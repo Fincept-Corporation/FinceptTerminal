@@ -1,274 +1,293 @@
 // src/screens/equity_research/EquityValuationTab.cpp
 #include "screens/equity_research/EquityValuationTab.h"
 
-#include "services/quantlib/QuantLibClient.h"
+#include "screens/equity_research/EquityResearchFormat.h"
+#include "services/equity/EquityResearchService.h"
+#include "services/equity/EquityValuationModels.h"
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
 #include <QFrame>
-#include <QGroupBox>
+#include <QGridLayout>
 #include <QHBoxLayout>
-#include <QJsonObject>
-#include <QJsonValue>
-#include <QLabel>
 #include <QScrollArea>
+#include <QStyle>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens {
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Construction
-// ─────────────────────────────────────────────────────────────────────────────
+namespace valuation_tab_detail {
+
+namespace fmt = equity_fmt;
+
+// CAPM pre-fill: risk-free + beta × equity risk premium, floored — a near-zero beta would
+// otherwise discount at ~4.5%, barely above terminal growth, and explode the terminal value.
+constexpr double kRiskFree = 0.045;
+constexpr double kEquityPremium = 0.055;
+constexpr double kDiscountFloor = 0.06;
+// Growth pre-fill comes from ONE quarter's YoY revenue growth; held for 10 years it must
+// be capped or a cyclical rebound quarter becomes a decade of hyper-growth.
+constexpr double kGrowthCapLow = -0.05;
+constexpr double kGrowthCapHigh = 0.15;
+
+void repolish(QWidget* w) {
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+}
+
+} // namespace valuation_tab_detail
+
+using namespace valuation_tab_detail;
 
 EquityValuationTab::EquityValuationTab(QWidget* parent) : QWidget(parent) {
     build_ui();
+    // A failed statements fetch must not leave the scores on "loading" forever.
+    connect(&services::equity::EquityResearchService::instance(),
+            &services::equity::EquityResearchService::error_occurred, this,
+            [this](const QString& ctx, const QString&) {
+                if (ctx != QLatin1String("Financials") || financials_loaded_ || current_symbol_.isEmpty())
+                    return;
+                financials_failed_ = true;
+                run_scoring_models();
+            });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// build_ui
+// UI
 // ─────────────────────────────────────────────────────────────────────────────
 
 void EquityValuationTab::build_ui() {
-    setStyleSheet(QString("background:%1; color:%2;").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()));
+    setObjectName(QStringLiteral("equityValuationTab"));
+    // One stylesheet for the whole tab; widgets pick rules up by objectName / "tone".
+    setStyleSheet(
+        QStringLiteral(
+            "#equityValuationTab, QWidget#valContent { background:%1; }"
+            "QScrollArea#valScroll { background:transparent; border:0; }"
+            "QFrame#valBox { background:%2; border:1px solid %3; }"
+            "QLabel { background:transparent; border:0; }"
+            "QLabel#valBoxTitle { color:%4; font-size:11px; font-weight:700; letter-spacing:1px; }"
+            "QLabel#valKey { color:%5; font-size:11px; }"
+            "QLabel#valValue { color:%6; font-size:13px; font-weight:600; }"
+            "QLabel#valValue[tone=\"good\"] { color:%7; } QLabel#valValue[tone=\"bad\"] { color:%8; }"
+            "QLabel#valValue[tone=\"warn\"] { color:%4; }"
+            "QLabel#valNote { color:%9; font-size:10px; }"
+            "QLabel#valWarn { color:%10; font-size:11px; }"
+            "QDoubleSpinBox { background:%11; color:%6; border:1px solid %3; padding:2px 4px; font-size:12px; }"
+            "QPushButton#valCalc { background:%4; color:%1; border:0; padding:5px 14px; font-size:11px;"
+            " font-weight:700; letter-spacing:1px; }"
+            "QPushButton#valCalc:hover { background:%12; }"
+            "QLabel#valBadge { padding:2px 10px; font-size:10px; font-weight:700; color:%1; background:%13; }"
+            "QLabel#valBadge[tone=\"good\"] { background:%7; } QLabel#valBadge[tone=\"bad\"] { background:%8; }"
+            "QLabel#valBadge[tone=\"warn\"] { background:%4; }"
+            "QLabel#valBadge[tone=\"none\"] { background:transparent; color:%9; border:1px solid %3; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
+                 ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),
+                 ui::colors::NEGATIVE(), ui::colors::TEXT_TERTIARY())
+            .arg(ui::colors::WARNING(), ui::colors::BG_RAISED(), ui::colors::AMBER_DIM(), ui::colors::BORDER_MED()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
     auto* scroll = new QScrollArea(this);
+    scroll->setObjectName(QStringLiteral("valScroll"));
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setStyleSheet("background:transparent; border:0;");
 
     auto* content = new QWidget;
-    content->setStyleSheet("background:transparent;");
+    content->setObjectName(QStringLiteral("valContent"));
     auto* vbox = new QVBoxLayout(content);
     vbox->setContentsMargins(12, 12, 12, 12);
     vbox->setSpacing(12);
-
-    build_dcf_section(vbox);
-    build_scoring_section(vbox);
-    build_multiples_section(vbox);
+    vbox->addWidget(build_dcf_section());
+    vbox->addWidget(build_scoring_section());
+    vbox->addWidget(build_multiples_section());
     vbox->addStretch();
 
     scroll->setWidget(content);
     root->addWidget(scroll);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Section builders
-// ─────────────────────────────────────────────────────────────────────────────
+QFrame* EquityValuationTab::make_box(const char* title_key, QVBoxLayout*& body) {
+    auto* box = new QFrame;
+    box->setObjectName(QStringLiteral("valBox"));
+    body = new QVBoxLayout(box);
+    body->setContentsMargins(12, 10, 12, 12);
+    body->setSpacing(8);
+    auto* title = new QLabel(tr(title_key));
+    title->setObjectName(QStringLiteral("valBoxTitle"));
+    i18n_labels_.insert(title, title_key);
+    body->addWidget(title);
+    return box;
+}
 
-void EquityValuationTab::build_dcf_section(QVBoxLayout* parent) {
-    auto* box = new QGroupBox(tr("DCF MODEL"));
-    box->setStyleSheet(QString("QGroupBox { border:1px solid %1; border-radius:4px; margin-top:8px;"
-                               "  font-size:11px; font-weight:700; color:%2; letter-spacing:1px; padding:8px; }"
-                               "QGroupBox::title { subcontrol-origin:margin; left:8px; }")
-                           .arg(ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+QLabel* EquityValuationTab::add_key_label(QWidget* parent, const char* key) {
+    auto* lbl = new QLabel(tr(key), parent);
+    lbl->setObjectName(QStringLiteral("valKey"));
+    i18n_labels_.insert(lbl, key);
+    return lbl;
+}
 
-    auto* hl = new QHBoxLayout(box);
-    hl->setSpacing(20);
+QWidget* EquityValuationTab::build_dcf_section() {
+    QVBoxLayout* body = nullptr;
+    auto* box = make_box(QT_TR_NOOP("DCF — LEVERED FREE CASH FLOW"), body);
 
-    // ── Left: inputs ──────────────────────────────────────────────
-    auto* left = new QWidget;
-    auto* form = new QVBoxLayout(left);
-    form->setSpacing(6);
-    form->setContentsMargins(0, 0, 0, 0);
+    auto* row = new QHBoxLayout;
+    row->setSpacing(28);
 
-    auto make_spin = [&](const char* label_key, double min, double max, double def, const QString& suffix,
+    // Inputs
+    auto* inputs = new QWidget(box);
+    auto* grid = new QGridLayout(inputs);
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setHorizontalSpacing(10);
+    grid->setVerticalSpacing(6);
+    int r = 0;
+    auto make_spin = [&](const char* key, double min, double max, double def, const QString& suffix,
                          int dec) -> QDoubleSpinBox* {
-        auto* row = new QWidget;
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(0, 0, 0, 0);
-        rl->setSpacing(8);
-
-        auto* lbl = new QLabel(tr(label_key));
-        lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
-        lbl->setFixedWidth(130);
-        i18n_labels_[lbl] = label_key;
-
-        auto* spin = new QDoubleSpinBox;
+        grid->addWidget(add_key_label(inputs, key), r, 0);
+        auto* spin = new QDoubleSpinBox(inputs);
         spin->setRange(min, max);
+        spin->setDecimals(dec);
         spin->setValue(def);
         spin->setSuffix(suffix);
-        spin->setDecimals(dec);
-        spin->setFixedWidth(120);
-        spin->setStyleSheet(QString("QDoubleSpinBox { background:%1; color:%2; border:1px solid %3;"
-                                    " padding:2px 4px; font-size:12px; }"
-                                    "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width:16px; }")
-                                .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM()));
-
-        rl->addWidget(lbl);
-        rl->addWidget(spin);
-        rl->addStretch();
-        form->addWidget(row);
+        spin->setFixedWidth(150);
+        spin->setAlignment(Qt::AlignRight);
+        spin->setGroupSeparatorShown(true);
+        grid->addWidget(spin, r, 1);
+        ++r;
         return spin;
     };
+    fcf_input_ = make_spin(QT_TR_NOOP("BASE FREE CASH FLOW"), -9999999.0, 9999999.0, 0.0, tr(" M"), 1);
+    growth_input_ = make_spin(QT_TR_NOOP("GROWTH (PROJECTION)"), -50.0, 100.0, 8.0, QStringLiteral(" %"), 2);
+    terminal_input_ = make_spin(QT_TR_NOOP("TERMINAL GROWTH"), -2.0, 10.0, 2.5, QStringLiteral(" %"), 2);
+    discount_input_ = make_spin(QT_TR_NOOP("DISCOUNT RATE"), 1.0, 40.0, 10.0, QStringLiteral(" %"), 2);
+    years_input_ = make_spin(QT_TR_NOOP("PROJECTION YEARS"), 1.0, 30.0, 10.0, tr(" yrs"), 0);
+    shares_input_ = make_spin(QT_TR_NOOP("SHARES OUTSTANDING"), 0.01, 99999999.0, 1.0, tr(" M"), 2);
 
-    fcf_input_ = make_spin("FREE CASH FLOW", -999999, 999999, 0.0, " M", 2);
-    growth_input_ = make_spin("GROWTH RATE", -50, 100, 8.0, " %", 2);
-    terminal_input_ = make_spin("TERMINAL GROWTH", 0, 10, 2.5, " %", 2);
-    discount_input_ = make_spin("DISCOUNT RATE", 1, 30, 10.0, " %", 2);
-    years_input_ = make_spin("PROJECTION YEARS", 5, 20, 10.0, " yrs", 0);
-    shares_input_ = make_spin("SHARES O/S", 0.01, 999999, 1.0, " M", 2);
-
-    calc_btn_ = new QPushButton(tr("CALCULATE"));
+    calc_btn_ = new QPushButton(tr("CALCULATE"), inputs);
+    calc_btn_->setObjectName(QStringLiteral("valCalc"));
     calc_btn_->setCursor(Qt::PointingHandCursor);
-    calc_btn_->setFixedHeight(28);
-    calc_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%2; border:0; font-size:12px;"
-                                     " font-weight:700; letter-spacing:1px; border-radius:3px; }"
-                                     "QPushButton:hover { background:%3; }"
-                                     "QPushButton:disabled { background:%4; color:%5; }")
-                                 .arg(ui::colors::AMBER(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM(),
-                                      ui::colors::BG_SURFACE(), ui::colors::TEXT_TERTIARY()));
+    calc_btn_->setToolTip(tr("Re-run the DCF with the inputs above (Enter)"));
+    calc_btn_->setDefault(true);
     connect(calc_btn_, &QPushButton::clicked, this, &EquityValuationTab::on_calculate_clicked);
-    form->addWidget(calc_btn_);
-    form->addStretch();
-    hl->addWidget(left);
+    for (auto* spin : {fcf_input_, growth_input_, terminal_input_, discount_input_, years_input_, shares_input_})
+        connect(spin, &QDoubleSpinBox::editingFinished, this, [this]() {
+            if (!current_symbol_.isEmpty())
+                on_calculate_clicked();
+        });
+    grid->addWidget(calc_btn_, r, 1, Qt::AlignRight);
+    row->addWidget(inputs);
 
-    // ── Right: results ────────────────────────────────────────────
-    auto* right = new QWidget;
-    auto* rl2 = new QVBoxLayout(right);
-    rl2->setSpacing(8);
-    rl2->setContentsMargins(0, 0, 0, 0);
-
-    auto make_result_row = [&](const char* label_key, QLabel*& val_out, const QString& val_color = "") {
-        auto* row = new QWidget;
-        auto* h = new QHBoxLayout(row);
-        h->setContentsMargins(0, 0, 0, 0);
-        h->setSpacing(8);
-
-        auto* lbl = new QLabel(tr(label_key));
-        lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
-        lbl->setFixedWidth(130);
-        i18n_labels_[lbl] = label_key;
-
-        val_out = new QLabel(QStringLiteral("—"));
-        QString col = val_color.isEmpty() ? QString(ui::colors::TEXT_PRIMARY()) : val_color;
-        val_out->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(col));
-
-        h->addWidget(lbl);
-        h->addWidget(val_out);
-        h->addStretch();
-        rl2->addWidget(row);
+    // Results
+    auto* results = new QWidget(box);
+    auto* rg = new QGridLayout(results);
+    rg->setContentsMargins(0, 0, 0, 0);
+    rg->setHorizontalSpacing(12);
+    rg->setVerticalSpacing(6);
+    int rr = 0;
+    auto make_result = [&](const char* key) -> QLabel* {
+        rg->addWidget(add_key_label(results, key), rr, 0);
+        auto* v = new QLabel(fmt::dash(), results);
+        v->setObjectName(QStringLiteral("valValue"));
+        v->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        rg->addWidget(v, rr, 1);
+        ++rr;
+        return v;
     };
-
-    make_result_row("INTRINSIC VALUE", intrinsic_val_, ui::colors::TEXT_PRIMARY());
-    make_result_row("CURRENT PRICE", current_price_val_, ui::colors::TEXT_SECONDARY());
-    make_result_row("MARGIN OF SAFETY", margin_val_, ui::colors::TEXT_PRIMARY());
-
-    verdict_badge_ = new QLabel;
+    intrinsic_val_ = make_result(QT_TR_NOOP("INTRINSIC VALUE / SHARE"));
+    current_price_val_ = make_result(QT_TR_NOOP("CURRENT PRICE"));
+    margin_val_ = make_result(QT_TR_NOOP("UPSIDE TO INTRINSIC"));
+    terminal_share_val_ = make_result(QT_TR_NOOP("TERMINAL VALUE SHARE"));
+    verdict_badge_ = new QLabel(results);
+    verdict_badge_->setObjectName(QStringLiteral("valBadge"));
     verdict_badge_->setAlignment(Qt::AlignCenter);
-    verdict_badge_->setFixedHeight(24);
-    verdict_badge_->setStyleSheet("font-size:11px; font-weight:700;");
-    rl2->addWidget(verdict_badge_);
-    rl2->addStretch();
+    verdict_badge_->setVisible(false);
+    rg->addWidget(verdict_badge_, rr, 0, 1, 2, Qt::AlignLeft);
+    row->addWidget(results);
+    row->addStretch();
+    body->addLayout(row);
 
-    hl->addWidget(right);
-    parent->addWidget(box);
+    dcf_note_ = new QLabel(box);
+    dcf_note_->setObjectName(QStringLiteral("valWarn"));
+    dcf_note_->setWordWrap(true);
+    dcf_note_->setVisible(false);
+    body->addWidget(dcf_note_);
+
+    assumptions_lbl_ = new QLabel(tr("Open a symbol to pre-fill the model from its trailing free cash flow, beta and "
+                                     "share count."),
+                                  box);
+    assumptions_lbl_->setObjectName(QStringLiteral("valNote"));
+    assumptions_lbl_->setWordWrap(true);
+    body->addWidget(assumptions_lbl_);
+    return box;
 }
 
-void EquityValuationTab::build_scoring_section(QVBoxLayout* parent) {
-    auto* box = new QGroupBox(tr("CREDIT QUALITY"));
-    box->setStyleSheet(QString("QGroupBox { border:1px solid %1; border-radius:4px; margin-top:8px;"
-                               "  font-size:11px; font-weight:700; color:%2; letter-spacing:1px; padding:8px; }"
-                               "QGroupBox::title { subcontrol-origin:margin; left:8px; }")
-                           .arg(ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+QWidget* EquityValuationTab::build_scoring_section() {
+    QVBoxLayout* body = nullptr;
+    auto* box = make_box(QT_TR_NOOP("CREDIT & QUALITY SCORES — ANNUAL STATEMENTS"), body);
 
-    auto* vl = new QVBoxLayout(box);
-    vl->setSpacing(8);
-
-    scoring_note_ = new QLabel(tr("Open FINANCIALS tab first to enable scoring."));
-    scoring_note_->setStyleSheet(
-        QString("color:%1; font-size:11px; font-style:italic;").arg(ui::colors::TEXT_TERTIARY()));
-    vl->addWidget(scoring_note_);
-
-    auto make_score_row = [&](const char* label_key, QLabel*& val_out, QLabel*& badge_out) {
-        auto* row = new QWidget;
-        auto* h = new QHBoxLayout(row);
-        h->setContentsMargins(0, 0, 0, 0);
-        h->setSpacing(12);
-
-        auto* lbl = new QLabel(tr(label_key));
-        lbl->setStyleSheet(QString("color:%1; font-size:12px;").arg(ui::colors::TEXT_SECONDARY()));
-        lbl->setFixedWidth(140);
-        i18n_labels_[lbl] = label_key;
-
-        val_out = new QLabel(QStringLiteral("—"));
-        val_out->setStyleSheet(QString("color:%1; font-size:13px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
-        val_out->setFixedWidth(60);
-
-        badge_out = new QLabel;
+    auto* grid = new QGridLayout;
+    grid->setHorizontalSpacing(14);
+    grid->setVerticalSpacing(6);
+    int r = 0;
+    auto make_score = [&](const char* key, QLabel*& val_out, QLabel*& badge_out) {
+        grid->addWidget(add_key_label(box, key), r, 0);
+        val_out = new QLabel(fmt::dash(), box);
+        val_out->setObjectName(QStringLiteral("valValue"));
+        val_out->setMinimumWidth(70);
+        grid->addWidget(val_out, r, 1);
+        badge_out = new QLabel(box);
+        badge_out->setObjectName(QStringLiteral("valBadge"));
         badge_out->setAlignment(Qt::AlignCenter);
-        badge_out->setFixedHeight(20);
-        badge_out->setMinimumWidth(160);
-        badge_out->setStyleSheet("font-size:10px; font-weight:700;");
-
-        h->addWidget(lbl);
-        h->addWidget(val_out);
-        h->addWidget(badge_out);
-        h->addStretch();
-        vl->addWidget(row);
+        badge_out->setMinimumWidth(170);
+        badge_out->setVisible(false);
+        grid->addWidget(badge_out, r, 2, Qt::AlignLeft);
+        ++r;
     };
+    make_score(QT_TR_NOOP("ALTMAN Z-SCORE"), altman_val_, altman_badge_);
+    make_score(QT_TR_NOOP("PIOTROSKI F-SCORE"), piotroski_val_, piotroski_badge_);
+    make_score(QT_TR_NOOP("BENEISH M-SCORE"), beneish_val_, beneish_badge_);
+    grid->setColumnStretch(3, 1);
+    body->addLayout(grid);
 
-    make_score_row("ALTMAN Z-SCORE", altman_val_, altman_badge_);
-    make_score_row("PIOTROSKI F", piotroski_val_, piotroski_badge_);
-    make_score_row("BENEISH M-SCORE", beneish_val_, beneish_badge_);
-
-    parent->addWidget(box);
+    scoring_note_ = new QLabel(box);
+    scoring_note_->setObjectName(QStringLiteral("valNote"));
+    scoring_note_->setWordWrap(true);
+    body->addWidget(scoring_note_);
+    return box;
 }
 
-void EquityValuationTab::build_multiples_section(QVBoxLayout* parent) {
-    auto* box = new QGroupBox(tr("ADVANCED MULTIPLES"));
-    box->setStyleSheet(QString("QGroupBox { border:1px solid %1; border-radius:4px; margin-top:8px;"
-                               "  font-size:11px; font-weight:700; color:%2; letter-spacing:1px; padding:8px; }"
-                               "QGroupBox::title { subcontrol-origin:margin; left:8px; }")
-                           .arg(ui::colors::BORDER_DIM(), ui::colors::AMBER()));
-
-    auto* grid = new QWidget;
-    auto* gl = new QHBoxLayout(grid);
-    gl->setSpacing(32);
-    gl->setContentsMargins(0, 0, 0, 0);
-
-    auto* col1 = new QVBoxLayout;
-    auto* col2 = new QVBoxLayout;
-
-    auto make_mult = [&](const char* label_key, QLabel*& val_out, QVBoxLayout* col) {
-        auto* row = new QWidget;
-        auto* h = new QHBoxLayout(row);
-        h->setContentsMargins(0, 0, 0, 0);
-        h->setSpacing(8);
-
-        auto* lbl = new QLabel(tr(label_key));
-        lbl->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
-        lbl->setFixedWidth(100);
-        i18n_labels_[lbl] = label_key;
-
-        val_out = new QLabel(QStringLiteral("—"));
-        val_out->setStyleSheet(QString("color:%1; font-size:13px; font-weight:600;").arg(ui::colors::TEXT_PRIMARY()));
-
-        h->addWidget(lbl);
-        h->addWidget(val_out);
-        h->addStretch();
-        col->addWidget(row);
+QWidget* EquityValuationTab::build_multiples_section() {
+    QVBoxLayout* body = nullptr;
+    auto* box = make_box(QT_TR_NOOP("MULTIPLES — TRAILING 12 MONTHS"), body);
+    auto* grid = new QGridLayout;
+    grid->setHorizontalSpacing(14);
+    grid->setVerticalSpacing(6);
+    auto make_mult = [&](const char* key, QLabel*& out, int row, int col) {
+        grid->addWidget(add_key_label(box, key), row, col * 2);
+        out = new QLabel(fmt::dash(), box);
+        out->setObjectName(QStringLiteral("valValue"));
+        grid->addWidget(out, row, col * 2 + 1);
     };
-
-    make_mult("EV/EBITDA", ev_ebitda_val_, col1);
-    make_mult("EV/REVENUE", ev_revenue_val_, col1);
-    make_mult("P/SALES", price_sales_val_, col2);
-    make_mult("GRAHAM NUMBER", graham_val_, col2);
-
-    gl->addLayout(col1);
-    gl->addLayout(col2);
-    gl->addStretch();
-
-    auto* vl = new QVBoxLayout(box);
-    vl->addWidget(grid);
-
-    parent->addWidget(box);
+    make_mult(QT_TR_NOOP("EV / EBITDA"), ev_ebitda_val_, 0, 0);
+    make_mult(QT_TR_NOOP("EV / REVENUE"), ev_revenue_val_, 1, 0);
+    make_mult(QT_TR_NOOP("PRICE / SALES"), price_sales_val_, 2, 0);
+    make_mult(QT_TR_NOOP("FCF YIELD"), fcf_yield_val_, 0, 1);
+    make_mult(QT_TR_NOOP("GRAHAM NUMBER"), graham_val_, 1, 1);
+    grid->setColumnMinimumWidth(1, 90);
+    grid->setColumnStretch(4, 1);
+    body->addLayout(grid);
+    graham_val_->setToolTip(tr("√(22.5 × trailing EPS × book value per share) — Graham's ceiling price for a "
+                               "defensive investor (P/E ≤ 15 and P/B ≤ 1.5)."));
+    multiples_note_ = new QLabel(box);
+    multiples_note_->setObjectName(QStringLiteral("valNote"));
+    multiples_note_->setWordWrap(true);
+    body->addWidget(multiples_note_);
+    return box;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,230 +295,276 @@ void EquityValuationTab::build_multiples_section(QVBoxLayout* parent) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void EquityValuationTab::set_symbol(const QString& symbol) {
-    if (symbol == current_symbol_)
+    if (symbol.isEmpty() || symbol == current_symbol_)
         return;
     current_symbol_ = symbol;
+    prefilled_for_.clear();
     clear_results();
-    // The screen feeds set_stock_info()/set_financials() whenever data lands — even while
-    // another tab is showing — so what is held may already be this symbol's (keep it) or
-    // the previous one's (drop it: it would drive this symbol's DCF, multiples and the
-    // Altman/Piotroski/Beneish scores).
-    if (last_info_.symbol != symbol) {
+    // set_stock_info()/set_financials() are fed whenever data lands — even while another tab
+    // is showing — so what is held may already be this symbol's (keep it) or the previous
+    // one's (drop it: it would drive this symbol's DCF, multiples and scores).
+    if (last_info_.symbol != symbol)
         last_info_ = {};
-        current_price_ = 0.0;
-    } else if (current_price_ > 0.0 && current_price_val_) {
-        current_price_val_->setText(fmt_currency(current_price_)); // clear_results() blanked it
-    }
     if (last_financials_.symbol != symbol)
         last_financials_ = {};
     financials_loaded_ = !last_financials_.symbol.isEmpty();
-    if (scoring_note_)
-        scoring_note_->setVisible(!financials_loaded_);
+    financials_failed_ = false;
+
+    if (!last_info_.symbol.isEmpty()) {
+        pre_fill_dcf_inputs();
+        run_multiples();
+    }
+    if (financials_loaded_) {
+        run_scoring_models();
+    } else {
+        update_statements_note();
+        // The statements feed the scores; ask for them (a cached copy answers at once and
+        // reaches set_financials() through the screen).
+        services::equity::EquityResearchService::instance().fetch_financials(symbol);
+    }
 }
 
 void EquityValuationTab::set_stock_info(const services::equity::StockInfo& info) {
     last_info_ = info;
-    current_price_ = info.current_price;
-    current_currency_ = info.currency;
+    if (info.symbol != current_symbol_)
+        return; // held until this tab is shown for that symbol
     pre_fill_dcf_inputs();
-
-    // Show current price in results panel immediately
-    if (current_price_val_)
-        current_price_val_->setText(fmt_currency(current_price_));
+    run_multiples();
+    if (financials_loaded_)
+        run_scoring_models(); // Altman needs the market cap
 }
 
 void EquityValuationTab::set_financials(const services::equity::FinancialsData& data) {
     last_financials_ = data;
+    if (data.symbol != current_symbol_)
+        return;
     financials_loaded_ = true;
-    if (scoring_note_)
-        scoring_note_->setVisible(false);
+    financials_failed_ = false;
+    run_scoring_models();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pre-fill DCF from StockInfo
+// DCF
 // ─────────────────────────────────────────────────────────────────────────────
 
 void EquityValuationTab::pre_fill_dcf_inputs() {
-    if (!fcf_input_)
+    // Once per symbol: later info refreshes must not overwrite inputs the analyst edited.
+    if (!fcf_input_ || prefilled_for_ == current_symbol_)
         return;
-
-    double fcf_m = last_info_.free_cashflow / 1e6;
-    double growth = last_info_.earnings_growth * 100.0;
-    double shares_m = last_info_.shares_outstanding / 1e6;
-    double wacc = 4.5 + last_info_.beta * 5.5; // CAPM approx
-
-    if (std::isfinite(fcf_m))
-        fcf_input_->setValue(fcf_m);
-    if (std::isfinite(growth) && growth > -100.0 && growth < 200.0)
-        growth_input_->setValue(growth);
-    if (std::isfinite(shares_m) && shares_m > 0.0)
-        shares_input_->setValue(shares_m);
-    if (std::isfinite(wacc) && wacc > 1.0 && wacc < 30.0)
-        discount_input_->setValue(wacc);
+    prefilled_for_ = current_symbol_;
+    const auto& s = last_info_;
+    QStringList notes;
+    if (s.free_cashflow != 0.0) {
+        fcf_input_->setValue(s.free_cashflow / 1e6);
+        notes << tr("FCF = trailing-12-month levered free cash flow (Yahoo)");
+    }
+    const double g = s.revenue_growth != 0.0 ? s.revenue_growth : s.earnings_growth;
+    if (g != 0.0) {
+        const double capped = std::clamp(g, kGrowthCapLow, kGrowthCapHigh);
+        growth_input_->setValue(capped * 100.0);
+        notes << tr("growth = latest-quarter YoY %1 growth (%2), capped to %3…%4 for a multi-year horizon")
+                     .arg(s.revenue_growth != 0.0 ? tr("revenue") : tr("earnings"), fmt::pct(g, 1),
+                          fmt::pct(kGrowthCapLow, 0), fmt::pct(kGrowthCapHigh, 0));
+    }
+    if (s.beta > 0.0) {
+        const double r = std::max(kDiscountFloor, kRiskFree + s.beta * kEquityPremium);
+        discount_input_->setValue(r * 100.0);
+        notes << tr("discount = %1 risk-free + β %2 × %3 equity premium (floor %4)")
+                     .arg(fmt::pct(kRiskFree, 1), QString::number(s.beta, 'f', 2), fmt::pct(kEquityPremium, 1),
+                          fmt::pct(kDiscountFloor, 0));
+    } else {
+        notes << tr("discount left at %1 — no beta reported").arg(fmt::pct(discount_input_->value() / 100.0, 1));
+    }
+    if (s.shares_outstanding > 0.0)
+        shares_input_->setValue(s.shares_outstanding / 1e6);
+    assumptions_lbl_->setText(tr("Pre-filled assumptions (edit and press CALCULATE): %1.").arg(notes.join(QStringLiteral(" · "))));
+    on_calculate_clicked();
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CALCULATE slot
-// ─────────────────────────────────────────────────────────────────────────────
 
 void EquityValuationTab::on_calculate_clicked() {
     if (current_symbol_.isEmpty())
         return;
+    services::equity::valuation::DcfInputs in;
+    in.fcf = fcf_input_->value() * 1e6;
+    in.growth = growth_input_->value() / 100.0;
+    in.terminal_growth = terminal_input_->value() / 100.0;
+    in.discount = discount_input_->value() / 100.0;
+    in.years = static_cast<int>(years_input_->value());
+    in.shares = shares_input_->value() * 1e6;
+    const auto res = services::equity::valuation::dcf(in);
 
-    // Validation: discount > terminal
-    if (discount_input_->value() <= terminal_input_->value()) {
-        if (margin_val_)
-            margin_val_->setText(tr("ERR: discount ≤ terminal"));
+    const QString stmt_ccy = statements_currency();
+    const QString px_ccy = last_info_.currency;
+    dcf_note_->setVisible(false);
+    verdict_badge_->setVisible(false);
+    margin_val_->setProperty("tone", QString());
+    repolish(margin_val_);
+    current_price_val_->setText(last_info_.current_price > 0.0 ? fmt_money(last_info_.current_price, px_ccy)
+                                                               : fmt::dash());
+    if (!res.ok) {
+        intrinsic_val_->setText(fmt::dash());
+        margin_val_->setText(fmt::dash());
+        terminal_share_val_->setText(fmt::dash());
+        dcf_note_->setText(res.error);
+        dcf_note_->setVisible(true);
         return;
     }
+    intrinsic_val_->setText(fmt_money(res.per_share, stmt_ccy));
+    terminal_share_val_->setText(fmt::pct(res.terminal_fraction, 0));
 
-    calc_btn_->setEnabled(false);
-    calc_btn_->setText(tr("CALCULATING…"));
-
-    // ── 1. DCF ────────────────────────────────────────────────────
-    QJsonObject dcf_body;
-    dcf_body["free_cash_flow"] = fcf_input_->value() * 1e6;
-    dcf_body["growth_rate"] = growth_input_->value() / 100.0;
-    dcf_body["terminal_growth_rate"] = terminal_input_->value() / 100.0;
-    dcf_body["discount_rate"] = discount_input_->value() / 100.0;
-    dcf_body["projection_years"] = static_cast<int>(years_input_->value());
-    dcf_body["shares_outstanding"] = shares_input_->value() * 1e6;
-
-    QPointer<EquityValuationTab> self = this;
-    services::QuantLibClient::instance().call("analysis/valuation/dcf/fcff", dcf_body, [self](mcp::ToolResult result) {
-        if (!self)
-            return;
-        self->calc_btn_->setEnabled(true);
-        self->calc_btn_->setText(tr("CALCULATE"));
-        if (!result.success) {
-            if (self->intrinsic_val_)
-                self->intrinsic_val_->setText(tr("API error"));
-            return;
-        }
-        self->display_dcf_result(result.data);
-    });
-
-    // ── 2. Scoring (only if financials loaded) ─────────────────────
-    if (financials_loaded_)
-        run_scoring_models();
-
-    // ── 3. Multiples ──────────────────────────────────────────────
-    run_multiples();
+    QStringList warnings;
+    if (res.terminal_fraction > 0.75)
+        warnings << tr("%1 of the value sits in the terminal year — the result is very sensitive to terminal "
+                       "growth and the discount rate.")
+                        .arg(fmt::pct(res.terminal_fraction, 0));
+    if (currency_mismatch()) {
+        margin_val_->setText(tr("n/c"));
+        warnings << tr("Statements are reported in %1 but the stock trades in %2 (and an ADR may represent several "
+                       "ordinary shares), so the per-share value is not compared with the price.")
+                        .arg(stmt_ccy, px_ccy);
+    } else if (last_info_.current_price > 0.0) {
+        const double upside = (res.per_share - last_info_.current_price) / last_info_.current_price;
+        margin_val_->setText(fmt::pct(upside, 1, true));
+        const char* tone = upside > 0.10 ? "good" : (upside < -0.10 ? "bad" : "warn");
+        margin_val_->setProperty("tone", QString::fromLatin1(tone));
+        repolish(margin_val_);
+        if (upside > 0.20)
+            set_badge(verdict_badge_, tr("BELOW DCF VALUE"), "good");
+        else if (upside < -0.20)
+            set_badge(verdict_badge_, tr("ABOVE DCF VALUE"), "bad");
+        else
+            set_badge(verdict_badge_, tr("NEAR DCF VALUE"), "warn");
+    } else {
+        margin_val_->setText(fmt::dash());
+    }
+    if (!warnings.isEmpty()) {
+        dcf_note_->setText(warnings.join(QLatin1Char(' ')));
+        dcf_note_->setVisible(true);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scoring models
+// Scores
 // ─────────────────────────────────────────────────────────────────────────────
 
+void EquityValuationTab::update_statements_note() {
+    if (!scoring_note_)
+        return;
+    if (financials_failed_)
+        scoring_note_->setText(tr("Annual statements could not be loaded for %1 — open the FINANCIALS tab and press "
+                                  "RETRY, or check the symbol.")
+                                   .arg(current_symbol_));
+    else if (!financials_loaded_)
+        scoring_note_->setText(tr("Loading annual statements…"));
+}
+
 void EquityValuationTab::run_scoring_models() {
-    const auto& bs = last_financials_.balance_sheet;
-    const auto& is = last_financials_.income_statement;
-    const auto& cf = last_financials_.cash_flow;
-
-    double total_assets = get_stmt_val(bs, "Total Assets");
-    double total_liabilities = get_stmt_val(bs, "Total Liabilities Net Minority Interest");
-    double current_assets = get_stmt_val(bs, "Current Assets");
-    double current_liab = get_stmt_val(bs, "Current Liabilities");
-    double retained_earnings = get_stmt_val(bs, "Retained Earnings");
-    double revenue = get_stmt_val(is, "Total Revenue");
-    double ebit = get_stmt_val(is, "EBIT");
-    if (ebit == 0.0)
-        ebit = get_stmt_val(is, "Operating Income");
-    double working_capital = (current_assets != 0.0 && current_liab != 0.0) ? current_assets - current_liab
-                                                                            : get_stmt_val(bs, "Working Capital");
-
-    // ── Altman Z ─────────────────────────────────────────────────
-    QPointer<EquityValuationTab> self = this;
-
-    // Four of Altman's five ratios divide by total assets and the fifth by total
-    // liabilities. With an empty balance sheet every input here is 0, and asking
-    // the endpoint anyway yields a score that describes nothing — which then
-    // rendered as a red "DISTRESS ZONE". Don't ask; say so instead.
-    if (total_assets > 0.0 && total_liabilities > 0.0) {
-        QJsonObject altman_body;
-        altman_body["working_capital"] = working_capital;
-        altman_body["total_assets"] = total_assets;
-        altman_body["retained_earnings"] = retained_earnings;
-        altman_body["ebit"] = ebit;
-        altman_body["market_cap"] = last_info_.market_cap;
-        altman_body["total_liabilities"] = total_liabilities;
-        altman_body["revenue"] = revenue;
-
-        services::QuantLibClient::instance().call("analysis/valuation/predictive/altman-z", altman_body,
-                                                  [self](mcp::ToolResult r) {
-                                                      if (!self)
-                                                          return;
-                                                      // An empty value renders "NO DATA" — a failed call must not
-                                                      // leave a stale verdict from the previously viewed symbol.
-                                                      self->display_altman_result(r.success ? r.data : QJsonValue());
-                                                  });
-    } else {
-        display_altman_result(QJsonValue());
+    namespace v = services::equity::valuation;
+    altman_badge_->setVisible(false);
+    piotroski_badge_->setVisible(false);
+    beneish_badge_->setVisible(false);
+    for (QLabel* l : {altman_val_, piotroski_val_, beneish_val_}) {
+        l->setText(fmt::dash());
+        l->setToolTip(QString());
+    }
+    if (!financials_loaded_) {
+        update_statements_note();
+        return;
     }
 
-    // ── Piotroski F (needs two periods) ──────────────────────────
-    if (is.size() >= 2 && bs.size() >= 2) {
-        QJsonObject pio_body;
-        // Period 0 = most recent, period 1 = prior year
-        pio_body["net_income"] = get_stmt_val(is, "Net Income");
-        pio_body["total_assets"] = get_stmt_val(bs, "Total Assets");
-        pio_body["operating_cashflow"] = get_stmt_val(cf, "Operating Cash Flow");
-        pio_body["long_term_debt"] = get_stmt_val(bs, "Long Term Debt");
-        pio_body["current_ratio"] = (current_liab > 0) ? current_assets / current_liab : 0.0;
-        pio_body["shares_outstanding"] = last_info_.shares_outstanding;
-        pio_body["gross_profit"] = get_stmt_val(is, "Gross Profit");
-        pio_body["revenue"] = get_stmt_val(is, "Total Revenue");
-        // Prior year
-        pio_body["prev_total_assets"] = get_stmt_val(bs, "Total Assets", 1);
-        pio_body["prev_long_term_debt"] = get_stmt_val(bs, "Long Term Debt", 1);
-        pio_body["prev_current_assets"] = get_stmt_val(bs, "Current Assets", 1);
-        pio_body["prev_current_liabilities"] = get_stmt_val(bs, "Current Liabilities", 1);
-        pio_body["prev_shares_outstanding"] = last_info_.shares_outstanding;
-        pio_body["prev_gross_profit"] = get_stmt_val(is, "Gross Profit", 1);
-        pio_body["prev_revenue"] = get_stmt_val(is, "Total Revenue", 1);
+    const QVector<v::FiscalYear> years = v::fiscal_years(last_financials_);
+    if (years.isEmpty()) {
+        scoring_note_->setText(tr("No annual statements on file for %1 — ETFs, funds, indices and some foreign "
+                                  "listings have none.")
+                                   .arg(current_symbol_));
+        return;
+    }
+    const v::FiscalYear& cur = years.first();
+    QStringList notes;
+    notes << (years.size() >= 2 ? tr("Fiscal year ended %1 vs %2 (annual statements, as reported).")
+                                      .arg(cur.period, years.at(1).period)
+                                : tr("Fiscal year ended %1 (annual statements, as reported).").arg(cur.period));
+    if (last_financials_.stale)
+        notes << tr("Cached statements — refreshing.");
+    if (last_info_.sector.contains(QLatin1String("Financial"), Qt::CaseInsensitive))
+        notes << tr("Altman Z and Beneish M were built for industrial companies; read them with caution for banks "
+                    "and insurers.");
 
-        services::QuantLibClient::instance().call("analysis/valuation/predictive/piotroski-f", pio_body,
-                                                  [self](mcp::ToolResult r) {
-                                                      if (!self)
-                                                          return;
-                                                      // Failure → "no data", never the previous symbol's score.
-                                                      self->display_piotroski_result(r.success ? r.data
-                                                                                               : QJsonValue());
-                                                  });
+    // ── Altman Z ──
+    if (currency_mismatch()) {
+        altman_val_->setText(tr("n/c"));
+        set_badge(altman_badge_, tr("CURRENCY MISMATCH"), "none");
+        altman_val_->setToolTip(tr("Market cap (%1) and statements (%2) are in different currencies.")
+                                    .arg(last_info_.currency, statements_currency()));
     } else {
-        display_piotroski_result(QJsonValue()); // fewer than two periods on file
+        const auto a = v::altman_z(cur, last_info_.market_cap);
+        if (!a.ok) {
+            set_badge(altman_badge_, tr("NO DATA — %1").arg(a.missing), "none");
+        } else {
+            altman_val_->setText(QString::number(a.z, 'f', 2));
+            altman_val_->setToolTip(tr("X1 working capital/assets %1 · X2 retained earnings/assets %2 · X3 EBIT/assets "
+                                       "%3 · X4 market cap/liabilities %4 · X5 sales/assets %5")
+                                        .arg(a.x1, 0, 'f', 3)
+                                        .arg(a.x2, 0, 'f', 3)
+                                        .arg(a.x3, 0, 'f', 3)
+                                        .arg(a.x4, 0, 'f', 3)
+                                        .arg(a.x5, 0, 'f', 3));
+            if (a.z > 2.99)
+                set_badge(altman_badge_, tr("SAFE ZONE (> 2.99)"), "good");
+            else if (a.z >= 1.81)
+                set_badge(altman_badge_, tr("GREY ZONE (1.81–2.99)"), "warn");
+            else
+                set_badge(altman_badge_, tr("DISTRESS ZONE (< 1.81)"), "bad");
+        }
     }
 
-    // ── Beneish M ────────────────────────────────────────────────
-    if (is.size() >= 2 && bs.size() >= 2) {
-        QJsonObject ben_body;
-        ben_body["revenue"] = get_stmt_val(is, "Total Revenue");
-        ben_body["prev_revenue"] = get_stmt_val(is, "Total Revenue", 1);
-        ben_body["receivables"] = get_stmt_val(bs, "Receivables");
-        ben_body["prev_receivables"] = get_stmt_val(bs, "Receivables", 1);
-        ben_body["gross_profit"] = get_stmt_val(is, "Gross Profit");
-        ben_body["prev_gross_profit"] = get_stmt_val(is, "Gross Profit", 1);
-        ben_body["total_assets"] = get_stmt_val(bs, "Total Assets");
-        ben_body["prev_total_assets"] = get_stmt_val(bs, "Total Assets", 1);
-        ben_body["long_term_debt"] = get_stmt_val(bs, "Long Term Debt");
-        ben_body["prev_long_term_debt"] = get_stmt_val(bs, "Long Term Debt", 1);
-        ben_body["current_assets"] = get_stmt_val(bs, "Current Assets");
-        ben_body["prev_current_assets"] = get_stmt_val(bs, "Current Assets", 1);
-        ben_body["ppe"] = get_stmt_val(bs, "Net PPE");
-        ben_body["prev_ppe"] = get_stmt_val(bs, "Net PPE", 1);
-        ben_body["net_income"] = get_stmt_val(is, "Net Income");
-        ben_body["prev_net_income"] = get_stmt_val(is, "Net Income", 1);
-        ben_body["operating_cashflow"] = get_stmt_val(cf, "Operating Cash Flow");
-
-        services::QuantLibClient::instance().call("analysis/valuation/predictive/beneish-m", ben_body,
-                                                  [self](mcp::ToolResult r) {
-                                                      if (!self)
-                                                          return;
-                                                      self->display_beneish_result(r.success ? r.data : QJsonValue());
-                                                  });
+    // ── Piotroski F / Beneish M need two years ──
+    if (years.size() < 2) {
+        set_badge(piotroski_badge_, tr("NO DATA — one fiscal year on file"), "none");
+        set_badge(beneish_badge_, tr("NO DATA — one fiscal year on file"), "none");
     } else {
-        display_beneish_result(QJsonValue()); // fewer than two periods on file
+        const v::FiscalYear& prev = years.at(1);
+        const auto p = v::piotroski_f(cur, prev);
+        QStringList lines;
+        for (const auto& t : p.tests)
+            lines << QStringLiteral("%1  %2").arg(t.second == 1 ? QStringLiteral("✓")
+                                                                : (t.second == 0 ? QStringLiteral("✗")
+                                                                                 : QStringLiteral("·")),
+                                                  t.first);
+        if (!p.ok) {
+            set_badge(piotroski_badge_, tr("NO DATA — %1").arg(p.missing), "none");
+        } else {
+            piotroski_val_->setText(QStringLiteral("%1 / %2").arg(p.score).arg(p.tests_available));
+            if (p.score >= 8)
+                set_badge(piotroski_badge_, tr("STRONG (8–9)"), "good");
+            else if (p.score >= 5)
+                set_badge(piotroski_badge_, tr("AVERAGE (5–7)"), "warn");
+            else
+                set_badge(piotroski_badge_, tr("WEAK (0–4)"), "bad");
+        }
+        piotroski_val_->setToolTip(lines.join(QLatin1Char('\n')));
+
+        const auto b = v::beneish_m(cur, prev);
+        QStringList comps;
+        for (const auto& c : b.components)
+            comps << QStringLiteral("%1 %2").arg(c.first, QString::number(c.second, 'f', 3));
+        if (!b.components.isEmpty())
+            beneish_val_->setToolTip(comps.join(QStringLiteral(" · ")) +
+                                     (b.imputed > 0 ? tr("\n%1 index(es) set to the neutral 1.0 — statement line not "
+                                                         "reported.")
+                                                          .arg(b.imputed)
+                                                    : QString()));
+        if (!b.ok) {
+            set_badge(beneish_badge_, tr("NO DATA — %1").arg(b.missing), "none");
+        } else {
+            beneish_val_->setText(QString::number(b.m, 'f', 2));
+            if (b.m > services::equity::valuation::kBeneishThreshold)
+                set_badge(beneish_badge_, tr("MANIPULATION RISK (> −1.78)"), "bad");
+            else
+                set_badge(beneish_badge_, tr("UNLIKELY MANIPULATOR (≤ −1.78)"), "good");
+        }
     }
+    scoring_note_->setText(notes.join(QLatin1Char(' ')));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -507,197 +572,77 @@ void EquityValuationTab::run_scoring_models() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void EquityValuationTab::run_multiples() {
-    // Use already-available StockInfo fields — no extra API call needed
-    // for EV/EBITDA, EV/Revenue, P/S. Graham Number needs EPS + book value.
-
-    if (ev_ebitda_val_)
-        ev_ebitda_val_->setText(last_info_.ev_to_ebitda > 0 ? QString("%1x").arg(last_info_.ev_to_ebitda, 0, 'f', 1)
-                                                            : QStringLiteral("—"));
-
-    if (ev_revenue_val_)
-        ev_revenue_val_->setText(last_info_.ev_to_revenue > 0 ? QString("%1x").arg(last_info_.ev_to_revenue, 0, 'f', 1)
-                                                              : QStringLiteral("—"));
-
-    if (price_sales_val_) {
-        double ps = (last_info_.total_revenue > 0 && last_info_.market_cap > 0)
-                        ? last_info_.market_cap / last_info_.total_revenue
-                        : 0.0;
-        price_sales_val_->setText(ps > 0 ? QString("%1x").arg(ps, 0, 'f', 1) : QStringLiteral("—"));
-    }
-
-    // Graham Number = sqrt(22.5 * EPS * BookValue)
-    // EPS ≈ (market_cap / shares_outstanding) / pe_ratio  (approximate)
-    if (graham_val_) {
-        double eps = (last_info_.pe_ratio > 0 && last_info_.current_price > 0)
-                         ? last_info_.current_price / last_info_.pe_ratio
-                         : 0.0;
-        double bv = last_info_.book_value;
-        double graham = (eps > 0 && bv > 0) ? std::sqrt(22.5 * eps * bv) : 0.0;
-        graham_val_->setText(graham > 0 ? fmt_currency(graham) : QStringLiteral("—"));
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Display helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-void EquityValuationTab::display_dcf_result(const QJsonValue& data) {
-    auto obj = data.toObject();
-    // Try common response key names from QuantLib API
-    double intrinsic = obj.value("intrinsic_value_per_share").toDouble(0.0);
-    if (intrinsic == 0.0)
-        intrinsic = obj.value("intrinsic_value").toDouble(0.0);
-    if (intrinsic == 0.0)
-        intrinsic = obj.value("value_per_share").toDouble(0.0);
-
-    if (intrinsic_val_)
-        intrinsic_val_->setText(intrinsic > 0 ? fmt_currency(intrinsic) : QStringLiteral("—"));
-
-    if (current_price_ <= 0 || intrinsic <= 0)
+    const auto& s = last_info_;
+    auto times = [](double v) { return v > 0.0 ? QString::number(v, 'f', 1) + QLatin1Char('x') : fmt::dash(); };
+    if (currency_mismatch()) {
+        for (QLabel* l : {ev_ebitda_val_, ev_revenue_val_, price_sales_val_, fcf_yield_val_, graham_val_})
+            l->setText(tr("n/c"));
+        multiples_note_->setText(tr("Price is in %1 but the statements are in %2 — Yahoo's TTM ratios mix the two, so "
+                                    "they are not shown.")
+                                     .arg(s.currency, statements_currency()));
         return;
-
-    double margin_pct = (intrinsic - current_price_) / current_price_ * 100.0;
-    QString margin_text = QString("%1%2%").arg(margin_pct >= 0 ? "+" : "").arg(margin_pct, 0, 'f', 1);
-
-    if (margin_val_) {
-        margin_val_->setText(margin_text);
-        QString col = margin_pct > 10    ? QString(ui::colors::POSITIVE())
-                      : margin_pct < -10 ? QString(ui::colors::NEGATIVE())
-                                         : QString(ui::colors::AMBER());
-        margin_val_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(col));
     }
-
-    if (verdict_badge_) {
-        if (margin_pct > 20)
-            set_badge(verdict_badge_, tr("UNDERVALUED"), ui::colors::POSITIVE());
-        else if (margin_pct < -20)
-            set_badge(verdict_badge_, tr("OVERVALUED"), ui::colors::NEGATIVE());
-        else
-            set_badge(verdict_badge_, tr("FAIRLY VALUED"), ui::colors::AMBER());
-    }
-}
-
-void EquityValuationTab::display_altman_result(const QJsonValue& data) {
-    auto obj = data.toObject();
-    // NaN sentinel, not 0.0. run_scoring_models() dispatches the Altman request
-    // unconditionally — with all-zero inputs when the balance sheet is empty,
-    // which is the normal case for ETFs, funds and most non-US listings. A 0.0
-    // default fell past both thresholds into "DISTRESS ZONE", so the terminal
-    // published a red bankruptcy verdict for any instrument whose financials
-    // simply did not load. Mirrors the -1 sentinel in display_piotroski_result.
-    const double z = obj.value("z_score").toDouble(obj.value("altman_z_score").toDouble(qQNaN()));
-    const bool has_z = !std::isnan(z);
-
-    if (altman_val_)
-        altman_val_->setText(has_z ? QString::number(z, 'f', 2) : QStringLiteral("—"));
-
-    if (altman_badge_) {
-        if (!has_z)
-            set_badge(altman_badge_, tr("NO DATA"), ui::colors::TEXT_TERTIARY());
-        else if (z > 2.99)
-            set_badge(altman_badge_, tr("SAFE ZONE"), ui::colors::POSITIVE());
-        else if (z >= 1.81)
-            set_badge(altman_badge_, tr("GREY ZONE"), ui::colors::AMBER());
-        else
-            set_badge(altman_badge_, tr("DISTRESS ZONE"), ui::colors::NEGATIVE());
-    }
-}
-
-void EquityValuationTab::display_piotroski_result(const QJsonValue& data) {
-    auto obj = data.toObject();
-    int f = obj.value("f_score").toInt(obj.value("piotroski_f_score").toInt(-1));
-
-    if (piotroski_val_)
-        piotroski_val_->setText(f >= 0 ? QString("%1/9").arg(f) : QStringLiteral("—"));
-
-    if (piotroski_badge_) {
-        if (f < 0)
-            set_badge(piotroski_badge_, tr("NO DATA"), ui::colors::TEXT_TERTIARY());
-        else if (f >= 8)
-            set_badge(piotroski_badge_, tr("STRONG (%1-9)").arg(f), ui::colors::POSITIVE());
-        else if (f >= 5)
-            set_badge(piotroski_badge_, tr("NEUTRAL (%1-7)").arg(f), ui::colors::AMBER());
-        else
-            set_badge(piotroski_badge_, tr("WEAK (0-%1)").arg(f), ui::colors::NEGATIVE());
-    }
-}
-
-void EquityValuationTab::display_beneish_result(const QJsonValue& data) {
-    auto obj = data.toObject();
-    // Same 0.0-default trap as Altman: an absent m_score defaulted to 0.0, which
-    // is above the -2.22 threshold and therefore accused every company with no
-    // returned score of "POSSIBLE MANIPULATOR".
-    const double m = obj.value("m_score").toDouble(obj.value("beneish_m_score").toDouble(qQNaN()));
-    const bool has_m = !std::isnan(m);
-
-    if (beneish_val_)
-        beneish_val_->setText(has_m ? QString::number(m, 'f', 2) : QStringLiteral("—"));
-
-    if (beneish_badge_) {
-        if (!has_m)
-            set_badge(beneish_badge_, tr("NO DATA"), ui::colors::TEXT_TERTIARY());
-        else if (m < -2.22)
-            set_badge(beneish_badge_, tr("UNLIKELY MANIPULATOR"), ui::colors::POSITIVE());
-        else
-            set_badge(beneish_badge_, tr("POSSIBLE MANIPULATOR"), ui::colors::NEGATIVE());
-    }
+    ev_ebitda_val_->setText(times(s.ev_to_ebitda));
+    ev_revenue_val_->setText(times(s.ev_to_revenue));
+    price_sales_val_->setText(s.total_revenue > 0.0 && s.market_cap > 0.0 ? times(s.market_cap / s.total_revenue)
+                                                                           : fmt::dash());
+    fcf_yield_val_->setText(s.market_cap > 0.0 && s.free_cashflow != 0.0 ? fmt::pct(s.free_cashflow / s.market_cap, 2)
+                                                                         : fmt::dash());
+    // Graham number = √(22.5 × EPS × BVPS); EPS from price ÷ trailing P/E.
+    const double eps = (s.pe_ratio > 0.0 && s.current_price > 0.0) ? s.current_price / s.pe_ratio : 0.0;
+    const double graham = (eps > 0.0 && s.book_value > 0.0) ? std::sqrt(22.5 * eps * s.book_value) : 0.0;
+    graham_val_->setText(graham > 0.0 ? fmt_money(graham, s.currency) : fmt::dash());
+    multiples_note_->setText(s.symbol.isEmpty() ? QString()
+                                                : tr("Trailing-12-month figures from Yahoo Finance; FCF yield = "
+                                                     "levered FCF ÷ market cap."));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Utility
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+QString EquityValuationTab::statements_currency() const {
+    return last_info_.financial_currency.isEmpty() ? last_info_.currency : last_info_.financial_currency;
+}
+
+bool EquityValuationTab::currency_mismatch() const {
+    return !last_info_.financial_currency.isEmpty() && !last_info_.currency.isEmpty() &&
+           last_info_.financial_currency.compare(last_info_.currency, Qt::CaseInsensitive) != 0;
+}
 
 void EquityValuationTab::clear_results() {
-    auto reset = [](QLabel* l) {
-        if (l)
-            l->setText(QStringLiteral("—"));
-    };
-    auto clear_badge = [](QLabel* l) {
-        if (l)
-            l->setText(QString());
-    };
-
-    reset(intrinsic_val_);
-    reset(current_price_val_);
-    reset(margin_val_);
-    clear_badge(verdict_badge_);
-    reset(altman_val_);
-    clear_badge(altman_badge_);
-    reset(piotroski_val_);
-    clear_badge(piotroski_badge_);
-    reset(beneish_val_);
-    clear_badge(beneish_badge_);
-    reset(ev_ebitda_val_);
-    reset(ev_revenue_val_);
-    reset(price_sales_val_);
-    reset(graham_val_);
+    for (QLabel* l : {intrinsic_val_, current_price_val_, margin_val_, terminal_share_val_, altman_val_,
+                      piotroski_val_, beneish_val_, ev_ebitda_val_, ev_revenue_val_, price_sales_val_, fcf_yield_val_,
+                      graham_val_}) {
+        if (l) {
+            l->setText(fmt::dash());
+            l->setToolTip(QString());
+        }
+    }
+    for (QLabel* b : {verdict_badge_, altman_badge_, piotroski_badge_, beneish_badge_})
+        if (b)
+            b->setVisible(false);
+    if (dcf_note_)
+        dcf_note_->setVisible(false);
+    if (scoring_note_)
+        scoring_note_->clear();
+    if (multiples_note_)
+        multiples_note_->clear();
 }
 
-void EquityValuationTab::set_badge(QLabel* badge, const QString& text, const QString& hex_color) {
+void EquityValuationTab::set_badge(QLabel* badge, const QString& text, const char* tone) {
     if (!badge)
         return;
     badge->setText(text);
-    badge->setStyleSheet(QString("background:%1; color:#000000; padding:2px 10px;"
-                                 " border-radius:3px; font-size:10px; font-weight:700;")
-                             .arg(hex_color));
+    badge->setProperty("tone", QString::fromLatin1(tone));
+    repolish(badge);
+    badge->setVisible(true);
 }
 
-QString EquityValuationTab::fmt_currency(double value) const {
-    QString cs = QStringLiteral("$");
-    if (current_currency_ == QStringLiteral("INR"))
-        cs = QStringLiteral("₹");
-    else if (current_currency_ == QStringLiteral("EUR"))
-        cs = QStringLiteral("€");
-    else if (current_currency_ == QStringLiteral("GBP"))
-        cs = QStringLiteral("£");
-    return QString("%1%2").arg(cs).arg(value, 0, 'f', 2);
-}
-
-double EquityValuationTab::get_stmt_val(const QVector<QPair<QString, QJsonObject>>& stmt, const QString& key,
-                                        int period_idx) const {
-    if (period_idx >= stmt.size())
-        return 0.0;
-    return stmt[period_idx].second.value(key).toDouble(0.0);
+QString EquityValuationTab::fmt_money(double value, const QString& currency) const {
+    if (!std::isfinite(value))
+        return fmt::dash();
+    return fmt::price(value, currency.isEmpty() ? QStringLiteral("USD") : currency, std::fabs(value) >= 1000.0 ? 0 : 2);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -710,6 +655,11 @@ void EquityValuationTab::changeEvent(QEvent* e) {
             it.key()->setText(tr(it.value()));
         if (calc_btn_)
             calc_btn_->setText(tr("CALCULATE"));
+        if (!current_symbol_.isEmpty()) {
+            run_multiples();
+            if (financials_loaded_)
+                run_scoring_models();
+        }
     }
     QWidget::changeEvent(e);
 }

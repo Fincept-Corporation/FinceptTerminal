@@ -43,6 +43,14 @@ TodayPnLWidget::TodayPnLWidget(const QJsonObject& cfg, QWidget* parent) : BaseWi
     header_hint_ = new QLabel("—");
     vl->addWidget(header_hint_);
 
+    // The hero is the broker's position P&L summed over every row (open and
+    // closed today) — under a "TODAY P&L" title it read as the day's P&L,
+    // which is the "Day" row below. Caption it.
+    hero_caption_ = new QLabel(tr("NET P&L · ALL POSITIONS"));
+    hero_caption_->setAlignment(Qt::AlignCenter);
+    hero_caption_->setObjectName("todayPnlRowLabel");
+    vl->addWidget(hero_caption_);
+
     total_pnl_label_ = new QLabel("—");
     total_pnl_label_->setAlignment(Qt::AlignCenter);
     total_pnl_label_->setObjectName("todayPnlHero");
@@ -167,12 +175,20 @@ void TodayPnLWidget::populate(const QVector<trading::BrokerPosition>& rows) {
     double total_pnl = 0.0;
     double day_pnl = 0.0;
     int open_positions = 0;
+    bool any_day_pnl = false;
+    bool any_pnl = false;
     for (const auto& p : rows) {
         total_pnl += p.pnl;
         day_pnl += p.day_pnl;
+        any_day_pnl = any_day_pnl || p.day_pnl != 0.0;
+        any_pnl = any_pnl || p.pnl != 0.0;
         if (std::abs(p.quantity) > 0.0)
             ++open_positions;
     }
+    // Most broker adapters never fill BrokerPosition::day_pnl, so it arrives
+    // as an exact 0 on every row. Printing "+0.00" then states a flat day that
+    // nobody measured — show "n/a" when every row has P&L but none a day P&L.
+    const bool day_unreported = !any_day_pnl && any_pnl;
     // Realized ≈ total P&L on zero-quantity rows (closed intraday)
     double realized = 0.0;
     for (const auto& p : rows) {
@@ -184,18 +200,29 @@ void TodayPnLWidget::populate(const QVector<trading::BrokerPosition>& rows) {
     const auto* broker = trading::BrokerRegistry::instance().get(broker_id_);
     const bool inr = !broker || broker->profile().currency == QLatin1String("INR");
 
-    const QColor total_col = total_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
-    total_pnl_label_->setText(fmt_pnl(total_pnl, inr));
-    total_pnl_label_->setStyleSheet(
-        QString("color:%1;font-size:24px;font-weight:700;background:transparent;padding:4px 0;").arg(total_col.name()));
+    auto tone = [](double v) {
+        return v > 0 ? ui::colors::POSITIVE() : v < 0 ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY();
+    };
+    total_pnl_label_->setText(rows.isEmpty() ? QStringLiteral("—") : fmt_pnl(total_pnl, inr));
+    set_css_cached(total_pnl_label_,
+                   QString("color:%1;font-size:24px;font-weight:700;background:transparent;padding:4px 0;")
+                       .arg(rows.isEmpty() ? ui::colors::TEXT_TERTIARY() : tone(total_pnl)));
 
-    day_pnl_value_->setText(fmt_pnl(day_pnl, inr));
-    day_pnl_value_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
-                                      .arg(day_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    if (day_unreported) {
+        day_pnl_value_->setText(tr("n/a"));
+        day_pnl_value_->setToolTip(tr("This broker's positions feed does not report day (mark-to-market) P&L."));
+        set_css_cached(day_pnl_value_, QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
+                                           .arg(ui::colors::TEXT_TERTIARY()));
+    } else {
+        day_pnl_value_->setText(fmt_pnl(day_pnl, inr));
+        day_pnl_value_->setToolTip(QString());
+        set_css_cached(day_pnl_value_, QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
+                                           .arg(tone(day_pnl)));
+    }
 
     realized_pnl_value_->setText(fmt_pnl(realized, inr));
-    realized_pnl_value_->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;")
-                                           .arg(realized >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    set_css_cached(realized_pnl_value_,
+                   QString("color:%1;font-size:12px;font-weight:600;background:transparent;").arg(tone(realized)));
 
     positions_value_->setText(QString::number(open_positions));
 
@@ -244,6 +271,11 @@ void TodayPnLWidget::apply_styles() {
 
     const QString row_label_css =
         QString("color:%1;font-size:10px;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
+    if (hero_caption_)
+        hero_caption_->setStyleSheet(row_label_css + "letter-spacing:0.5px;");
+    reset_css_cache(total_pnl_label_);
+    reset_css_cache(day_pnl_value_);
+    reset_css_cache(realized_pnl_value_);
     if (day_pnl_label_)
         day_pnl_label_->setStyleSheet(row_label_css);
     if (realized_pnl_label_)
@@ -265,6 +297,8 @@ void TodayPnLWidget::retranslateUi() {
         day_pnl_label_->setText(tr("Day"));
     if (realized_pnl_label_)
         realized_pnl_label_->setText(tr("Realized"));
+    if (hero_caption_)
+        hero_caption_->setText(tr("NET P&L · ALL POSITIONS"));
     if (positions_label_)
         positions_label_->setText(tr("Positions"));
     if (header_hint_ && account_id_.isEmpty())

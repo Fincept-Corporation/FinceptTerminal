@@ -2,6 +2,7 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QDialog>
@@ -71,6 +72,17 @@ SparklineStripWidget::SparklineStripWidget(const QJsonObject& cfg, QWidget* pare
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
 
+    // Title-bar refresh was not wired (a dead button under the watchdog's
+    // "click refresh to retry"). Force past min_interval; rate limits apply.
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        QStringList topics;
+        topics.reserve(symbols_.size());
+        for (const auto& sym : symbols_)
+            topics.append(QStringLiteral("market:sparkline:") + sym);
+        if (!topics.isEmpty())
+            datahub::DataHub::instance().request(topics, /*force=*/true);
+    });
+
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
@@ -130,8 +142,10 @@ void SparklineStripWidget::build_rows() {
         const QString& sym = symbols_[i];
         Row r;
         r.symbol = new QLabel(sym);
+        r.symbol->setObjectName("sparkSym");
         r.spark = new SparklineCanvas();
         r.last = new QLabel("—");
+        r.last->setObjectName("sparkLast");
         r.last->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         grid->addWidget(r.symbol, i, 0);
         grid->addWidget(r.spark, i, 1);
@@ -185,7 +199,7 @@ void SparklineStripWidget::on_points(const QString& symbol, const QVector<double
     if (it == rows_.end() || points.isEmpty())
         return;
     it->spark->set_points(points);
-    it->last->setText(QString::number(points.last(), 'f', 2));
+    it->last->setText(dash_fmt::price(points.last(), symbol));
     received_.insert(symbol);
     set_loading_progress(received_.size(), symbols_.size());
 }
@@ -226,15 +240,15 @@ void SparklineStripWidget::on_theme_changed() {
 }
 
 void SparklineStripWidget::apply_styles() {
-    const QString sym_css =
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
-    const QString last_css =
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
+    // One sheet on the rows' parent (object-name selectors) — this used to
+    // be two setStyleSheet() calls per row, inside the row loop.
+    if (QWidget* host = content_layout() ? content_layout()->parentWidget() : nullptr)
+        host->setStyleSheet(
+            QString("*{background:transparent;}"  // what BaseWidget set on this host
+                    "QLabel#sparkSym{color:%1;font-size:11px;font-weight:700;background:transparent;}"
+                    "QLabel#sparkLast{color:%1;font-size:11px;font-weight:600;background:transparent;}")
+                .arg(ui::colors::TEXT_PRIMARY()));
     for (auto it = rows_.begin(); it != rows_.end(); ++it) {
-        if (it->symbol)
-            it->symbol->setStyleSheet(sym_css);
-        if (it->last)
-            it->last->setStyleSheet(last_css);
         if (it->spark)
             it->spark->update();
     }

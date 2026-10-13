@@ -86,6 +86,26 @@ class UnifiedTrading : public QObject {
     void place_order_auto_split(const QString& account_id, const UnifiedOrder& order,
                                 std::function<void(const SplitOrderResult&)> callback);
 
+    // --- Basket unwind (partial-failure recovery) ---
+    // A multi-leg basket is NOT atomic: legs go out one by one, so a failure part
+    // way leaves the placed legs as naked exposure (e.g. the short leg of a spread
+    // without its hedge). unwind_basket_legs() undoes the legs that were placed:
+    // for each successful leg it reads the broker's order book (truth, not our
+    // request), cancels any unfilled remainder, re-reads the book, then sends an
+    // opposite-side MARKET order for exactly the FILLED quantity in the same
+    // product, through place_order() (validation + risk gate + rate limit).
+    // Never reverses a leg whose fill it cannot verify — it reports it instead.
+    // BLOCKING (broker round-trips): call from a worker thread.
+    struct UnwindLegResult {
+        QString symbol;
+        QString order_id;
+        bool ok = false;
+        QString action; // what was done, e.g. "cancelled remainder; reversed 50"
+        QString error;
+    };
+    QVector<UnwindLegResult> unwind_basket_legs(const QString& account_id,
+                                                const QVector<BasketOrderResult::OrderResult>& legs);
+
     UnifiedTrading(const UnifiedTrading&) = delete;
     UnifiedTrading& operator=(const UnifiedTrading&) = delete;
 

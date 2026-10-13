@@ -19,7 +19,7 @@
 //   - AgentsTools_Discovery.cpp  — list / discover / introspection / cache
 //   - AgentsTools_Execution.cpp  — run_agent + routing + workflows + streaming
 //   - AgentsTools_Repos.cpp      — planner + memory + config/workflow CRUD +
-//                                  sessions + paper trading + decisions
+//                                  sessions + decisions
 // Shared helpers (JSON converters, dispatch_agent_run) live in
 // AgentsTools_internal.h.
 

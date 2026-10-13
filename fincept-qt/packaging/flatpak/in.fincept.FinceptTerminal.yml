@@ -58,7 +58,8 @@ modules:
       # mutable, so the commit is what makes the build reproducible.
       # Pinned to the latest *released* tag. Bump both fields together on each
       # release; a tag that does not exist fails the build at source fetch,
-      # which is what v4.5.0 did here before it was ever tagged.
+      # which is what v4.5.0 did here before it was ever tagged. Keep this on the
+      # last tag that exists; move it to v4.5.1 only after that tag is pushed.
       - type: git
         url: https://github.com/Fincept-Corporation/FinceptTerminal.git
         tag: v4.4.1

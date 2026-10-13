@@ -7,6 +7,7 @@
 #include "mcp/JobRegistry.h"
 #include "mcp/SchemaValidator.h"
 #include "mcp/TerminalMcpBridge.h"
+#include "mcp/server/CallApproval.h"
 
 #include <QCoreApplication>
 #include <QFutureWatcher>
@@ -156,7 +157,6 @@ std::vector<McpProvider::ToolAuditInfo> McpProvider::audit_all_tools() const {
         info.is_destructive = def.is_destructive;
         info.auth_required = def.auth_required;
         info.input_schema = def.input_schema.to_json();
-        info.legacy_aliases = def.legacy_aliases;
         result.push_back(std::move(info));
     }
     return result;
@@ -296,26 +296,13 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
             return p.future();
         };
 
-        // Phase 6.10: try canonical name first, then any registered alias.
-        // Aliases let us migrate names without breaking saved chats / Finagent
-        // workflows that reference the old name.
-        QString resolved = name;
-        if (!tools_.contains(resolved)) {
-            for (auto it = tools_.constBegin(); it != tools_.constEnd(); ++it) {
-                if (it.value().legacy_aliases.contains(name)) {
-                    LOG_INFO(TAG, QString("Tool called by legacy name '%1' — canonical '%2'").arg(name, it.key()));
-                    resolved = it.key();
-                    break;
-                }
-            }
-        }
-
-        if (!tools_.contains(resolved))
+        const auto it = tools_.constFind(name);
+        if (it == tools_.constEnd())
             return fail_now("Tool not found: " + name);
-        if (disabled_tools_.contains(resolved))
-            return fail_now("Tool is disabled: " + resolved);
+        if (disabled_tools_.contains(name))
+            return fail_now("Tool is disabled: " + name);
 
-        const auto& def = tools_[resolved];
+        const ToolDef& def = it.value();
         sync_handler = def.handler;
         async_handler = def.async_handler;
         schema = def.input_schema;
@@ -324,7 +311,7 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
         is_destructive = def.is_destructive;
 
         if (!async_handler && !sync_handler)
-            return fail_now("Tool '" + resolved + "' has no handler");
+            return fail_now("Tool '" + name + "' has no handler");
     }
 
     // Phase 6.3: authorization gate — shared with McpService's external-tool
@@ -520,31 +507,6 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
 // LLM Integration
 // ============================================================================
 
-QJsonArray McpProvider::format_tools_for_openai() const {
-    auto tools = list_tools();
-    QJsonArray result;
-
-    for (const auto& tool : tools) {
-        QJsonObject schema = tool.input_schema;
-        if (schema.isEmpty()) {
-            schema["type"] = "object";
-            schema["properties"] = QJsonObject();
-        }
-
-        QJsonObject fn;
-        fn["name"] = QString(INTERNAL_SERVER_ID) + "__" + encode_tool_name_for_wire(tool.name);
-        fn["description"] = tool.description;
-        fn["parameters"] = schema;
-
-        QJsonObject entry;
-        entry["type"] = "function";
-        entry["function"] = fn;
-        result.append(entry);
-    }
-
-    return result;
-}
-
 QPair<QString, QString> McpProvider::parse_openai_function_name(const QString& fn_name) {
     int pos = fn_name.indexOf("__");
     if (pos > 0 && pos < fn_name.length() - 2)
@@ -646,7 +608,13 @@ bool McpProvider::destructive_allowed() {
     if (TerminalMcpBridge::is_destructive_allowed())
         return true;
 
-    // 2. Session grant, seeded once from the persisted setting.
+    // 2. Per-call user approval — the dispatcher wraps a call the user approved
+    //    in ToolApprovalDialog in a ScopedApprovedCall on this same thread.
+    //    Thread-local and RAII-scoped, so it can only ever cover that one call.
+    if (ScopedApprovedCall::active())
+        return true;
+
+    // 3. Session grant, seeded once from the persisted setting.
     int v = s_destructive_session_grant.load(std::memory_order_relaxed);
     if (v < 0) {
         v = AppConfig::instance().get(QString::fromLatin1(kDestructiveSettingKey), QVariant(false)).toBool() ? 1 : 0;

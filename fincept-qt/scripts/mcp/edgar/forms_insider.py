@@ -2,233 +2,113 @@
 Form 4 Insider Transaction Extraction
 ======================================
 
-Extract insider trading data from Form 4 filings including:
-- Buy/sell transactions
-- Officer/director information
-- Transaction prices and shares
-- Ownership before/after
-- Derivative vs non-derivative securities
+Insider trading data from Form 4 filings (MCP edgar_insider_* tools):
+- owner name / role (director, officer, 10% owner)
+- non-derivative transactions with code, shares, price, value, shares owned after
+- open-market buy vs sell summary
+
+Parsing is shared with research.py (Equity Research FILINGS tab). Only transaction
+codes P (purchase) and S (sale) are counted as buys and sells: option exercises (M),
+tax withholding (F), grants (A) and gifts (G) are not trading decisions, and counting
+them as buys/sells — as this module used to — reported insiders "buying" on every
+vesting date.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import traceback
 
-try:
-    from edgar import Company
-    EDGAR_AVAILABLE = True
-except ImportError:
-    EDGAR_AVAILABLE = False
+from .base import EdgarError
+from .research import _company, _NotFound, load_form4s, summarize_form4s
 
-from .base import EdgarError, check_edgar_available
+
+def _guard(command: str, fn, *args) -> Dict[str, Any]:
+    try:
+        return fn(*args)
+    except _NotFound as e:
+        return {"error": EdgarError(command, str(e)).to_dict()}
+    except Exception as e:
+        return {"error": EdgarError(command, str(e), traceback.format_exc()).to_dict()}
+
+
+def _transactions(ticker: str, limit: int) -> Dict[str, Any]:
+    parsed, _failed = load_form4s(_company(ticker), limit)
+    rows = [{
+        "filing_date": p["filed"],
+        "accession_number": p["accession"],
+        "owner": p["insider"],
+        "role": p["role"],
+        "is_director": p["is_director"],
+        "is_officer": p["is_officer"],
+        "transaction_codes": sorted({t["code"] for t in p["transactions"]}),
+    } for p in parsed]
+    return {"success": True, "data": rows, "count": len(rows)}
 
 
 def get_insider_transactions(ticker: str, limit: int = 25) -> Dict[str, Any]:
-    """
-    Get insider transactions (Form 4 filings)
+    """Recent Form 4 filings with owner and role."""
+    return _guard("get_insider_transactions", _transactions, ticker, limit)
 
-    Args:
-        ticker: Stock ticker symbol
-        limit: Number of transactions to retrieve
 
-    Returns:
-        List of insider transactions with basic info
-    """
-    try:
-        check_edgar_available()
-        company = Company(ticker)
-        filings = company.get_filings(form="4")
-
-        if not filings or len(filings) == 0:
-            return {
-                "success": True,
-                "data": [],
-                "count": 0
-            }
-
-        transactions = []
-        count = 0
-
-        for filing in filings:
-            if count >= limit:
-                break
-
-            try:
-                form4 = filing.obj()
-
-                if form4:
-                    transactions.append({
-                        "filing_date": str(filing.filing_date),
-                        "accession_number": filing.accession_number,
-                        "owner": form4.owner.name if hasattr(form4, 'owner') and hasattr(form4.owner, 'name') else None,
-                        "is_director": form4.owner.is_director if hasattr(form4, 'owner') and hasattr(form4.owner, 'is_director') else None,
-                        "is_officer": form4.owner.is_officer if hasattr(form4, 'owner') and hasattr(form4.owner, 'is_officer') else None,
-                    })
-                    count += 1
-            except:
-                # Skip if can't parse
-                pass
-
-        return {
-            "success": True,
-            "data": transactions,
-            "count": len(transactions)
-        }
-    except Exception as e:
-        return {"error": EdgarError("get_insider_transactions", str(e), traceback.format_exc()).to_dict()}
+def _detailed(ticker: str, limit: int) -> Dict[str, Any]:
+    parsed, _failed = load_form4s(_company(ticker), limit)
+    rows = []
+    for p in parsed:
+        rows.append({
+            "filing_date": p["filed"],
+            "accession_number": p["accession"],
+            "url": p.get("url"),
+            "owner": {
+                "name": p["insider"],
+                "is_director": p["is_director"],
+                "is_officer": p["is_officer"],
+                "is_ten_percent_owner": p["is_ten_pct_owner"],
+                "officer_title": p["officer_title"] or p["role"],
+            },
+            "transactions": [{
+                "transaction_date": p["trade_date"],
+                "transaction_code": t["code"],
+                "transaction_type": t["code_label"],
+                "shares": t["shares"],
+                "price_per_share": t["price"],
+                "value": t["value"],
+                "shares_owned_after": p["owned_after"],
+                "rule_10b5_1_plan": t["plan_10b5_1"],
+            } for t in p["transactions"]],
+            "transaction_count": len(p["transactions"]),
+        })
+    return {"success": True, "data": rows, "count": len(rows)}
 
 
 def get_insider_transactions_detailed(ticker: str, limit: int = 25) -> Dict[str, Any]:
-    """
-    Get detailed insider transactions with full transaction info
+    """Form 4 filings with every non-derivative transaction (code, shares, price, value)."""
+    return _guard("get_insider_transactions_detailed", _detailed, ticker, limit)
 
-    Args:
-        ticker: Stock ticker symbol
-        limit: Number of transactions to retrieve
 
-    Returns:
-        Detailed transaction data including prices, shares, ownership
-    """
-    try:
-        check_edgar_available()
-        company = Company(ticker)
-        filings = company.get_filings(form="4")
-
-        if not filings or len(filings) == 0:
-            return {
-                "success": True,
-                "data": [],
-                "count": 0
-            }
-
-        transactions = []
-        count = 0
-
-        for filing in filings:
-            if count >= limit:
-                break
-
-            try:
-                form4 = filing.obj()
-
-                if not form4:
-                    continue
-
-                # Extract owner info
-                owner_info = {
-                    "name": form4.owner.name if hasattr(form4, 'owner') and hasattr(form4.owner, 'name') else None,
-                    "is_director": form4.owner.is_director if hasattr(form4, 'owner') and hasattr(form4.owner, 'is_director') else False,
-                    "is_officer": form4.owner.is_officer if hasattr(form4, 'owner') and hasattr(form4.owner, 'is_officer') else False,
-                    "is_ten_percent_owner": form4.owner.is_ten_percent_owner if hasattr(form4, 'owner') and hasattr(form4.owner, 'is_ten_percent_owner') else False,
-                    "officer_title": form4.owner.officer_title if hasattr(form4, 'owner') and hasattr(form4.owner, 'officer_title') else None,
-                }
-
-                # Extract transactions
-                txn_data = []
-                if hasattr(form4, 'transactions'):
-                    for txn in form4.transactions:
-                        txn_info = {
-                            "transaction_date": str(txn.transaction_date) if hasattr(txn, 'transaction_date') else None,
-                            "transaction_code": txn.transaction_code if hasattr(txn, 'transaction_code') else None,
-                            "shares": float(txn.shares) if hasattr(txn, 'shares') and txn.shares else None,
-                            "price_per_share": float(txn.price_per_share) if hasattr(txn, 'price_per_share') and txn.price_per_share else None,
-                            "transaction_type": "Buy" if hasattr(txn, 'transaction_code') and txn.transaction_code in ['P', 'M'] else "Sell" if hasattr(txn, 'transaction_code') and txn.transaction_code in ['S', 'F'] else "Other",
-                            "ownership_form": txn.ownership_form if hasattr(txn, 'ownership_form') else None,
-                            "shares_owned_after": float(txn.shares_owned_after) if hasattr(txn, 'shares_owned_after') and txn.shares_owned_after else None,
-                        }
-                        txn_data.append(txn_info)
-
-                transactions.append({
-                    "filing_date": str(filing.filing_date),
-                    "accession_number": filing.accession_number,
-                    "owner": owner_info,
-                    "transactions": txn_data,
-                    "transaction_count": len(txn_data)
-                })
-
-                count += 1
-
-            except Exception as e:
-                # Skip problematic filings
-                continue
-
-        return {
-            "success": True,
-            "data": transactions,
-            "count": len(transactions)
-        }
-    except Exception as e:
-        return {"error": EdgarError("get_insider_transactions_detailed", str(e), traceback.format_exc()).to_dict()}
+def _summary(ticker: str, limit: int) -> Dict[str, Any]:
+    parsed, failed = load_form4s(_company(ticker), limit)
+    s = summarize_form4s(parsed)
+    dates = sorted(p["filed"] for p in parsed if p.get("filed"))
+    return {"success": True, "data": {
+        "filings_analyzed": len(parsed),
+        "filings_unparsed": failed,
+        "window_from": dates[0] if dates else None,
+        "window_to": dates[-1] if dates else None,
+        "total_transactions": s["buys"]["count"] + s["sells"]["count"],
+        "buys": s["buys"]["count"],
+        "sells": s["sells"]["count"],
+        "buy_volume": s["buys"]["shares"],
+        "sell_volume": s["sells"]["shares"],
+        "net_volume": s["net_shares"],
+        "buy_value": s["buys"]["value"],
+        "sell_value": s["sells"]["value"],
+        "net_value": s["net_value"],
+        "sells_under_10b5_1": s["sells_under_10b5_1"],
+        "other_transactions": s["other_codes"],
+        "insiders": s["insiders"],
+        "note": "buys/sells count open-market codes P and S only",
+    }}
 
 
 def get_insider_summary(ticker: str, limit: int = 50) -> Dict[str, Any]:
-    """
-    Get summary of insider activity (buy vs sell)
-
-    Args:
-        ticker: Stock ticker symbol
-        limit: Number of filings to analyze
-
-    Returns:
-        Summary statistics of insider activity
-    """
-    try:
-        check_edgar_available()
-        company = Company(ticker)
-        filings = company.get_filings(form="4")
-
-        if not filings or len(filings) == 0:
-            return {
-                "success": True,
-                "data": {
-                    "total_transactions": 0,
-                    "buys": 0,
-                    "sells": 0,
-                    "buy_volume": 0,
-                    "sell_volume": 0
-                }
-            }
-
-        buys = 0
-        sells = 0
-        buy_volume = 0
-        sell_volume = 0
-        count = 0
-
-        for filing in filings:
-            if count >= limit:
-                break
-
-            try:
-                form4 = filing.obj()
-                if not form4 or not hasattr(form4, 'transactions'):
-                    continue
-
-                for txn in form4.transactions:
-                    if hasattr(txn, 'transaction_code') and hasattr(txn, 'shares'):
-                        code = txn.transaction_code
-                        shares = float(txn.shares) if txn.shares else 0
-
-                        if code in ['P', 'M']:  # Purchase
-                            buys += 1
-                            buy_volume += shares
-                        elif code in ['S', 'F']:  # Sale
-                            sells += 1
-                            sell_volume += shares
-
-                count += 1
-            except:
-                continue
-
-        return {
-            "success": True,
-            "data": {
-                "total_transactions": buys + sells,
-                "buys": buys,
-                "sells": sells,
-                "buy_volume": buy_volume,
-                "sell_volume": sell_volume,
-                "net_volume": buy_volume - sell_volume
-            }
-        }
-    except Exception as e:
-        return {"error": EdgarError("get_insider_summary", str(e), traceback.format_exc()).to_dict()}
+    """Open-market buying vs selling over the most recent `limit` Form 4 filings."""
+    return _guard("get_insider_summary", _summary, ticker, min(int(limit), 60))

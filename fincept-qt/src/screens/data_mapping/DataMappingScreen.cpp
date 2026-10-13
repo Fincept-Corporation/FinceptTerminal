@@ -258,7 +258,7 @@ void DataMappingScreen::retranslateUi() {
     if (schemas_count_lbl_)
         schemas_count_lbl_->setText(tr("Schemas: %1").arg(7));
     if (parsers_count_lbl_)
-        parsers_count_lbl_->setText(tr("Parsers: %1").arg(6));
+        parsers_count_lbl_->setText(tr("Parsers: %1").arg(1));
     if (status_mappings_)
         status_mappings_->setText(tr("Saved: %1").arg(saved_mappings_.size()));
 
@@ -293,25 +293,17 @@ void DataMappingScreen::retranslateUi() {
     set_row_label(api_auth_value_row_, tr("AUTH VALUE"));
     set_row_label(api_headers_row_, tr("HEADERS (one per line)"));
     set_row_label(api_body_row_, tr("REQUEST BODY (JSON)"));
-    set_row_label(api_timeout_row_, tr("TIMEOUT"));
     if (api_name_)
         api_name_->setPlaceholderText(tr("e.g. Upstox OHLCV"));
     if (api_auth_value_)
         api_auth_value_->setPlaceholderText(tr("Token / API Key value"));
-    if (api_timeout_)
-        api_timeout_->setSuffix(tr(" sec"));
     if (api_test_btn_)
         api_test_btn_->setText(tr("TEST API REQUEST"));
 
     // Step 1 — schema
     if (schema_panel_title_)
         schema_panel_title_->setText(tr("SCHEMA SELECTION"));
-    set_row_label(schema_type_row_, tr("SCHEMA TYPE"));
     set_row_label(schema_select_row_, tr("SELECT SCHEMA"));
-    if (schema_type_ && schema_type_->count() >= 2) {
-        schema_type_->setItemText(0, tr("Predefined Schema"));
-        schema_type_->setItemText(1, tr("Custom Schema"));
-    }
     if (schema_fields_table_)
         schema_fields_table_->setHorizontalHeaderLabels({tr("Field"), tr("Type"), tr("Required"), tr("Description")});
 

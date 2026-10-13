@@ -25,6 +25,8 @@
 #include <QWidget>
 
 class QPushButton;
+class QSpinBox;
+class QTimer;
 
 namespace fincept::screens {
 
@@ -36,8 +38,15 @@ class PendingOrdersPanel : public QWidget {
     // Reload + show the popover with its bottom-right corner at `global_anchor`.
     void popup_at(const QPoint& global_anchor);
 
+    // Kill switch with its strong confirmation (lists every LIVE account, requires
+    // typing KILL) and a per-account result report parented to `parent`. Shared so
+    // any trading surface can offer the same switch. Returns true when engaged.
+    static bool confirm_and_run_kill_switch(QWidget* parent);
+
   protected:
     void changeEvent(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
   private:
     void build_ui();
@@ -58,19 +67,15 @@ class PendingOrdersPanel : public QWidget {
     bool approve_row(const QString& pending_id);
     bool reject_row(const QString& pending_id);
 
-    // Age of a queued order as display text; sets *stale_out when the order has
-    // been waiting long enough that executing it at market is questionable.
-    static QString order_age_text(const QDateTime& created, bool* stale_out = nullptr);
+    // Age of a queued order as display text.
+    static QString order_age_text(const QDateTime& created);
+    // Remaining approval window as display text ("4:32", "EXPIRED").
+    static QString remaining_text(qint64 secs);
+    // Re-render only the Expires column (1 Hz while visible) — no row rebuild.
+    void tick_countdown();
 
-    // A queued order older than this is flagged in the table and in the approval
-    // confirmation — and REFUSED by ActionCenter::approve_order().
-    //
-    // Derived from ActionCenter's constant rather than duplicated: this panel's
-    // warning copy and the engine's enforcement must describe the same
-    // threshold. If they drifted, the UI would either nag about orders that
-    // still execute fine, or stay silent about ones about to be refused —
-    // both worse than no warning at all.
-    static constexpr qint64 kStaleOrderSecs = fincept::trading::ActionCenter::kPendingOrderTtlMinutes * 60;
+    // Rows whose approval window ends within this many seconds are highlighted.
+    static constexpr qint64 kExpiringSoonSecs = 60;
 
     // ── Widgets ──────────────────────────────────────────────────────────────
     QLabel* title_label_ = nullptr;
@@ -95,6 +100,11 @@ class PendingOrdersPanel : public QWidget {
 
     QPushButton* approve_all_btn_ = nullptr;
     QPushButton* reject_all_btn_ = nullptr;
+
+    QLabel* ttl_caption_ = nullptr;
+    QSpinBox* ttl_spin_ = nullptr;     // approval window (minutes), persisted by ActionCenter
+    QPushButton* kill_btn_ = nullptr;  // kill switch
+    QTimer* countdown_timer_ = nullptr; // 1 Hz Expires-column refresh, runs only while shown
 };
 
 } // namespace fincept::screens

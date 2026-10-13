@@ -17,6 +17,7 @@ Strategies unique to bt:
 
 import sys
 import numpy as np
+import pandas as pd
 from typing import Dict, Any, Callable, Tuple, List, Optional
 
 
@@ -322,12 +323,30 @@ def _vwap_calc(high, low, close, volume):
 # bt algo helpers — try to import bt, fall back gracefully
 # ============================================================================
 
-_BT_AVAILABLE = False
-try:
-    import bt as _bt
-    _BT_AVAILABLE = True
-except ImportError:
-    _bt = None
+from bt_data import import_bt_library as _import_bt
+
+_bt = _import_bt()
+_BT_AVAILABLE = _bt is not None
+
+
+# ── No look-ahead ──────────────────────────────────────────────────────────
+# bt rebalances at the CLOSE of the bar it runs on. A signal (or a momentum /
+# volatility estimate) computed from that same close therefore trades on
+# information it could not have had before the close. Every selection and
+# weighting below uses data up to the PREVIOUS bar: SelectWhere gets the signal
+# shifted by one bar and the lookback algos get lag=1 day.
+_LAG = pd.DateOffset(days=1)
+
+
+def _lagged(signal):
+    """Signal known at the previous close (bool/float frame shifted one bar)."""
+    return signal.shift(1).fillna(0)
+
+
+def _days(n):
+    """bt lookbacks are DateOffsets; an int lookback raised inside bt.run and the
+    provider silently switched to its numpy fallback."""
+    return pd.DateOffset(days=int(n))
 
 
 def _make_bt_strategy(name, algos, data):
@@ -370,9 +389,13 @@ def _build_inv_vol(params):
     def build(data, name='inv_vol'):
         if _BT_AVAILABLE:
             algos = [
+                # Wait until the lookback window has data (the first rebalance otherwise
+                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
+                # it, the counter only advanced on month starts (lookback MONTHS).
+                _bt.algos.RunAfterDays(int(lookback) + 2),
                 _bt.algos.RunMonthly(),
                 _bt.algos.SelectAll(),
-                _bt.algos.WeighInvVol(lookback=lookback),
+                _bt.algos.WeighInvVol(lookback=_days(lookback), lag=_LAG),
                 _bt.algos.Rebalance(),
             ]
             return _bt.Strategy(name, algos)
@@ -390,9 +413,13 @@ def _build_mean_var(params):
     def build(data, name='mean_var'):
         if _BT_AVAILABLE:
             algos = [
+                # Wait until the lookback window has data (the first rebalance otherwise
+                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
+                # it, the counter only advanced on month starts (lookback MONTHS).
+                _bt.algos.RunAfterDays(int(lookback) + 2),
                 _bt.algos.RunMonthly(),
                 _bt.algos.SelectAll(),
-                _bt.algos.WeighMeanVar(lookback=lookback),
+                _bt.algos.WeighMeanVar(lookback=_days(lookback), lag=_LAG),
                 _bt.algos.Rebalance(),
             ]
             return _bt.Strategy(name, algos)
@@ -410,9 +437,13 @@ def _build_risk_parity(params):
     def build(data, name='risk_parity'):
         if _BT_AVAILABLE:
             algos = [
+                # Wait until the lookback window has data (the first rebalance otherwise
+                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
+                # it, the counter only advanced on month starts (lookback MONTHS).
+                _bt.algos.RunAfterDays(int(lookback) + 2),
                 _bt.algos.RunMonthly(),
                 _bt.algos.SelectAll(),
-                _bt.algos.WeighERC(lookback=lookback),
+                _bt.algos.WeighERC(lookback=_days(lookback), lag=_LAG),
                 _bt.algos.Rebalance(),
             ]
             return _bt.Strategy(name, algos)
@@ -431,10 +462,16 @@ def _build_target_vol(params):
 
     def build(data, name='target_vol'):
         if _BT_AVAILABLE:
+            # It used to be plain equal weight - targetVol/lookback were read and ignored.
             algos = [
+                # Wait until the lookback window has data (the first rebalance otherwise
+                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
+                # it, the counter only advanced on month starts (lookback MONTHS).
+                _bt.algos.RunAfterDays(int(lookback) + 2),
                 _bt.algos.RunMonthly(),
                 _bt.algos.SelectAll(),
                 _bt.algos.WeighEqually(),
+                _bt.algos.TargetVol(target, lookback=_days(lookback), lag=_LAG),
                 _bt.algos.Rebalance(),
             ]
             return _bt.Strategy(name, algos)
@@ -452,9 +489,13 @@ def _build_min_var(params):
     def build(data, name='min_var'):
         if _BT_AVAILABLE:
             algos = [
+                # Wait until the lookback window has data (the first rebalance otherwise
+                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
+                # it, the counter only advanced on month starts (lookback MONTHS).
+                _bt.algos.RunAfterDays(int(lookback) + 2),
                 _bt.algos.RunMonthly(),
                 _bt.algos.SelectAll(),
-                _bt.algos.WeighMeanVar(lookback=lookback),
+                _bt.algos.WeighMeanVar(lookback=_days(lookback), lag=_LAG),
                 _bt.algos.Rebalance(),
             ]
             return _bt.Strategy(name, algos)
@@ -478,8 +519,13 @@ def _build_momentum_topn(params):
     def build(data, name='momentum_topn'):
         if _BT_AVAILABLE:
             algos = [
+                # Wait until the lookback window has data (the first rebalance otherwise
+                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
+                # it, the counter only advanced on month starts (lookback MONTHS).
+                _bt.algos.RunAfterDays(int(lookback) + 2),
                 _bt.algos.RunMonthly(),
-                _bt.algos.SelectMomentum(n=top_n, lookback=pd.DateOffset(days=lookback)),
+                _bt.algos.SelectAll(),  # SelectMomentum ranks the current selection
+                _bt.algos.SelectMomentum(n=top_n, lookback=pd.DateOffset(days=lookback), lag=_LAG),
                 _bt.algos.WeighEqually(),
                 _bt.algos.Rebalance(),
             ]
@@ -500,9 +546,14 @@ def _build_momentum_inv_vol(params):
     def build(data, name='momentum_inv_vol'):
         if _BT_AVAILABLE:
             algos = [
+                # Wait until the lookback window has data (the first rebalance otherwise
+                # fails on an empty/NaN estimate). Must precede RunMonthly: placed after
+                # it, the counter only advanced on month starts (lookback MONTHS).
+                _bt.algos.RunAfterDays(int(lookback) + 2),
                 _bt.algos.RunMonthly(),
-                _bt.algos.SelectMomentum(n=top_n, lookback=pd.DateOffset(days=lookback)),
-                _bt.algos.WeighInvVol(lookback=lookback),
+                _bt.algos.SelectAll(),  # SelectMomentum ranks the current selection
+                _bt.algos.SelectMomentum(n=top_n, lookback=pd.DateOffset(days=lookback), lag=_LAG),
+                _bt.algos.WeighInvVol(lookback=_days(lookback), lag=_LAG),
                 _bt.algos.Rebalance(),
             ]
             return _bt.Strategy(name, algos)
@@ -558,7 +609,7 @@ def _build_sma_crossover(params):
             signal = (fast_ma > slow_ma).astype(float)
             algos = [
                 _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(signal),
+                _bt.algos.SelectWhere(_lagged(signal)),
                 _bt.algos.WeighEqually(),
                 _bt.algos.Rebalance(),
             ]
@@ -584,7 +635,7 @@ def _build_ema_crossover(params):
             signal = (fast_ema > slow_ema).astype(float)
             algos = [
                 _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(signal),
+                _bt.algos.SelectWhere(_lagged(signal)),
                 _bt.algos.WeighEqually(),
                 _bt.algos.Rebalance(),
             ]
@@ -614,7 +665,7 @@ def _build_macd(params):
             signal = (macd_line > signal_line).astype(float)
             algos = [
                 _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(signal),
+                _bt.algos.SelectWhere(_lagged(signal)),
                 _bt.algos.WeighEqually(),
                 _bt.algos.Rebalance(),
             ]
@@ -656,7 +707,7 @@ def _build_mean_reversion(params):
             signal = (zscore < -threshold).astype(float)
             algos = [
                 _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(signal),
+                _bt.algos.SelectWhere(_lagged(signal)),
                 _bt.algos.WeighEqually(),
                 _bt.algos.Rebalance(),
             ]
@@ -683,7 +734,7 @@ def _build_bollinger_bands(params):
             signal = (data < lower).astype(float)
             algos = [
                 _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(signal),
+                _bt.algos.SelectWhere(_lagged(signal)),
                 _bt.algos.WeighEqually(),
                 _bt.algos.Rebalance(),
             ]
@@ -739,7 +790,7 @@ def _build_breakout(params):
             signal = (data >= upper).astype(float)
             algos = [
                 _bt.algos.RunDaily(),
-                _bt.algos.SelectWhere(signal),
+                _bt.algos.SelectWhere(_lagged(signal)),
                 _bt.algos.WeighEqually(),
                 _bt.algos.Rebalance(),
             ]

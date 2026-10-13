@@ -21,6 +21,7 @@
 #include <QRegularExpression>
 #include <QStringListModel>
 #include <QStyle>
+#include <QTimer>
 
 namespace fincept::ui::algo {
 
@@ -90,6 +91,14 @@ QStringList loaded_broker_ids() {
             ids << a.broker_id;
     return ids;
 }
+
+// Instrument search runs once the user pauses typing, not on every keystroke.
+constexpr int kSymChipSearchDebounceMs = 150;
+constexpr const char* kSymChipDebounceName = "symChipSearchDebounce";
+
+QTimer* sym_chip_debounce_timer(const QObject* owner) {
+    return owner->findChild<QTimer*>(QLatin1String(kSymChipDebounceName), Qt::FindDirectChildrenOnly);
+}
 } // namespace
 
 SymbolChipInput::SymbolChipInput(QWidget* parent) : QFrame(parent) {
@@ -140,7 +149,29 @@ SymbolChipInput::SymbolChipInput(QWidget* parent) : QFrame(parent) {
                 [this](const QModelIndex& idx) { commit_label(idx.data().toString()); });
     }
 
-    connect(edit_, &QLineEdit::textEdited, this, &SymbolChipInput::on_text_changed);
+    // Debounced search: one instrument search ~150 ms after the last keystroke
+    // instead of one per keystroke. Clearing the field still empties the list at
+    // once, and every commit path flushes a pending search first, so a pick
+    // always resolves against suggestions for the text actually typed.
+    auto* debounce = new QTimer(this);
+    debounce->setObjectName(QLatin1String(kSymChipDebounceName));
+    debounce->setSingleShot(true);
+    debounce->setInterval(kSymChipSearchDebounceMs);
+    connect(debounce, &QTimer::timeout, this, [this]() {
+        on_text_changed(edit_->text());
+        // The line edit re-shows its popup only on a keystroke; the model was
+        // refreshed after that, so show it against the new suggestions now.
+        if (edit_->hasFocus() && model_->rowCount() > 0)
+            completer_->complete();
+    });
+    connect(edit_, &QLineEdit::textEdited, this, [this, debounce](const QString& text) {
+        if (text.trimmed().isEmpty()) {
+            debounce->stop();
+            on_text_changed(text);
+        } else {
+            debounce->start();
+        }
+    });
     connect(edit_, &QLineEdit::returnPressed, this, [this]() { commit_text(edit_->text()); });
     connect(completer_, QOverload<const QString&>::of(&QCompleter::activated), this,
             [this](const QString& label) { commit_label(label); });
@@ -195,6 +226,14 @@ bool SymbolChipInput::eventFilter(QObject* obj, QEvent* ev) {
     if (obj == edit_ && ev->type() == QEvent::KeyPress) {
         auto* ke = static_cast<QKeyEvent*>(ev);
         if (ke->key() == Qt::Key_Tab) {
+            // A search still pending in the debounce window would leave the popup
+            // showing the previous keystroke's suggestions — run it now.
+            if (QTimer* t = sym_chip_debounce_timer(this); t && t->isActive()) {
+                t->stop();
+                on_text_changed(edit_->text());
+                if (model_->rowCount() > 0)
+                    completer_->complete();
+            }
             // accept the highlighted/first suggestion if the popup is up, else raw text
             if (completer_->popup() && completer_->popup()->isVisible()) {
                 const auto idx = completer_->popup()->currentIndex();
@@ -220,6 +259,11 @@ bool SymbolChipInput::eventFilter(QObject* obj, QEvent* ev) {
 }
 
 void SymbolChipInput::commit_text(const QString& raw) {
+    // Resolve against suggestions for the current text, not a debounced older one.
+    if (QTimer* t = sym_chip_debounce_timer(this); t && t->isActive()) {
+        t->stop();
+        on_text_changed(edit_->text());
+    }
     // If the whole text is a picked suggestion label (e.g. "HINDUNILVR · NSE"),
     // resolve it to its single real symbol instead of fragmenting it.
     const QString whole = raw.trimmed();
@@ -244,6 +288,10 @@ void SymbolChipInput::commit_text(const QString& raw) {
 }
 
 void SymbolChipInput::commit_label(const QString& label) {
+    // The label was picked from the suggestions on screen, which sugg_map_ still
+    // describes — drop any pending re-search rather than running it.
+    if (QTimer* t = sym_chip_debounce_timer(this))
+        t->stop();
     // Resolve the friendly suggestion label back to its real canonical symbol.
     QString sym = sugg_map_.value(label);
     if (sym.isEmpty())

@@ -176,8 +176,15 @@ class PortfolioOptimizationService:
             return {"success": False, "error": "SciPy not available"}
 
         try:
-            # Step 1: Tree clustering
-            corr_matrix = cov_matrix.corr()
+            # Step 1: Tree clustering on the correlation IMPLIED by the covariance
+            # (corr_ij = cov_ij / (sd_i * sd_j)). This used cov_matrix.corr(), which
+            # treats the covariance matrix's columns as data series and correlates
+            # THEM -- a different matrix -- so the clustering (and the weights) were
+            # built on the wrong distances.
+            sd = np.sqrt(np.clip(np.diag(cov_matrix.values), 1e-18, None))
+            corr_matrix = pd.DataFrame(np.clip(cov_matrix.values / np.outer(sd, sd), -1.0, 1.0),
+                                       index=cov_matrix.index, columns=cov_matrix.columns)
+            np.fill_diagonal(corr_matrix.values, 1.0)
             dist_matrix = np.sqrt((1 - corr_matrix) / 2)  # Distance metric
             link = linkage(squareform(dist_matrix.values), method='single')
 
@@ -220,11 +227,15 @@ class PortfolioOptimizationService:
                     weights[cluster_0] *= alpha
                     weights[cluster_1] *= (1 - alpha)
 
-            # Normalize
+            # Normalize, and put the weights back in the covariance's asset order:
+            # they were built in the clustered (quasi-diagonal) order, and the
+            # volatility below multiplied that vector against the UN-reordered
+            # covariance -- pairing each weight with another asset's variance.
             weights /= weights.sum()
+            weights = weights.reindex(cov_matrix.columns)
 
             # Calculate portfolio stats
-            port_vol = np.sqrt(weights.values @ cov_matrix @ weights.values)
+            port_vol = np.sqrt(weights.values @ cov_matrix.values @ weights.values)
 
             return {
                 "success": True,
@@ -469,7 +480,7 @@ class PortfolioOptimizationService:
             j = df.values - num_items
             sorted_items[i] = link[j, 0]
             df = pd.Series(link[j, 1], index=i+1)
-            sorted_items = sorted_items.append(df)
+            sorted_items = pd.concat([sorted_items, df])  # Series.append was removed in pandas 2
             sorted_items = sorted_items.sort_index()
             sorted_items.index = range(sorted_items.shape[0])
 

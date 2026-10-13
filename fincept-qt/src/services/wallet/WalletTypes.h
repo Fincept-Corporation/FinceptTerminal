@@ -89,6 +89,9 @@ using FncptPrice = TokenPrice;
 /// Fee-discount eligibility for a wallet. Published on
 /// `billing:fncpt_discount:<pubkey>` (Phase 2 §2C).
 ///
+/// Eligibility only: no checkout / billing path reads it, so the discount is
+/// PLANNED and not applied anywhere yet — UI must present it that way.
+///
 /// Derived state: `FeeDiscountService` subscribes to `wallet:balance:<pk>`
 /// and republishes a `FncptDiscount` whenever the held FNCPT amount crosses
 /// the threshold (or the balance topic emits anew at the same eligibility
@@ -227,9 +230,9 @@ struct TreasuryRunway {
 // Plan §3.5 deciding factor: ship a minimal `fincept_lock` Anchor program
 // in `solana/programs/fincept_lock/` (out-of-tree, separate repo).
 //
-// The terminal-side surface ships in mock mode (`is_mock=true` on every
-// payload) until the Anchor program is deployed and `fincept.lock_program_id`
-// is configured in SecureStorage.
+// NOT LIVE in this build: the program is not deployed and nothing can read or
+// create positions (`StakingService::staking_live()` is false). The types
+// below describe the planned payloads; no producer publishes them yet.
 
 /// One lock position. Published as part of `QVector<LockPosition>` on
 /// `wallet:locks:<pubkey>`. A position is a non-transferable NFT under the
@@ -244,7 +247,6 @@ struct LockPosition {
     qint64 duration_secs = 0;         ///< original lock duration
     QString weight_raw;               ///< veFNCPT weight (atomic, decimals match $FNCPT)
     double lifetime_yield_usdc = 0.0; ///< total USDC paid to this position
-    bool is_mock = false;
 };
 
 /// Aggregate veFNCPT view per pubkey. Published on `wallet:vefncpt:<pubkey>`.
@@ -257,7 +259,6 @@ struct VeFncptAggregate {
     int position_count = 0;
     double projected_next_period_yield_usdc = 0.0; ///< weight share × next-epoch revenue × 25%
     qint64 ts_ms = 0;
-    bool is_mock = false;
 };
 
 /// Yield earned by a wallet. Published on `wallet:yield:<pubkey>`.
@@ -289,14 +290,12 @@ struct TreasuryRevenue {
 /// `billing:tier:<pubkey>` by `TierService` (consumer-producer pattern,
 /// like `FeeDiscountService`).
 ///
-/// Tier thresholds live in `services/billing/TierConfig.h`. Plan §3.6:
-///   Bronze   100+ veFNCPT  →  basic API quota
-///   Silver   1k+  veFNCPT  →  premium screens
-///   Gold     10k+ veFNCPT  →  all agents + arena
+/// Tier thresholds live in `services/billing/TierConfig.h`. The plan §3.6
+/// benefits (Bronze: basic API quota · Silver: premium screens · Gold: all
+/// agents + arena) are PLANNED ONLY — nothing in the terminal reads a tier to
+/// enable or hide a feature, so a tier unlocks nothing in this build.
 ///
-/// `Free` is the implicit zero-stake tier — no veFNCPT held. Drives the
-/// nav-level gating: paid screens are hidden for Free, revealed for
-/// Silver+ via a `tier_changed` signal.
+/// `Free` is the implicit zero-stake tier — no veFNCPT held.
 struct TierStatus {
     enum class Tier {
         Free,   ///< no veFNCPT
@@ -311,7 +310,6 @@ struct TierStatus {
     QString next_threshold_raw; ///< raw amount needed to reach next tier; empty at Gold
     int decimals = 6;
     qint64 ts_ms = 0;
-    bool is_mock = false;
 };
 
 } // namespace fincept::wallet

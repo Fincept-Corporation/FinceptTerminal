@@ -8,6 +8,7 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
+#include "trading/OrderThreadPool.h"
 #include "trading/PaperTrading.h"
 #include "trading/UnifiedTrading.h"
 
@@ -522,7 +523,7 @@ void UnifiedPortfolioService::exit_child(const QString& account_id, const QStrin
         return;
     }
     QPointer<UnifiedPortfolioService> self(this);
-    auto future = QtConcurrent::run([self, account_id, symbol, exchange, product]() {
+    auto future = QtConcurrent::run(&order_thread_pool(), [self, account_id, symbol, exchange, product]() {
         auto r = UnifiedTrading::instance().close_position(account_id, symbol, exchange, product);
         const bool ok = r.success;
         const QString msg =
@@ -573,7 +574,7 @@ void UnifiedPortfolioService::exit_symbol(const QString& symbol, const QString& 
     }
 
     QPointer<UnifiedPortfolioService> self(this);
-    auto future = QtConcurrent::run([self, symbol, exchange, children]() {
+    auto future = QtConcurrent::run(&order_thread_pool(), [self, symbol, exchange, children]() {
         int ok_count = 0;
         QStringList errors;
         for (const AggChild& c : children) {
@@ -626,7 +627,7 @@ void UnifiedPortfolioService::square_off_all_positions() {
 
     const QStringList ids = accts_.keys();
     QPointer<UnifiedPortfolioService> self(this);
-    auto future = QtConcurrent::run([self, ids]() {
+    auto future = QtConcurrent::run(&order_thread_pool(), [self, ids]() {
         int closed = 0;
         QStringList errors;
         for (const QString& id : ids) {
@@ -697,7 +698,7 @@ void UnifiedPortfolioService::place_new_order(const QString& account_id, const U
     }
 
     QPointer<UnifiedPortfolioService> self(this);
-    auto future = QtConcurrent::run([self, account_id, order]() {
+    auto future = QtConcurrent::run(&order_thread_pool(), [self, account_id, order]() {
         auto r = UnifiedTrading::instance().place_order(account_id, order);
         const QString msg = r.success ? QString("Order placed: %1 (%2)").arg(order.symbol, r.order_id)
                                       : QString("Order failed for %1: %2").arg(order.symbol, r.message);

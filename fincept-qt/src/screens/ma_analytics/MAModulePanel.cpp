@@ -568,6 +568,33 @@ void MAModulePanel::on_result_ready(const QString& context, const QJsonObject& p
         // An empty deal database is the normal first-run state — say what to do about it.
         if (module_.id == fincept::services::ma::ModuleId::Deals && payload.value(QStringLiteral("count")).toInt(-1) == 0)
             status_label_->setText(tr("No deals stored yet - use SCAN SEC FILINGS, then LOAD ALL DEALS"));
+        // A scan lists the filings it stored; offer them to PARSE FILING so the user does not have to
+        // copy accession numbers out of the raw result.
+        if (context == QLatin1String("scan_filings")) {
+            QComboBox* picker = combo_inputs_.value(QStringLiteral("parse_accession"), nullptr);
+            const QJsonArray filings =
+                payload.value(QStringLiteral("data")).toObject().value(QStringLiteral("filings")).toArray();
+            if (picker && !filings.isEmpty()) {
+                const QString typed = picker->currentText();
+                picker->clear();
+                for (const QJsonValue& fv : filings) {
+                    const QJsonObject f = fv.toObject();
+                    const QString acc = f.value(QStringLiteral("accession_number")).toString();
+                    if (acc.isEmpty())
+                        continue;
+                    const QString form = f.value(QStringLiteral("filing_type")).toString();
+                    picker->addItem(QStringLiteral("%1  %2  %3  %4")
+                                        .arg(acc, form, f.value(QStringLiteral("filing_date")).toString(),
+                                             f.value(QStringLiteral("company_name")).toString()),
+                                    acc);
+                    picker->setItemData(picker->count() - 1, form, Qt::UserRole + 1);
+                }
+                picker->setCurrentIndex(-1);
+                picker->setEditText(typed);
+                status_label_->setText(
+                    tr("%1 filing(s) found - pick one under Filing and press PARSE FILING").arg(picker->count()));
+            }
+        }
     }
 }
 

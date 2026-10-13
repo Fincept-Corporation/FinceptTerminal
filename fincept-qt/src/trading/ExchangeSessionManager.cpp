@@ -6,8 +6,11 @@
 
 #include <QMutexLocker>
 #include <QPointer>
+#include <QThread>
 #include <QTimer>
 #include <QVariant>
+
+#include <utility>
 
 namespace fincept::trading {
 
@@ -21,6 +24,13 @@ const QString kMgrTag = "ExchangeSessionManager";
 constexpr int kEsmHubSyncDebounceMs = 400;
 constexpr int kEsmHubIdleStopMs = 20000;
 constexpr int kEsmHubHealMs = 30000;
+
+// Fan-out caps (see the header). Ticker: hub latest-wins at 20 Hz. Orderbook:
+// every message is a full top-N snapshot, so hub latest-wins at 10 Hz loses
+// nothing. Trades / ohlc: batched by the manager over the same 10 Hz window.
+constexpr int kEsmTickerCoalesceMs = 50;
+constexpr int kEsmOrderbookCoalesceMs = 100;
+constexpr int kEsmBatchWindowMs = 100;
 
 // Split "ws:<exchange>:<family>:<pair>" — the pair may itself contain ':'
 // (perps: "BTC/USDC:USDC"), so everything after the third separator is the pair.
@@ -110,20 +120,79 @@ SessionPublisher ExchangeSessionManager::build_publisher() {
         const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":orderbook:") + pair;
         fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(ob));
     };
-    p.publish_trade = [](const QString& exchange, const QString& pair, const TradeData& td) {
+    // Sessions are children of the manager, so these callbacks can never outlive it.
+    p.publish_trade = [this](const QString& exchange, const QString& pair, const TradeData& td) {
         if (!hub_supported_exchange(exchange) || pair.isEmpty())
             return;
-        const QString topic = QStringLiteral("ws:") + exchange + QStringLiteral(":trades:") + pair;
-        fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(td));
+        enqueue_trade(QStringLiteral("ws:") + exchange + QStringLiteral(":trades:") + pair, td);
     };
-    p.publish_candle = [](const QString& exchange, const QString& pair, const QString& interval, const Candle& c) {
+    p.publish_candle = [this](const QString& exchange, const QString& pair, const QString& interval,
+                              const Candle& c) {
         if (!hub_supported_exchange(exchange) || pair.isEmpty())
             return;
-        const QString topic =
-            QStringLiteral("ws:") + exchange + QStringLiteral(":ohlc:") + pair + QLatin1Char(':') + interval;
-        fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(c));
+        enqueue_candle(QStringLiteral("ws:") + exchange + QStringLiteral(":ohlc:") + pair + QLatin1Char(':') +
+                           interval,
+                       c);
     };
     return p;
+}
+
+// ── Fan-out batching ────────────────────────────────────────────────────────
+
+void ExchangeSessionManager::enqueue_trade(const QString& topic, const TradeData& td) {
+    if (QThread::currentThread() != thread()) {
+        QMetaObject::invokeMethod(
+            this, [this, topic, td]() { enqueue_trade(topic, td); }, Qt::QueuedConnection);
+        return;
+    }
+    pending_trade_batches_[topic].append(td);
+    arm_ws_batch_timer();
+}
+
+void ExchangeSessionManager::enqueue_candle(const QString& topic, const Candle& c) {
+    if (QThread::currentThread() != thread()) {
+        QMetaObject::invokeMethod(
+            this, [this, topic, c]() { enqueue_candle(topic, c); }, Qt::QueuedConnection);
+        return;
+    }
+    // ws_stream.py re-emits the forming bar on every update. Keep only the newest
+    // state of each bar, in place, so a bar's final update still goes out when the
+    // next bar opens inside the same window. The list is 1-2 entries long.
+    auto& bars = pending_candle_batches_[topic];
+    for (auto it = bars.rbegin(); it != bars.rend(); ++it) {
+        if (it->timestamp == c.timestamp) {
+            *it = c;
+            arm_ws_batch_timer();
+            return;
+        }
+    }
+    bars.append(c);
+    arm_ws_batch_timer();
+}
+
+void ExchangeSessionManager::arm_ws_batch_timer() {
+    if (!ws_batch_timer_) {
+        ws_batch_timer_ = new QTimer(this);
+        ws_batch_timer_->setSingleShot(true);
+        ws_batch_timer_->setInterval(kEsmBatchWindowMs);
+        connect(ws_batch_timer_, &QTimer::timeout, this, &ExchangeSessionManager::flush_ws_batches);
+    }
+    if (!ws_batch_timer_->isActive())
+        ws_batch_timer_->start();
+}
+
+void ExchangeSessionManager::flush_ws_batches() {
+    // Take the batches first: a subscriber slot runs synchronously inside
+    // publish() and may feed more data back in.
+    const auto trades = std::exchange(pending_trade_batches_, {});
+    const auto candles = std::exchange(pending_candle_batches_, {});
+    auto& hub = fincept::datahub::DataHub::instance();
+    for (auto it = trades.cbegin(); it != trades.cend(); ++it)
+        hub.publish(it.key(), QVariant::fromValue(it.value()));
+    for (auto it = candles.cbegin(); it != candles.cend(); ++it) {
+        for (const auto& c : it.value())
+            hub.publish(it.key(), QVariant::fromValue(c));
+    }
 }
 
 // ── Producer ────────────────────────────────────────────────────────────────
@@ -181,14 +250,18 @@ void ExchangeSessionManager::ensure_registered_with_hub() {
     push_only.min_interval_ms = 0;
 
     fincept::datahub::TopicPolicy coalesced_ticker = push_only;
-    coalesced_ticker.coalesce_within_ms = 50; // 20 Hz fan-out cap
+    coalesced_ticker.coalesce_within_ms = kEsmTickerCoalesceMs; // 20 Hz fan-out cap
 
-    // Install per-exchange policies for every supported exchange: ticker
-    // coalesced at 20 Hz, orderbook/trades/ohlc pushed straight through.
+    fincept::datahub::TopicPolicy coalesced_book = push_only;
+    coalesced_book.coalesce_within_ms = kEsmOrderbookCoalesceMs; // 10 Hz; each message is a full snapshot
+
+    // Install per-exchange policies for every supported exchange: ticker and
+    // orderbook coalesced latest-wins by the hub; trades / ohlc must not be
+    // latest-wins, so the manager batches them before publishing (see header).
     for (const auto& id : supported_exchange_ids()) {
         const QString base = QStringLiteral("ws:") + id + QLatin1Char(':');
         hub.set_policy_pattern(base + QStringLiteral("ticker:*"), coalesced_ticker);
-        hub.set_policy_pattern(base + QStringLiteral("orderbook:*"), push_only);
+        hub.set_policy_pattern(base + QStringLiteral("orderbook:*"), coalesced_book);
         hub.set_policy_pattern(base + QStringLiteral("trades:*"), push_only);
         hub.set_policy_pattern(base + QStringLiteral("ohlc:*"), push_only);
     }

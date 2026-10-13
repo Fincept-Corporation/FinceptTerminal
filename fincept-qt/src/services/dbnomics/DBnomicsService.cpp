@@ -11,6 +11,8 @@
 #include <QJsonObject>
 #include <QUrl>
 
+#include <algorithm>
+
 namespace fincept::services {
 
 DBnomicsService& DBnomicsService::instance() {
@@ -103,7 +105,7 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
                 out.push_back({o["code"].toString(), o["name"].toString()});
             }
             DbnPagination page{0, 50, total};
-            emit datasets_loaded(out, page, false);
+            emit datasets_loaded(provider_code, out, page, false);
             return;
         }
     }
@@ -149,7 +151,7 @@ void DBnomicsService::fetch_datasets(const QString& provider_code, int offset) {
                     kDatasetCacheSec, "dbnomics");
             }
             LOG_INFO("DBnomicsService", QString("Loaded %1 datasets (total=%2)").arg(out.size()).arg(total));
-            emit datasets_loaded(out, page, append);
+            emit datasets_loaded(provider_code, out, page, append);
         },
         this);
 }
@@ -175,7 +177,7 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
                 out.push_back({o["code"].toString(), o["name"].toString()});
             }
             DbnPagination page{0, 50, total};
-            emit series_loaded(out, page, false);
+            emit series_loaded(provider_code, dataset_code, query, out, page, false);
             return;
         }
     }
@@ -188,7 +190,8 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
 
     fincept::HttpClient::instance().get(
         build_url(path),
-        [this, cache_key, offset, no_query, first_page](fincept::Result<QJsonDocument> result) {
+        [this, cache_key, provider_code, dataset_code, query, offset, no_query,
+         first_page](fincept::Result<QJsonDocument> result) {
             if (result.is_err()) {
                 LOG_ERROR("DBnomicsService",
                           QString("series fetch failed: %1").arg(QString::fromStdString(result.error())));
@@ -234,7 +237,7 @@ void DBnomicsService::fetch_series(const QString& provider_code, const QString& 
                     kSeriesCacheSec, "dbnomics");
             }
             LOG_INFO("DBnomicsService", QString("Loaded %1 series (total=%2)").arg(out.size()).arg(total));
-            emit series_loaded(out, page, append);
+            emit series_loaded(provider_code, dataset_code, query, out, page, append);
         },
         this);
 }
@@ -243,6 +246,8 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
                                          const QString& series_code) {
     // Series codes may carry characters that are not legal in a URL path segment.
     const auto seg = [](const QString& s) { return QString::fromUtf8(QUrl::toPercentEncoding(s)); };
+    // metadata=true (the default) adds the dataset's dimension labels — the source of the unit and
+    // seasonal-adjustment labels below.
     const QString path = QString("/series/%1/%2/%3?observations=1&format=json")
                              .arg(seg(provider_code), seg(dataset_code), seg(series_code));
     const QString full_id = QString("%1/%2/%3").arg(provider_code).arg(dataset_code).arg(series_code);
@@ -254,7 +259,8 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
             // A failed hub refresh must clear the topic's in_flight flag (publish_error), or retries
             // are refused until the scheduler's refresh_timeout fires. The signal is still emitted
             // for the screen's spinner and for the MCP tools that wait on it.
-            auto fail = [this, &provider_code, &dataset_code, &series_code](const QString& message) {
+            auto fail = [this, &full_id, &provider_code, &dataset_code, &series_code](const QString& message) {
+                emit observations_failed(full_id, message);
                 emit error_occurred("observations", message);
                 if (hub_registered_)
                     fincept::datahub::DataHub::instance().publish_error(
@@ -272,6 +278,7 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
             }
             QJsonObject doc = docs[0].toObject();
             QJsonArray periods = doc["period"].toArray();
+            QJsonArray starts = doc["period_start_day"].toArray();
             QJsonArray values = doc["value"].toArray();
             QString name = doc["series_name"].toString(series_code);
 
@@ -280,19 +287,46 @@ void DBnomicsService::fetch_observations(const QString& provider_code, const QSt
             for (int i = 0; i < periods.size() && i < values.size(); ++i) {
                 DbnObservation o;
                 o.period = periods[i].toString();
-                if (values[i].isNull() || values[i].toString() == "NA") {
-                    o.value = 0.0;
-                    o.valid = false;
-                } else {
+                o.start = QDate::fromString(starts.at(i).toString(), Qt::ISODate);
+                // DBnomics marks gaps with the string "NA"; anything not numeric is a gap, never a 0.
+                if (values[i].isDouble()) {
                     o.value = values[i].toDouble();
                     o.valid = true;
+                } else {
+                    o.value = 0.0;
+                    o.valid = false;
                 }
                 obs.push_back(o);
             }
+            // Chronological by period start (period strings of mixed frequency do not sort lexically).
+            std::stable_sort(obs.begin(), obs.end(), [](const DbnObservation& a, const DbnObservation& b) {
+                if (a.start.isValid() && b.start.isValid())
+                    return a.start < b.start;
+                return a.period < b.period;
+            });
             DbnDataPoint dp;
             dp.series_id = full_id;
             dp.series_name = name;
             dp.observations = std::move(obs);
+            dp.frequency = doc["@frequency"].toString();
+            dp.indexed_at = doc["indexed_at"].toString();
+            dp.provider_name = root["provider"].toObject()["name"].toString();
+            // Unit / seasonal adjustment: the label of the series' value in a unit-like / adjustment-like
+            // dimension (names differ per provider: unit, UNIT_MEASURE, s_adj, seasonal, ADJUSTMENT …).
+            const QJsonObject dims = doc["dimensions"].toObject();
+            const QJsonObject value_labels = root["dataset"].toObject()["dimensions_values_labels"].toObject();
+            auto dim_label = [&dims, &value_labels](const QStringList& names) -> QString {
+                for (auto it = dims.constBegin(); it != dims.constEnd(); ++it) {
+                    if (!names.contains(it.key().toLower()))
+                        continue;
+                    const QString code = it.value().toString();
+                    const QString label = value_labels.value(it.key()).toObject().value(code).toString();
+                    return label.isEmpty() ? code : label;
+                }
+                return {};
+            };
+            dp.unit = dim_label({"unit", "units", "unit_measure", "unit_of_measure"});
+            dp.seasonal = dim_label({"s_adj", "seasonal", "seasonal_adjustment", "adjustment", "sa"});
             // color will be assigned by DBnomicsScreen::assign_series_colors()
             LOG_INFO("DBnomicsService",
                      QString("Loaded %1 observations for %2").arg(dp.observations.size()).arg(full_id));
@@ -315,7 +349,7 @@ void DBnomicsService::global_search(const QString& query, int offset) {
 
     fincept::HttpClient::instance().get(
         build_url(path),
-        [this, offset](fincept::Result<QJsonDocument> result) {
+        [this, query, offset](fincept::Result<QJsonDocument> result) {
             if (result.is_err()) {
                 emit error_occurred("search", QString::fromStdString(result.error()));
                 return;
@@ -333,7 +367,7 @@ void DBnomicsService::global_search(const QString& query, int offset) {
                                o["dataset_code"].toString(), o["dataset_name"].toString(), o["nb_series"].toInt()});
             }
             DbnPagination page{offset, 20, total};
-            emit search_results_loaded(out, page, offset > 0);
+            emit search_results_loaded(query, out, page, offset > 0);
         },
         this);
 }

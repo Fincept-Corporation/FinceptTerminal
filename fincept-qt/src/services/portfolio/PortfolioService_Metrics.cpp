@@ -1,29 +1,27 @@
 // src/services/portfolio/PortfolioService_Metrics.cpp
 //
-// Analytics: fetch_correlation, benchmark + SPY history, risk-free rate,
-// compute_metrics, snapshot loading, history backfill.
+// Analytics: one-shot market analytics (scripts/portfolio_metrics.py — holdings,
+// benchmark and risk-free rate in ONE threaded download), the flow-adjusted
+// time-weighted return series, compute_metrics, snapshot loading and history
+// backfill.
 //
 // Part of the partial-class split of PortfolioService.cpp.
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
 #include "services/portfolio/PortfolioService.h"
-#include "services/sectors/SectorResolver.h"
 #include "storage/repositories/PortfolioRepository.h"
 #include "storage/repositories/SettingsRepository.h"
-#include "trading/AccountManager.h"
-#include "trading/BrokerInterface.h"
-#include "trading/BrokerRegistry.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QMutexLocker>
+#include <QMap>
 #include <QStandardPaths>
-#include <QtConcurrent>
 
 #include <algorithm>
 #include <cmath>
@@ -31,157 +29,117 @@
 
 namespace fincept::services {
 
-namespace {
+namespace portfolio_metrics_detail {
 
 // ── Risk-model tuning constants ───────────────────────────────────────────────
 // The composite risk score is a 0–100 number built from normalised sub-scores.
 // Each raw input is divided by a "cap" (the level at which that input is
 // considered maximally risky and saturates its sub-score at 1.0), then weighted.
-// Caps are expressed in the same units as the inputs (annualised % for vol,
-// weight % for concentration, % for drawdown, unitless for beta).
 constexpr double kVolCapPct = 40.0;           // 40% annualised vol → max vol risk
 constexpr double kConcentrationCapPct = 80.0; // top-3 weight 80% → max concentration risk
 constexpr double kDrawdownCapPct = 50.0;      // 50% max drawdown → max drawdown risk
 constexpr double kBetaCap = 2.0;              // |beta| 2.0 → max market-sensitivity risk
 
-// Sub-score weights when ALL four signals are available (time-series path).
-// They sum to 100.
+// Weights when all four signals exist (sum 100) and when only vol +
+// concentration are known (sum 100).
 constexpr double kWVolFull = 30.0;
 constexpr double kWConcFull = 25.0;
 constexpr double kWDrawdownFull = 25.0;
 constexpr double kWBetaFull = 20.0;
-
-// Sub-score weights for the DEGRADED path (<3 snapshots): only volatility and
-// concentration are estimable, so the drawdown/beta weight is redistributed
-// evenly across the two available signals (50/50, summing to 100).
 constexpr double kWVolDegraded = 50.0;
 constexpr double kWConcDegraded = 50.0;
 
-// Historical VaR/CVaR confidence level. kVar95Tail is the tail probability
-// (5% → 95% confidence); kVar95Z is the corresponding one-sided normal z-score,
-// used only by the parametric fallback when the historical sample is too small.
 constexpr double kVar95Tail = 0.05;
-constexpr double kVar95Z = 1.645;
+// Minimum TWR periods before a statistic is shown at all.
+constexpr int kMinPerfObs = 20;
+constexpr int kMinDrawdownObs = 5;
+// Annualised return is only reported over at least half a year (GIPS-style:
+// annualising a few weeks produces absurd numbers).
+constexpr int kMinAnnualiseDays = 182;
+// A flow-adjusted period return outside this band is an unrecorded deposit /
+// withdrawal or a bad print, not performance — excluded and counted.
+constexpr double kMaxPlausibleReturn = 1.0;
+constexpr double kMinPlausibleReturn = -0.9;
 
-} // namespace
+constexpr const char* kRfValueKey = "portfolio.rf3m_value";
+constexpr const char* kRfSourceKey = "portfolio.rf3m_source";
+constexpr int kAnalyticsTimeoutMs = 120 * 1000;
 
-void PortfolioService::fetch_correlation(const QStringList& symbols) {
-    if (symbols.size() < 2) {
-        emit correlation_computed({});
-        return;
-    }
-
-    // Order-independent key: the same book re-requested on every refresh tick
-    // must not respawn a yfinance download each time.
-    QStringList sorted_syms = symbols;
-    sorted_syms.sort();
-    const QString cache_key = sorted_syms.join(QLatin1Char(','));
-    if (corr_cache_.key == cache_key &&
-        (QDateTime::currentSecsSinceEpoch() - corr_cache_.timestamp) < kCorrelationTtlSec) {
-        emit correlation_computed(corr_cache_.matrix);
-        return;
-    }
-    if (corr_inflight_key_ == cache_key)
-        return; // identical request already running - it will emit when it lands
-    corr_inflight_key_ = cache_key;
-
-    // Build inline Python that embeds the symbol list, fetches 30-day closes,
-    // and prints a JSON correlation matrix to stdout.
-    QJsonArray sym_arr;
-    for (const auto& s : symbols)
-        sym_arr.append(s);
-    const QString sym_json = QString::fromUtf8(QJsonDocument(sym_arr).toJson(QJsonDocument::Compact));
-
-    const QString code = QString(R"python(
-import json, sys
-import yfinance as yf
-import numpy as np
-
-symbols = %1
-data = {}
-for sym in symbols:
-    try:
-        hist = yf.download(sym, period="30d", interval="1d", progress=False)
-        if hist is not None and not hist.empty:
-            close_obj = hist["Close"]
-            # Newer yfinance returns MultiIndex columns even for a single ticker,
-            # so hist["Close"] can be a DataFrame — collapse it to a Series.
-            if hasattr(close_obj, "columns"):
-                close_obj = close_obj.iloc[:, 0]
-            closes = close_obj.dropna().tolist()
-            if closes and hasattr(closes[0], 'item'):
-                closes = [v.item() for v in closes]
-            if closes:
-                data[sym] = closes
-    except Exception:
-        pass
-
-# Compute daily returns
-returns = {}
-for sym, prices in data.items():
-    if len(prices) >= 5:
-        r = [(prices[i] - prices[i-1]) / prices[i-1] for i in range(1, len(prices))]
-        returns[sym] = r
-
-syms = list(returns.keys())
-matrix = {}
-for i in range(len(syms)):
-    for j in range(len(syms)):
-        a = returns[syms[i]]
-        b = returns[syms[j]]
-        n = min(len(a), len(b))
-        if n < 2:
-            val = 1.0 if i == j else 0.0
-        else:
-            a, b = a[-n:], b[-n:]
-            ma, mb = sum(a)/n, sum(b)/n
-            num = sum((a[k]-ma)*(b[k]-mb) for k in range(n))
-            da  = sum((a[k]-ma)**2 for k in range(n))
-            db  = sum((b[k]-mb)**2 for k in range(n))
-            denom = (da*db)**0.5
-            val = num/denom if denom > 1e-10 else (1.0 if i==j else 0.0)
-            val = max(-1.0, min(1.0, val))
-        matrix[syms[i] + "|" + syms[j]] = round(val, 4)
-
-print(json.dumps(matrix))
-)python")
-                             .arg(sym_json);
-
-    QPointer<PortfolioService> self = this;
-    python::PythonRunner::instance().run_code(code, [self, cache_key](python::PythonResult result) {
-        if (!self)
-            return;
-        // A newer request for a different book may have superseded this one
-        // while it ran; emitting the stale matrix over the newer book's would
-        // show the wrong correlations, so the older result is cached but silent.
-        const bool is_latest = (self->corr_inflight_key_ == cache_key);
-        if (is_latest)
-            self->corr_inflight_key_.clear();
-        if (!result.success || result.output.trimmed().isEmpty()) {
-            LOG_WARN("PortfolioSvc", "Correlation fetch failed: " + result.error.left(200));
-            if (is_latest)
-                emit self->correlation_computed({});
-            return;
-        }
-        QJsonParseError err;
-        const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
-        if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-            if (is_latest)
-                emit self->correlation_computed({});
-            return;
-        }
-        QHash<QString, double> matrix;
-        const auto obj = doc.object();
-        for (auto it = obj.begin(); it != obj.end(); ++it)
-            matrix[it.key()] = it.value().toDouble();
-        if (!matrix.isEmpty())
-            self->corr_cache_ = {cache_key, QDateTime::currentSecsSinceEpoch(), matrix};
-        if (is_latest)
-            emit self->correlation_computed(matrix);
-    });
+std::optional<double> opt_double(const QJsonValue& v) {
+    if (!v.isDouble())
+        return std::nullopt;
+    const double d = v.toDouble();
+    return std::isfinite(d) ? std::optional<double>(d) : std::nullopt;
 }
 
-// ── SPY benchmark data ────────────────────────────────────────────────────────
+/// Close on or before @p date from parallel (ascending) date/close vectors.
+std::optional<double> close_as_of(const QStringList& dates, const QVector<double>& closes, const QString& date) {
+    if (dates.isEmpty() || dates.size() != closes.size())
+        return std::nullopt;
+    const auto it = std::upper_bound(dates.begin(), dates.end(), date);
+    if (it == dates.begin())
+        return std::nullopt;
+    const qsizetype idx = std::distance(dates.begin(), it) - 1;
+    const double c = closes[idx];
+    return c > 0 ? std::optional<double>(c) : std::nullopt;
+}
+
+portfolio::MarketAnalytics parse_analytics(const QJsonObject& o, const QString& pid, const QString& bench) {
+    portfolio::MarketAnalytics a;
+    a.portfolio_id = pid;
+    a.as_of = o.value("as_of").toString();
+    const auto b = o.value("benchmark").toObject();
+    a.benchmark = b.value("symbol").toString(bench);
+    const auto bd = b.value("dates").toArray();
+    const auto bc = b.value("closes").toArray();
+    if (bd.size() == bc.size()) {
+        for (int i = 0; i < bd.size(); ++i) {
+            a.benchmark_dates.append(bd[i].toString());
+            a.benchmark_closes.append(bc[i].toDouble());
+        }
+    }
+    const auto rf = o.value("risk_free").toObject();
+    if (auto r = opt_double(rf.value("rate"))) {
+        a.risk_free_rate = r;
+        a.risk_free_source = QStringLiteral("%1 %2 (%3)")
+                                 .arg(rf.value("symbol").toString(), rf.value("description").toString(),
+                                      rf.value("as_of").toString());
+    }
+    const auto corr = o.value("correlation").toObject();
+    a.correlation_window = corr.value("window").toInt();
+    const auto mat = corr.value("matrix").toObject();
+    for (auto it = mat.begin(); it != mat.end(); ++it)
+        if (it.value().isDouble())
+            a.correlation.insert(it.key(), it.value().toDouble());
+    const auto p = o.value("portfolio").toObject();
+    a.ann_vol = opt_double(p.value("ann_vol"));
+    a.var_95_1d = opt_double(p.value("var_95_1d"));
+    a.cvar_95_1d = opt_double(p.value("cvar_95_1d"));
+    a.beta = opt_double(p.value("beta"));
+    a.observations = p.value("observations").toInt();
+    a.coverage = p.value("coverage").toDouble();
+    const auto hs = o.value("holdings").toObject();
+    for (auto it = hs.begin(); it != hs.end(); ++it) {
+        const auto h = it.value().toObject();
+        portfolio::HoldingRisk hr;
+        hr.ann_vol = opt_double(h.value("ann_vol"));
+        hr.beta = opt_double(h.value("beta"));
+        hr.risk_contribution = opt_double(h.value("risk_contribution"));
+        hr.observations = h.value("observations").toInt();
+        a.holdings.insert(it.key(), hr);
+    }
+    for (const auto& v : o.value("missing").toArray())
+        a.missing.append(v.toString());
+    for (const auto& v : o.value("warnings").toArray())
+        a.warnings.append(v.toString());
+    return a;
+}
+
+} // namespace portfolio_metrics_detail
+
+namespace pmd = portfolio_metrics_detail;
+
+// ── Benchmark selection ───────────────────────────────────────────────────────
 
 QString PortfolioService::default_benchmark_for_currency(const QString& currency) {
     const QString c = currency.trimmed().toUpper();
@@ -202,190 +160,205 @@ QString PortfolioService::default_benchmark_for_currency(const QString& currency
     return QStringLiteral("SPY"); // USD and unknown
 }
 
-void PortfolioService::fetch_spy_history(const QString& period) {
-    fetch_benchmark_history(QStringLiteral("SPY"), period);
+// ── Risk-free rate ────────────────────────────────────────────────────────────
+
+void PortfolioService::ensure_risk_free_loaded() {
+    if (rf_loaded_)
+        return;
+    rf_loaded_ = true;
+    auto& settings = SettingsRepository::instance();
+    auto val_r = settings.get(pmd::kRfValueKey);
+    auto src_r = settings.get(pmd::kRfSourceKey);
+    bool ok = false;
+    const double v = val_r.is_ok() ? val_r.value().toDouble(&ok) : 0.0;
+    if (ok && std::isfinite(v) && v > -0.01 && v < 0.3) {
+        rf_rate_ = v;
+        rf_source_ = tr("%1 — last known value").arg(src_r.is_ok() ? src_r.value() : QStringLiteral("^IRX"));
+    } else {
+        rf_rate_ = kDefaultRiskFreeRate;
+        rf_source_ = tr("default %1% — live T-bill rate not fetched yet").arg(kDefaultRiskFreeRate * 100.0, 0, 'f', 2);
+    }
 }
 
-void PortfolioService::fetch_benchmark_history(const QString& symbol, const QString& period) {
-    // Allow callers to omit the symbol → defaults to SPY (legacy behaviour).
-    const QString sym = symbol.isEmpty() ? QStringLiteral("SPY") : symbol;
+// ── Market analytics ──────────────────────────────────────────────────────────
 
-    // The screen asks for the benchmark(s) on every summary refresh; a 1-year
-    // daily series barely moves in 30 minutes, so replay it from memory instead
-    // of respawning Python + yfinance each minute.
-    const QString bench_key = sym + QLatin1Char('|') + period;
-    const auto cached = bench_cache_.constFind(bench_key);
-    if (cached != bench_cache_.constEnd() &&
-        (QDateTime::currentSecsSinceEpoch() - cached->timestamp) < kBenchmarkTtlSec) {
-        publish_benchmark(sym, cached->dates, cached->closes);
+portfolio::MarketAnalytics PortfolioService::last_market_analytics(const QString& portfolio_id) const {
+    const auto it = analytics_cache_.constFind(portfolio_id);
+    return it == analytics_cache_.constEnd() ? portfolio::MarketAnalytics{} : it->data;
+}
+
+void PortfolioService::publish_market_analytics(const portfolio::MarketAnalytics& a) {
+    if (a.risk_free_rate.has_value()) {
+        rf_rate_ = *a.risk_free_rate;
+        rf_source_ = a.risk_free_source;
+        rf_loaded_ = true;
+        auto& settings = SettingsRepository::instance();
+        settings.set(pmd::kRfValueKey, QString::number(rf_rate_, 'f', 6), "portfolio");
+        settings.set(pmd::kRfSourceKey, a.risk_free_source, "portfolio");
+    }
+    emit market_analytics_loaded(a.portfolio_id, true, {});
+}
+
+void PortfolioService::fetch_market_analytics(const portfolio::PortfolioSummary& summary, bool force) {
+    const QString pid = summary.portfolio.id;
+    if (pid.isEmpty() || summary.holdings.isEmpty())
+        return;
+    const QString bench = default_benchmark_for_currency(summary.portfolio.currency);
+
+    // Key on quantities, not weights: weights drift with every tick and would
+    // re-trigger the download; quantities only change on a trade.
+    QStringList parts;
+    parts.reserve(summary.holdings.size());
+    for (const auto& h : summary.holdings)
+        parts.append(h.symbol + QLatin1Char(':') + QString::number(h.quantity, 'g', 10));
+    parts.sort();
+    const QString key = pid + QLatin1Char('|') + QDate::currentDate().toString(Qt::ISODate) + QLatin1Char('|') +
+                        bench + QLatin1Char('|') + parts.join(QLatin1Char(','));
+
+    const auto cached = analytics_cache_.constFind(pid);
+    if (!force && cached != analytics_cache_.constEnd() && cached->key == key &&
+        (QDateTime::currentSecsSinceEpoch() - cached->timestamp) < kAnalyticsTtlSec) {
+        publish_market_analytics(cached->data);
         return;
     }
-    if (bench_inflight_.contains(bench_key))
-        return; // already downloading - the landing result fires the signals
-    bench_inflight_.insert(bench_key);
+    if (analytics_inflight_.value(pid) == key)
+        return; // identical request already running — it publishes when it lands
+    analytics_inflight_.insert(pid, key);
 
-    const QString code = QString(R"python(
-import json, sys
-import yfinance as yf
+    QJsonArray syms;
+    QJsonObject weights;
+    for (const auto& h : summary.holdings) {
+        syms.append(h.symbol);
+        weights.insert(h.symbol, h.weight / 100.0);
+    }
+    QJsonObject payload;
+    payload["symbols"] = syms;
+    payload["weights"] = weights;
+    payload["benchmark"] = bench;
+    payload["period"] = "1y";
+    payload["corr_window"] = kCorrelationWindowDays;
 
-symbol = "%1"
-period = "%2"
-try:
-    hist = yf.download(symbol, period=period, interval="1d", progress=False, auto_adjust=True)
-    dates  = []
-    closes = []
-    if hist is not None and not hist.empty:
-        for dt, row in hist.iterrows():
-            v = row["Close"]
-            if hasattr(v, "item"): v = v.item()
-            dates.append(dt.strftime("%Y-%m-%d"))
-            closes.append(float(v))
-    print(json.dumps({"symbol": symbol, "dates": dates, "closes": closes}))
-except Exception as e:
-    print(json.dumps({"symbol": symbol, "dates": [], "closes": [], "error": str(e)}))
-)python")
-                             .arg(sym, period);
+    python::PythonRunner::RunOptions opts;
+    opts.timeout_ms = pmd::kAnalyticsTimeoutMs;
+    opts.stdin_data = QJsonDocument(payload).toJson(QJsonDocument::Compact);
 
     QPointer<PortfolioService> self = this;
-    python::PythonRunner::instance().run_code(code, [self, sym, bench_key](python::PythonResult result) {
-        if (!self)
-            return;
-        self->bench_inflight_.remove(bench_key);
-        QStringList dates;
-        QVector<double> closes;
-        if (!result.success || result.output.trimmed().isEmpty()) {
-            LOG_WARN("PortfolioSvc", QString("Benchmark %1 fetch failed: %2").arg(sym, result.error.left(200)));
+    python::PythonRunner::instance().run_with_options(
+        QStringLiteral("portfolio_metrics.py"), {QStringLiteral("analytics")}, opts,
+        [self, pid, key, bench](python::PythonResult result) {
+            if (!self)
+                return;
+            // A newer request for a different book/day may have superseded this
+            // one; publishing the stale result would paint the wrong numbers.
+            if (self->analytics_inflight_.value(pid) != key)
+                return;
+            self->analytics_inflight_.remove(pid);
+
+            QJsonObject root;
+            QString error;
+            if (!result.success) {
+                error = result.error.isEmpty() ? QStringLiteral("analytics script failed") : result.error;
+            } else {
+                QJsonParseError perr;
+                const auto doc = QJsonDocument::fromJson(python::extract_json(result.output).toUtf8(), &perr);
+                if (perr.error != QJsonParseError::NoError || !doc.isObject())
+                    error = QStringLiteral("analytics returned malformed JSON: ") + perr.errorString();
+                else
+                    root = doc.object();
+            }
+            if (!error.isEmpty()) {
+                LOG_WARN("PortfolioSvc", "Market analytics failed for " + pid + ": " + error.left(300));
+                emit self->market_analytics_loaded(pid, false, error.left(300));
+                return;
+            }
+            auto a = pmd::parse_analytics(root, pid, bench);
+            if (!a.warnings.isEmpty())
+                LOG_INFO("PortfolioSvc", "Market analytics notes: " + a.warnings.join("; ").left(300));
+            self->analytics_cache_.insert(pid, {key, QDateTime::currentSecsSinceEpoch(), a});
+            self->publish_market_analytics(a);
+        });
+}
+
+// ── Time-weighted return series ───────────────────────────────────────────────
+
+QVector<portfolio::TwrPoint>
+PortfolioService::build_twr_series(const QVector<portfolio::PortfolioSnapshot>& snapshots,
+                                   const QVector<portfolio::Transaction>& transactions) {
+    // Snapshots ascending, one per date (last write wins).
+    QVector<portfolio::PortfolioSnapshot> snaps = snapshots;
+    std::stable_sort(snaps.begin(), snaps.end(),
+                     [](const auto& a, const auto& b) { return a.snapshot_date.left(10) < b.snapshot_date.left(10); });
+    QVector<portfolio::PortfolioSnapshot> uniq;
+    uniq.reserve(snaps.size());
+    for (const auto& s : snaps) {
+        if (!uniq.isEmpty() && uniq.last().snapshot_date.left(10) == s.snapshot_date.left(10))
+            uniq.last() = s;
+        else
+            uniq.append(s);
+    }
+
+    // External flows by date: a BUY brings capital in, a SELL takes proceeds out.
+    QMap<QString, double> flows; // ordered by date
+    for (const auto& t : transactions) {
+        const QString type = t.transaction_type.toUpper();
+        if (!std::isfinite(t.quantity) || !std::isfinite(t.price))
+            continue;
+        const QString d = t.transaction_date.left(10);
+        if (type == QLatin1String("BUY"))
+            flows[d] += t.quantity * t.price;
+        else if (type == QLatin1String("SELL"))
+            flows[d] -= t.quantity * t.price;
+    }
+
+    QVector<portfolio::TwrPoint> out;
+    out.reserve(uniq.size());
+    double cum = 0.0;
+    for (int i = 0; i < uniq.size(); ++i) {
+        portfolio::TwrPoint p;
+        p.date = uniq[i].snapshot_date.left(10);
+        p.nav = uniq[i].total_value;
+        if (i == 0) {
+            p.valid = false; // the base point carries no return
+            out.append(p);
+            continue;
+        }
+        const QString prev = out.last().date;
+        double flow = 0.0;
+        for (auto it = flows.upperBound(prev); it != flows.end() && it.key() <= p.date; ++it)
+            flow += it.value();
+        p.net_flow = flow;
+        const double base = out.last().nav;
+        if (base > 1e-9 && std::isfinite(p.nav)) {
+            const double r = (p.nav - flow) / base - 1.0;
+            if (std::isfinite(r) && r <= pmd::kMaxPlausibleReturn && r >= pmd::kMinPlausibleReturn) {
+                p.period_return = r;
+                cum = (1.0 + cum) * (1.0 + r) - 1.0;
+            } else {
+                p.valid = false;
+            }
         } else {
-            QJsonParseError err;
-            const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
-            if (err.error == QJsonParseError::NoError && doc.isObject()) {
-                const auto obj = doc.object();
-                const auto dates_arr = obj["dates"].toArray();
-                const auto closes_arr = obj["closes"].toArray();
-                dates.reserve(dates_arr.size());
-                closes.reserve(closes_arr.size());
-                for (const auto& v : dates_arr)
-                    dates.append(v.toString());
-                for (const auto& v : closes_arr)
-                    closes.append(v.toDouble());
-            }
+            p.valid = false;
         }
-
-        // Only a real series is worth replaying; a failed download (empty) is
-        // retried on the next request instead of being pinned for 30 minutes.
-        if (!dates.isEmpty() && dates.size() == closes.size())
-            self->bench_cache_.insert(bench_key, {dates, closes, QDateTime::currentSecsSinceEpoch()});
-        self->publish_benchmark(sym, dates, closes);
-    });
-}
-
-void PortfolioService::publish_benchmark(const QString& symbol, const QStringList& dates,
-                                         const QVector<double>& closes) {
-    // Beta computation in compute_metrics() always regresses against SPY,
-    // so only update that cache when SPY is what the caller asked for —
-    // otherwise we would corrupt Beta with e.g. TSX returns.
-    if (symbol == QStringLiteral("SPY")) {
-        spy_dates_cache_ = dates;
-        spy_closes_cache_ = closes;
-        emit spy_history_loaded(dates, closes);
+        p.cumulative = cum;
+        out.append(p);
     }
-    emit benchmark_history_loaded(symbol, dates, closes);
+    return out;
 }
 
-// ── Risk-free rate (FRED DGS10) ───────────────────────────────────────────────
-
-void PortfolioService::fetch_risk_free_rate() {
-    // Check 24h cache in SettingsRepository
-    auto& settings = SettingsRepository::instance();
-    const qint64 now_secs = QDateTime::currentSecsSinceEpoch();
-
-    auto ts_r = settings.get("portfolio.rf_rate_timestamp");
-    auto val_r = settings.get("portfolio.rf_rate_value");
-    if (ts_r.is_ok() && val_r.is_ok()) {
-        bool ts_ok = false, val_ok = false;
-        const qint64 cached_ts = ts_r.value().toLongLong(&ts_ok);
-        const double cached_val = val_r.value().toDouble(&val_ok);
-        if (ts_ok && val_ok && (now_secs - cached_ts) < 86400) {
-            // Cache still valid — use stored value
-            rf_rate_ = cached_val;
-            emit risk_free_rate_loaded(rf_rate_);
-            return;
-        }
-    }
-
-    // Fetch from FRED via inline Python. The API key is read from the
-    // FRED_API_KEY environment variable, which PythonRunner::build_python_env()
-    // injects from SecureStorage (user configures it under Settings → API
-    // Credentials → "FRED (Federal Reserve)"). No key is ever hardcoded here.
-    // If no key is configured we skip the network call and fall back to the
-    // default rate so Sharpe/Sortino still compute (with a logged note).
-    const QString code = QString(R"python(
-import os, json, urllib.request
-DEFAULT_RATE = %1
-api_key = os.environ.get("FRED_API_KEY", "").strip()
-if not api_key:
-    print(json.dumps({"rate": DEFAULT_RATE, "error": "FRED_API_KEY not configured; using default risk-free rate"}))
-else:
-    url = (
-        "https://api.stlouisfed.org/fred/series/observations"
-        "?series_id=DGS10&api_key=" + api_key +
-        "&file_type=json&sort_order=desc&limit=5"
-    )
-    try:
-        with urllib.request.urlopen(url, timeout=10) as r:
-            data = json.loads(r.read().decode())
-        rate = None
-        for obs in data.get("observations", []):
-            v = obs.get("value", ".")
-            if v != ".":
-                rate = float(v) / 100.0  # convert percent to decimal
-                break
-        print(json.dumps({"rate": rate if rate is not None else DEFAULT_RATE}))
-    except Exception as e:
-        print(json.dumps({"rate": DEFAULT_RATE, "error": str(e)}))
-)python")
-                             .arg(QString::number(kDefaultRiskFreeRate));
-
-    QPointer<PortfolioService> self = this;
-    python::PythonRunner::instance().run_code(code, [self, now_secs](python::PythonResult result) {
-        if (!self)
-            return;
-        double rate = kDefaultRiskFreeRate; // fallback
-        bool used_fallback = true;
-        if (result.success && !result.output.trimmed().isEmpty()) {
-            QJsonParseError err;
-            const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
-            if (err.error == QJsonParseError::NoError && doc.object().contains("rate")) {
-                rate = doc.object()["rate"].toDouble(kDefaultRiskFreeRate);
-                const QString note = doc.object().value("error").toString();
-                used_fallback = !note.isEmpty();
-                if (used_fallback)
-                    LOG_WARN("PortfolioSvc",
-                             "Risk-free rate: " + note + " (using " + QString::number(rate * 100, 'f', 2) + "%)");
-            }
-        }
-        // Persist to the 24h cache. A FALLBACK rate (no FRED key configured, or
-        // the request failed) is back-dated so it expires after an hour rather
-        // than masquerading as a live yield for a day - otherwise adding a key
-        // in Settings had no effect until the next day.
-        auto& settings = SettingsRepository::instance();
-        const qint64 stamp = used_fallback ? (now_secs - 86400 + 3600) : now_secs;
-        settings.set("portfolio.rf_rate_timestamp", QString::number(stamp));
-        settings.set("portfolio.rf_rate_value", QString::number(rate, 'f', 6));
-        self->rf_rate_ = rate;
-        emit self->risk_free_rate_loaded(rate);
-    });
-}
-
-// ── Metrics computation (async, P8-safe) ─────────────────────────────────────
+// ── Metrics computation ───────────────────────────────────────────────────────
 
 void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summary) {
     if (summary.holdings.isEmpty()) {
         emit metrics_computed({});
         return;
     }
+    ensure_risk_free_loaded();
 
-    portfolio::ComputedMetrics metrics;
+    const QString pid = summary.portfolio.id;
+    portfolio::ComputedMetrics m;
+    m.benchmark_symbol = default_benchmark_for_currency(summary.portfolio.currency);
+    m.risk_free_rate = rf_rate_;
+    m.risk_free_source = rf_source_;
 
     // ── Concentration top-3 ───────────────────────────────────────────────────
     QVector<double> weights;
@@ -396,234 +369,177 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
     double conc = 0;
     for (qsizetype i = 0; i < std::min(qsizetype{3}, weights.size()); ++i)
         conc += weights[i];
-    metrics.concentration_top3 = conc;
-    // Concentration-only baseline (overwritten below once vol/drawdown/beta are
-    // known). Capped at half-scale since it is a single-signal estimate.
-    metrics.risk_score = std::min(conc / kConcentrationCapPct, 1.0) * kWConcDegraded;
+    m.concentration_top3 = conc;
 
-    // ── Load snapshots synchronously for time-series metrics ─────────────────
-    // (this runs on the calling thread — compute_metrics is always called from
-    //  the UI thread after summary_loaded, so we keep computation fast by
-    //  loading snapshots from SQLite which is sub-millisecond for <365 rows)
-    auto snap_r = PortfolioRepository::instance().get_snapshots(summary.portfolio.id, 365);
-    if (snap_r.is_err() || snap_r.value().size() < 3) {
-        // Trigger an async backfill so the next compute_metrics call has data.
-        // This is one-shot per process to avoid hammering yfinance — once we've
-        // attempted, the user can manually re-trigger via re-import.
-        if (!backfill_attempted_.contains(summary.portfolio.id)) {
-            backfill_attempted_.insert(summary.portfolio.id);
-            QPointer<PortfolioService> self = this;
-            const QString pid = summary.portfolio.id;
-            QMetaObject::invokeMethod(
-                this,
-                [self, pid]() {
-                    if (self)
-                        self->backfill_history(pid, "1y");
-                },
-                Qt::QueuedConnection);
+    // ── Realised, flow-adjusted (time-weighted) returns ──────────────────────
+    auto& repo = PortfolioRepository::instance();
+    QVector<portfolio::PortfolioSnapshot> snaps;
+    if (auto r = repo.get_snapshots(pid, 365); r.is_ok())
+        snaps = r.value();
+    if (snaps.size() < 3 && !backfill_attempted_.contains(pid)) {
+        // One-shot per process: reconstruct NAV history from the ledger so the
+        // realised figures have something to work with.
+        backfill_attempted_.insert(pid);
+        QPointer<PortfolioService> self = this;
+        QMetaObject::invokeMethod(
+            this,
+            [self, pid]() {
+                if (self)
+                    self->backfill_history(pid);
+            },
+            Qt::QueuedConnection);
+    }
+    QVector<portfolio::Transaction> txns;
+    if (auto r = repo.get_transactions(pid, 1000000); r.is_ok())
+        txns = r.value();
+    m.twr_series = build_twr_series(snaps, txns);
+
+    QVector<double> rets;
+    QVector<QString> starts, ends;
+    for (int i = 1; i < m.twr_series.size(); ++i) {
+        const auto& p = m.twr_series[i];
+        if (!p.valid) {
+            ++m.perf_excluded;
+            continue;
         }
-        // Fallback: derive volatility from cross-sectional day changes only
-        double sum = 0, sum_sq = 0;
-        int n = 0;
-        for (const auto& h : summary.holdings) {
-            if (std::abs(h.day_change_percent) > 0.0001) {
-                sum += h.day_change_percent;
-                sum_sq += h.day_change_percent * h.day_change_percent;
-                ++n;
+        rets.append(p.period_return);
+        starts.append(m.twr_series[i - 1].date);
+        ends.append(p.date);
+    }
+    if (!m.twr_series.isEmpty()) {
+        m.perf_start = m.twr_series.first().date;
+        m.perf_end = m.twr_series.last().date;
+    }
+    const int n = rets.size();
+    m.perf_observations = n;
+
+    if (n >= pmd::kMinDrawdownObs) {
+        double idx = 1.0, peak = 1.0, mdd = 0.0;
+        for (double r : rets) {
+            idx *= (1.0 + r);
+            peak = std::max(peak, idx);
+            mdd = std::min(mdd, idx / peak - 1.0);
+        }
+        m.max_drawdown = mdd * 100.0;
+        m.total_return = (idx - 1.0) * 100.0;
+    }
+
+    double ppy = 252.0;
+    std::optional<double> realised_vol_pct;
+    std::optional<double> realised_beta;
+    if (n >= pmd::kMinPerfObs) {
+        const QDate d0 = QDate::fromString(m.perf_start, Qt::ISODate);
+        const QDate d1 = QDate::fromString(m.perf_end, Qt::ISODate);
+        const int span_days = (d0.isValid() && d1.isValid()) ? static_cast<int>(d0.daysTo(d1)) : 0;
+        const double years = span_days / 365.25;
+        // Observations per year implied by the sample itself: ≈252 for
+        // trading-day snapshots, ≈365 when weekends were snapshotted too (their
+        // zero returns then scale back out), lower when the app was closed.
+        if (years > 0)
+            ppy = std::clamp(n / years, 1.0, 366.0);
+
+        const double mean = std::accumulate(rets.begin(), rets.end(), 0.0) / n;
+        double ss = 0;
+        for (double r : rets)
+            ss += (r - mean) * (r - mean);
+        const double sd = std::sqrt(ss / (n - 1));
+        const double rf_p = std::pow(1.0 + rf_rate_, 1.0 / ppy) - 1.0;
+
+        realised_vol_pct = sd * std::sqrt(ppy) * 100.0;
+        if (sd > 1e-12)
+            m.sharpe = (mean - rf_p) / sd * std::sqrt(ppy);
+
+        // Sortino: downside deviation vs the risk-free target over ALL periods.
+        double dss = 0;
+        for (double r : rets) {
+            const double shortfall = std::min(r - rf_p, 0.0);
+            dss += shortfall * shortfall;
+        }
+        const double dd = std::sqrt(dss / n);
+        if (dd > 1e-12)
+            m.sortino = (mean - rf_p) / dd * std::sqrt(ppy);
+
+        if (span_days >= pmd::kMinAnnualiseDays && m.total_return.has_value())
+            m.annualized_return = (std::pow(1.0 + *m.total_return / 100.0, 1.0 / years) - 1.0) * 100.0;
+
+        // Historical VaR/CVaR from the realised series (used only when the
+        // ex-ante figures below are unavailable).
+        if (summary.total_market_value > 0) {
+            QVector<double> sorted = rets;
+            std::sort(sorted.begin(), sorted.end());
+            const int k = std::max(1, static_cast<int>(std::floor(n * pmd::kVar95Tail)));
+            double tail = 0;
+            for (int i = 0; i < k; ++i)
+                tail += sorted[i];
+            m.var_95 = summary.total_market_value * std::max(-sorted[k - 1], 0.0);
+            m.cvar_95 = summary.total_market_value * std::max(-(tail / k), 0.0);
+        }
+
+        // Realised beta / Jensen's alpha vs the currency benchmark, each
+        // period matched to the benchmark's move over the same dates.
+        const auto a = last_market_analytics(pid);
+        if (a.benchmark == m.benchmark_symbol && a.benchmark_dates.size() >= 2) {
+            QVector<double> pr, br;
+            for (int i = 0; i < n; ++i) {
+                const auto b0 = pmd::close_as_of(a.benchmark_dates, a.benchmark_closes, starts[i]);
+                const auto b1 = pmd::close_as_of(a.benchmark_dates, a.benchmark_closes, ends[i]);
+                if (!b0 || !b1)
+                    continue;
+                pr.append(rets[i]);
+                br.append(*b1 / *b0 - 1.0);
             }
-        }
-        if (n >= 2) {
-            const double mean = sum / n;
-            const double var = (sum_sq / n) - (mean * mean);
-            const double daily_vol = std::sqrt(std::max(var, 0.0));
-            const double ann_vol = daily_vol * std::sqrt(252.0);
-            // day_change_percent is already in percent units, so daily_vol/ann_vol
-            // are too — do NOT multiply by 100 again (that produced ~100x-inflated
-            // "2380%" volatility). The full-history path stores ann_vol directly,
-            // and vol_score/sharpe below already treat it as a percentage.
-            metrics.volatility = ann_vol; // already in %
-            const double rf_daily = rf_rate_ / 252.0;
-            if (daily_vol > 1e-6)
-                metrics.sharpe = ((mean / 100.0 - rf_daily) / (daily_vol / 100.0)) * std::sqrt(252.0);
-            if (summary.total_market_value > 0) {
-                // Loss at the 5th percentile = z*sigma - mean. abs() turned a
-                // positive-drift day into a reported "loss" of the same size.
-                const double loss_frac = kVar95Z * daily_vol / 100.0 - mean / 100.0;
-                metrics.var_95 = summary.total_market_value * std::max(loss_frac, 0.0);
-            }
-            const double vol_score = std::min(ann_vol / kVolCapPct, 1.0) * kWVolDegraded;
-            const double conc_score = std::min(conc / kConcentrationCapPct, 1.0) * kWConcDegraded;
-            metrics.risk_score = vol_score + conc_score;
-        }
-        emit metrics_computed(metrics);
-        return;
-    }
-
-    // ── Build daily return series from snapshots ──────────────────────────────
-    auto snaps = snap_r.value();
-    // Sort ascending by date
-    std::sort(snaps.begin(), snaps.end(),
-              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
-
-    QVector<double> port_returns; // daily log returns (%)
-    port_returns.reserve(snaps.size() - 1);
-    for (int i = 1; i < snaps.size(); ++i) {
-        const double prev = snaps[i - 1].total_value;
-        const double curr = snaps[i].total_value;
-        if (prev > 1e-6)
-            port_returns.append((curr - prev) / prev * 100.0);
-    }
-
-    if (port_returns.size() < 2) {
-        emit metrics_computed(metrics);
-        return;
-    }
-
-    const int n = port_returns.size();
-
-    // ── Mean and std-dev ──────────────────────────────────────────────────────
-    const double mean = std::accumulate(port_returns.begin(), port_returns.end(), 0.0) / n;
-    double sum_sq = 0;
-    for (const double r : port_returns)
-        sum_sq += (r - mean) * (r - mean);
-    const double daily_vol = std::sqrt(sum_sq / (n - 1)); // sample std-dev
-    const double ann_vol = daily_vol * std::sqrt(252.0);
-    metrics.volatility = ann_vol; // already in %
-
-    // ── Sharpe ratio (annualised) ─────────────────────────────────────────────
-    // rf_rate_ = live DGS10 annual decimal (e.g. 0.043); convert to daily %
-    const double rf_daily = rf_rate_ / 252.0 * 100.0;
-    if (daily_vol > 1e-6)
-        metrics.sharpe = ((mean - rf_daily) / daily_vol) * std::sqrt(252.0);
-
-    // ── Sortino ratio (annualised) ────────────────────────────────────────────
-    // Like Sharpe but penalises only downside deviation below the minimum
-    // acceptable return (MAR = daily risk-free rate). Returns at or above MAR
-    // contribute zero to the downside variance.
-    {
-        double downside_sq = 0.0;
-        for (const double r : port_returns) {
-            const double shortfall = r - rf_daily;
-            if (shortfall < 0.0)
-                downside_sq += shortfall * shortfall;
-        }
-        const double downside_dev = std::sqrt(downside_sq / n); // population over all periods
-        if (downside_dev > 1e-6)
-            metrics.sortino = ((mean - rf_daily) / downside_dev) * std::sqrt(252.0);
-    }
-
-    // ── Max drawdown ──────────────────────────────────────────────────────────
-    double peak = snaps.first().total_value;
-    double max_dd = 0.0;
-    for (const auto& s : snaps) {
-        if (s.total_value > peak)
-            peak = s.total_value;
-        if (peak > 1e-6) {
-            const double dd = (s.total_value - peak) / peak * 100.0;
-            if (dd < max_dd)
-                max_dd = dd;
-        }
-    }
-    metrics.max_drawdown = max_dd; // negative %
-
-    // ── Beta vs SPY (OLS regression on aligned date windows) ─────────────────
-    // Build SPY daily return series from cached closes, aligned to snapshot dates.
-    if (spy_closes_cache_.size() >= 2 && spy_dates_cache_.size() == spy_closes_cache_.size()) {
-        // Build a date→close map for O(1) lookup
-        QHash<QString, double> spy_map;
-        spy_map.reserve(spy_dates_cache_.size());
-        for (int i = 0; i < spy_dates_cache_.size(); ++i)
-            spy_map[spy_dates_cache_[i]] = spy_closes_cache_[i];
-
-        // For each consecutive snapshot pair, find SPY return for the same day
-        QVector<double> spy_aligned;
-        QVector<double> port_aligned;
-        spy_aligned.reserve(snaps.size() - 1);
-        port_aligned.reserve(snaps.size() - 1);
-
-        for (int i = 1; i < snaps.size(); ++i) {
-            const QString date = snaps[i].snapshot_date;
-            if (!spy_map.contains(date))
-                continue;
-            // Find previous available SPY close
-            const QString prev_date = snaps[i - 1].snapshot_date;
-            if (!spy_map.contains(prev_date))
-                continue;
-
-            const double spy_prev = spy_map[prev_date];
-            const double spy_curr = spy_map[date];
-            if (spy_prev < 1e-6)
-                continue;
-
-            const double spy_ret = (spy_curr - spy_prev) / spy_prev * 100.0;
-            const double pv = snaps[i - 1].total_value;
-            const double cv = snaps[i].total_value;
-            if (pv < 1e-6)
-                continue;
-            const double port_ret = (cv - pv) / pv * 100.0;
-            spy_aligned.append(spy_ret);
-            port_aligned.append(port_ret);
-        }
-
-        const int m = spy_aligned.size();
-        if (m >= 5) {
-            // OLS: beta = cov(port, spy) / var(spy)
-            const double spy_mean = std::accumulate(spy_aligned.begin(), spy_aligned.end(), 0.0) / m;
-            const double port_mean = std::accumulate(port_aligned.begin(), port_aligned.end(), 0.0) / m;
-            double cov = 0.0, var_spy = 0.0;
-            for (int i = 0; i < m; ++i) {
-                cov += (port_aligned[i] - port_mean) * (spy_aligned[i] - spy_mean);
-                var_spy += (spy_aligned[i] - spy_mean) * (spy_aligned[i] - spy_mean);
-            }
-            if (var_spy > 1e-10) {
-                const double beta_val = cov / var_spy;
-                metrics.beta = beta_val;
-
-                // ── Jensen's alpha (annualised) ──────────────────────────────
-                // alpha = R_p - [R_f + beta * (R_m - R_f)], all annualised.
-                // port_mean / spy_mean are daily % returns over the aligned
-                // window; annualise by *252 and convert % → decimal.
-                const double port_ann = port_mean / 100.0 * 252.0;
-                const double mkt_ann = spy_mean / 100.0 * 252.0;
-                const double alpha_dec = port_ann - (rf_rate_ + beta_val * (mkt_ann - rf_rate_));
-                metrics.alpha = alpha_dec * 100.0; // store as %
+            const int mc = pr.size();
+            if (mc >= pmd::kMinPerfObs) {
+                const double pm = std::accumulate(pr.begin(), pr.end(), 0.0) / mc;
+                const double bm = std::accumulate(br.begin(), br.end(), 0.0) / mc;
+                double cov = 0, var_b = 0;
+                for (int i = 0; i < mc; ++i) {
+                    cov += (pr[i] - pm) * (br[i] - bm);
+                    var_b += (br[i] - bm) * (br[i] - bm);
+                }
+                if (var_b > 1e-14) {
+                    const double beta = cov / var_b;
+                    realised_beta = beta;
+                    m.alpha = ((pm - rf_p) - beta * (bm - rf_p)) * ppy * 100.0;
+                }
             }
         }
     }
 
-    // ── VaR 95% and CVaR 95% (historical simulation) ─────────────────────────
-    // Sort returns ascending; VaR = worst 5th percentile; CVaR = mean of tail.
-    if (summary.total_market_value > 0 && !port_returns.isEmpty()) {
-        QVector<double> sorted_rets = port_returns;
-        std::sort(sorted_rets.begin(), sorted_rets.end());
-        const int tail_count = std::max(1, static_cast<int>(std::floor(sorted_rets.size() * kVar95Tail)));
-        // VaR: loss at 95th percentile (positive value = amount at risk)
-        const double var_pct = -sorted_rets[tail_count - 1]; // worst 5th pct return (%)
-        metrics.var_95 = summary.total_market_value * std::max(var_pct, 0.0) / 100.0;
-        // CVaR: expected loss beyond VaR (average of worst tail_count returns)
-        double tail_sum = 0.0;
-        for (int i = 0; i < tail_count; ++i)
-            tail_sum += sorted_rets[i];
-        const double cvar_pct = -(tail_sum / tail_count);
-        metrics.cvar_95 = summary.total_market_value * std::max(cvar_pct, 0.0) / 100.0;
+    // ── Ex-ante risk at current weights (preferred for vol / beta / VaR) ──────
+    const auto a = last_market_analytics(pid);
+    if (a.benchmark == m.benchmark_symbol && a.ann_vol.has_value()) {
+        m.risk_ex_ante = true;
+        m.risk_observations = a.observations;
+        m.volatility = *a.ann_vol * 100.0;
+        m.beta = a.beta.has_value() ? a.beta : realised_beta;
+        if (a.var_95_1d && summary.total_market_value > 0)
+            m.var_95 = *a.var_95_1d * summary.total_market_value;
+        if (a.cvar_95_1d && summary.total_market_value > 0)
+            m.cvar_95 = *a.cvar_95_1d * summary.total_market_value;
+    } else {
+        m.volatility = realised_vol_pct;
+        m.beta = realised_beta;
     }
 
-    // ── Composite risk score (0-100) ─────────────────────────────────────────
-    // Full four-signal model: volatility + concentration + drawdown + beta,
-    // weighted 30/25/25/20. See the tuning constants at the top of this file.
-    {
-        const double vol_score = std::min(ann_vol / kVolCapPct, 1.0) * kWVolFull;
-        const double conc_score = std::min(conc / kConcentrationCapPct, 1.0) * kWConcFull;
-        const double dd_score = std::min(std::abs(max_dd) / kDrawdownCapPct, 1.0) * kWDrawdownFull;
-        const double beta_val = metrics.beta.value_or(1.0);
-        const double beta_score = std::min(std::abs(beta_val) / kBetaCap, 1.0) * kWBetaFull;
-        metrics.risk_score = vol_score + conc_score + dd_score + beta_score;
+    // ── Composite risk score (0-100) — only with a real volatility ───────────
+    if (m.volatility.has_value()) {
+        const double vol = *m.volatility;
+        if (m.max_drawdown.has_value() && m.beta.has_value()) {
+            m.risk_score = std::min(vol / pmd::kVolCapPct, 1.0) * pmd::kWVolFull +
+                           std::min(conc / pmd::kConcentrationCapPct, 1.0) * pmd::kWConcFull +
+                           std::min(std::abs(*m.max_drawdown) / pmd::kDrawdownCapPct, 1.0) * pmd::kWDrawdownFull +
+                           std::min(std::abs(*m.beta) / pmd::kBetaCap, 1.0) * pmd::kWBetaFull;
+        } else {
+            m.risk_score = std::min(vol / pmd::kVolCapPct, 1.0) * pmd::kWVolDegraded +
+                           std::min(conc / pmd::kConcentrationCapPct, 1.0) * pmd::kWConcDegraded;
+        }
     }
 
-    emit metrics_computed(metrics);
+    emit metrics_computed(m);
 }
 
-// ── Import / Export ──────────────────────────────────────────────────────────
+// ── Snapshots ─────────────────────────────────────────────────────────────────
 
 void PortfolioService::load_snapshots(const QString& portfolio_id, int days) {
     auto r = PortfolioRepository::instance().get_snapshots(portfolio_id, days);
@@ -640,26 +556,20 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
 
     auto& repo = PortfolioRepository::instance();
 
-    // Pull the full transaction history (not just the latest 50 — we need
-    // every BUY/SELL since the portfolio was created so the replay walks the
-    // whole timeline).
-    auto txns_r = repo.get_transactions(portfolio_id, /*limit=*/100000);
+    // Full ledger: the replay walks every BUY/SELL since the portfolio began.
+    auto txns_r = repo.get_transactions(portfolio_id, /*limit=*/1000000);
     if (txns_r.is_err() || txns_r.value().isEmpty()) {
-        // No transactions → nothing to replay. Emit zero so callers don't wait.
         emit history_backfilled(portfolio_id, 0);
         return;
     }
     const auto txns = txns_r.value();
 
-    // Serialize transactions to a temp JSON file. The Python side (action
-    // `portfolio_nav_history_replay`) reads it and walks the transactions in
-    // order to reconstruct daily position vectors and per-day cost basis.
-    // A file is used rather than CLI args because a portfolio with 500
-    // transactions × ~40 chars each would exceed Windows' 8191-char arg limit.
+    // A temp file, not argv: 500 transactions would exceed Windows' 8191-char
+    // argument limit. (yfinance_data.py's replay action reads a path.)
     QJsonArray tx_arr;
     for (const auto& t : txns) {
         QJsonObject obj;
-        obj["date"] = t.transaction_date.left(10); // YYYY-MM-DD
+        obj["date"] = t.transaction_date.left(10);
         obj["symbol"] = t.symbol;
         obj["type"] = t.transaction_type;
         obj["quantity"] = t.quantity;
@@ -681,16 +591,11 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
     f.write(QJsonDocument(tx_arr).toJson(QJsonDocument::Compact));
     f.close();
 
-    QStringList args;
-    args << "portfolio_nav_history_replay" << tmp_path;
-
     QPointer<PortfolioService> self = this;
     python::PythonRunner::instance().run(
-        "yfinance_data.py", args, [self, portfolio_id, tmp_path](python::PythonResult result) {
-            // Always remove the temp file when we're done with it, regardless of
-            // success — leaks add up if a user re-imports often.
-            QFile::remove(tmp_path);
-
+        "yfinance_data.py", {"portfolio_nav_history_replay", tmp_path},
+        [self, portfolio_id, tmp_path](python::PythonResult result) {
+            QFile::remove(tmp_path); // always — leaks add up on frequent re-imports
             if (!self)
                 return;
             if (!result.success || result.output.trimmed().isEmpty()) {
@@ -700,7 +605,7 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
                 return;
             }
             QJsonParseError err;
-            const auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8(), &err);
+            const auto doc = QJsonDocument::fromJson(python::extract_json(result.output).toUtf8(), &err);
             if (err.error != QJsonParseError::NoError || !doc.isObject()) {
                 LOG_WARN("PortfolioSvc", "backfill_history: bad JSON: " + err.errorString());
                 emit self->history_backfilled(portfolio_id, 0);
@@ -721,10 +626,8 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
             }
             const bool have_costs = (costs.size() == dates.size());
 
-            // Upsert each row. INSERT OR REPLACE keyed by (portfolio_id, snapshot_date)
-            // so re-running backfill corrects existing rows in place. Per-day cost
-            // basis comes from the replay (BUY adds, SELL reduces by WAC); falls
-            // back to NAV if the Python side didn't return a costs array.
+            // INSERT OR REPLACE keyed by (portfolio, date): a re-run corrects
+            // existing rows in place.
             auto& repo = PortfolioRepository::instance();
             int written = 0;
             for (int i = 0; i < dates.size(); ++i) {
@@ -733,8 +636,7 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
                 const double cost_basis = have_costs ? costs[i].toDouble() : 0.0;
                 const double pnl = nav - cost_basis;
                 const double pnl_pct = cost_basis > 0 ? (pnl / cost_basis) * 100.0 : 0.0;
-                auto wr = repo.save_snapshot(portfolio_id, nav, cost_basis, pnl, pnl_pct, d);
-                if (wr.is_ok())
+                if (repo.save_snapshot(portfolio_id, nav, cost_basis, pnl, pnl_pct, d).is_ok())
                     ++written;
             }
 
@@ -743,7 +645,5 @@ void PortfolioService::backfill_history(const QString& portfolio_id, const QStri
             emit self->history_backfilled(portfolio_id, written);
         });
 }
-
-// ── Cache control ────────────────────────────────────────────────────────────
 
 } // namespace fincept::services

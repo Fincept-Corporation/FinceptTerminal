@@ -448,3 +448,205 @@ def json_response(data: Any) -> str:
 def parse_json_input(json_str: str) -> Dict[str, Any]:
     """Parse JSON input from command line argument"""
     return json.loads(json_str)
+
+
+# ============================================================================
+# Run control shared by every provider
+# ============================================================================
+
+def read_cli_args(argv=None):
+    """Return (command, json_args) from the CLI.
+
+    The host (BacktestingService) sends `<command> --stdin` and writes the JSON
+    payload to stdin: broker-injected candles easily exceed the ~32 KB Windows
+    command-line limit, and argv is visible to other same-user processes.
+    `<command> <json>` is still accepted for manual runs.
+    """
+    import sys as _sys
+    argv = list(_sys.argv if argv is None else argv)
+    if len(argv) < 2:
+        raise ValueError('Usage: <provider>.py <command> <json_args | --stdin>')
+    command = argv[1]
+    if '--stdin' in argv[2:]:
+        return command, _sys.stdin.read()
+    if len(argv) < 3:
+        raise ValueError('Usage: <provider>.py <command> <json_args | --stdin>')
+    return command, argv[2]
+
+
+def check_cancelled(request) -> None:
+    """Exit the process immediately if the host cancelled this run.
+
+    BacktestingService passes `cancelFile` (a temp path) with every run and
+    creates that file when the user presses CANCEL. Long loops (optimisation,
+    walk-forward windows) call this once per iteration so a cancelled run frees
+    its Python slot instead of computing for minutes nobody will read.
+
+    os._exit is deliberate: provider loops wrap iterations in broad
+    `except Exception` handlers that would swallow a normal exception.
+    """
+    import os as _os
+    import sys as _sys
+    path = request.get('cancelFile') if isinstance(request, dict) else None
+    if not path or not _os.path.exists(path):
+        return
+    try:
+        out = _sys.__stdout__
+        out.write(json.dumps({'success': False, 'error': 'Cancelled by user', 'cancelled': True}) + '\n')
+        out.flush()
+    finally:
+        _os._exit(3)
+
+
+class SyntheticDataRefused(RuntimeError):
+    """Real market data could not be loaded and the user did not allow synthetic data."""
+
+
+def synthetic_allowed(request) -> bool:
+    """True only when the user explicitly ticked 'Allow synthetic data' in the UI."""
+    return bool(isinstance(request, dict) and request.get('allowSyntheticData', False))
+
+
+def refuse_synthetic(symbols, reason) -> None:
+    """Raise SyntheticDataRefused with an actionable message.
+
+    Every provider used to fall back to random-walk prices whenever a download
+    failed (typo'd ticker, network outage, rate limit) and still returned a
+    'successful' backtest. A run on fake prices is now refused unless the user
+    opted in explicitly.
+    """
+    syms = ', '.join(str(s) for s in (symbols or [])) or '(none)'
+    raise SyntheticDataRefused(
+        f'Market data for {syms} could not be loaded ({reason}). Refusing to run on synthetic '
+        f'prices. Check the symbol (exchange suffix, e.g. RELIANCE.NS), the date range and your '
+        f'network connection - or tick "Allow synthetic data" to test strategy mechanics on fake prices.'
+    )
+
+
+def periods_per_year(index) -> float:
+    """Bars per year implied by a datetime index (used to annualise Sharpe/vol/CAGR).
+
+    daily-like spacing: 252 when the index has weekend gaps (equities), 365 when it
+    does not (crypto/FX 24x7); weekly 52; monthly 12; intraday: observed bars per
+    calendar year spanned.
+    """
+    try:
+        import numpy as np
+        import pandas as pd
+        if not isinstance(index, pd.DatetimeIndex):
+            index = pd.DatetimeIndex(pd.to_datetime(list(index)))
+        n = len(index)
+        if n < 3:
+            return 252.0
+        secs = index.asi8.astype('float64')
+        unit = str(index.dtype)
+        if 'ns' in unit:
+            secs = secs / 1e9
+        elif 'us' in unit:
+            secs = secs / 1e6
+        elif 'ms' in unit:
+            secs = secs / 1e3
+        deltas = np.diff(secs)
+        deltas = deltas[deltas > 0]
+        if len(deltas) == 0:
+            return 252.0
+        med = float(np.median(deltas))
+        if med < 1.0:
+            return 252.0
+        if med >= 25 * 86400:
+            return 12.0
+        if med >= 6 * 86400:
+            return 52.0
+        if med >= 20 * 3600:
+            return 252.0 if bool(np.any(deltas > 1.5 * 86400)) else 365.0
+        span_years = float(secs[-1] - secs[0]) / (365.25 * 86400.0)
+        if span_years <= 0:
+            return 252.0
+        return float(max(1.0, (n - 1) / span_years))
+    except Exception:
+        return 252.0
+
+
+def describe_annualization(ppy: float) -> str:
+    """Human description of an annualisation basis for the assumptions block."""
+    if abs(ppy - 252.0) < 0.5:
+        return '252 bars/year (daily equity bars)'
+    if abs(ppy - 365.0) < 0.5:
+        return '365 bars/year (daily bars, 7-day market)'
+    if abs(ppy - 52.0) < 0.5:
+        return '52 bars/year (weekly bars)'
+    if abs(ppy - 12.0) < 0.5:
+        return '12 bars/year (monthly bars)'
+    return f'{ppy:,.0f} bars/year (measured from the intraday bar spacing)'
+
+
+_SURVIVORSHIP_NOTE = (
+    'Backtests only the symbols entered. There is no universe selection, so no survivorship '
+    'filter applies - but symbols that were later delisted cannot be tested, so a hand-picked '
+    'list of current winners is itself survivorship-biased.'
+)
+
+
+def build_assumptions(engine: str, execution: str, request: Dict[str, Any], *,
+                      costs: Optional[str] = None,
+                      position_sizing: Optional[str] = None,
+                      annualization: Optional[str] = None,
+                      data_source: Optional[str] = None,
+                      ignored: Optional[List[str]] = None,
+                      notes: Optional[List[str]] = None) -> Dict[str, Any]:
+    """The `assumptions` block every backtest result carries.
+
+    It states how the numbers were produced so a reader can judge them: when
+    fills happen relative to the signal bar, which costs were charged, how
+    returns were annualised and which UI settings this engine ignored.
+    """
+    req = request if isinstance(request, dict) else {}
+    commission = float(req.get('commission', 0) or 0)
+    slippage = float(req.get('slippage', 0) or 0)
+    if costs is None:
+        costs = (f'commission {commission * 100:.3f}% of notional per fill; '
+                 f'slippage {slippage * 100:.4f}% of price per fill')
+    out = {
+        'engine': engine,
+        'execution': execution,
+        'costs': costs,
+        'data_source': data_source or 'Yahoo Finance (split/dividend-adjusted prices)',
+        'survivorship': _SURVIVORSHIP_NOTE,
+        'risk_free_rate': float(req.get('riskFreeRate', 0) or 0),
+    }
+    if position_sizing:
+        out['position_sizing'] = position_sizing
+    if annualization:
+        out['annualization'] = annualization
+    if ignored:
+        out['ignored_settings'] = list(ignored)
+    if notes:
+        out['notes'] = list(notes)
+    return out
+
+
+def ignored_request_settings(request: Dict[str, Any], supported: List[str]) -> List[str]:
+    """UI settings the user changed from their neutral value that this engine does not apply.
+
+    supported: subset of {'commission', 'slippage', 'stops', 'sizing', 'short', 'leverage', 'interval'}.
+    """
+    req = request if isinstance(request, dict) else {}
+    out = []
+    if 'commission' not in supported and float(req.get('commission', 0) or 0) > 0:
+        out.append('commission')
+    if 'slippage' not in supported and float(req.get('slippage', 0) or 0) > 0:
+        out.append('slippage')
+    if 'stops' not in supported and (float(req.get('stopLoss', 0) or 0) > 0
+                                     or float(req.get('takeProfit', 0) or 0) > 0):
+        out.append('stop-loss/take-profit')
+    sizing = str(req.get('positionSizing', 'percent') or 'percent')
+    size_val = float(req.get('positionSizeValue', 100) or 100)
+    if 'sizing' not in supported and not (sizing == 'percent' and size_val >= 100):
+        out.append('position sizing (engine invests 100% of equity)')
+    if 'short' not in supported and bool(req.get('allowShort', False)):
+        out.append('short selling (long-only engine)')
+    if 'leverage' not in supported and float(req.get('leverage', 1) or 1) != 1.0:
+        out.append('leverage')
+    if 'interval' not in supported and str(req.get('interval', '1d') or '1d') != '1d':
+        out.append(f"interval {req.get('interval')} (engine uses daily bars)")
+    return out

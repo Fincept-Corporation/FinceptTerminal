@@ -155,9 +155,10 @@ void ConflictMonitorPanel::build_ui() {
         if (row < 0)
             return;
         if (auto* it = events_table_->item(row, 3)) {
-            const QString url = it->data(Qt::UserRole + 1).toString();
-            if (!url.isEmpty())
-                QDesktopServices::openUrl(QUrl(url));
+            // API-supplied link: web URLs only, never another scheme handed to the shell.
+            const QUrl url(it->data(Qt::UserRole + 1).toString());
+            if (url.isValid() && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https")))
+                QDesktopServices::openUrl(url);
         }
     });
 
@@ -549,8 +550,9 @@ QWidget* ConflictMonitorPanel::build_event_details_section(QWidget* parent) {
                                             .arg(neg.darker(120).name()));
     }
     connect(detail_open_btn_, &QPushButton::clicked, this, [this]() {
-        if (!current_url_.isEmpty())
-            QDesktopServices::openUrl(QUrl(current_url_));
+        const QUrl url(current_url_);
+        if (url.isValid() && (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https")))
+            QDesktopServices::openUrl(url);
     });
     dvl->addWidget(detail_open_btn_);
 

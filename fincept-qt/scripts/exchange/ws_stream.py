@@ -686,11 +686,24 @@ async def main():
     # Hyperliquid is a perps DEX — its primary market type is "swap".
     # All other exchanges default to "spot".
     default_type = "swap" if exchange_id in ("hyperliquid",) else "spot"
+    # 10 s per REST request, with retries on a hung connection
+    # (install_get_retry). The old 30 s budget meant one stalled connection —
+    # common to Kraken on some networks — kept the screen dark for minutes.
     exchange = exchange_class({
         "enableRateLimit": True,
-        "timeout":         30000,
+        "timeout":         10000,
         "options":         {"defaultType": default_type},
     })
+    from exchange_client import (load_cached_market_data, save_markets_cache,
+                                 apply_cached_markets, install_get_retry)
+    install_get_retry(exchange)
+    # Same idea for the WebSocket handshake: a healthy connect completes in
+    # under 2 s, so give up on a stalled one after 5 s (ccxt default 10 s) and
+    # let the watcher's retry open a fresh connection.
+    try:
+        exchange.streaming = {**(exchange.streaming or {}), "connectionTimeout": 5000}
+    except Exception:
+        pass
 
     # Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read
     # the system DNS config on Windows, so EVERY ccxt.pro REST + WS call fails
@@ -706,31 +719,47 @@ async def main():
             trust_env=True,
         )
 
-    # IMPORTANT: Always call load_markets() — do NOT restore from a disk cache by
-    # assigning exchange.markets directly. That leaves ccxt.pro's internal indexes
-    # (currencies, safeMarket lookups) incomplete, causing "NoneType has no len()"
-    # on the first watch_* call.
-    MAX_RETRIES = 5
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            emit({"type": "status", "connected": False, "exchange": exchange_id,
-                  "symbols": all_symbols,
-                  "message": f"Loading markets (attempt {attempt}/{MAX_RETRIES})..."})
-            await exchange.load_markets()
-            emit({"type": "status", "connected": True,
-                  "exchange": exchange_id, "symbols": all_symbols})
-            break
-        except Exception as e:
-            emit({"type": "error",
-                  "message": f"load_markets attempt {attempt} failed: {e}"})
-            if attempt < MAX_RETRIES:
-                delay = min(attempt * 3, 15)
-                await asyncio.sleep(delay)
+    # Markets: a fresh disk cache (markets + currencies, installed with
+    # set_markets() so ccxt.pro's indexes are complete) lets streaming start
+    # without any REST round trip. Assigning exchange.markets directly is NOT
+    # enough — it leaves currencies/safeMarket lookups incomplete and the first
+    # watch_* call fails with "NoneType has no len()". A cache without
+    # currencies is not trusted for that reason.
+    markets_ready = False
+    cached_markets, cached_currencies = load_cached_market_data(exchange_id)
+    if cached_markets and cached_currencies:
+        markets_ready = apply_cached_markets(exchange, cached_markets, cached_currencies)
+    if markets_ready:
+        emit({"type": "status", "connected": True,
+              "exchange": exchange_id, "symbols": all_symbols})
     else:
-        emit({"type": "status", "connected": False, "exchange": exchange_id,
-              "symbols": all_symbols, "message": "load_markets failed — giving up"})
-        await exchange.close()
-        sys.exit(1)
+        MAX_RETRIES = 5
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                emit({"type": "status", "connected": False, "exchange": exchange_id,
+                      "symbols": all_symbols,
+                      "message": f"Loading markets (attempt {attempt}/{MAX_RETRIES})..."})
+                await exchange.load_markets()
+                save_markets_cache(exchange_id, exchange.markets, exchange.currencies)
+                markets_ready = True
+                break
+            except Exception as e:
+                emit({"type": "error",
+                      "message": f"load_markets attempt {attempt} failed: {e}"})
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(min(attempt * 2, 6))
+        if not markets_ready:
+            # Unreachable REST API: stream from a stale market list if we have one.
+            stale_markets, stale_currencies = load_cached_market_data(exchange_id, allow_stale=True)
+            if stale_markets and stale_currencies:
+                markets_ready = apply_cached_markets(exchange, stale_markets, stale_currencies)
+        if not markets_ready:
+            emit({"type": "status", "connected": False, "exchange": exchange_id,
+                  "symbols": all_symbols, "message": "load_markets failed — giving up"})
+            await exchange.close()
+            sys.exit(1)
+        emit({"type": "status", "connected": True,
+              "exchange": exchange_id, "symbols": all_symbols})
 
     caps = get_exchange_caps(exchange)
 

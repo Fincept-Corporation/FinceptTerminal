@@ -127,7 +127,7 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
     // Update the active view with new data
     if (auto* sectors_v = qobject_cast<AnalyticsSectorsView*>(current)) {
         sectors_v->set_data(summary, currency);
-        sectors_v->set_correlation(current_correlation_);
+        sectors_v->set_correlation(current_analytics_.correlation);
     } else if (auto* perf_v = qobject_cast<PerformanceRiskView*>(current)) {
         perf_v->set_data(summary, currency);
         perf_v->set_snapshots(current_snapshots_);
@@ -135,6 +135,7 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
     } else if (auto* risk_v = qobject_cast<RiskManagementView*>(current)) {
         risk_v->set_data(summary, currency);
         risk_v->set_metrics(current_metrics_);
+        risk_v->set_analytics(current_analytics_);
     } else if (auto* opt_v = qobject_cast<PortfolioOptimizationView*>(current)) {
         opt_v->set_data(summary, currency);
     } else if (auto* quant_v = qobject_cast<QuantStatsView*>(current)) {
@@ -165,13 +166,15 @@ void PortfolioDetailWrapper::update_metrics(const portfolio::ComputedMetrics& me
         plan->set_metrics(metrics);
 }
 
-void PortfolioDetailWrapper::update_correlation(const QHash<QString, double>& matrix) {
-    current_correlation_ = matrix;
+void PortfolioDetailWrapper::update_analytics(const portfolio::MarketAnalytics& analytics) {
+    current_analytics_ = analytics;
     auto* current = view_stack_->currentWidget();
     if (!current)
         return;
     if (auto* v = qobject_cast<AnalyticsSectorsView*>(current))
-        v->set_correlation(matrix);
+        v->set_correlation(analytics.correlation);
+    else if (auto* r = qobject_cast<RiskManagementView*>(current))
+        r->set_analytics(analytics);
 }
 
 void PortfolioDetailWrapper::set_optimization_target(double annual_return) {
@@ -191,8 +194,8 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
         case portfolio::DetailView::AnalyticsSectors: {
             auto* asv = new AnalyticsSectorsView;
             connect(asv, &AnalyticsSectorsView::sector_selected, this, &PortfolioDetailWrapper::sector_selected);
-            if (!current_correlation_.isEmpty())
-                asv->set_correlation(current_correlation_);
+            if (!current_analytics_.correlation.isEmpty())
+                asv->set_correlation(current_analytics_.correlation);
             widget = asv;
             break;
         }
@@ -207,6 +210,7 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
         case portfolio::DetailView::RiskMgmt: {
             auto* rmv = new RiskManagementView;
             rmv->set_metrics(current_metrics_);
+            rmv->set_analytics(current_analytics_);
             widget = rmv;
             break;
         }

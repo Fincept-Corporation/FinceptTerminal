@@ -5,6 +5,7 @@
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
 
+#include <QDate>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -104,7 +105,7 @@ void ImfPanel::activate() {
 
 void ImfPanel::build_controls(QHBoxLayout* thl) {
     country_lbl_ = new QLabel(tr("COUNTRY"));
-    country_lbl_->setStyleSheet(ctrl_label_style());
+    country_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
     country_combo_ = new QComboBox;
     for (const auto& pair : kImfCountries)
         country_combo_->addItem(pair.first, pair.second);
@@ -175,6 +176,16 @@ void ImfPanel::on_result(const QString& request_id, const services::EconomicsRes
         // over an arbitrary single year column across unrelated countries — hide
         // them rather than show a number nobody can interpret.
         set_stats_visible(!country.isEmpty());
+        // DataMapper serves the World Economic Outlook, whose current and future years are IMF
+        // projections, not observations. They stay in the table (flagged) but never become "LATEST".
+        SeriesMeta meta;
+        meta.frequency = tr("Annual");
+        meta.stats_cutoff = QDate(QDate::currentDate().year() - 1, 12, 31);
+        meta.note = tr("Years from %1 on are IMF WEO projections").arg(QDate::currentDate().year());
+        const int open = static_cast<int>(indicator_name.lastIndexOf(QLatin1Char('(')));
+        if (open > 0 && indicator_name.endsWith(QLatin1Char(')')))
+            meta.units = indicator_name.mid(open + 1, indicator_name.size() - open - 2);
+        set_series_meta(meta);
         display(rows, title);
         LOG_INFO("ImfPanel", QString("Displayed %1 rows").arg(rows.size()));
     }
@@ -198,8 +209,11 @@ QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values, const QString& ind
     QStringList years = year_set.values();
     std::sort(years.begin(), years.end());
 
+    // WEO: the current year and later are projections.
+    const int first_projection_year = QDate::currentDate().year();
     if (country_filter.isEmpty()) {
-        // Wide format: one row per country, columns = years (last 10)
+        // Wide format: one row per country, columns = years (last 10). Projection years are marked
+        // in the column header ("2027 (proj.)") so they can't be read as reported data.
         const QStringList recent_years = years.mid(qMax(0, years.size() - 10));
         for (const auto& c : countries) {
             const QJsonObject y_map = by_country[c].toObject();
@@ -207,7 +221,8 @@ QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values, const QString& ind
             row["country"] = c;
             for (const auto& y : recent_years) {
                 const QJsonValue v = y_map[y];
-                row[y] = v.isNull() ? QJsonValue() : v;
+                const QString col = y.toInt() >= first_projection_year ? tr("%1 (proj.)").arg(y) : y;
+                row[col] = v.isNull() ? QJsonValue() : v;
             }
             rows.append(row);
         }
@@ -223,6 +238,7 @@ QJsonArray ImfPanel::flatten_pivot(const QJsonObject& values, const QString& ind
             QJsonObject row;
             row["year"] = y;
             row["value"] = v;
+            row["status"] = y.toInt() >= first_projection_year ? tr("IMF projection") : tr("Actual / estimate");
             rows.append(row);
         }
     }

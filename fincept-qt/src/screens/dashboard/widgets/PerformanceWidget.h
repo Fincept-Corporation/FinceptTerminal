@@ -33,11 +33,11 @@ class PerformanceWidget : public BaseWidget {
     void rebuild_from_cache();
 
     struct MetricRow {
-        QWidget* row_widget = nullptr;
         QLabel* label = nullptr;
         QLabel* value = nullptr;
         QLabel* period = nullptr;
     };
+    QWidget* rows_host_ = nullptr; // owns the rows + the one stylesheet styling them
     QVector<MetricRow> rows_;
 
     QHash<QString, services::QuoteData> row_cache_;

@@ -11,6 +11,7 @@
 #include "core/symbol/SymbolContext.h"
 #include "core/symbol/SymbolRef.h"
 #include "screens/portfolio/PortfolioBlotter.h"
+#include "screens/portfolio/PortfolioCsv.h"
 #include "screens/portfolio/PortfolioCommandBar.h"
 #include "screens/portfolio/PortfolioDetailWrapper.h"
 #include "screens/portfolio/PortfolioDialogs.h"
@@ -31,6 +32,7 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 
+#include <QDate>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
@@ -47,6 +49,7 @@
 #include <QSplitter>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <memory>
 
 namespace fincept::screens {
@@ -267,16 +270,15 @@ void PortfolioScreen::build_ui() {
                     QMessageBox::warning(
                         this, tr("Portfolio Import Failed"),
                         tr("Could not import the portfolio.\n\n") + detail +
-                            tr("\n\nExpected format:\n"
-                               "{\n"
-                               "  \"portfolio_name\": \"My Portfolio\",\n"
-                               "  \"currency\": \"USD\",\n"
-                               "  \"owner\": \"...\",\n"
-                               "  \"transactions\": [\n"
-                               "    {\"date\": \"YYYY-MM-DD\", \"symbol\": \"AAPL\", \"type\": \"BUY\",\n"
-                               "     \"quantity\": 10, \"price\": 150.0}\n"
-                               "  ]\n"
-                               "}"));
+                            tr("\n\nAccepted formats (either one):\n"
+                               "1) Terminal export — a ledger of trades:\n"
+                               "{ \"portfolio_name\": \"My Portfolio\", \"currency\": \"USD\",\n"
+                               "  \"transactions\": [ {\"date\": \"YYYY-MM-DD\", \"symbol\": \"AAPL\",\n"
+                               "     \"type\": \"BUY\" | \"SELL\" | \"DIVIDEND\", \"quantity\": 10, \"price\": 150.0} ] }\n\n"
+                               "2) Holdings snapshot — each holding becomes a BUY:\n"
+                               "{ \"name\": \"My Portfolio\", \"currency\": \"USD\",\n"
+                               "  \"holdings\": [ {\"symbol\": \"AAPL\", \"quantity\": 10, \"avg_cost\": 150.0,\n"
+                               "     \"date\": \"YYYY-MM-DD\" (optional), \"sector\": \"Technology\" (optional)} ] }"));
                     return;
                 }
                 on_portfolio_selected(result.portfolio_id);
@@ -690,36 +692,17 @@ QWidget* PortfolioScreen::build_main_view() {
                                                       {{"screen_id", screen_id}, {"symbol", symbol}});
             });
     connect(blotter_, &PortfolioBlotter::edit_transaction_requested, this, [this](const QString& symbol) {
-        // Load transactions for this symbol, show edit dialog for the most recent one
-        services::PortfolioService::instance().load_transactions(selected_id_, 100);
-        QPointer<PortfolioScreen> self = this;
-        auto conn = std::make_shared<QMetaObject::Connection>();
-        *conn = connect(
-            &services::PortfolioService::instance(), &services::PortfolioService::transactions_loaded, this,
-            [this, self, symbol, conn](QVector<portfolio::Transaction> txns) {
-                disconnect(*conn);
-                if (!self)
-                    return;
-                // Find most recent transaction for this symbol
-                portfolio::Transaction* match = nullptr;
-                for (auto& t : txns) {
-                    if (t.symbol == symbol) {
-                        match = &t;
-                        break;
-                    }
-                }
-                if (!match)
-                    return;
-                EditTransactionDialog dlg(*match, this);
-                if (dlg.exec() == QDialog::Accepted) {
-                    services::PortfolioService::instance().update_transaction(match->id, dlg.quantity(), dlg.price(),
-                                                                              dlg.date(), dlg.notes());
-                    // update_transaction() emits nothing, so the history panel kept
-                    // showing the old numbers until the next 60 s poll.
-                    services::PortfolioService::instance().load_transactions(selected_id_, 50);
-                }
-            },
-            Qt::SingleShotConnection);
+        // Most recent ledger row for this symbol. The ledger read is local and
+        // synchronous; the old version fired an async reload and caught the
+        // next transactions_loaded with a one-shot connection.
+        const auto txns = services::PortfolioService::instance().ledger(selected_id_);
+        for (const auto& t : txns) {
+            if (t.symbol == symbol) {
+                edit_transaction_by_id(t.id);
+                return;
+            }
+        }
+        QMessageBox::information(this, tr("Edit Transaction"), tr("No ledger rows recorded for %1.").arg(symbol));
     });
     connect(blotter_, &PortfolioBlotter::delete_position_requested, this, [this](const QString& symbol) {
         const auto* h = find_holding(symbol);
@@ -763,6 +746,16 @@ QWidget* PortfolioScreen::build_main_view() {
         fincept::EventBus::instance().publish("nav.open_symbol",
                                               {{"screen_id", QStringLiteral("equity_research")}, {"symbol", symbol}});
     });
+    connect(txn_panel_, &PortfolioTxnPanel::open_symbol_requested, this,
+            [](const QString& screen_id, const QString& symbol) {
+                fincept::EventBus::instance().publish("nav.open_symbol",
+                                                      {{"screen_id", screen_id}, {"symbol", symbol}});
+            });
+    connect(txn_panel_, &PortfolioTxnPanel::edit_transaction_requested, this,
+            &PortfolioScreen::edit_transaction_by_id);
+    connect(txn_panel_, &PortfolioTxnPanel::delete_transaction_requested, this,
+            &PortfolioScreen::delete_transaction_by_id);
+    connect(txn_panel_, &PortfolioTxnPanel::export_requested, this, &PortfolioScreen::export_ledger_csv);
     connect(txn_panel_, &PortfolioTxnPanel::collapse_toggled, this, [this](bool collapsed) {
         // Header is 30px, table content is the rest. When collapsed, shrink
         // to header height; when expanded, restore to the full height (the
@@ -784,7 +777,8 @@ QWidget* PortfolioScreen::build_main_view() {
         if (const auto* h = find_holding(selected_symbol_))
             dlg.preset(h->symbol, h->current_price);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().add_asset(selected_id_, dlg.symbol(), dlg.quantity(), dlg.price());
+            services::PortfolioService::instance().add_asset(selected_id_, dlg.symbol(), dlg.quantity(), dlg.price(),
+                                                             dlg.date());
         }
     });
     connect(order_panel_, &PortfolioOrderPanel::sell_submitted, this, [this]() {
@@ -795,9 +789,12 @@ QWidget* PortfolioScreen::build_main_view() {
         // current_summary_ and would leave `h` dangling.
         const QString symbol = h->symbol;
         const double held = h->quantity;
+        const double last = h->current_price;
         SellAssetDialog dlg(symbol, held, this);
+        dlg.preset_price(last);
         if (dlg.exec() == QDialog::Accepted) {
-            services::PortfolioService::instance().sell_asset(selected_id_, symbol, dlg.quantity(), dlg.price());
+            services::PortfolioService::instance().sell_asset(selected_id_, symbol, dlg.quantity(), dlg.price(),
+                                                              dlg.date());
         }
     });
 
@@ -806,6 +803,59 @@ QWidget* PortfolioScreen::build_main_view() {
     order_panel_anim_->setEasingCurve(QEasingCurve::OutCubic);
 
     return w;
+}
+
+void PortfolioScreen::edit_transaction_by_id(const QString& transaction_id) {
+    const auto txns = services::PortfolioService::instance().ledger(selected_id_);
+    const auto it = std::find_if(txns.begin(), txns.end(),
+                                 [&transaction_id](const auto& t) { return t.id == transaction_id; });
+    if (it == txns.end())
+        return;
+    const portfolio::Transaction txn = *it;
+    EditTransactionDialog dlg(txn, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        // Re-derives the position from the ledger and emits ledger_changed →
+        // full refresh (holdings, history, metrics).
+        services::PortfolioService::instance().update_transaction(selected_id_, txn.id, dlg.quantity(), dlg.price(),
+                                                                  dlg.date(), dlg.notes());
+    }
+}
+
+void PortfolioScreen::delete_transaction_by_id(const QString& transaction_id) {
+    const auto txns = services::PortfolioService::instance().ledger(selected_id_);
+    const auto it = std::find_if(txns.begin(), txns.end(),
+                                 [&transaction_id](const auto& t) { return t.id == transaction_id; });
+    if (it == txns.end())
+        return;
+    const auto answer = QMessageBox::question(
+        this, tr("Delete Transaction"),
+        tr("Delete %1 %2 %3 @ %4 on %5?\n\nThe %3 position is re-derived from the remaining ledger rows.")
+            .arg(it->transaction_type, QString::number(it->quantity, 'g', 12), it->symbol,
+                 QString::number(it->price, 'g', 12), it->transaction_date.left(10)),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer == QMessageBox::Yes)
+        services::PortfolioService::instance().delete_transaction(transaction_id, selected_id_);
+}
+
+void PortfolioScreen::export_ledger_csv() {
+    const auto txns = services::PortfolioService::instance().ledger(selected_id_);
+    if (txns.isEmpty()) {
+        QMessageBox::information(this, tr("Export Ledger"), tr("No transactions recorded for this portfolio yet."));
+        return;
+    }
+    QVector<QStringList> rows;
+    rows.reserve(txns.size());
+    for (auto it = txns.crbegin(); it != txns.crend(); ++it) // oldest first
+        rows.append({it->transaction_date.left(10), it->symbol, it->transaction_type,
+                     portfolio_csv::num(it->quantity, 8), portfolio_csv::num(it->price, 6),
+                     portfolio_csv::num(it->total_value, 2), it->notes, it->id});
+    const QString path = portfolio_csv::save(
+        this, QStringLiteral("transactions_%1.csv").arg(QDate::currentDate().toString(Qt::ISODate)),
+        {"date", "symbol", "type", "quantity", "price", "total_value_" + current_summary_.portfolio.currency, "notes",
+         "transaction_id"},
+        rows);
+    if (!path.isEmpty())
+        services::FileManagerService::instance().import_file(path, "portfolio");
 }
 
 void PortfolioScreen::update_main_view_data() {

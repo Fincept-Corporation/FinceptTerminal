@@ -1,11 +1,12 @@
 #pragma once
 // CredentialsSection.h — API key credentials panel for SettingsScreen.
-// Stores keys in OS keychain via SecureStorage; never written to disk plain.
+// Stores keys in SecureStorage (AES-256-GCM encrypted SQLite); never written to disk plain.
 
 #include <QEvent>
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
+#include <QStringList>
 #include <QWidget>
 
 class QPushButton;
@@ -19,6 +20,14 @@ class CredentialsSection : public QWidget {
 
     /// Refresh status labels and placeholders from SecureStorage.
     void reload();
+
+    /// Narrow the provider cards to `text` (same as typing in the section's own
+    /// filter box). Used by the Settings search to land on one provider.
+    void set_filter(const QString& text);
+
+    /// Every provider's display name and env-var key, for the Settings search
+    /// ("tiingo" or "POLYGON_API_KEY" should find this section).
+    static QStringList search_terms();
 
   protected:
     void showEvent(QShowEvent* e) override;

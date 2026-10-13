@@ -80,14 +80,12 @@ void OnboardingTour::build_ui() {
     heading_->setFont(tf);
     root->addWidget(heading_);
 
-    // Build the four steps with empty labels — retranslateUi() fills in the
+    // Build the five steps with empty labels — retranslateUi() fills in the
     // text so language switches re-apply it. build_step() caches the labels
     // into step_labels_ in declared order.
     steps_ = new QStackedWidget(this);
-    steps_->addWidget(build_step({}, {}, {}));
-    steps_->addWidget(build_step({}, {}, {}));
-    steps_->addWidget(build_step({}, {}, {}));
-    steps_->addWidget(build_step({}, {}, {}));
+    for (int i = 0; i < 5; ++i)
+        steps_->addWidget(build_step({}, {}, {}));
     step_count_ = steps_->count();
     root->addWidget(steps_, /*stretch=*/1);
 
@@ -192,6 +190,15 @@ void OnboardingTour::retranslateUi() {
                                          "opt-in, and broker credentials. Hotkeys are rebindable — "
                                          "every action in the registry can be assigned a key."));
         step_labels_[3].tip->setText(tr("Tip: F11 toggles fullscreen on the focused window."));
+    }
+    if (step_labels_.size() > 4 && step_labels_[4].title) {
+        step_labels_[4].title->setText(tr("Two editions"));
+        step_labels_[4].body->setText(tr("You're on the free, open-source edition (AGPL-3.0). Your Fincept "
+                                         "account is Free, or Pro at $10/month for monthly credits and higher "
+                                         "limits. Fincept Terminal Enterprise is the private edition for funds "
+                                         "and research desks — a separate product with its own accounts."));
+        step_labels_[4].tip->setText(
+            tr("Tip: Ctrl+Shift+P → \"plans\" or \"enterprise\" — or use the Help menu."));
     }
 
     if (btn_skip_)

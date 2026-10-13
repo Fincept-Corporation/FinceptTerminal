@@ -51,7 +51,7 @@ void StatCanPanel::activate() {
 
 void StatCanPanel::build_controls(QHBoxLayout* thl) {
     series_lbl_ = new QLabel(tr("SERIES"));
-    series_lbl_->setStyleSheet(ctrl_label_style());
+    series_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_combo_ = new QComboBox;
     for (const auto& s : kStatCanSeries)

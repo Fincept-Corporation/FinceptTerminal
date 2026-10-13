@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 # Known agent directories to scan (avoids expensive rglob)
 KNOWN_AGENT_DIRS = [
     "TraderInvestorsAgent",
-    "hedgeFundAgents",
     "EconomicAgents",
     "GeopoliticsAgents",
     "finagent_core",

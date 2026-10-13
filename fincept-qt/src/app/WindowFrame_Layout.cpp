@@ -183,6 +183,9 @@ bool WindowFrame::apply_layout(const layout::FrameLayout& fl) {
         dock_router_->prepare_dock_widget(id);
         if (!ps.instance_id.is_null())
             dock_router_->adopt_panel_instance(id, ps.instance_id);
+        // Re-apply the panel's saved colour link when its screen is built.
+        if (!ps.link_group.isEmpty())
+            dock_router_->set_pending_link_group(id, symbol_group_from_char(ps.link_group.at(0)));
     }
 
     // Phase 2: restore the ADS dock layout blob. CDockManager::restoreState

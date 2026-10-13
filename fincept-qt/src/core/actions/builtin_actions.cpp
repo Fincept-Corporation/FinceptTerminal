@@ -19,6 +19,7 @@
 #include "core/symbol/SymbolRef.h"
 #include "core/window/WindowRegistry.h"
 #include "screens/launchpad/OnboardingTour.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -373,6 +374,7 @@ Result<void> handler_link_set_group(const CommandContext& ctx) {
         return Result<void>::err(QString("Group %1 is disabled").arg(symbol_group_letter(g)).toStdString());
 
     linked->set_group(g);
+    dock_router_link_defaults::mark_user_configured_links();
     // Mirror the right-click flow: if the group already has a symbol, push it
     // immediately; otherwise seed the group from the panel's current symbol.
     const SymbolRef group_sym = SymbolContext::instance().group_symbol(g);
@@ -391,6 +393,7 @@ Result<void> handler_link_clear_group(const CommandContext& ctx) {
     if (!linked)
         return Result<void>::err("Focused panel does not support linking");
     linked->set_group(SymbolGroup::None);
+    dock_router_link_defaults::mark_user_configured_links();
     return Result<void>::ok();
 }
 
@@ -481,6 +484,25 @@ Result<void> handler_replay_tour(const CommandContext& ctx) {
     if (ctx.focused_frame)
         parent = ctx.focused_frame;
     fincept::screens::OnboardingTour::show_for(parent);
+    return Result<void>::ok();
+}
+
+Result<void> handler_billing_plans(const CommandContext& ctx) {
+    // The single entry point to Plans & Pricing: the toolbar plan badge,
+    // Profile → Billing and every low-credit prompt route here too.
+    if (!ctx.focused_frame || ctx.focused_frame->is_locked())
+        return Result<void>::ok(); // inert
+    ctx.focused_frame->show_pricing();
+    return Result<void>::ok();
+}
+
+Result<void> handler_help_enterprise(const CommandContext& ctx) {
+    QWidget* parent = ctx.focused_frame;
+    if (!parent)
+        parent = WindowCycler::instance().focused_frame();
+    if (auto* frame = qobject_cast<WindowFrame*>(parent); frame && frame->is_locked())
+        return Result<void>::ok(); // never over the lock screen
+    fincept::ui::UpgradeDialog::show_now(parent, QStringLiteral("palette"));
     return Result<void>::ok();
 }
 
@@ -954,6 +976,30 @@ void register_builtins() {
         QKeySequence{}, // no default hotkey — discoverable via palette
         /*predicate*/ {},
         &handler_replay_tour,
+        {},
+    });
+
+    register_one(ActionDef{
+        "help.enterprise",
+        "Fincept Terminal Enterprise",
+        "Help",
+        {"enterprise", "private edition", "upgrade", "demo", "firm"},
+        QKeySequence{},
+        /*predicate*/ {},
+        &handler_help_enterprise,
+        {},
+    });
+
+    // ── Account-level actions ───────────────────────────────────────────────
+
+    register_one(ActionDef{
+        "billing.plans",
+        "Plans & Pricing",
+        "Account",
+        {"plans", "pricing", "upgrade", "pro", "billing"},
+        QKeySequence{},
+        require_unlocked_frame(),
+        &handler_billing_plans,
         {},
     });
 

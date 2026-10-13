@@ -24,6 +24,10 @@ class PortfolioStatusBar : public QWidget {
     /// worse than no status light.
     void set_feed_state(bool live, const QString& detail = {});
 
+    /// Short status of the market-analytics data (as-of date / failure), with
+    /// the detail in the tooltip. Empty text clears it.
+    void set_analytics_note(const QString& text, const QString& tooltip, bool warn);
+
     void start_clock();
     void stop_clock();
 
@@ -33,9 +37,15 @@ class PortfolioStatusBar : public QWidget {
   private:
     void update_clock();
     void retranslateUi();
+    void render_notes();
 
     QLabel* brand_label_ = nullptr;
-    QLabel* version_label_ = nullptr;
+    /// Data-quality notes: an FX warning (holdings priced in another currency
+    /// summed without conversion) takes precedence over the analytics status.
+    QLabel* notes_label_ = nullptr;
+    QString analytics_note_;
+    QString analytics_tip_;
+    bool analytics_warn_ = false;
     QLabel* portfolio_label_ = nullptr;
     QLabel* live_label_ = nullptr;
     QLabel* positions_label_ = nullptr;

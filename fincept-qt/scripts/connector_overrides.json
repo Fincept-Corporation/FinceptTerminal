@@ -1,0 +1,1245 @@
+{
+ "_doc": "Hand-maintained corrections for .github/scripts/gen_data_connectors.py (see its docstring). Per connector: category / region / title / desc / name, key_required (true ONLY when the connector cannot return data without its key — decided by reading the script and checked with a keyless smoke run), key_note, docs_url, default_command / default_args, args_hints, commands / commands_add / commands_drop, ttl_sec, mcp (false = a dedicated MCP tool already covers it) and broken (why the upstream does not work; the connector stays browsable in the UI but gets no MCP tool). Regenerate after editing: python .github/scripts/gen_data_connectors.py",
+ "include": [
+  "boj_fetcher.py",
+  "canada_gov_api.py",
+  "coingecko.py",
+  "data_gov_hk_api.py",
+  "datagov_au_api.py",
+  "datagovuk_api.py",
+  "estat_japan_api.py",
+  "fetch_company_news.py",
+  "french_gov_api.py",
+  "govdata_de_api_complete.py",
+  "nasa_gibs_api.py",
+  "openafrica_api.py",
+  "pxweb_fetcher.py",
+  "swiss_gov_api.py"
+ ],
+ "exclude": {
+  "akshare_data.py": "Served by the AkShare screen; endpoints resolve dynamically (getattr), not a fixed command list.",
+  "screener_data.py": "Backs the Equity Screener (services/screener/ScreenerService); takes JSON criteria on stdin, not a generic `<command> [args]` connector."
+ },
+ "credential_labels": {
+  "ACLED_EMAIL": "ACLED account email",
+  "CROSSREF_EMAIL": "Crossref contact email (polite pool)",
+  "KAGGLE_USERNAME": "Kaggle username",
+  "SENTINELHUB_CLIENT_ID": "Sentinel Hub client ID",
+  "SENTINELHUB_CLIENT_SECRET": "Sentinel Hub client secret",
+  "ESTAT_APP_ID": "e-Stat (Japan) application ID",
+  "EODHD_API_KEY": "EODHD",
+  "COINGECKO_API_KEY": "CoinGecko Pro",
+  "CFTC_APP_TOKEN": "CFTC (Socrata app token)",
+  "CANADA_GOV_API_KEY": "Open Government Canada",
+  "SWISS_GOV_API_KEY": "opendata.swiss",
+  "GOVDATA_API_KEY": "GovData.de",
+  "AFRICA_API_KEY": "openAFRICA",
+  "RELIEFWEB_APP_ID": "ReliefWeb approved appname",
+  "GTA_API_KEY": "Global Trade Alert",
+  "GFW_API_KEY": "Global Forest Watch",
+  "USDA_FAS_API_KEY": "USDA FAS (api.data.gov key)",
+  "USDA_ERS_API_KEY": "USDA ERS (api.data.gov key)",
+  "UNDP_API_KEY": "UNDP HDRO Data API"
+ },
+ "connectors": {
+  "abs_data.py": {
+   "category": "Government & Statistics",
+   "region": "Australia",
+   "default_command": "gdp"
+  },
+  "acled_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "key_required": true,
+   "docs_url": "https://acleddata.com/register/"
+  },
+  "adb_data.py": {
+   "category": "China & Asia",
+   "region": "Asia-Pacific",
+   "title": "Asian Development Bank (ADB) KIDB",
+   "desc": "Asian Development Bank Key Indicators Database (KIDB): population, GDP, financial and trade indicators for Asia-Pacific economies."
+  },
+  "aisstream_data.py": {
+   "category": "Shipping",
+   "key_required": true,
+   "docs_url": "https://aisstream.io/apikeys"
+  },
+  "alpha_vantage_extra_data.py": {
+   "category": "Markets & Equities",
+   "title": "Alpha Vantage (FX, crypto, commodities, macro)",
+   "key_required": true,
+   "docs_url": "https://www.alphavantage.co/support/#api-key"
+  },
+  "alphavantage_data.py": {
+   "category": "Markets & Equities",
+   "title": "Alpha Vantage",
+   "key_required": true,
+   "default_args": [
+    "AAPL"
+   ],
+   "ttl_sec": 60,
+   "docs_url": "https://www.alphavantage.co/support/#api-key",
+   "desc": "Alpha Vantage real-time and delayed stock quotes."
+  },
+  "alternative_me_data.py": {
+   "category": "Crypto & DeFi",
+   "title": "Alternative.me (Fear & Greed)",
+   "ttl_sec": 300
+  },
+  "arxiv_data.py": {
+   "category": "Academic & Research",
+   "title": "arXiv"
+  },
+  "baostock_data.py": {
+   "category": "China & Asia",
+   "region": "China",
+   "broken": "needs the 'baostock' package (pure-Python, BSD, depends only on pandas; verified working 2026-10-13 from a side install) - add it to the app requirements to enable this connector",
+   "desc": "BaoStock: China A-share daily bars, fundamentals (profit, growth, balance sheet, cash flow, DuPont), index constituents and macro rates."
+  },
+  "bcb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Brazil"
+  },
+  "bea_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "title": "BEA (Bureau of Economic Analysis)",
+   "key_required": true,
+   "key_note": "Without a key BEA answers with empty results.",
+   "docs_url": "https://apps.bea.gov/API/signup/",
+   "desc": "Bureau of Economic Analysis: NIPA and regional accounts, GDP by industry, international transactions and investment, input-output tables."
+  },
+  "bis_data.py": {
+   "category": "Macro & Central Banks",
+   "title": "BIS (Bank for International Settlements)",
+   "desc": "Bank for International Settlements SDMX API: effective exchange rates, central bank policy rates, credit to the non-financial sector, house prices, long/short-term rates and the full SDMX structure catalogue."
+  },
+  "bis_stats_data.py": {
+   "category": "Macro & Central Banks",
+   "title": "BIS Data Portal"
+  },
+  "blockchain_com_data.py": {
+   "category": "Crypto & DeFi",
+   "title": "Blockchain.com (Bitcoin network)",
+   "ttl_sec": 120
+  },
+  "bls_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "title": "BLS (Bureau of Labor Statistics)",
+   "desc": "US labor statistics: CPI, employment, wages, productivity and employment-cost series and overviews.",
+   "key_required": true,
+   "docs_url": "https://data.bls.gov/registrationEngine/"
+  },
+  "bnm_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Malaysia"
+  },
+  "bnr_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Romania"
+  },
+  "boc_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Canada"
+  },
+  "boe_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "United Kingdom",
+   "title": "Bank of England (BoE)",
+   "desc": "Bank of England Statistical Interactive Database: Bank Rate, SONIA, sterling exchange rates, quoted and effective interest rates, monetary aggregates and gilt/OIS yield curves."
+  },
+  "boi_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Israel"
+  },
+  "boj_fetcher.py": {
+   "category": "Macro & Central Banks",
+   "region": "Japan",
+   "name": "data_boj",
+   "title": "Bank of Japan (BoJ)",
+   "desc": "Bank of Japan Time-Series Data Search: any BoJ series by code (FX, rates, money, prices) as a dated table.",
+   "args_hints": {
+    "series": "<series_code e.g. FM08'FXERD01> [start_date] [end_date]"
+   },
+   "default_args": [
+    "FM08'FXERD01"
+   ]
+  },
+  "canada_gov_api.py": {
+   "category": "Government & Statistics",
+   "region": "Canada",
+   "name": "data_canada_gov",
+   "title": "Open Government Canada",
+   "key_required": false,
+   "desc": "Open Government Canada (CKAN): federal publishers, datasets, resources, previews and keyword search."
+  },
+  "cboe_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "Cboe",
+   "desc": "Cboe delayed quotes and history for equities and indices, index constituents and snapshots, the VIX futures curve and option chains from Cboe's public CDN.",
+   "default_command": "index_snapshots",
+   "ttl_sec": 120
+  },
+  "cboe_vix_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "Cboe VIX & volatility indices",
+   "ttl_sec": 300
+  },
+  "census_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "key_required": true,
+   "docs_url": "https://api.census.gov/data/key_signup.html"
+  },
+  "census_international_data.py": {
+   "category": "Government & Statistics",
+   "key_required": true,
+   "docs_url": "https://api.census.gov/data/key_signup.html"
+  },
+  "cftc_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "CFTC Commitments of Traders",
+   "key_required": false,
+   "key_note": "An app token only raises Socrata rate limits.",
+   "desc": "CFTC Commitments of Traders: COT positions by market, market sentiment, position summaries and historical trends."
+  },
+  "climate_trace_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "default_command": "summary"
+  },
+  "cnb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Czech Republic"
+  },
+  "coincap_data.py": {
+   "category": "Crypto & DeFi",
+   "key_required": true,
+   "docs_url": "https://pro.coincap.io/dashboard"
+  },
+  "coingecko.py": {
+   "category": "Crypto & DeFi",
+   "title": "CoinGecko",
+   "key_required": false,
+   "key_note": "A Pro key switches to the Pro API.",
+   "default_command": "price",
+   "default_args": [
+    "bitcoin",
+    "usd"
+   ],
+   "ttl_sec": 60,
+   "desc": "CoinGecko: coin prices, markets, history, trending coins, exchanges, NFTs and public-company treasuries."
+  },
+  "coinglass_data.py": {
+   "category": "Crypto & DeFi",
+   "key_required": true,
+   "docs_url": "https://www.coinglass.com/pricing"
+  },
+  "coinmarketcap_data.py": {
+   "category": "Crypto & DeFi",
+   "key_required": true,
+   "docs_url": "https://pro.coinmarketcap.com/signup",
+   "ttl_sec": 120
+  },
+  "coinpaprika_data.py": {
+   "category": "Crypto & DeFi",
+   "ttl_sec": 120
+  },
+  "congress_gov_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "key_required": true,
+   "mcp": false,
+   "docs_url": "https://api.congress.gov/sign-up/",
+   "desc": "Congress.gov: bills by congress and type, bill details, full text, summaries and related data."
+  },
+  "copernicus_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "Europe",
+   "key_required": true,
+   "docs_url": "https://cds.climate.copernicus.eu/"
+  },
+  "crossref_data.py": {
+   "category": "Academic & Research",
+   "key_required": false,
+   "key_note": "CROSSREF_EMAIL only joins the polite pool."
+  },
+  "cryptocompare_data.py": {
+   "category": "Crypto & DeFi",
+   "key_required": true,
+   "key_note": "Without a key the API returns empty lists.",
+   "docs_url": "https://developers.coindesk.com/",
+   "ttl_sec": 120
+  },
+  "data_gov_hk_api.py": {
+   "category": "China & Asia",
+   "region": "Hong Kong",
+   "name": "data_hk_gov",
+   "title": "Data.gov.hk (Hong Kong)",
+   "mcp": false,
+   "desc": "Hong Kong government data portal: categories, datasets, resources and historical files."
+  },
+  "data_world_data.py": {
+   "category": "Academic & Research",
+   "title": "data.world",
+   "key_required": true,
+   "docs_url": "https://data.world/settings/advanced"
+  },
+  "datagov_au_api.py": {
+   "category": "Government & Statistics",
+   "region": "Australia",
+   "name": "data_au_gov",
+   "title": "data.gov.au (Australia)",
+   "key_required": false,
+   "mcp": false,
+   "desc": "data.gov.au (CKAN): Australian government organizations, datasets, resources and keyword search."
+  },
+  "datagovsg_data.py": {
+   "category": "China & Asia",
+   "region": "Singapore",
+   "title": "Data.gov.sg (Singapore)",
+   "key_required": false
+  },
+  "datagovuk_api.py": {
+   "category": "Government & Statistics",
+   "region": "United Kingdom",
+   "name": "data_uk_gov",
+   "title": "data.gov.uk",
+   "key_required": false,
+   "mcp": false,
+   "desc": "data.gov.uk (CKAN): publishers, datasets, resources, previews and keyword search."
+  },
+  "defillama_data.py": {
+   "category": "Crypto & DeFi",
+   "ttl_sec": 300
+  },
+  "dexscreener_data.py": {
+   "category": "Crypto & DeFi",
+   "ttl_sec": 60
+  },
+  "ecb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Euro Area",
+   "title": "European Central Bank (ECB)",
+   "desc": "ECB statistical data: euro reference exchange rates, euro-area AAA / all-ratings yield curves and balance-of-payments statistics."
+  },
+  "ecb_sdmx_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Euro Area",
+   "title": "ECB SDMX"
+  },
+  "econdb_data.py": {
+   "category": "Macro & Central Banks",
+   "desc": "EconDB: global economic indicators by country, country profiles and main macro series."
+  },
+  "eia_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "title": "EIA (US Energy Information Administration)",
+   "key_required": false,
+   "key_note": "Short-Term Energy Outlook tables need EIA_API_KEY.",
+   "docs_url": "https://www.eia.gov/opendata/register.php"
+  },
+  "eia_electricity_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": true,
+   "key_note": "The EIA v2 API answers HTTP 403 without a key.",
+   "docs_url": "https://www.eia.gov/opendata/register.php"
+  },
+  "eia_natural_gas_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": true,
+   "key_note": "The EIA v2 API answers HTTP 403 without a key.",
+   "docs_url": "https://www.eia.gov/opendata/register.php"
+  },
+  "eia_petroleum_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": true,
+   "key_note": "The EIA v2 API answers HTTP 403 without a key.",
+   "docs_url": "https://www.eia.gov/opendata/register.php"
+  },
+  "eia_steo_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": true,
+   "key_note": "The EIA v2 API answers HTTP 403 without a key.",
+   "docs_url": "https://www.eia.gov/opendata/register.php"
+  },
+  "ember_energy_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "key_required": true,
+   "key_note": "The Ember API answers HTTP 403 without a key.",
+   "docs_url": "https://ember-energy.org/data/api/"
+  },
+  "energy_transition_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "key_required": true,
+   "key_note": "Without the key every command returns empty data."
+  },
+  "entso_e_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "Europe",
+   "key_required": true,
+   "docs_url": "https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide.html"
+  },
+  "eodhd_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://eodhd.com/register"
+  },
+  "estat_japan_api.py": {
+   "category": "China & Asia",
+   "region": "Japan",
+   "name": "data_estat_japan",
+   "title": "e-Stat (Japan official statistics)",
+   "key_required": true,
+   "docs_url": "https://www.e-stat.go.jp/api/en/api-info/user-guide",
+   "desc": "e-Stat: Japanese official statistics — table catalogue, metadata, classifications and data by area and period."
+  },
+  "eurostat_data.py": {
+   "category": "Government & Statistics",
+   "region": "European Union",
+   "title": "Eurostat",
+   "args_hints": {
+    "dataset": "<dataset_code> [filters e.g. geo=DE,unit=CP_MEUR] [last_n_periods]"
+   }
+  },
+  "eurostat_extra_data.py": {
+   "category": "Government & Statistics",
+   "region": "European Union",
+   "title": "Eurostat Extra"
+  },
+  "exchangerate_data.py": {
+   "category": "Markets & Equities",
+   "title": "ExchangeRate (open.er-api.com)",
+   "ttl_sec": 300
+  },
+  "faostat_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "title": "FAOSTAT (UN FAO)"
+  },
+  "fdic_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States"
+  },
+  "federal_reserve_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "United States",
+   "desc": "Federal Reserve data: fed funds, SOFR and overnight bank funding rates, Treasury rates and yield curve, money measures and SOMA holdings."
+  },
+  "fetch_company_news.py": {
+   "category": "News & Alternative Data",
+   "name": "data_company_news",
+   "title": "Company News (Google News)",
+   "desc": "Latest news articles by company or symbol, by topic, or full article text — via GNews.",
+   "default_command": "topic",
+   "default_args": [
+    "BUSINESS"
+   ]
+  },
+  "finnhub_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://finnhub.io/register",
+   "ttl_sec": 60
+  },
+  "fiscal_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "title": "US Treasury FiscalData",
+   "desc": "US Treasury FiscalData: debt to the penny, average interest rates, interest expense, exchange rates and record debt."
+  },
+  "fitch_connect_data.py": {
+   "category": "Macro & Central Banks",
+   "title": "World Bank Sovereign Fiscal",
+   "desc": "Sovereign debt, fiscal balance, tax revenue, expenditure, debt service and external debt from the World Bank Open Finances / WDI APIs (no key needed). Not affiliated with Fitch."
+  },
+  "fmp_data.py": {
+   "category": "Markets & Equities",
+   "title": "Financial Modeling Prep (FMP)",
+   "desc": "Financial Modeling Prep: quotes, profiles, price history, financial statements and ratios, ETFs, crypto, news, economic calendar, insider and institutional ownership.",
+   "key_required": true,
+   "docs_url": "https://site.financialmodelingprep.com/developer/docs",
+   "default_args": [
+    "AAPL"
+   ]
+  },
+  "fmp_extra_data.py": {
+   "category": "Markets & Equities",
+   "title": "Financial Modeling Prep (DCF, estimates, holders)",
+   "key_required": true,
+   "docs_url": "https://site.financialmodelingprep.com/developer/docs"
+  },
+  "frankfurter_data.py": {
+   "category": "Markets & Equities",
+   "title": "Frankfurter (ECB FX rates)"
+  },
+  "fred_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "United States",
+   "title": "FRED (St. Louis Fed)",
+   "desc": "Federal Reserve Economic Data: 800k+ US and international series — observations, search, categories and releases.",
+   "key_required": true,
+   "docs_url": "https://fred.stlouisfed.org/docs/api/api_key.html",
+   "default_command": "series",
+   "default_args": [
+    "GDP"
+   ]
+  },
+  "fred_economic_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "United States",
+   "title": "FRED Macro Dashboards",
+   "key_required": true,
+   "docs_url": "https://fred.stlouisfed.org/docs/api/api_key.html"
+  },
+  "french_gov_api.py": {
+   "category": "Government & Statistics",
+   "region": "France",
+   "name": "data_fr_gov",
+   "title": "French Government Open Data",
+   "desc": "French public APIs: data.gouv.fr datasets and tabular resources, API Géo (municipalities, departments, regions) and, with an API Entreprise key, company lookups by SIREN/SIRET.",
+   "key_required": false,
+   "key_note": "Only the company command needs ENTREPRISE_API_KEY.",
+   "mcp": false
+  },
+  "gas_infrastructure_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "Europe",
+   "title": "ENTSOG gas transparency",
+   "default_command": "points"
+  },
+  "gfd_data.py": {
+   "category": "Macro & Central Banks"
+  },
+  "github_stats_data.py": {
+   "category": "News & Alternative Data",
+   "title": "GitHub repository stats",
+   "key_required": false,
+   "key_note": "A token raises the limit from 60 to 5,000 requests per hour."
+  },
+  "glassnode_data.py": {
+   "category": "Crypto & DeFi",
+   "key_required": true,
+   "docs_url": "https://studio.glassnode.com/settings/api"
+  },
+  "global_competitiveness_data.py": {
+   "category": "Macro & Central Banks"
+  },
+  "global_debt_monitor_data.py": {
+   "category": "Macro & Central Banks"
+  },
+  "global_findex_data.py": {
+   "category": "Macro & Central Banks"
+  },
+  "global_fishing_watch_data.py": {
+   "category": "Shipping",
+   "key_required": true,
+   "docs_url": "https://globalfishingwatch.org/our-apis/"
+  },
+  "global_forest_watch_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "key_required": true,
+   "docs_url": "https://data-api.globalforestwatch.org/#tag/Authentication"
+  },
+  "global_price_index_data.py": {
+   "category": "News & Alternative Data",
+   "title": "Global price indices (Big Mac, PPP)"
+  },
+  "global_solar_atlas_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "default_command": "summary"
+  },
+  "global_trade_alert_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "key_required": false,
+   "docs_url": "https://globaltradealert.org/api-access",
+   "key_note": "Jurisdiction and intervention-type lists are keyless; intervention data needs a GTA API key.",
+   "args_hints": {
+    "details": "<intervention_id>"
+   }
+  },
+  "govdata_de_api_complete.py": {
+   "category": "Government & Statistics",
+   "region": "Germany",
+   "name": "data_de_gov",
+   "title": "GovData.de (Germany)",
+   "key_required": false,
+   "desc": "GovData.de (CKAN): German federal and state publishers, datasets, resources, previews and keyword search."
+  },
+  "government_us_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "title": "TreasuryDirect (US Treasury securities)",
+   "desc": "TreasuryDirect: Treasury security prices and auction results (prices are published end-of-day on business days).",
+   "default_command": "treasury_auctions",
+   "mcp": false
+  },
+  "govinfo_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "key_required": false,
+   "key_note": "Falls back to the rate-limited DEMO_KEY.",
+   "docs_url": "https://api.data.gov/signup/",
+   "desc": "GovInfo (US GPO): collections, packages, Congressional Record, Federal Register, court opinions, public laws and GAO reports."
+  },
+  "govtrack_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States"
+  },
+  "harvard_dataverse_data.py": {
+   "category": "Academic & Research",
+   "key_required": false
+  },
+  "hdx_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "title": "HDX (Humanitarian Data Exchange)",
+   "default_args": [
+    "climate"
+   ],
+   "desc": "Humanitarian Data Exchange (OCHA): search datasets by keyword, country, organization, topic or data series."
+  },
+  "hnb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Croatia",
+   "title": "Croatian National Bank (HNB)"
+  },
+  "hud_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "key_required": true,
+   "key_note": "HUD answers HTTP 403 without a token.",
+   "docs_url": "https://www.huduser.gov/hudapi/public/register"
+  },
+  "iadb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Latin America & Caribbean",
+   "default_command": "projects"
+  },
+  "iea_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "default_command": "indicators"
+  },
+  "ilostat_data.py": {
+   "category": "Government & Statistics",
+   "desc": "ILOSTAT (ILO): unemployment, employment, wages, hours of work, informality and social protection statistics."
+  },
+  "imf_data.py": {
+   "category": "Macro & Central Banks",
+   "title": "IMF (International Monetary Fund)",
+   "desc": "IMF World Economic Outlook series and projections (DataMapper), international reserves (IRFCL), direction of trade (IMTS) and any IMF SDMX dataflow.",
+   "default_command": "comprehensive_economic_data",
+   "default_args": [
+    "USA"
+   ]
+  },
+  "imf_datamapper_data.py": {
+   "category": "Macro & Central Banks"
+  },
+  "intrinio_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://intrinio.com/"
+  },
+  "irena_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "default_command": "capacity"
+  },
+  "irs_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States"
+  },
+  "kaggle_data.py": {
+   "category": "Academic & Research",
+   "key_required": true,
+   "docs_url": "https://www.kaggle.com/settings/account"
+  },
+  "lei_data.py": {
+   "category": "Markets & Equities",
+   "title": "GLEIF (Legal Entity Identifiers)",
+   "default_args": [
+    "Apple"
+   ]
+  },
+  "maddison_project_data.py": {
+   "category": "Macro & Central Banks"
+  },
+  "marinetraffic_data.py": {
+   "category": "Shipping",
+   "key_required": true,
+   "docs_url": "https://www.marinetraffic.com/en/ais-api-services"
+  },
+  "marketstack_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://marketstack.com/signup"
+  },
+  "messari_data.py": {
+   "category": "Crypto & DeFi",
+   "key_required": false,
+   "docs_url": "https://messari.io/api",
+   "key_note": "The asset directory and metrics catalogue are keyless; details, time series and news need a Messari API key."
+  },
+  "metals_prices_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "title": "Metals.dev prices",
+   "key_required": true,
+   "docs_url": "https://metals.dev/"
+  },
+  "mnb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Hungary",
+   "title": "National Bank of Hungary (MNB)"
+  },
+  "multpl_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "United States",
+   "title": "Multpl (S&P 500 Multiples)",
+   "desc": "S&P 500 valuation history from multpl.com: Shiller CAPE, P/E, dividend and earnings yield, price/sales and 40+ other series."
+  },
+  "n2yo_satellite_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "title": "N2YO satellite tracking",
+   "key_required": true,
+   "docs_url": "https://www.n2yo.com/api/",
+   "desc": "N2YO: satellite TLEs, positions, visual and radio passes, and what is overhead a location."
+  },
+  "nasa_gibs_api.py": {
+   "category": "Geospatial & Geopolitics",
+   "name": "data_nasa_gibs",
+   "title": "NASA GIBS satellite imagery",
+   "desc": "NASA Global Imagery Browse Services: imagery layer catalogue, layer details and time periods, and WMTS tiles for any location and date."
+  },
+  "nasdaq_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "Nasdaq",
+   "desc": "Nasdaq public data: equity search and screener, dividend / earnings / IPO / economic calendars and market overview.",
+   "key_required": false,
+   "key_note": "Only top_retail (Nasdaq Data Link RTAT) needs NASDAQ_API_KEY.",
+   "default_command": "market_overview"
+  },
+  "nber_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "United States",
+   "key_required": false,
+   "key_note": "FRED_API_KEY is only used by the unemployment command."
+  },
+  "nbp_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Poland"
+  },
+  "noaa_climate_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": true,
+   "docs_url": "https://www.ncdc.noaa.gov/cdo-web/token"
+  },
+  "nominatim_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "title": "OpenStreetMap Nominatim geocoding"
+  },
+  "norges_bank_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Norway"
+  },
+  "numbeo_data.py": {
+   "category": "News & Alternative Data",
+   "key_required": true,
+   "docs_url": "https://www.numbeo.com/api/"
+  },
+  "oecd_data.py": {
+   "category": "Macro & Central Banks",
+   "desc": "OECD SDMX API: real GDP, CPI, unemployment, GDP forecasts, interest rates and trade balance by country, plus an economic summary."
+  },
+  "oecd_dev_data.py": {
+   "category": "Government & Statistics",
+   "default_command": "oda"
+  },
+  "oecd_health_data.py": {
+   "category": "Government & Statistics",
+   "title": "OECD Health Statistics",
+   "args_hints": {
+    "expenditure": "<country> [year] [type_=TOT]",
+    "life_expectancy": "<country> [year] [sex=T]",
+    "disease": "<country> [cause=ALL] [year]",
+    "pharma": "<country> [year]",
+    "workers": "<country> [type_=PHYS] [year]",
+    "hospitals": "<country> [indicator=HOSPBED] [year]"
+   },
+   "default_args": [
+    "USA"
+   ]
+  },
+  "ons_data.py": {
+   "category": "Government & Statistics",
+   "region": "United Kingdom",
+   "title": "ONS (UK Office for National Statistics)",
+   "default_command": "gdp"
+  },
+  "openCorporates_data.py": {
+   "category": "Markets & Equities",
+   "title": "OpenCorporates",
+   "key_required": true,
+   "key_note": "OpenCorporates answers HTTP 401 without an API token.",
+   "docs_url": "https://opencorporates.com/api_accounts/new"
+  },
+  "open_exchange_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://openexchangerates.org/signup/free"
+  },
+  "open_meteo_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "title": "Open-Meteo weather",
+   "default_args": [
+    "40.71",
+    "-74.01"
+   ]
+  },
+  "open_parliament_data.py": {
+   "category": "Government & Statistics",
+   "region": "United Kingdom",
+   "key_required": true,
+   "docs_url": "https://www.theyworkforyou.com/api/"
+  },
+  "open_secrets_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "key_required": true,
+   "docs_url": "https://www.opensecrets.org/open-data/api"
+  },
+  "openafrica_api.py": {
+   "category": "Government & Statistics",
+   "region": "Africa",
+   "name": "data_openafrica",
+   "title": "openAFRICA",
+   "key_required": false,
+   "broken": "open.africa blocks automated access (Cloudflare challenge, HTTP 403) (re-checked 2026-10-13)",
+   "desc": "openAFRICA: African open-data portal (CKAN) organizations and datasets."
+  },
+  "openaq_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "key_required": true,
+   "key_note": "OpenAQ v3 answers HTTP 401 without a key.",
+   "docs_url": "https://explore.openaq.org/register"
+  },
+  "openbb_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "key_note": "The OpenBB Hub API answers HTTP 401 without a token.",
+   "docs_url": "https://my.openbb.co/"
+  },
+  "openfigi_data.py": {
+   "category": "Markets & Equities",
+   "key_required": false,
+   "key_note": "A key only raises rate limits.",
+   "default_command": "map",
+   "default_args": [
+    "TICKER:AAPL"
+   ]
+  },
+  "oscar_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "title": "WMO OSCAR (Earth observation systems)",
+   "desc": "WMO OSCAR: satellites, instruments and the Earth-observation variables they measure."
+  },
+  "overpass_api_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "title": "OpenStreetMap Overpass"
+  },
+  "owid_co2_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "title": "Our World in Data — CO2 & energy"
+  },
+  "owid_data.py": {
+   "category": "Government & Statistics",
+   "title": "Our World in Data",
+   "desc": "Our World in Data grapher charts (CO2, energy, life expectancy, poverty, GDP per capita, democracy) by country and year, plus indicator search and lookup.",
+   "commands": [
+    "co2",
+    "co2_per_capita",
+    "energy",
+    "life_expectancy",
+    "poverty",
+    "gdp_per_capita",
+    "democracy",
+    "health",
+    "indicator",
+    "search"
+   ],
+   "args_hints": {
+    "co2": "[country] [start_year] [end_year]",
+    "co2_per_capita": "[country] [start_year] [end_year]",
+    "energy": "[country] [start_year] [end_year]",
+    "life_expectancy": "[country] [start_year] [end_year]",
+    "poverty": "[country] [start_year] [end_year]",
+    "gdp_per_capita": "[country] [start_year] [end_year]",
+    "democracy": "[country] [start_year] [end_year]",
+    "health": "[country] [start_year] [end_year]"
+   },
+   "default_command": "co2",
+   "default_args": [
+    "World"
+   ]
+  },
+  "paris_agreement_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "title": "Climate Watch (Paris Agreement NDCs)",
+   "key_required": false
+  },
+  "penn_world_table_data.py": {
+   "category": "Macro & Central Banks"
+  },
+  "polygon_io_data.py": {
+   "category": "Markets & Equities",
+   "title": "Polygon.io",
+   "key_required": true,
+   "docs_url": "https://polygon.io/dashboard/signup",
+   "ttl_sec": 60
+  },
+  "prs_group_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "title": "Worldwide Governance Indicators",
+   "default_command": "governance",
+   "default_args": [
+    "USA"
+   ]
+  },
+  "public_apis_finance_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Central & Eastern Europe",
+   "title": "Central Bank FX Rates (CEE)",
+   "desc": "Official exchange-rate tables from the central banks of Poland (incl. gold), Croatia, the Czech Republic, Hungary and Israel."
+  },
+  "pxweb_fetcher.py": {
+   "category": "Government & Statistics",
+   "region": "Finland",
+   "name": "data_statfin",
+   "title": "Statistics Finland (PxWeb)",
+   "desc": "Statistics Finland PxWeb API: browse the table tree (nodes), read table metadata and query table data.",
+   "args_hints": {
+    "nodes": "[path]",
+    "metadata": "<table_path>",
+    "data": "<table_path> [query_json]"
+   }
+  },
+  "quandl_nasdaq_data.py": {
+   "category": "Markets & Equities",
+   "title": "Nasdaq Data Link (Quandl)",
+   "key_required": true,
+   "key_note": "Nasdaq Data Link answers HTTP 403 without a key.",
+   "docs_url": "https://data.nasdaq.com/sign-up"
+  },
+  "quandl_wiki_data.py": {
+   "category": "Markets & Equities",
+   "title": "Nasdaq Data Link WIKI Prices",
+   "key_required": true,
+   "docs_url": "https://data.nasdaq.com/sign-up",
+   "default_args": [
+    "AAPL"
+   ]
+  },
+  "quiverquant_data.py": {
+   "category": "Markets & Equities",
+   "title": "Quiver Quantitative",
+   "key_required": true,
+   "docs_url": "https://www.quiverquant.com/"
+  },
+  "rba_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Australia"
+  },
+  "redfin_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "Redfin housing market"
+  },
+  "reliefweb_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "key_required": true,
+   "docs_url": "https://apidoc.reliefweb.int/parameters#appname",
+   "key_note": "ReliefWeb API v2 only answers requests carrying an appname that ReliefWeb has approved; request one (free) and store it as the credential."
+  },
+  "riksbank_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Sweden"
+  },
+  "rsf_press_freedom_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "default_command": "scores"
+  },
+  "scb_data.py": {
+   "category": "Government & Statistics",
+   "region": "Sweden",
+   "title": "Statistics Sweden (SCB)",
+   "desc": "Statistics Sweden PxWeb API: category tree, table metadata, population, GDP, employment and CPI."
+  },
+  "sec_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "SEC EDGAR",
+   "desc": "SEC EDGAR: company filings, CIK/symbol mapping, filing content, insider and institutional ownership, company facts and XBRL financial statements.",
+   "default_command": "cik_map",
+   "default_args": [
+    "AAPL"
+   ]
+  },
+  "sec_xbrl_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "SEC EDGAR XBRL company facts"
+  },
+  "semantic_scholar_data.py": {
+   "category": "Academic & Research",
+   "key_required": false,
+   "key_note": "Keyless calls are heavily rate-limited (HTTP 429)."
+  },
+  "sentinelhub_data.py": {
+   "category": "Geospatial & Geopolitics",
+   "key_required": true,
+   "docs_url": "https://www.sentinel-hub.com/",
+   "desc": "Sentinel Hub: satellite scene search by bounding box or point and processed imagery (true colour, NDVI and more)."
+  },
+  "simfin_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://www.simfin.com/"
+  },
+  "snb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Switzerland"
+  },
+  "spain_data.py": {
+   "category": "Government & Statistics",
+   "region": "Spain",
+   "desc": "datos.gob.es: Spanish government catalogues, datasets and resources."
+  },
+  "statcan_data.py": {
+   "category": "Government & Statistics",
+   "region": "Canada",
+   "default_command": "unemployment"
+  },
+  "statista_free_data.py": {
+   "category": "News & Alternative Data",
+   "title": "IndexMundi / free statistics"
+  },
+  "swiss_gov_api.py": {
+   "category": "Government & Statistics",
+   "region": "Switzerland",
+   "name": "data_ch_gov",
+   "title": "opendata.swiss (Switzerland)",
+   "key_required": false,
+   "desc": "opendata.swiss (CKAN): Swiss publishers, datasets, resources, previews and keyword search."
+  },
+  "tcmb_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "Turkey",
+   "title": "Central Bank of Turkey (TCMB)"
+  },
+  "tiingo_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://www.tiingo.com/account/api/token",
+   "ttl_sec": 60
+  },
+  "trading_economics_data.py": {
+   "category": "Macro & Central Banks",
+   "key_required": true,
+   "docs_url": "https://tradingeconomics.com/api/"
+  },
+  "tradingview_data.py": {
+   "category": "Markets & Equities",
+   "title": "TradingView screener"
+  },
+  "transparency_budget_data.py": {
+   "category": "Geospatial & Geopolitics"
+  },
+  "treasury_data.py": {
+   "category": "Government & Statistics",
+   "region": "United States",
+   "title": "US Treasury Fiscal Data"
+  },
+  "twelve_data.py": {
+   "category": "Markets & Equities",
+   "key_required": true,
+   "docs_url": "https://twelvedata.com/pricing",
+   "ttl_sec": 60
+  },
+  "un_comtrade_data.py": {
+   "category": "Government & Statistics",
+   "title": "UN Comtrade",
+   "key_required": false,
+   "key_note": "Without UN_COMTRADE_API_KEY calls are limited to 500 records (preview endpoints).",
+   "desc": "UN Comtrade: bilateral trade flows by reporter, partner, commodity and period; country import/export profiles and sector trade."
+  },
+  "un_comtrade_extended_data.py": {
+   "category": "Government & Statistics",
+   "key_required": false
+  },
+  "un_population_data.py": {
+   "category": "Government & Statistics"
+  },
+  "un_sdg_data.py": {
+   "category": "Government & Statistics",
+   "title": "UN SDG Statistics"
+  },
+  "un_stats_data.py": {
+   "category": "Government & Statistics"
+  },
+  "unctad_data.py": {
+   "category": "Macro & Central Banks",
+   "broken": "UNCTADstat's data API needs per-user ClientId/ClientSecret credentials (unctadstat-user-api.unctad.org answers HTTP 401) and its keyless bulk files are 7z archives; the connector implements neither yet (checked 2026-10-13)"
+  },
+  "undp_data.py": {
+   "category": "Macro & Central Banks",
+   "key_required": true,
+   "docs_url": "https://hdr.undp.org/sites/default/files/2023-24_HDR/HDRO_data_api_manual.pdf"
+  },
+  "unesco_data.py": {
+   "category": "Government & Statistics",
+   "default_command": "list_versions",
+   "desc": "UNESCO Institute for Statistics: education, science and culture indicators by country and region."
+  },
+  "unhcr_data.py": {
+   "category": "Government & Statistics"
+  },
+  "unicef_data.py": {
+   "category": "Government & Statistics",
+   "default_args": [
+    "IND,NGA,BRA"
+   ]
+  },
+  "usda_ers_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": true,
+   "docs_url": "https://api.data.gov/signup"
+  },
+  "usda_fas_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": false,
+   "docs_url": "https://api.data.gov/signup",
+   "key_note": "Without a key the shared api.data.gov DEMO_KEY is used (about 10 requests/hour per IP); a free api.data.gov key lifts the limit."
+  },
+  "usda_nass_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "region": "United States",
+   "key_required": true,
+   "docs_url": "https://quickstats.nass.usda.gov/api"
+  },
+  "waqi_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "title": "World Air Quality Index (WAQI)",
+   "key_required": false,
+   "key_note": "Without a token the shared 'demo' token only covers a few stations.",
+   "default_args": [
+    "shanghai"
+   ],
+   "docs_url": "https://aqicn.org/data-platform/token/"
+  },
+  "who_data.py": {
+   "category": "Government & Statistics"
+  },
+  "who_immunization_data.py": {
+   "category": "Government & Statistics",
+   "default_command": "global"
+  },
+  "wikipedia_pageviews_data.py": {
+   "category": "News & Alternative Data"
+  },
+  "wisesheets_macro_data.py": {
+   "category": "Macro & Central Banks",
+   "region": "United States",
+   "title": "Macro Trends",
+   "default_command": "shiller_pe",
+   "default_args": [
+    "2000"
+   ]
+  },
+  "wits_trade_data.py": {
+   "category": "Government & Statistics",
+   "title": "World Bank WITS",
+   "desc": "World Bank WITS: trade statistics, tariffs and non-tariff measures by reporter, partner, product and year."
+  },
+  "world_bank_climate_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "default_command": "temperature"
+  },
+  "world_bank_commodity_data.py": {
+   "category": "Energy, Commodities & Climate",
+   "title": "World Bank commodity prices (Pink Sheet)",
+   "default_command": "oil",
+   "default_args": [
+    "2020"
+   ]
+  },
+  "world_bank_extra_data.py": {
+   "category": "Macro & Central Banks",
+   "default_command": "poverty"
+  },
+  "world_pop_data.py": {
+   "category": "Geospatial & Geopolitics"
+  },
+  "world_values_survey_data.py": {
+   "category": "Academic & Research"
+  },
+  "worldbank_data.py": {
+   "category": "Macro & Central Banks",
+   "title": "World Bank Open Data",
+   "desc": "World Bank Open Data (WDI): countries, indicators, GDP per capita, commodity prices, economic snapshots and regional comparisons."
+  },
+  "worldbank_health_data.py": {
+   "category": "Government & Statistics"
+  },
+  "worldometers_data.py": {
+   "category": "Government & Statistics"
+  },
+  "wto_data.py": {
+   "category": "Government & Statistics",
+   "title": "WTO (World Trade Organization)",
+   "key_required": false,
+   "key_note": "The WTO data APIs need WTO_API_KEY; available_apis and overview work without it.",
+   "desc": "WTO APIs: quantitative restrictions, ePing SPS/TBT notifications, trade timeseries indicators and trade-facilitation data."
+  },
+  "yfinance_data.py": {
+   "category": "Markets & Equities",
+   "title": "Yahoo Finance (yfinance)",
+   "desc": "Yahoo Finance via yfinance: quotes, price history, company info, financial statements and ratios, news and symbol search.",
+   "default_args": [
+    "AAPL"
+   ],
+   "ttl_sec": 60,
+   "mcp": false,
+   "commands_drop": [
+    "portfolio_nav_history",
+    "portfolio_nav_history_replay",
+    "batch_all",
+    "batch_sparklines",
+    "quote_names"
+   ],
+   "args_hints": {
+    "batch_quotes": "<symbol> [symbol ...]"
+   }
+  },
+  "yh_finance_data.py": {
+   "category": "Markets & Equities",
+   "title": "Yahoo Finance (market summary, movers, options)"
+  },
+  "zenodo_data.py": {
+   "category": "Academic & Research",
+   "key_required": false
+  },
+  "zillow_data.py": {
+   "category": "Markets & Equities",
+   "region": "United States",
+   "title": "Zillow Research housing data"
+  }
+ }
+}

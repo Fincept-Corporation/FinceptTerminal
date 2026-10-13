@@ -49,7 +49,7 @@ void OwIdPanel::activate() {
 void OwIdPanel::build_controls(QHBoxLayout* thl) {
     auto mk_lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -99,7 +99,7 @@ void OwIdPanel::on_fetch() {
     const QString end = end_edit_->text().trimmed();
 
     if (country.isEmpty()) {
-        show_error(tr("Please enter a country name"));
+        show_empty(tr("Please enter a country name"));
         return;
     }
 

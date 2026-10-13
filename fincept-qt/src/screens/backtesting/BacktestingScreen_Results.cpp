@@ -11,9 +11,15 @@
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/backtesting/BacktestingScreen_internal.h"
 #include "services/backtesting/BacktestingService.h"
+#include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
 
+#include <QDateTime>
+#include <QFile>
+#include <QFileDialog>
 #include <QGridLayout>
+#include <QLocale>
+#include <QMessageBox>
 #include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -41,9 +47,12 @@ void BacktestingScreen::clear_results() {
     equity_hint_ = nullptr;
     clear_layout(summary_layout_);
     metrics_table_->setRowCount(0);
-    trades_table_->setRowCount(0);
-    trades_table_->setColumnCount(0);
+    set_detail_rows({}, {});
     raw_json_edit_->clear();
+    if (result_tabs_ && result_tabs_->count() > 3) {
+        result_tabs_->setTabText(0, tr("SUMMARY"));
+        result_tabs_->setTabText(3, tr("DETAILS"));
+    }
     if (equity_chart_tab_ && equity_chart_tab_->layout()) {
         auto* layout = equity_chart_tab_->layout();
         while (layout->count() > 0) {
@@ -55,20 +64,51 @@ void BacktestingScreen::clear_results() {
     }
 }
 
+void BacktestingScreen::set_detail_rows(const QJsonArray& rows, const QStringList& columns) {
+    // A fresh reset every run: LiveTableModel only diffs in place when the key
+    // sequence is unchanged, which for a new result would mean comparing every cell.
+    details_model_->clear();
+    details_cols_ = columns;
+    details_model_->set_headers(columns);
+    QVector<BtDetailRow> data;
+    data.reserve(rows.size());
+    for (int i = 0; i < rows.size(); ++i)
+        data.push_back(BtDetailRow{i, rows[i].toObject()});
+    details_model_->upsert(data);
+    if (details_proxy_)
+        details_proxy_->sort(-1); // natural (provider) order until the user clicks a header
+    if (!columns.isEmpty())
+        details_view_->resizeColumnsToContents(); // bounded by setResizeContentsPrecision(200)
+}
+
 void BacktestingScreen::display_result(const QString& command, const QJsonObject& payload) {
     clear_results();
 
-    const auto accent = providers_[active_provider_].color.name();
+    const QString slug = running_provider_.isEmpty() ? providers_[active_provider_].slug : running_provider_;
+    const QColor accent_color = [&]() {
+        for (const auto& pr : providers_)
+            if (pr.slug == slug)
+                return pr.color;
+        return providers_[active_provider_].color;
+    }();
+    // Card values / section headers take the provider accent via a per-slug rule.
+    backtesting_internal::set_style_prop(summary_container_, "provider", slug);
 
-    // ── Local helpers (capture summary_container_ / metrics_table_ / trades_table_) ──
+    // ── Local helpers (capture summary_container_ / metrics_table_) ──
 
-    auto add_section_header = [&](const QString& text, const QString& color = QString()) {
+    auto add_section_header = [&](const QString& text) {
         auto* lbl = new QLabel(text, summary_container_);
-        lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3; "
-                                   "letter-spacing:1px; padding-top:4px;")
-                               .arg(color.isEmpty() ? accent : color)
-                               .arg(ui::fonts::TINY)
-                               .arg(ui::fonts::DATA_FAMILY));
+        lbl->setObjectName("btResultSection");
+        summary_layout_->addWidget(lbl);
+    };
+
+    // tone: info | warn | error | synthetic (rules in refresh_theme)
+    auto add_banner = [&](const QString& text, const char* tone) {
+        auto* lbl = new QLabel(text, summary_container_);
+        lbl->setObjectName("btBanner");
+        lbl->setProperty("tone", QString::fromLatin1(tone));
+        lbl->setWordWrap(true);
+        lbl->setTextInteractionFlags(Qt::TextSelectableByMouse);
         summary_layout_->addWidget(lbl);
     };
 
@@ -113,21 +153,15 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             shown.append(canon);
 
             auto* card = new QWidget(cards);
-            card->setStyleSheet(
-                QString("background:%1; border:1px solid %2;").arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+            card->setObjectName("btCard");
+            card->setAttribute(Qt::WA_StyledBackground, true);
             auto* cvl = new QVBoxLayout(card);
             cvl->setContentsMargins(10, 8, 10, 8);
             cvl->setSpacing(2);
             auto* lbl = new QLabel(humanize(key), card);
-            lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                                   .arg(ui::colors::TEXT_TERTIARY())
-                                   .arg(ui::fonts::TINY)
-                                   .arg(ui::fonts::DATA_FAMILY));
+            lbl->setObjectName("btCardLabel");
             auto* vlbl = new QLabel(fmt_metric(key, val), card);
-            vlbl->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                    .arg(accent)
-                                    .arg(ui::fonts::DATA)
-                                    .arg(ui::fonts::DATA_FAMILY));
+            vlbl->setObjectName("btCardValue");
             cvl->addWidget(lbl);
             cvl->addWidget(vlbl);
             gl->addWidget(card, row, col);
@@ -161,14 +195,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         metrics_table_->resizeColumnsToContents();
     };
 
-    // Row-cap bookkeeping — the DETAILS table is capped at kMaxDetailRows so a
-    // 100k-trade backtest doesn't allocate 100k QTableWidgetItems. The cap must
-    // be VISIBLE (tab label + banner) or a trader silently reads a 200-trade
-    // sample as the whole trade list.
-    constexpr int kMaxDetailRows = 200;
+    // Every row goes to the model (no cap): the view formats only visible cells.
     int details_total = 0;
-    int details_shown = 0;
-
     auto fill_details_table = [&](const QJsonArray& arr, const QStringList& preferred_cols = {}) {
         if (arr.isEmpty() || !arr[0].isObject())
             return;
@@ -179,21 +207,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                 if (!it.value().isObject() && !it.value().isArray())
                     cols.append(it.key());
         }
-        const int rows = qMin(static_cast<int>(arr.size()), kMaxDetailRows);
         details_total = static_cast<int>(arr.size());
-        details_shown = rows;
-        trades_table_->setColumnCount(cols.size());
-        trades_table_->setHorizontalHeaderLabels(cols);
-        trades_table_->setRowCount(rows);
-        for (int r = 0; r < rows; ++r) {
-            auto rec = arr[r].toObject();
-            for (int c = 0; c < cols.size(); ++c) {
-                auto* item = new QTableWidgetItem(fmt_metric(cols[c], rec[cols[c]]));
-                item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                trades_table_->setItem(r, c, item);
-            }
-        }
-        trades_table_->resizeColumnsToContents();
+        set_detail_rows(arr, cols);
     };
 
     // ── Header (per-command title) ──
@@ -205,20 +220,18 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         }
     add_section_header(tr("%1 RESULTS").arg(cmd_label));
 
-    // ── Synthetic-data warning (Python sets this when yfinance is unavailable) ──
-    if (payload.value("usingSyntheticData").toBool()) {
-        auto* warn =
-            new QLabel(tr("Using synthetic price data (yfinance unavailable). Results do not reflect real markets."),
-                       summary_container_);
-        warn->setWordWrap(true);
-        warn->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px; "
-                                    "background:rgba(245,158,11,0.10); border:1px solid %4;")
-                                .arg(ui::colors::WARNING())
-                                .arg(ui::fonts::SMALL)
-                                .arg(ui::fonts::DATA_FAMILY)
-                                .arg(ui::colors::WARNING()));
-        summary_layout_->addWidget(warn);
+    // ── Synthetic data: impossible to miss (banner, tab title, status chip, exports) ──
+    const bool synthetic = payload.value("usingSyntheticData").toBool();
+    if (synthetic) {
+        add_banner(tr("SYNTHETIC DATA — these prices were randomly generated because real market data could not "
+                      "be loaded (you enabled \"Allow synthetic data\"). Every number below has NO market meaning. "
+                      "Do not use it for any decision."),
+                   "synthetic");
+        if (result_tabs_)
+            result_tabs_->setTabText(0, tr("SUMMARY · SYNTHETIC"));
     }
+
+    const QJsonObject assumptions = payload.value("assumptions").toObject();
 
     // ── Per-command rendering ──
 
@@ -228,8 +241,19 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         // ── Cost disclosure ──
         // Results are only achievable net of the costs that were actually sent
         // to the provider. State them next to the headline numbers so a reader
-        // never mistakes a gross curve for a tradeable one.
-        {
+        // never mistakes a gross curve for a tradeable one. Providers now report
+        // what they applied and ignored (assumptions); the hard-coded table below is
+        // only the fallback for results that predate that block.
+        if (!assumptions.isEmpty()) {
+            const QString costs = assumptions.value("costs").toString();
+            QStringList ignored;
+            for (const auto& v : assumptions.value("ignoredSettings").toArray())
+                ignored << v.toString();
+            const bool gross = costs.startsWith(QLatin1String("none"));
+            add_banner(tr("Costs: %1").arg(costs), gross ? "warn" : "info");
+            if (!ignored.isEmpty())
+                add_banner(tr("Not applied by this engine: %1.").arg(ignored.join(QStringLiteral("; "))), "warn");
+        } else {
             const double comm = commission_spin_ ? commission_spin_->value() : 0.0;
             const double slip = slippage_spin_ ? slippage_spin_->value() : 0.0;
             const double sl_pct = stop_loss_spin_ ? stop_loss_spin_->value() : 0.0;
@@ -240,7 +264,6 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
             // backtesting.py, BT and FastTrade commission only; the Fincept engine applies none
             // of them. Claiming "Costs applied" for a setting the provider drops would
             // overstate how conservative the run is.
-            const QString slug = running_provider_.isEmpty() ? providers_[active_provider_].slug : running_provider_;
             QString pname = slug;
             for (const auto& pr : providers_)
                 if (pr.slug == slug)
@@ -267,16 +290,10 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                                              : tr(" %1 does not apply your %2 setting.").arg(pname, ignored.join(", "));
 
             QString cost_text;
-            QString cost_fg;
-            QString cost_bg;
-            QString cost_border;
             if (costless) {
                 cost_text = tr("NO COSTS MODELLED — no commission or slippage reached the engine. "
                                "These returns are gross and are not achievable.") +
                             ignored_note;
-                cost_fg = ui::colors::WARNING();
-                cost_bg = QStringLiteral("rgba(245,158,11,0.10)");
-                cost_border = ui::colors::WARNING();
             } else {
                 QStringList parts;
                 if (applied_comm)
@@ -284,20 +301,8 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                 if (applied_slip)
                     parts << tr("slippage %1% per fill").arg(slip, 0, 'f', 4);
                 cost_text = tr("Costs applied: %1.").arg(parts.join(tr(", "))) + ignored_note;
-                const bool has_ignored = !ignored.isEmpty();
-                cost_fg = has_ignored ? ui::colors::WARNING() : ui::colors::TEXT_TERTIARY();
-                cost_bg = has_ignored ? QStringLiteral("rgba(245,158,11,0.10)") : ui::colors::BG_RAISED();
-                cost_border = has_ignored ? ui::colors::WARNING() : ui::colors::BORDER_DIM();
             }
-            auto* costs = new QLabel(cost_text, summary_container_);
-            costs->setWordWrap(true);
-            costs->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 10px; "
-                                         "background:%4; border:1px solid %5;")
-                                     .arg(cost_fg)
-                                     .arg(ui::fonts::TINY)
-                                     .arg(ui::fonts::DATA_FAMILY)
-                                     .arg(cost_bg, cost_border));
-            summary_layout_->addWidget(costs);
+            add_banner(cost_text, (costless || !ignored.isEmpty()) ? "warn" : "info");
         }
 
         // ── No-trade guard ──
@@ -305,30 +310,15 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         // like a flawless strategy on the summary cards. Say so explicitly.
         const int n_trades = perf.value("totalTrades").toInt(perf.value("total_trades").toInt(-1));
         if (n_trades == 0) {
-            auto* nt = new QLabel(tr("This strategy produced ZERO trades over the selected range. "
-                                     "Every performance figure below is meaningless — widen the date range, "
-                                     "loosen the entry rules, or check the symbol/interval."),
-                                  summary_container_);
-            nt->setWordWrap(true);
-            nt->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px; "
-                                      "background:rgba(220,38,38,0.08); border:1px solid %1;")
-                                  .arg(ui::colors::NEGATIVE())
-                                  .arg(ui::fonts::SMALL)
-                                  .arg(ui::fonts::DATA_FAMILY));
-            summary_layout_->addWidget(nt);
+            add_banner(tr("This strategy produced ZERO trades over the selected range. "
+                          "Every performance figure below is meaningless — widen the date range, "
+                          "loosen the entry rules, or check the symbol/interval."),
+                       "error");
         }
 
         add_cards_from(perf, {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio", "maxDrawdown",
-                              "winRate", "profitFactor", "calmarRatio", "totalTrades", "volatility"});
-        if (payload.contains("status")) {
-            auto status = payload["status"].toString();
-            auto* sl = new QLabel(tr("Status: %1").arg(status), summary_container_);
-            sl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px;")
-                                  .arg(status == "success" ? ui::colors::POSITIVE() : ui::colors::WARNING())
-                                  .arg(ui::fonts::SMALL)
-                                  .arg(ui::fonts::DATA_FAMILY));
-            summary_layout_->addWidget(sl);
-        }
+                              "winRate", "profitFactor", "calmarRatio", "totalTrades", "volatility",
+                              "positiveDayRate"});
         fill_kv_table(perf);
         auto trades = payload.value("trades").toArray();
         fill_details_table(trades, {"symbol", "entryDate", "exitDate", "side", "entryPrice", "exitPrice", "quantity",
@@ -625,26 +615,36 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         fill_kv_table(payload);
     }
 
-    // ── Row-cap disclosure ──
-    // Make the DETAILS truncation impossible to miss: label the tab with the
-    // real count and drop a banner on the summary.
     if (result_tabs_ && result_tabs_->count() > 3) {
-        result_tabs_->setTabText(3, details_total > details_shown
-                                        ? tr("DETAILS (%1 of %2)").arg(details_shown).arg(details_total)
-                                        : tr("DETAILS"));
+        result_tabs_->setTabText(3, details_total > 0 ? tr("DETAILS (%1)").arg(QLocale().toString(details_total))
+                                                      : tr("DETAILS"));
     }
-    if (details_total > details_shown) {
-        auto* trunc = new QLabel(tr("Showing the first %1 of %2 rows. Use EXPORT JSON for the complete set.")
-                                     .arg(details_shown)
-                                     .arg(details_total),
-                                 summary_container_);
-        trunc->setWordWrap(true);
-        trunc->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:6px 10px; "
-                                     "background:rgba(245,158,11,0.10); border:1px solid %1;")
-                                 .arg(ui::colors::WARNING())
-                                 .arg(ui::fonts::TINY)
-                                 .arg(ui::fonts::DATA_FAMILY));
-        summary_layout_->addWidget(trunc);
+
+    // ── How these numbers were produced (provider-reported) ──
+    if (!assumptions.isEmpty()) {
+        add_section_header(tr("ASSUMPTIONS"));
+        QStringList lines;
+        auto line = [&](const QString& label, const char* key) {
+            const QJsonValue v = assumptions.value(QLatin1String(key));
+            if (v.isString() && !v.toString().isEmpty())
+                lines << QStringLiteral("%1: %2").arg(label, v.toString());
+        };
+        line(tr("ENGINE"), "engine");
+        line(tr("EXECUTION"), "execution");
+        line(tr("COSTS"), "costs");
+        line(tr("POSITION SIZING"), "positionSizing");
+        line(tr("DATA"), "dataSource");
+        line(tr("ANNUALISATION"), "annualization");
+        if (assumptions.contains("riskFreeRate"))
+            lines << tr("RISK-FREE RATE: %1%").arg(assumptions.value("riskFreeRate").toDouble() * 100.0, 0, 'f', 2);
+        line(tr("SURVIVORSHIP"), "survivorship");
+        for (const auto& n : assumptions.value("notes").toArray())
+            lines << tr("NOTE: %1").arg(n.toString());
+        auto* box = new QLabel(lines.join(QStringLiteral("\n")), summary_container_);
+        box->setObjectName("btAssumptions");
+        box->setWordWrap(true);
+        box->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        summary_layout_->addWidget(box);
     }
 
     summary_layout_->addStretch();
@@ -653,12 +653,18 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
     auto equity_arr = payload.value("equity").toArray();
     if (!equity_arr.isEmpty() && equity_chart_tab_ && equity_chart_tab_->layout()) {
         auto* eq_series = new QLineSeries;
-        eq_series->setPen(QPen(QColor(accent), 1.5));
+        eq_series->setPen(QPen(accent_color, 1.5));
         auto* dd_series = new QLineSeries;
         dd_series->setPen(QPen(QColor(ui::colors::NEGATIVE()), 1.0));
 
         double y_min = 1e18, y_max = -1e18;
         double dd_min = 0;
+        // Collect first and hand the series one list: append() per point re-emits
+        // pointAdded for each of tens of thousands of bars.
+        QList<QPointF> eq_points;
+        QList<QPointF> dd_points;
+        eq_points.reserve(equity_arr.size());
+        dd_points.reserve(equity_arr.size());
 
         for (const auto& pt : equity_arr) {
             auto obj = pt.toObject();
@@ -677,13 +683,16 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                 dt = QDateTime::fromString(date_str.left(10), "yyyy-MM-dd");
             if (!dt.isValid())
                 continue;
-            qint64 ms = dt.toMSecsSinceEpoch();
-            eq_series->append(ms, equity_val);
-            dd_series->append(ms, dd_val * 100.0);
+            const qreal ms = static_cast<qreal>(dt.toMSecsSinceEpoch());
+            eq_points.append(QPointF(ms, equity_val));
+            dd_points.append(QPointF(ms, dd_val * 100.0));
             y_min = qMin(y_min, equity_val);
             y_max = qMax(y_max, equity_val);
             dd_min = qMin(dd_min, dd_val * 100.0);
         }
+
+        eq_series->replace(eq_points);
+        dd_series->replace(dd_points);
 
         if (eq_series->count() > 1) {
             auto* chart = new QChart;
@@ -736,8 +745,31 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
         }
     }
 
-    // ── RAW JSON tab (always populated) ──
-    raw_json_edit_->setPlainText(QJsonDocument(payload).toJson(QJsonDocument::Indented));
+    // ── RAW JSON tab ──
+    // A 100k-trade payload is tens of MB of indented text; laying that out in a
+    // QTextEdit froze the UI. Long arrays are previewed (first 500 items, marked);
+    // EXPORT JSON always writes the complete payload.
+    {
+        constexpr int kPreviewItems = 500;
+        QJsonObject preview = payload;
+        bool truncated = false;
+        for (auto it = payload.begin(); it != payload.end(); ++it) {
+            if (!it.value().isArray())
+                continue;
+            const QJsonArray arr = it.value().toArray();
+            if (arr.size() <= kPreviewItems)
+                continue;
+            QJsonArray head;
+            for (int i = 0; i < kPreviewItems; ++i)
+                head.append(arr[i]);
+            preview[it.key()] = head;
+            preview[it.key() + QStringLiteral("__preview")] =
+                tr("showing %1 of %2 items - EXPORT JSON writes all").arg(kPreviewItems).arg(arr.size());
+            truncated = true;
+        }
+        raw_json_edit_->setPlainText(QString::fromUtf8(QJsonDocument(truncated ? preview : payload).toJson(
+            QJsonDocument::Indented)));
+    }
 
     // Switch to summary tab
     result_tabs_->setCurrentIndex(0);
@@ -745,14 +777,13 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
 void BacktestingScreen::display_error(const QString& msg) {
     clear_results();
+    last_payload_ = QJsonObject();
 
     auto* err = new QLabel(msg, summary_container_);
+    err->setObjectName("btBanner");
+    err->setProperty("tone", QStringLiteral("error"));
     err->setWordWrap(true);
-    err->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:12px;"
-                               "background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3);")
-                           .arg(ui::colors::NEGATIVE())
-                           .arg(ui::fonts::SMALL)
-                           .arg(ui::fonts::DATA_FAMILY));
+    err->setTextInteractionFlags(Qt::TextSelectableByMouse);
     summary_layout_->addWidget(err);
     summary_layout_->addStretch();
 
@@ -778,6 +809,8 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
             strategy_category_combo_->addItem(cat);
         strategy_category_combo_->blockSignals(false);
         populate_strategies();
+        if (strategies_count_label_)
+            strategies_count_label_->setText(QString::number(strategies_.size()));
         LOG_INFO("Backtesting", QString("[%1] Loaded %2 strategies").arg(provider).arg(strategies_.size()));
         // A backtest auto-run was requested (e.g. from Equity Research) before
         // strategies were ready — now that a strategy is selected, fire it.
@@ -812,19 +845,7 @@ void BacktestingScreen::on_result(const QString& provider, const QString& comman
         return;
     }
 
-    // Regular command result. The service is a shared singleton, so this also sees other
-    // screens' runs (e.g. Portfolio's "backtest current weights" on vectorbt/backtest).
-    // Only the run THIS screen started may touch run state or replace the results pane.
-    if (!is_running_ || provider != running_provider_ || command != running_command_) {
-        LOG_DEBUG("Backtesting", QString("Ignoring foreign/stale result %1/%2").arg(provider, command));
-        return;
-    }
-    is_running_ = false;
-    stop_run_ticker();
-    run_button_->setEnabled(true);
-    set_status_state(tr("READY"), ui::colors::POSITIVE, "rgba(22,163,74,0.08)");
-    display_result(command, payload);
-    LOG_INFO("Backtesting", QString("[%1/%2] Complete").arg(provider, command));
+    // Run results arrive via on_run_completed (correlated by run id).
 }
 
 void BacktestingScreen::on_command_options_loaded(const QString& provider, const QJsonObject& options) {
@@ -862,29 +883,187 @@ void BacktestingScreen::on_command_options_loaded(const QString& provider, const
 }
 
 void BacktestingScreen::on_error(const QString& context, const QString& message) {
-    // Context is "<provider>/<command>" for a run and "load_strategies/<provider>",
-    // "list_strategies" or "<provider>/get_*" for the background catalogue loads.
+    // Runs report through on_run_failed (correlated by run id). This slot only
+    // handles the background catalogue loads: "load_strategies/<provider>" and
+    // "<provider>/get_*". Anything else is another consumer's run.
     const bool catalogue_ctx = context.startsWith(QLatin1String("load_strategies/")) ||
-                               context == QLatin1String("list_strategies") ||
                                context.endsWith(QLatin1String("/get_indicators")) ||
                                context.endsWith(QLatin1String("/get_strategies")) ||
                                context.endsWith(QLatin1String("/get_command_options"));
-    if (catalogue_ctx && is_running_) {
-        // A catalogue load failing mid-run must not reset the run state (it re-enabled RUN
-        // and let a second backtest start on top of the first) or wipe its eventual result.
+    if (!catalogue_ctx)
+        return;
+    if (is_running_) {
+        // A catalogue load failing mid-run must not reset the run or wipe its result.
         LOG_WARN("Backtesting", QString("[%1] background load failed during a run: %2").arg(context, message));
         return;
     }
-    if (!catalogue_ctx && (!is_running_ || context != running_provider_ + QLatin1Char('/') + running_command_)) {
-        // Another screen's run (or one we already gave up on) — not ours to display.
-        LOG_DEBUG("Backtesting", QString("Ignoring foreign/stale error [%1]").arg(context));
+    set_status_state(tr("ERROR"), QStringLiteral("error"));
+    display_error(tr("Could not load the provider catalogue [%1]: %2").arg(context, message));
+}
+
+void BacktestingScreen::on_run_completed(quint64 run_id, const QString& provider, const QString& command,
+                                         const QJsonObject& payload) {
+    if (run_id == 0 || run_id != current_run_id_)
+        return; // another screen's run, a catalogue call, or a run we already cancelled
+    end_run();
+    last_payload_ = payload;
+    last_command_ = command;
+    if (payload.value("usingSyntheticData").toBool())
+        set_status_state(tr("DONE · SYNTHETIC DATA"), QStringLiteral("synthetic"));
+    else
+        set_status_state(tr("READY"), QStringLiteral("done"));
+    display_result(command, payload);
+    LOG_INFO("Backtesting", QString("[%1/%2] Complete (run %3)").arg(provider, command).arg(run_id));
+}
+
+void BacktestingScreen::on_run_failed(quint64 run_id, const QString& context, const QString& message) {
+    if (run_id == 0 || run_id != current_run_id_)
+        return;
+    end_run();
+    set_status_state(tr("ERROR"), QStringLiteral("error"));
+    display_error(QString("[%1] %2").arg(context, message));
+}
+
+void BacktestingScreen::on_run_cancelled(quint64 run_id, const QString& provider, const QString& command) {
+    if (run_id == 0 || run_id != current_run_id_)
+        return;
+    const qint64 secs = run_elapsed_.isValid() ? run_elapsed_.elapsed() / 1000 : 0;
+    end_run();
+    set_status_state(tr("CANCELLED"), QStringLiteral("cancelled"));
+    display_error(tr("%1 / %2 cancelled after %3 s. Nothing from this run will be shown.\n\n"
+                     "Optimisation and walk-forward loops stop at their next iteration. A single long "
+                     "backtest step cannot be interrupted: its Python process finishes in the background "
+                     "(its result is discarded) and occupies one of the shared Python slots until then.")
+                      .arg(provider, command)
+                      .arg(secs));
+    LOG_INFO("Backtesting", QString("[%1/%2] run %3 cancelled after %4s").arg(provider, command).arg(run_id).arg(secs));
+}
+
+// ── Exports ──────────────────────────────────────────────────────────────────
+
+namespace {
+
+QString bt_csv_cell(const QJsonValue& v) {
+    QString s;
+    if (v.isDouble())
+        s = QString::number(v.toDouble(), 'g', 15);
+    else if (v.isBool())
+        s = v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    else if (v.isString())
+        s = v.toString();
+    else if (v.isNull() || v.isUndefined())
+        return {};
+    else
+        s = QString::fromUtf8((v.isArray() ? QJsonDocument(v.toArray()) : QJsonDocument(v.toObject()))
+                                  .toJson(QJsonDocument::Compact));
+    if (s.contains(QLatin1Char(',')) || s.contains(QLatin1Char('"')) || s.contains(QLatin1Char('\n'))) {
+        s.replace(QLatin1String("\""), QLatin1String("\"\""));
+        s = QLatin1Char('"') + s + QLatin1Char('"');
+    }
+    return s;
+}
+
+} // namespace
+
+QStringList BacktestingScreen::export_header_lines() const {
+    QStringList h;
+    const bool synthetic = last_payload_.value("usingSyntheticData").toBool();
+    if (synthetic)
+        h << QStringLiteral("# WARNING: SYNTHETIC DATA - prices were randomly generated; these results have NO market "
+                            "meaning");
+    h << QStringLiteral("# Fincept Terminal backtest export, generated %1")
+             .arg(QDateTime::currentDateTime().toString(Qt::ISODate));
+    QStringList syms;
+    for (const auto& v : last_run_meta_.value("symbols").toArray())
+        syms << v.toString();
+    if (!last_run_meta_.isEmpty()) {
+        h << QStringLiteral("# provider: %1 | command: %2 | strategy: %3")
+                 .arg(last_run_meta_.value("provider").toString(), last_run_meta_.value("command").toString(),
+                      last_run_meta_.value("strategy").toString());
+        h << QStringLiteral("# symbols: %1 | period: %2 to %3 | interval: %4")
+                 .arg(syms.join(QLatin1Char(' ')), last_run_meta_.value("startDate").toString(),
+                      last_run_meta_.value("endDate").toString(), last_run_meta_.value("interval").toString());
+    }
+    const QJsonObject a = last_payload_.value("assumptions").toObject();
+    for (const char* key : {"engine", "execution", "costs", "positionSizing", "dataSource", "annualization"}) {
+        const QString v = a.value(QLatin1String(key)).toString();
+        if (!v.isEmpty())
+            h << QStringLiteral("# %1: %2").arg(QLatin1String(key), QString(v).replace(QLatin1Char('\n'), QLatin1Char(' ')));
+    }
+    return h;
+}
+
+bool BacktestingScreen::write_text_file(const QString& path, const QString& text, const QString& title) {
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        LOG_ERROR("Backtesting", "Export failed for " + path + ": " + f.errorString());
+        QMessageBox::warning(this, title, tr("Could not write %1:\n%2").arg(path, f.errorString()));
+        return false;
+    }
+    f.write(text.toUtf8());
+    f.close();
+    services::FileManagerService::instance().import_file(path, "backtesting");
+    LOG_INFO("Backtesting", "Exported results to: " + path);
+    return true;
+}
+
+void BacktestingScreen::export_details_csv() {
+    const auto& rows = details_model_->rows();
+    if (rows.isEmpty() || details_cols_.isEmpty()) {
+        QMessageBox::information(this, tr("Export CSV"), tr("There are no detail rows to export."));
         return;
     }
-    is_running_ = false;
-    stop_run_ticker();
-    run_button_->setEnabled(true);
-    set_status_state(tr("ERROR"), ui::colors::NEGATIVE, "rgba(220,38,38,0.08)");
-    display_error(QString("[%1] %2").arg(context, message));
+    const bool synthetic = last_payload_.value("usingSyntheticData").toBool();
+    const QString base = last_command_.isEmpty() ? QStringLiteral("backtest") : last_command_;
+    const QString suggested =
+        QStringLiteral("%1_details%2.csv").arg(base, synthetic ? QStringLiteral("_SYNTHETIC") : QString());
+    const QString path =
+        QFileDialog::getSaveFileName(this, tr("Export Details CSV"), suggested, tr("CSV Files (*.csv);;All Files (*)"));
+    if (path.isEmpty())
+        return;
+
+    QString out = export_header_lines().join(QLatin1Char('\n')) + QLatin1Char('\n');
+    out.reserve(out.size() + rows.size() * details_cols_.size() * 12);
+    QStringList header;
+    for (const auto& c : details_cols_)
+        header << bt_csv_cell(QJsonValue(c));
+    out += header.join(QLatin1Char(',')) + QLatin1Char('\n');
+    // Provider order and raw values (full precision) - not the view's sort or formatting.
+    for (const auto& r : rows) {
+        QStringList cells;
+        cells.reserve(details_cols_.size());
+        for (const auto& c : details_cols_)
+            cells << bt_csv_cell(r.rec.value(c));
+        out += cells.join(QLatin1Char(',')) + QLatin1Char('\n');
+    }
+    write_text_file(path, out, tr("Export Details CSV"));
+}
+
+void BacktestingScreen::export_equity_csv() {
+    const QJsonArray eq = last_payload_.value("equity").toArray();
+    if (eq.isEmpty()) {
+        QMessageBox::information(this, tr("Export CSV"), tr("This result has no equity curve to export."));
+        return;
+    }
+    const bool synthetic = last_payload_.value("usingSyntheticData").toBool();
+    const QString suggested =
+        QStringLiteral("equity_curve%1.csv").arg(synthetic ? QStringLiteral("_SYNTHETIC") : QString());
+    const QString path =
+        QFileDialog::getSaveFileName(this, tr("Export Equity Curve CSV"), suggested, tr("CSV Files (*.csv);;All Files (*)"));
+    if (path.isEmpty())
+        return;
+
+    QString out = export_header_lines().join(QLatin1Char('\n')) + QLatin1Char('\n');
+    out += QStringLiteral("date,equity,drawdown,returns,benchmark\n");
+    for (const auto& v : eq) {
+        const QJsonObject p = v.toObject();
+        out += QStringList{bt_csv_cell(p.value("date")), bt_csv_cell(p.value("equity")),
+                           bt_csv_cell(p.value("drawdown")), bt_csv_cell(p.value("returns")),
+                           bt_csv_cell(p.value("benchmark"))}
+                   .join(QLatin1Char(',')) +
+               QLatin1Char('\n');
+    }
+    write_text_file(path, out, tr("Export Equity Curve CSV"));
 }
 
 } // namespace fincept::screens

@@ -1,13 +1,26 @@
 // src/screens/relationship_map/RelationshipGraphScene.h
 #pragma once
 
+#include "core/currency/Currency.h"
 #include "screens/relationship_map/RelationshipMapTypes.h"
 
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QLocale>
 #include <QTimer>
 
 namespace fincept::relmap {
+
+/// Money in the quote currency (yfinance `currency`), via the shared cur::money():
+/// everything here used to be hard-coded "$", so an INR or GBP quote read as
+/// dollars. LSE quotes in pence ("GBp") are shown as "1,234.00p". An empty code is
+/// treated as USD (the script's default).
+inline QString money(double value, const QString& currency, bool compact = false) {
+    const QString c = currency.trimmed();
+    if (c == QLatin1String("GBp") || c == QLatin1String("GBX"))
+        return QLocale(QLocale::English).toString(value, 'f', 2) + QStringLiteral("p");
+    return cur::money(value, compact, c.isEmpty() ? QStringLiteral("USD") : c.toUpper());
+}
 
 class GraphNodeItem;
 class RelNode;

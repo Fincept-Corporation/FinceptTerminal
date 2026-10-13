@@ -1,8 +1,8 @@
 #include "screens/crypto_center/panels/TierPanel.h"
 
-#include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "services/billing/TierConfig.h"
+#include "services/wallet/StakingService.h"
 #include "services/wallet/WalletService.h"
 #include "services/wallet/WalletTypes.h"
 #include "ui/theme/Theme.h"
@@ -42,6 +42,15 @@ QString format_token(double v, int dp = 0) {
     return QLocale::system().toString(v, 'f', dp);
 }
 
+bool staking_is_live() {
+    return fincept::wallet::StakingService::instance().staking_live();
+}
+
+void repolish(QWidget* w) {
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+}
+
 } // namespace
 
 TierPanel::TierPanel(QWidget* parent) : QWidget(parent) {
@@ -76,7 +85,7 @@ void TierPanel::build_ui() {
     hl->setSpacing(8);
     title_ = new QLabel(tr("TIER"), head);
     title_->setObjectName(QStringLiteral("tierTitle"));
-    current_label_ = new QLabel(tr("current FREE"), head);
+    current_label_ = new QLabel(head);
     current_label_->setObjectName(QStringLiteral("tierHeadCaption"));
     hl->addWidget(title_);
     hl->addStretch();
@@ -89,21 +98,21 @@ void TierPanel::build_ui() {
     bl->setContentsMargins(14, 14, 14, 14);
     bl->setSpacing(8);
 
-    auto build_row = [body, bl](TierRow& row, const QString& label, const QString& threshold, const QString& unlocks) {
+    auto build_row = [body, bl](TierRow& row) {
         row.host = new QFrame(body);
         row.host->setObjectName(QStringLiteral("tierRow"));
         auto* row_l = new QHBoxLayout(row.host);
         row_l->setContentsMargins(10, 8, 10, 8);
         row_l->setSpacing(12);
-        row.label = new QLabel(label, row.host);
+        row.label = new QLabel(row.host);
         row.label->setObjectName(QStringLiteral("tierRowLabel"));
         row.label->setMinimumWidth(80);
-        row.threshold = new QLabel(threshold, row.host);
+        row.threshold = new QLabel(row.host);
         row.threshold->setObjectName(QStringLiteral("tierRowThreshold"));
         row.threshold->setMinimumWidth(140);
-        row.unlocks = new QLabel(unlocks, row.host);
+        row.unlocks = new QLabel(row.host);
         row.unlocks->setObjectName(QStringLiteral("tierRowUnlocks"));
-        row.chip = new QLabel(TierPanel::tr("[locked]"), row.host);
+        row.chip = new QLabel(row.host);
         row.chip->setObjectName(QStringLiteral("tierRowChipLocked"));
         row_l->addWidget(row.label);
         row_l->addWidget(row.threshold);
@@ -112,17 +121,34 @@ void TierPanel::build_ui() {
         bl->addWidget(row.host);
     };
 
-    build_row(bronze_row_, tr("BRONZE"), tr("100+ veFNCPT"), tr("basic API quota"));
-    build_row(silver_row_, tr("SILVER"), tr("1,000+ veFNCPT"), tr("premium screens"));
-    build_row(gold_row_, tr("GOLD"), tr("10,000+ veFNCPT"), tr("all agents + arena"));
+    build_row(bronze_row_);
+    build_row(silver_row_);
+    build_row(gold_row_);
+    apply_row_texts();
 
-    footer_ = new QLabel(tr("Connect a wallet to see your tier."), body);
+    footer_ = new QLabel(body);
     footer_->setObjectName(QStringLiteral("tierFooter"));
     footer_->setAlignment(Qt::AlignLeft);
+    footer_->setWordWrap(true);
     bl->addWidget(footer_);
 
     bl->addStretch(1);
     root->addWidget(body, 1);
+}
+
+void TierPanel::apply_row_texts() {
+    // The benefit column is PLANNED copy: no feature in this build checks a
+    // tier, so the old "basic API quota / premium screens / all agents + arena"
+    // read as entitlements the user did not actually get.
+    bronze_row_.label->setText(tr("BRONZE"));
+    bronze_row_.threshold->setText(tr("100+ veFNCPT"));
+    bronze_row_.unlocks->setText(tr("planned: basic API quota"));
+    silver_row_.label->setText(tr("SILVER"));
+    silver_row_.threshold->setText(tr("1,000+ veFNCPT"));
+    silver_row_.unlocks->setText(tr("planned: premium screens"));
+    gold_row_.label->setText(tr("GOLD"));
+    gold_row_.threshold->setText(tr("10,000+ veFNCPT"));
+    gold_row_.unlocks->setText(tr("planned: all agents + arena"));
 }
 
 void TierPanel::apply_theme() {
@@ -172,33 +198,39 @@ void TierPanel::apply_theme() {
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
+void TierPanel::subscribe_if_live() {
+    if (!staking_is_live() || current_pubkey_.isEmpty() || !current_topic_.isEmpty())
+        return;
+    current_topic_ = QStringLiteral("billing:tier:%1").arg(current_pubkey_);
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_tier_update(v); });
+    hub.request(current_topic_, /*force=*/false);
+}
+
 void TierPanel::on_wallet_connected(const QString& pubkey, const QString& /*label*/) {
     current_pubkey_ = pubkey;
-    if (isVisible() && current_topic_.isEmpty()) {
-        current_topic_ = QStringLiteral("billing:tier:%1").arg(pubkey);
-        auto& hub = fincept::datahub::DataHub::instance();
-        hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_tier_update(v); });
-        hub.request(current_topic_, /*force=*/false);
+    if (!staking_is_live()) {
+        render_planned();
+        return;
     }
+    if (isVisible())
+        subscribe_if_live();
 }
 
 void TierPanel::on_wallet_disconnected() {
     fincept::datahub::DataHub::instance().unsubscribe(this);
     current_topic_.clear();
     current_pubkey_.clear();
-    render_state(fincept::wallet::TierStatus::Tier::Free, QString(), QString(), false);
-    footer_->setText(tr("Connect a wallet to see your tier."));
-    footer_->show();
+    if (!staking_is_live()) {
+        render_planned();
+        return;
+    }
+    render_state(fincept::wallet::TierStatus::Tier::Free, QString(), QString());
 }
 
 void TierPanel::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    if (!current_pubkey_.isEmpty() && current_topic_.isEmpty()) {
-        current_topic_ = QStringLiteral("billing:tier:%1").arg(current_pubkey_);
-        auto& hub = fincept::datahub::DataHub::instance();
-        hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_tier_update(v); });
-        hub.request(current_topic_, /*force=*/false);
-    }
+    subscribe_if_live();
 }
 
 void TierPanel::hideEvent(QHideEvent* e) {
@@ -216,41 +248,21 @@ void TierPanel::changeEvent(QEvent* event) {
 void TierPanel::retranslateUi() {
     if (title_)
         title_->setText(tr("TIER"));
-
-    // Static row descriptors (tier name · threshold · unlocks).
-    if (bronze_row_.label)
-        bronze_row_.label->setText(tr("BRONZE"));
-    if (bronze_row_.threshold)
-        bronze_row_.threshold->setText(tr("100+ veFNCPT"));
-    if (bronze_row_.unlocks)
-        bronze_row_.unlocks->setText(tr("basic API quota"));
-    if (silver_row_.label)
-        silver_row_.label->setText(tr("SILVER"));
-    if (silver_row_.threshold)
-        silver_row_.threshold->setText(tr("1,000+ veFNCPT"));
-    if (silver_row_.unlocks)
-        silver_row_.unlocks->setText(tr("premium screens"));
-    if (gold_row_.label)
-        gold_row_.label->setText(tr("GOLD"));
-    if (gold_row_.threshold)
-        gold_row_.threshold->setText(tr("10,000+ veFNCPT"));
-    if (gold_row_.unlocks)
-        gold_row_.unlocks->setText(tr("all agents + arena"));
-
-    // Chips: re-apply text using the objectName as the achieved/locked flag
-    // (set by render_state) so the live state survives the locale switch.
+    apply_row_texts();
+    if (!staking_is_live()) {
+        render_planned();
+        return;
+    }
+    // Chips: re-apply text using the objectName as the reached flag (set by
+    // render_state) so the live state survives the locale switch. The head and
+    // footer refresh on the next tier update.
     auto retr_chip = [](QLabel* chip) {
-        if (!chip)
-            return;
-        const bool achieved = chip->objectName() == QLatin1String("tierRowChipAchieved");
-        chip->setText(achieved ? TierPanel::tr("[achieved]") : TierPanel::tr("[locked]"));
+        const bool reached = chip->objectName() == QLatin1String("tierRowChipAchieved");
+        chip->setText(reached ? TierPanel::tr("[reached]") : TierPanel::tr("[not reached]"));
     };
     retr_chip(bronze_row_.chip);
     retr_chip(silver_row_.chip);
     retr_chip(gold_row_.chip);
-
-    // Footer: the connect-prompt is the only state we can rebuild without the
-    // last TierStatus; other footer messages refresh on the next tier update.
     if (footer_ && current_pubkey_.isEmpty())
         footer_->setText(tr("Connect a wallet to see your tier."));
 }
@@ -261,59 +273,63 @@ void TierPanel::on_tier_update(const QVariant& v) {
     const auto s = v.value<fincept::wallet::TierStatus>();
     const double weight_ui = atomic_to_ui(s.weight_raw, s.decimals);
     // next_threshold_raw is the ABSOLUTE weight of the next tier (e.g. 1,000),
-    // not what is still missing. The footer used to say "lock 1,000 veFNCPT to
-    // reach the next tier" to a wallet that already held 750 — overstating the
-    // gap. Show the remainder instead.
+    // not what is still missing — show the remainder.
     const double next_ui = atomic_to_ui(s.next_threshold_raw, s.decimals);
     const double remaining_ui = std::ceil(std::max(0.0, next_ui - weight_ui));
     render_state(s.tier, QStringLiteral("%1 veFNCPT").arg(format_token(weight_ui, 1)),
-                 (next_ui > 0.0 && remaining_ui > 0.0) ? format_token(remaining_ui, 0) : QString(), s.is_mock);
+                 (next_ui > 0.0 && remaining_ui > 0.0) ? format_token(remaining_ui, 0) : QString());
+}
+
+void TierPanel::render_planned() {
+    for (TierRow* row : {&bronze_row_, &silver_row_, &gold_row_}) {
+        row->chip->setText(tr("[planned]"));
+        row->chip->setObjectName(QStringLiteral("tierRowChipLocked"));
+        row->host->setObjectName(QStringLiteral("tierRow"));
+        repolish(row->chip);
+        repolish(row->host);
+    }
+    current_label_->setText(tr("PLANNED · NOT ACTIVE"));
+    footer_->setText(tr("Tiers are planned, not active: no feature in this build is unlocked or restricted by "
+                        "tier, and holding $FNCPT does not change what you can use. Tiers will be computed from "
+                        "locked veFNCPT weight once on-chain staking launches."));
+    footer_->show();
 }
 
 void TierPanel::render_state(fincept::wallet::TierStatus::Tier current, const QString& weight_ui_str,
-                             const QString& remaining_ui_str, bool is_mock) {
+                             const QString& remaining_ui_str) {
     using Tier = fincept::wallet::TierStatus::Tier;
 
-    auto set_row = [](TierRow& row, bool achieved, bool is_current) {
-        row.chip->setText(achieved ? TierPanel::tr("[achieved]") : TierPanel::tr("[locked]"));
-        row.chip->setObjectName(achieved ? QStringLiteral("tierRowChipAchieved") : QStringLiteral("tierRowChipLocked"));
+    auto set_row = [](TierRow& row, bool reached, bool is_current) {
+        row.chip->setText(reached ? TierPanel::tr("[reached]") : TierPanel::tr("[not reached]"));
+        row.chip->setObjectName(reached ? QStringLiteral("tierRowChipAchieved") : QStringLiteral("tierRowChipLocked"));
         row.host->setObjectName(is_current ? QStringLiteral("tierRowCurrent") : QStringLiteral("tierRow"));
-        row.chip->style()->unpolish(row.chip);
-        row.chip->style()->polish(row.chip);
-        row.host->style()->unpolish(row.host);
-        row.host->style()->polish(row.host);
+        repolish(row.chip);
+        repolish(row.host);
     };
 
     set_row(bronze_row_, current >= Tier::Bronze, current == Tier::Bronze);
     set_row(silver_row_, current >= Tier::Silver, current == Tier::Silver);
     set_row(gold_row_, current >= Tier::Gold, current == Tier::Gold);
 
-    QString head_text = QStringLiteral("current %1").arg(fincept::billing::TierConfig::label_for(current));
-    if (is_mock)
-        head_text += QStringLiteral(" · DEMO");
-    if (!weight_ui_str.isEmpty()) {
+    QString head_text = tr("current %1").arg(fincept::billing::TierConfig::label_for(current));
+    if (!weight_ui_str.isEmpty())
         head_text += QStringLiteral("  ·  %1").arg(weight_ui_str);
-    }
     current_label_->setText(head_text);
 
+    // Every footer variant carries the "planned" qualifier — reaching a tier
+    // does not unlock anything until tier gating exists.
     if (current_pubkey_.isEmpty()) {
         footer_->setText(tr("Connect a wallet to see your tier."));
-        footer_->show();
-    } else if (is_mock) {
-        // The tier above is derived from the staking producer's sample
-        // positions, not from this wallet — say so under the number too.
-        footer_->setText(tr("DEMO — derived from sample positions, not your on-chain locks "
-                            "(fincept_lock is not deployed)."));
-        footer_->show();
     } else if (!remaining_ui_str.isEmpty()) {
-        footer_->setText(tr("%1 more veFNCPT weight needed to reach the next tier.").arg(remaining_ui_str));
-        footer_->show();
+        footer_->setText(tr("%1 more veFNCPT weight needed to reach the next tier. Tier benefits are planned "
+                            "and not active yet.")
+                             .arg(remaining_ui_str));
     } else if (current == Tier::Gold) {
-        footer_->setText(tr("All Fincept Terminal features unlocked."));
-        footer_->show();
+        footer_->setText(tr("Top tier reached. Tier benefits are planned and not active yet."));
     } else {
-        footer_->hide();
+        footer_->setText(tr("Tier benefits are planned and not active yet."));
     }
+    footer_->show();
 }
 
 } // namespace fincept::screens::panels

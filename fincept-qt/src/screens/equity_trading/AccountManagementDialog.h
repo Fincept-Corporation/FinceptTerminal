@@ -49,8 +49,13 @@ class AccountManagementDialog : public QDialog {
     void on_rename_account();
     void build_credential_form(const trading::BrokerProfile& profile);
     void load_saved_credentials(const QString& account_id);
-    // Show/hide the "LIVE + Auto = no confirmation" banner under the approval combo.
+    // Show/hide the "LIVE + one-click = no confirmation" banner under the approval combo.
     void update_approval_warning();
+    // Reflect the selected account's one-click opt-in (label carries the account name).
+    void refresh_one_click();
+    void on_one_click_toggled(bool on);
+    // Global pre-trade risk limits (OrderValidator settings).
+    void open_risk_limits_dialog();
 
     // Zerodha-specific form + handlers
     void build_zerodha_form();
@@ -101,6 +106,8 @@ class AccountManagementDialog : public QDialog {
     QLabel* approval_caption_ = nullptr;
     QComboBox* approval_mode_combo_ = nullptr;
     QLabel* approval_warning_ = nullptr;
+    QCheckBox* one_click_cb_ = nullptr; // per-account opt-out of the LIVE confirmation dialog (off by default)
+    QPushButton* risk_limits_btn_ = nullptr;
 
     // Dynamic credential fields (rebuilt per broker profile)
     QVector<QLineEdit*> cred_fields_;

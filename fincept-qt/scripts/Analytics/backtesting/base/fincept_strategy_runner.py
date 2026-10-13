@@ -19,7 +19,8 @@ sys.path.insert(0, str(STRATEGIES_DIR))
 
 # Import Fincept Engine
 from fincept_engine import QCAlgorithm, Symbol, TradeBar, Slice
-from fincept_engine.enums import Resolution, SecurityType
+from fincept_engine.enums import Resolution, SecurityType, OrderType, OrderStatus
+from fincept_engine.types import OrderTicket, OrderEvent
 from _registry import STRATEGY_REGISTRY
 from _loader import resolve_strategy_path
 
@@ -180,28 +181,64 @@ class FinceptStrategyRunner:
             # Instantiate strategy
             algorithm = strategy_class()
 
-            # Set initial cash
-            algorithm.set_cash(initial_cash)
-
             # Initialize strategy (call Initialize method)
             if hasattr(algorithm, 'initialize'):
                 algorithm.initialize()
             elif hasattr(algorithm, 'Initialize'):
                 algorithm.Initialize()
 
+            # The user's capital wins. Most registry strategies hard-code
+            # set_cash(100000) in initialize(), which used to run AFTER the runner's
+            # set_cash(initial_cash) - so a 50,000 run simulated 100,000 and the
+            # provider then measured returns against 50,000 (a +27% year read +153%).
+            algorithm.set_cash(initial_cash)
+
+            # A strategy only trades the tickers its initialize() subscribed. Feeding it
+            # other symbols produced a silent zero-trade run labelled with the user's
+            # ticker, so say so instead.
+            subscribed = sorted(str(k).upper() for k in algorithm.securities.keys())
+            wanted = [str(s).upper() for s in symbols]
+            if not any(s in subscribed for s in wanted):
+                if subscribed:
+                    raise ValueError(
+                        f"This strategy trades {', '.join(subscribed[:8])} (hard-coded in its initialize()); "
+                        f"it ignores {', '.join(wanted)}. Enter {subscribed[0]} as the symbol, or pick a "
+                        f"strategy that trades your instrument.")
+                raise ValueError("This strategy subscribes to no tradable symbol in initialize() "
+                                 "(universe/option/future selection is not supported by the Fincept engine).")
+
             # Fetch historical data
             print(f"Fetching data for {symbols}...", file=sys.stderr)
             historical_data = self.fetch_historical_data(symbols, start_date, end_date, resolution)
 
             if not historical_data:
-                raise ValueError("No historical data fetched")
+                raise ValueError(f"No historical data for {', '.join(wanted)} between {start_date} and "
+                                 f"{end_date} (Yahoo Finance returned nothing - check the symbol).")
 
-            # Run backtest (feed data bar by bar)
+            # ── Next-bar execution ─────────────────────────────────────────────
+            # The engine fills a market order instantly at the security's current
+            # price - the close of the very bar whose data produced the signal. That
+            # is a look-ahead: the order is queued instead and filled at the NEXT
+            # bar's open (before the strategy sees that bar).
+            pending_orders = []
+
+            def _deferred_market_order(symbol, quantity, asynchronous=False, tag="", order_properties=None):
+                oid = algorithm._next_order_id()
+                sym = symbol if isinstance(symbol, Symbol) else Symbol(str(symbol).upper())
+                ticket = OrderTicket(oid, sym, quantity, OrderType.MARKET, tag=tag)
+                algorithm.transactions._orders[oid] = ticket
+                pending_orders.append(ticket)
+                return ticket
+
+            algorithm.market_order = _deferred_market_order
+
+            # Bars keyed by time per symbol (the old per-bar linear scan was O(n^2)).
+            bars_by_time = {sym: {b['time']: b for b in bars} for sym, bars in historical_data.items()}
+
             print(f"Running backtest for {strategy_id}...", file=sys.stderr)
             equity_curve = []
             trades = []
 
-            # Get all timestamps across all symbols
             all_timestamps = set()
             for symbol_data in historical_data.values():
                 for bar in symbol_data:
@@ -213,17 +250,41 @@ class FinceptStrategyRunner:
             for timestamp_str in timestamps:
                 timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
 
-                # Create Slice for this timestamp
-                slice_data = Slice(timestamp)
+                # 1) Fill orders queued on the previous bar at this bar's open.
+                if pending_orders:
+                    still_pending = []
+                    for ticket in pending_orders:
+                        ticker = str(ticket.symbol).upper()
+                        bar_data = None
+                        for sym_key, by_time in bars_by_time.items():
+                            if str(sym_key).upper() == ticker:
+                                bar_data = by_time.get(timestamp_str)
+                                break
+                        if not bar_data or not bar_data.get('open'):
+                            still_pending.append(ticket)  # no bar for it yet
+                            continue
+                        px = float(bar_data['open'])
+                        ticket.average_fill_price = px
+                        ticket.quantity_filled = ticket.quantity
+                        ticket.status = OrderStatus.FILLED
+                        ticket.time = timestamp
+                        stamped_orders.add(ticket.order_id)
+                        algorithm.portfolio.process_fill(ticker, ticket.quantity, px)
+                        try:
+                            algorithm.on_order_event(OrderEvent(ticket.order_id, ticket.symbol,
+                                                                OrderStatus.FILLED, px, ticket.quantity))
+                        except Exception as e:  # a strategy's own handler must not abort the run
+                            print(f"on_order_event raised: {e}", file=sys.stderr)
+                    pending_orders[:] = still_pending
 
-                for symbol_str, bars in historical_data.items():
-                    # Find bar for this timestamp
-                    bar_data = next((b for b in bars if b['time'] == timestamp_str), None)
+                # 2) Build the slice and mark prices to this bar's close.
+                slice_data = Slice(timestamp)
+                for symbol_str, by_time in bars_by_time.items():
+                    bar_data = by_time.get(timestamp_str)
                     if bar_data:
-                        symbol = Symbol.create(symbol_str)
                         bar = TradeBar(
                             time=timestamp,
-                            symbol=symbol,
+                            symbol=Symbol.create(symbol_str),
                             open=bar_data['open'],
                             high=bar_data['high'],
                             low=bar_data['low'],
@@ -232,47 +293,41 @@ class FinceptStrategyRunner:
                         )
                         slice_data.add(symbol_str, bar)
 
-                # Update securities with current prices
                 bar_prices = {}
                 for symbol_str in slice_data._data.keys():
                     if symbol_str in algorithm.securities:
                         price = slice_data[symbol_str].close
                         algorithm.securities[symbol_str].update_price(price)
                         bar_prices[symbol_str] = price
-                # Mark open positions to this bar's close. The portfolio only re-priced a
-                # holding at the moment it was FILLED, so equity stayed flat between trades
-                # (a buy-and-hold year reported exactly the starting capital).
                 if bar_prices and hasattr(algorithm.portfolio, 'update_market_prices'):
                     algorithm.portfolio.update_market_prices(bar_prices)
 
-                # Call OnData
+                # 3) Let the strategy react to this bar (its orders fill next bar).
                 if hasattr(algorithm, 'on_data'):
                     algorithm.on_data(slice_data)
                 elif hasattr(algorithm, 'OnData'):
                     algorithm.OnData(slice_data)
 
-                # Orders are stamped with the wall clock when created; give the ones this bar
-                # produced the BAR's time so fills carry their simulated date (not "today").
                 for oid, ticket in algorithm.transactions._orders.items():
-                    if oid not in stamped_orders:
+                    if oid not in stamped_orders and ticket.status == OrderStatus.FILLED:
                         stamped_orders.add(oid)
                         try:
                             ticket.time = timestamp
                         except Exception:
                             pass
 
-                # Record equity
-                portfolio_value = algorithm.portfolio.total_portfolio_value
                 equity_curve.append({
                     'time': timestamp_str,
-                    'equity': portfolio_value
+                    'equity': algorithm.portfolio.total_portfolio_value
                 })
 
-            # Calculate performance metrics
             final_equity = equity_curve[-1]['equity'] if equity_curve else initial_cash
             total_return = ((final_equity - initial_cash) / initial_cash) * 100
 
-            # Extract trades from algorithm
+            unfilled = len(pending_orders)
+            non_market = sum(1 for t in algorithm.transactions._orders.values()
+                             if t.order_type != OrderType.MARKET)
+
             for order_id, order in algorithm.transactions._orders.items():
                 if order.status.name == 'FILLED':
                     trades.append({
@@ -283,8 +338,6 @@ class FinceptStrategyRunner:
                         'type': order.order_type.name
                     })
 
-            # Positions still open at the end of the run (symbol/qty/avg cost/last price) so
-            # callers can report them; additive key, existing consumers ignore it.
             open_positions = []
             try:
                 for ticker, h in algorithm.portfolio.get_holdings_summary().items():
@@ -303,6 +356,8 @@ class FinceptStrategyRunner:
                 'success': True,
                 'data': {
                     'open_positions': open_positions,
+                    'unfilled_orders': unfilled,
+                    'non_market_orders': non_market,
                     'performance': {
                         'total_return': total_return,
                         'final_equity': final_equity,

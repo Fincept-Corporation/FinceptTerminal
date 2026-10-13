@@ -9,15 +9,16 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
-BASE_URL = "https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1/data"
-META_URL = "https://ec.europa.eu/eurostat/api/dissemination/sdmx/2.1"
-SEARCH_URL = "https://ec.europa.eu/eurostat/api/dissemination/catalogue/datasets"
+# The JSON dissemination API returns JSON-stat 2.0 (the old SDMX 2.1 path with format=JSON also
+# answered JSON-stat, so an SDMX-JSON parser found "No dataSets").
+BASE_URL = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data"
+TOC_URL = "https://ec.europa.eu/eurostat/api/dissemination/catalogue/toc/txt"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
-session.headers.update({"Accept": "application/json"})
+session.headers.update({"Accept": "application/json", "User-Agent": "FinceptTerminal/4.5 (+https://fincept.in)"})
 
 
 def _make_request(endpoint: str, params: Dict = None, base: str = None) -> Any:
@@ -26,71 +27,114 @@ def _make_request(endpoint: str, params: Dict = None, base: str = None) -> Any:
     url = f"{base_url}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         response = session.get(url, params=params, timeout=60)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            try:
+                err = response.json().get("error", {})
+                if isinstance(err, list):
+                    err = err[0] if err else {}
+                msg = err.get("label") or response.text[:200]
+            except ValueError:
+                msg = response.text[:200]
+            return {"error": f"HTTP {response.status_code}: {msg}"}
         return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
     except (json.JSONDecodeError, ValueError) as e:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
-def _parse_eurostat_sdmx(data: Any, label: str = "series") -> Any:
-    """Parse Eurostat SDMX-JSON response into simplified time series."""
+def _parse_jsonstat(data: Any, label: str = "series") -> Any:
+    """Parse a Eurostat JSON-stat 2.0 dataset into one entry per non-time dimension combination."""
     if isinstance(data, dict) and "error" in data:
         return data
     try:
-        datasets = data.get("dataSets", [])
-        if not datasets:
-            return {"error": "No dataSets", "keys": list(data.keys())}
-        dataset = datasets[0]
-        structure = data.get("structure", {})
-        dims_s = structure.get("dimensions", {}).get("series", [])
-        dims_o = structure.get("dimensions", {}).get("observation", [])
-
-        # Get time values
-        time_values = []
-        for d in dims_o:
-            if "TIME" in d.get("id", ""):
-                time_values = [v.get("id") for v in d.get("values", [])]
-
-        series_list = []
-        for key, series_obj in dataset.get("series", {}).items():
-            parts = key.split(":")
-            dim_labels = {}
-            for i, dim in enumerate(dims_s):
-                if i < len(parts):
-                    try:
-                        idx = int(parts[i])
-                        vals = dim.get("values", [])
-                        if idx < len(vals):
-                            dim_labels[dim["id"]] = vals[idx].get("id", "")
-                    except ValueError:
-                        pass
-
-            obs = []
-            for obs_k, obs_v in series_obj.get("observations", {}).items():
-                idx = int(obs_k)
-                period = time_values[idx] if idx < len(time_values) else obs_k
-                val = obs_v[0] if obs_v else None
-                obs.append({"period": period, "value": val})
-            obs.sort(key=lambda x: x["period"])
-            series_list.append({"dimensions": dim_labels, "observations": obs, "count": len(obs)})
-
-        return {label: series_list, "total_series": len(series_list)}
+        ids = data.get("id", [])
+        sizes = data.get("size", [])
+        dims = data.get("dimension", {})
+        values = data.get("value", {})
+        status = data.get("status", {}) or {}
+        if not ids or not sizes:
+            return {"error": "Unexpected response (no JSON-stat dimensions)", "keys": list(data.keys())}
+        if isinstance(values, list):
+            values = {str(i): v for i, v in enumerate(values) if v is not None}
+        cats = []
+        for d in ids:
+            cat = dims.get(d, {}).get("category", {})
+            index = cat.get("index", {})
+            if isinstance(index, list):
+                order = index
+            else:
+                order = [k for k, _ in sorted(index.items(), key=lambda kv: kv[1])]
+            cats.append((order, cat.get("label", {})))
+        tpos = ids.index("time") if "time" in ids else len(ids) - 1
+        strides = [1] * len(sizes)
+        for i in range(len(sizes) - 2, -1, -1):
+            strides[i] = strides[i + 1] * sizes[i + 1]
+        series = {}
+        for flat_s, v in values.items():
+            flat = int(flat_s)
+            coords = [(flat // strides[i]) % sizes[i] for i in range(len(sizes))]
+            skey = tuple(c for i, c in enumerate(coords) if i != tpos)
+            if skey not in series:
+                dim_labels = {}
+                for i, c in enumerate(coords):
+                    if i == tpos:
+                        continue
+                    code = cats[i][0][c]
+                    dim_labels[ids[i]] = {"id": code, "name": cats[i][1].get(code, code)}
+                series[skey] = {"dimensions": dim_labels, "observations": []}
+            period = cats[tpos][0][coords[tpos]]
+            obs = {"period": period, "value": v}
+            if flat_s in status:
+                obs["flag"] = status[flat_s]
+            series[skey]["observations"].append(obs)
+        out = []
+        for s in series.values():
+            s["observations"].sort(key=lambda x: x["period"])
+            s["count"] = len(s["observations"])
+            out.append(s)
+        return {label: out, "total_series": len(out), "title": data.get("label"), "updated": data.get("updated")}
     except Exception as e:
         return {"error": f"Parse error: {str(e)}"}
 
 
+MAX_DATASET_SERIES = 200
+
+
 def get_dataset(dataset_code: str, params: Dict = None) -> Any:
-    """Fetch a raw Eurostat dataset by code (e.g. nama_10_gdp, une_rt_m, prc_hicp_midx)."""
+    """Fetch a Eurostat dataset by code (e.g. nama_10_gdp, une_rt_m, prc_hicp_minr).
+    params: dimension filters such as {"geo": "DE", "unit": "CP_MEUR"}; without filters whole
+    datasets can be tens of MB, so at most MAX_DATASET_SERIES series are returned (flagged)."""
     if params is None:
         params = {}
-    params.setdefault("format", "JSON")
     params.setdefault("lang", "EN")
+    params.setdefault("lastTimePeriod", 10)
     data = _make_request(dataset_code, params=params)
-    return _parse_eurostat_sdmx(data, "series")
+    result = _parse_jsonstat(data, "series")
+    if isinstance(result.get("series"), list) and len(result["series"]) > MAX_DATASET_SERIES:
+        result["truncated"] = True
+        result["note"] = (f"{len(result['series'])} series matched; only the first {MAX_DATASET_SERIES} are "
+                          "returned - add dimension filters (e.g. geo=DE,unit=CP_MEUR)")
+        result["series"] = result["series"][:MAX_DATASET_SERIES]
+    return result
+
+
+def _parse_filters(text: str) -> Dict:
+    """'geo=DE,unit=CP_MEUR,na_item=B1GQ' -> {"geo": "DE", ...}; repeated keys become lists."""
+    out: Dict = {}
+    for part in (text or "").split(","):
+        if "=" not in part:
+            continue
+        k, v = part.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if not k:
+            continue
+        if k in out:
+            out[k] = out[k] if isinstance(out[k], list) else [out[k]]
+            out[k].append(v)
+        else:
+            out[k] = v
+    return out
 
 
 def get_gdp(country: str = "DE", freq: str = "A") -> Any:
@@ -99,7 +143,6 @@ def get_gdp(country: str = "DE", freq: str = "A") -> Any:
     freq: A=annual, Q=quarterly.
     """
     params = {
-        "format": "JSON",
         "lang": "EN",
         "geo": country.upper(),
         "unit": "CP_MEUR",
@@ -108,7 +151,7 @@ def get_gdp(country: str = "DE", freq: str = "A") -> Any:
     }
     dataset = "nama_10_gdp" if freq == "A" else "namq_10_gdp"
     data = _make_request(dataset, params=params)
-    result = _parse_eurostat_sdmx(data, "gdp_series")
+    result = _parse_jsonstat(data, "gdp_series")
     result.update({"country": country.upper(), "frequency": freq, "dataset": dataset})
     return result
 
@@ -119,17 +162,17 @@ def get_unemployment(country: str = "DE", freq: str = "M") -> Any:
     freq: M=monthly, Q=quarterly, A=annual.
     """
     params = {
-        "format": "JSON",
         "lang": "EN",
         "geo": country.upper(),
         "unit": "PC_ACT",
         "sex": "T",
-        "age": "Y15-74",
+        "age": "TOTAL",
+        "s_adj": "SA" if freq != "A" else "NSA",
         "lastTimePeriod": 60,
     }
     dataset = "une_rt_m" if freq == "M" else ("une_rt_q" if freq == "Q" else "une_rt_a")
     data = _make_request(dataset, params=params)
-    result = _parse_eurostat_sdmx(data, "unemployment_series")
+    result = _parse_jsonstat(data, "unemployment_series")
     result.update({"country": country.upper(), "frequency": freq, "dataset": dataset})
     return result
 
@@ -139,17 +182,18 @@ def get_inflation(country: str = "DE", freq: str = "M") -> Any:
     country: EU27_2020, DE, FR, IT, ES, NL, PL, etc.
     freq: M=monthly, A=annual.
     """
+    # prc_hicp_midx/aind stopped at 2025; the ECOICOP ver.2 datasets carry the 2025=100 index
+    # plus the annual rate of change.
     params = {
-        "format": "JSON",
         "lang": "EN",
         "geo": country.upper(),
-        "unit": "INX_A_AVG",
-        "coicop": "CP00",
-        "lastTimePeriod": 120,
+        "unit": ["I25", "RCH_A"] if freq == "M" else ["INX_A_AVG", "RCH_A_AVG"],
+        "coicop18": "TOTAL",
+        "lastTimePeriod": 120 if freq == "M" else 30,
     }
-    dataset = "prc_hicp_midx" if freq == "M" else "prc_hicp_aind"
+    dataset = "prc_hicp_minr" if freq == "M" else "prc_hicp_ainr"
     data = _make_request(dataset, params=params)
-    result = _parse_eurostat_sdmx(data, "inflation_series")
+    result = _parse_jsonstat(data, "inflation_series")
     result.update({"country": country.upper(), "frequency": freq, "dataset": dataset})
     return result
 
@@ -157,7 +201,6 @@ def get_inflation(country: str = "DE", freq: str = "M") -> Any:
 def get_population(country: str = "DE") -> Any:
     """Get annual population data for EU/EEA countries."""
     params = {
-        "format": "JSON",
         "lang": "EN",
         "geo": country.upper(),
         "sex": "T",
@@ -165,44 +208,50 @@ def get_population(country: str = "DE") -> Any:
         "lastTimePeriod": 30,
     }
     data = _make_request("demo_pjan", params=params)
-    result = _parse_eurostat_sdmx(data, "population_series")
+    result = _parse_jsonstat(data, "population_series")
     result.update({"country": country.upper(), "dataset": "demo_pjan"})
     return result
 
 
 def search_datasets(keyword: str) -> Any:
-    """Search for Eurostat datasets by keyword."""
-    params = {"lang": "EN", "query": keyword, "limit": 30}
+    """Search Eurostat dataset codes/titles (from the public table of contents) by keyword."""
     try:
-        response = session.get(SEARCH_URL, params=params, timeout=30)
+        response = session.get(TOC_URL, params={"lang": "en"}, headers={"Accept": "text/plain"}, timeout=60)
         response.raise_for_status()
-        data = response.json()
-        if isinstance(data, list):
-            return {"results": data[:30], "count": len(data), "keyword": keyword}
-        elif isinstance(data, dict) and "results" in data:
-            return {"results": data["results"][:30], "count": len(data["results"]), "keyword": keyword}
-        return {"raw": data, "keyword": keyword}
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         return {"error": f"Search failed: {str(e)}"}
+    kw = keyword.lower()
+    results, seen = [], set()
+    for line in response.text.splitlines()[1:]:
+        cols = [c.strip().strip('"').strip() for c in line.split("	")]
+        if len(cols) < 7 or cols[2] not in ("dataset", "table"):
+            continue
+        title, code = cols[0], cols[1]
+        if code in seen or (kw not in title.lower() and kw not in code.lower()):
+            continue
+        seen.add(code)
+        results.append({"code": code, "title": title, "type": cols[2], "last_update": cols[3],
+                        "data_start": cols[5], "data_end": cols[6]})
+    return {"keyword": keyword, "count": len(results), "results": results[:50]}
 
 
 def get_trade(reporter: str = "DE", partner: str = "WORLD", flow: str = "X") -> Any:
-    """Get EU international trade data.
+    """Get annual intra/extra-EU trade of a Member State (ext_lt_intratrd), million EUR.
     reporter: DE, FR, IT, ES, NL, etc.
-    partner: WORLD, US, CN, JP, GB, etc.
-    flow: X=exports, M=imports.
+    partner: WORLD, EU27_2020 (intra-EU) or EXT_EU27_2020 (extra-EU).
+    flow: X=exports, M=imports, B=balance.
     """
+    indic = {"X": "MIO_EXP_VAL", "M": "MIO_IMP_VAL", "B": "MIO_BAL_VAL"}.get(flow.upper(), "MIO_EXP_VAL")
     params = {
-        "format": "JSON",
         "lang": "EN",
-        "reporter": reporter.upper(),
+        "geo": reporter.upper(),
         "partner": partner.upper(),
-        "flow": flow.upper(),
+        "indic_et": indic,
         "sitc06": "TOTAL",
         "lastTimePeriod": 20,
     }
     data = _make_request("ext_lt_intratrd", params=params)
-    result = _parse_eurostat_sdmx(data, "trade_series")
+    result = _parse_jsonstat(data, "trade_series")
     result.update({"reporter": reporter.upper(), "partner": partner.upper(), "flow": flow.upper()})
     return result
 
@@ -218,9 +267,12 @@ def main(args=None):
 
     if command == "dataset":
         if len(args) < 2:
-            result = {"error": "Usage: dataset <dataset_code> (e.g. nama_10_gdp, une_rt_m, prc_hicp_midx)"}
+            result = {"error": "Usage: dataset <dataset_code> [filters e.g. geo=DE,unit=CP_MEUR] [last_n_periods]"}
         else:
-            result = get_dataset(args[1])
+            filters = _parse_filters(args[2]) if len(args) > 2 else {}
+            if len(args) > 3:
+                filters["lastTimePeriod"] = int(args[3])
+            result = get_dataset(args[1], filters)
     elif command == "gdp":
         country = args[1] if len(args) > 1 else "DE"
         freq = args[2] if len(args) > 2 else "A"

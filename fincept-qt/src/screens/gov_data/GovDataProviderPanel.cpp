@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QTextStream>
 #include <QTimer>
 #include <QUrl>
@@ -98,6 +99,19 @@ QString make_gov_panel_style(const QString& color, const QString& extra_qss) {
     s += QString("#govStatusMsg { color:%1; font-size:13px; background:transparent; }").arg(t.text_secondary);
     s += QString("#govStatusErr { color:%1; font-size:12px; background:transparent; }").arg(t.negative);
 
+    // Portal selector bar (multi-portal providers)
+    s += QString("#govPortalBar { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
+    s += QString("#govPortalLabel { color:%1; font-size:9px; font-weight:700; letter-spacing:0.5px;"
+                 "  background:transparent; }")
+             .arg(t.text_secondary);
+    s += QString("#govPortalCombo { background:%1; color:%2; border:1px solid %3; font-size:10px;"
+                 "  font-weight:700; padding:2px 8px; min-width:220px; }"
+                 "#govPortalCombo::drop-down { border:none; width:18px; }"
+                 "#govPortalCombo QAbstractItemView { background:%1; color:%4;"
+                 "  selection-background-color:rgba(%5,%6,%7,0.12); border:1px solid %3; }")
+             .arg(t.bg_raised, color, t.border_dim, t.text_primary)
+             .arg(cr, cg, cb);
+
     // Breadcrumb
     s += QString("#govBreadcrumb { background:%1; border-bottom:1px solid %2; }").arg(t.bg_surface, t.border_dim);
     s += QString("#govBreadcrumbText { color:%1; font-size:9px; background:transparent; }").arg(t.text_secondary);
@@ -144,51 +158,25 @@ void GovDataProviderPanel::build_ui() {
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // Optional portal selector bar (e.g. CKAN universal panel)
-    if (!options_.portal_combo_items.isEmpty()) {
-        const auto& t = ThemeManager::instance().tokens();
-        const QString bg_surface = QString::fromLatin1(t.bg_surface);
-        const QString bg_raised = QString::fromLatin1(t.bg_raised);
-        const QString border_dim = QString::fromLatin1(t.border_dim);
-        const QString text_sec = QString::fromLatin1(t.text_secondary);
-        const QString text_pri = QString::fromLatin1(t.text_primary);
-        const auto cc = QColor(color_);
-
+    // Optional portal selector bar (multi-portal scripts, e.g. universal CKAN). Styled by
+    // make_gov_panel_style() through the object names.
+    if (multi_portal()) {
         auto* portal_bar = new QWidget(this);
         portal_bar->setObjectName("govPortalBar");
         portal_bar->setFixedHeight(32);
-        portal_bar->setStyleSheet(
-            QString("#govPortalBar { background:%1; border-bottom:1px solid %2; }").arg(bg_surface, border_dim));
         auto* phl = new QHBoxLayout(portal_bar);
         phl->setContentsMargins(14, 0, 14, 0);
         phl->setSpacing(8);
         portal_label_ = new QLabel;
-        portal_label_->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700;"
-                                             " letter-spacing:0.5px; background:transparent;")
-                                         .arg(text_sec));
+        portal_label_->setObjectName("govPortalLabel");
         phl->addWidget(portal_label_);
-        auto* combo = new QComboBox;
-        combo->setObjectName("govPortalCombo");
-        combo->addItems(options_.portal_combo_items);
-        // Portal switching is not yet wired: the universal CKAN connector script
-        // (datagovuk_api.py) hardcodes the data.gov.uk endpoint and takes no
-        // portal argument, so the selector is informational and shown disabled.
-        combo->setEnabled(false);
-        if (!options_.portal_combo_tooltip.isEmpty())
-            combo->setToolTip(options_.portal_combo_tooltip);
-        else
-            combo->setToolTip(tr("Portal switching is not yet functional — this panel "
-                                 "queries data.gov.uk only."));
-        combo->setStyleSheet(QString("QComboBox { background:%1; color:%2; border:1px solid %3;"
-                                     " font-size:10px; font-weight:700; padding:2px 8px; min-width:160px; }"
-                                     "QComboBox::drop-down { border:none; width:18px; }"
-                                     "QComboBox QAbstractItemView { background:%1; color:%4;"
-                                     " selection-background-color:rgba(%5,%6,%7,0.12); border:1px solid %3; }")
-                                 .arg(bg_raised, color_, border_dim, text_pri)
-                                 .arg(cc.red())
-                                 .arg(cc.green())
-                                 .arg(cc.blue()));
-        phl->addWidget(combo);
+        portal_combo_ = new QComboBox;
+        portal_combo_->setObjectName("govPortalCombo");
+        portal_combo_->setEnabled(false); // until the portal list has loaded
+        portal_combo_->setAccessibleName(tr("CKAN portal"));
+        // activated = user picks only; populate_portals() fills the list without triggering a load.
+        connect(portal_combo_, &QComboBox::activated, this, &GovDataProviderPanel::on_portal_changed);
+        phl->addWidget(portal_combo_);
         phl->addStretch(1);
         root->addWidget(portal_bar);
     }
@@ -443,13 +431,104 @@ void GovDataProviderPanel::retranslateUi() {
 // ── Data loading ─────────────────────────────────────────────────────────────
 
 void GovDataProviderPanel::load_initial_data() {
+    if (multi_portal() && !portals_loaded_) {
+        // The portal list comes from the script itself, so the selector can never offer a portal
+        // the script does not serve. Publishers load once a portal is selected.
+        show_loading(tr("Loading portals…"));
+        services::GovDataService::instance().execute(script_, options_.portals_command, {}, "gov_portals_" + script_);
+        return;
+    }
+    load_publishers();
+}
+
+void GovDataProviderPanel::load_publishers() {
     show_loading(tr("Loading %1…").arg(org_label_translated_lower()));
-    services::GovDataService::instance().execute(script_, "publishers", {}, "gov_orgs_" + script_);
+    execute_for_portal("publishers", {}, "gov_orgs_");
+}
+
+void GovDataProviderPanel::execute_for_portal(const QString& command, const QStringList& args,
+                                              const QString& request_prefix) {
+    if (!multi_portal()) {
+        services::GovDataService::instance().execute(script_, command, args, request_prefix + script_);
+        return;
+    }
+    QStringList full_args;
+    full_args << portal_ << args;
+    services::GovDataService::instance().execute(script_, command, full_args, request_prefix + script_ + "@" + portal_);
+}
+
+void GovDataProviderPanel::populate_portals(const QJsonArray& portals) {
+    if (!portal_combo_)
+        return;
+    QSignalBlocker block(portal_combo_);
+    portal_combo_->clear();
+    int default_index = -1;
+    for (const QJsonValue& v : portals) {
+        const QJsonObject p = v.toObject();
+        const QString code = p.value("code").toString();
+        if (code.isEmpty())
+            continue;
+        portal_combo_->addItem(p.value("name").toString(code), code);
+        if (p.value("default").toBool(false))
+            default_index = portal_combo_->count() - 1;
+    }
+    if (portal_combo_->count() == 0)
+        return;
+    // Keep the user's portal across a reload of the list; else the script's default; else the first.
+    int idx = portal_.isEmpty() ? -1 : portal_combo_->findData(portal_);
+    if (idx < 0)
+        idx = default_index >= 0 ? default_index : 0;
+    portal_combo_->setCurrentIndex(idx);
+    portal_combo_->setEnabled(true);
+    portal_ = portal_combo_->itemData(idx).toString();
+    portals_loaded_ = true;
+}
+
+void GovDataProviderPanel::on_portal_changed(int index) {
+    if (!portal_combo_ || index < 0)
+        return;
+    const QString code = portal_combo_->itemData(index).toString();
+    if (code.isEmpty() || code == portal_)
+        return;
+    portal_ = code;
+    // Everything on screen belongs to the previous portal.
+    selected_org_.clear();
+    selected_org_name_.clear();
+    selected_dataset_.clear();
+    current_orgs_ = {};
+    current_datasets_ = {};
+    current_resources_ = {};
+    orgs_table_->setRowCount(0);
+    datasets_table_->setRowCount(0);
+    resources_table_->setRowCount(0);
+    current_view_ = Orgs;
+    orgs_btn_->setChecked(true);
+    datasets_btn_->setChecked(false);
+    update_toolbar_state();
+    update_breadcrumb();
+    load_publishers();
 }
 
 void GovDataProviderPanel::on_result(const QString& request_id, const services::GovDataResult& result) {
     if (!request_id.contains(script_) && !request_id.startsWith("gov_search_" + script_) &&
         !request_id.startsWith("gov_datasets_" + script_) && !request_id.startsWith("gov_resources_" + script_))
+        return;
+
+    if (request_id == "gov_portals_" + script_) {
+        if (!result.success) {
+            show_error(result.error);
+            return;
+        }
+        populate_portals(result.data.value("data").toArray());
+        if (!portals_loaded_) {
+            show_error(tr("The script listed no portals"));
+            return;
+        }
+        load_publishers();
+        return;
+    }
+    // A multi-portal answer is tagged "@<portal>"; one for a portal the user has since left is stale.
+    if (multi_portal() && !request_id.endsWith("@" + portal_))
         return;
 
     if (!result.success) {
@@ -666,8 +745,7 @@ void GovDataProviderPanel::on_org_clicked(int row) {
     selected_org_ = item->data(Qt::UserRole).toString();
     selected_org_name_ = item->text();
     show_loading(tr("Loading datasets for %1…").arg(item->text()));
-    services::GovDataService::instance().execute(script_, "datasets", {selected_org_, "100"},
-                                                 "gov_datasets_" + script_);
+    execute_for_portal("datasets", {selected_org_, "100"}, "gov_datasets_");
 }
 
 void GovDataProviderPanel::on_dataset_clicked(int row) {
@@ -676,7 +754,7 @@ void GovDataProviderPanel::on_dataset_clicked(int row) {
         return;
     selected_dataset_ = item->data(Qt::UserRole).toString();
     show_loading(tr("Loading resources…"));
-    services::GovDataService::instance().execute(script_, "resources", {selected_dataset_}, "gov_resources_" + script_);
+    execute_for_portal("resources", {selected_dataset_}, "gov_resources_");
 }
 
 void GovDataProviderPanel::on_search() {
@@ -687,8 +765,12 @@ void GovDataProviderPanel::on_search() {
     current_view_ = Search;
     orgs_btn_->setChecked(false);
     datasets_btn_->setChecked(false);
+    if (multi_portal() && !portals_loaded_) {
+        load_initial_data(); // the portal list failed to load earlier — retry that first
+        return;
+    }
     show_loading(tr("Searching for \"%1\"…").arg(query));
-    services::GovDataService::instance().execute(script_, "search", {query, "50"}, "gov_search_" + script_);
+    execute_for_portal("search", {query, "50"}, "gov_search_");
 }
 
 void GovDataProviderPanel::on_back() {

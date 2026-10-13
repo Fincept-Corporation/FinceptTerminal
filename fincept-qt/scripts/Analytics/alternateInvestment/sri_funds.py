@@ -175,7 +175,7 @@ class SRIFundAnalyzer(AlternativeInvestmentBase):
                 'sri_value': float(sri_value),
                 'benchmark_value': float(benchmark_value),
                 'cost_of_higher_expenses': float(cost_of_expenses),
-                'percentage_loss': float((cost_of_expenses / benchmark_value) * Decimal('100'))
+                'percentage_loss': float(cost_of_expenses / benchmark_value)
             })
 
         return {

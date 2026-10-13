@@ -39,7 +39,6 @@
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "screens/code_editor/CodeEditorScreen.h"
-#include "screens/common/ComingSoonScreen.h"
 #include "screens/common/IStatefulScreen.h"
 #include "screens/crypto_center/CryptoCenterScreen.h"
 #include "screens/crypto_trading/CryptoTradingScreen.h"
@@ -55,7 +54,6 @@
 #include "screens/excel/ExcelScreen.h"
 #include "screens/file_manager/FileManagerScreen.h"
 #include "screens/fno/FnoScreen.h"
-#include "screens/forum/ForumScreen.h"
 #include "screens/geopolitics/GeopoliticsScreen.h"
 #include "screens/gov_data/GovDataScreen.h"
 #include "screens/info/ContactScreen.h"
@@ -92,7 +90,6 @@
 #include "ui/navigation/DockStatusBar.h"
 #include "ui/navigation/DockToolBar.h"
 #include "ui/navigation/FKeyBar.h"
-#include "ui/navigation/NavigationBar.h"
 #include "ui/navigation/StatusBar.h"
 #include "ui/navigation/ToolBar.h"
 #include "ui/pushpins/PushpinBar.h"
@@ -840,7 +837,7 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
                 {"perspective_geopolitics", {"geopolitics", "maritime", "relationship_map", "news"}},
                 // AI & Quant
                 {"perspective_quant", {"ai_quant_lab", "quantlib", "backtesting", "markets"}},
-                {"perspective_ai", {"ai_chat", "agent_config"}},
+                {"perspective_ai", {"ai_chat", "agent_config", "agent_workbench"}},
                 // Tools
                 {"perspective_tools", {"code_editor", "node_editor"}},
             };
@@ -964,15 +961,16 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // Toolbar logout
     connect(toolbar, &ui::ToolBar::logout_clicked, this, []() { auth::AuthManager::instance().logout(); });
 
-    // Toolbar plan label → pricing screen
-    connect(toolbar, &ui::ToolBar::plan_clicked, this, [this]() {
-        set_shell_visible(false);
-        stack_->setCurrentIndex(0);
-        auth_stack_->setCurrentIndex(3); // PricingScreen
-    });
+    // Toolbar plan badge → Plans & Pricing (same path as the billing.plans
+    // action); the screen's BACK / CONTINUE WITH FREE returns to where the
+    // user was — dock UI or chat mode.
+    connect(toolbar, &ui::ToolBar::plan_clicked, this, &WindowFrame::show_pricing);
+    if (auto* pricing = auth_stack_->findChild<screens::PricingScreen*>(QString(), Qt::FindDirectChildrenOnly))
+        connect(pricing, &screens::PricingScreen::back_requested, this, &WindowFrame::leave_pricing);
 
-    // Toolbar UPGRADE → Enterprise (the private edition) promo dialog.
-    connect(toolbar, &ui::ToolBar::upgrade_clicked, this, [this]() { ui::UpgradeDialog::show_now(this); });
+    // Toolbar ENTERPRISE → Fincept Terminal Enterprise (the private edition) dialog.
+    connect(toolbar, &ui::ToolBar::upgrade_clicked, this,
+            [this]() { ui::UpgradeDialog::show_now(this, QStringLiteral("toolbar")); });
 
     // Auth state
     connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,

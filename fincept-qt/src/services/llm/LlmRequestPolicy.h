@@ -500,6 +500,11 @@ inline bool tool_is_destructive(const QString& wire_name) {
     const QString bare = mcp::McpProvider::parse_openai_function_name(wire_name).second;
     if (bare.isEmpty())
         return true;
+    // tool_invoke is a generic dispatcher: it is not destructive itself, but the
+    // tool it wraps may be. Treat it as a barrier so a wrapped write can never
+    // run concurrently with — or overtake — other calls in the same round.
+    if (bare == QLatin1String("tool_invoke"))
+        return true;
     const auto t = mcp::McpProvider::instance().find_tool(bare);
     return t ? t->is_destructive : true;
 }

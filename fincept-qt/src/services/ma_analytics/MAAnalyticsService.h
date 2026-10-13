@@ -242,10 +242,6 @@ class MAAnalyticsService : public QObject, public fincept::datahub::Producer {
     void run_vision_backtest(const QJsonObject& params);                       // backtester.py: backtest
     void run_vision_index(const QString& command, const QJsonObject& params);  // setup_index.py: build|status
 
-    // ── Data connectors — keyless *_data.py CLIs (positional: command + args) ──
-    // Array-safe variant of run_python (wraps a top-level JSON array as {data:[…]}).
-    void run_data_connector(const QString& script, const QStringList& args, const QString& context);
-
   signals:
     // Generic result signal — module panels connect to this filtered by context
     void result_ready(QString context, QJsonObject data);

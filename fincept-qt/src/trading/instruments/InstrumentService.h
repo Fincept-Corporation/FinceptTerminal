@@ -9,8 +9,11 @@
 #include <QString>
 #include <QVector>
 
+#include <array>
 #include <functional>
+#include <memory>
 #include <optional>
+#include <vector>
 
 namespace fincept::trading {
 
@@ -26,8 +29,11 @@ namespace fincept::trading {
 ///   auto sym   = InstrumentService::instance().to_brsymbol("NIFTY28MAR24FUT", "NFO", "zerodha");
 ///
 /// Thread safety: refresh() runs on a QtConcurrent worker thread and posts results
-/// back to the UI thread via QMetaObject::invokeMethod. All cache reads and writes
-/// are guarded by a single QMutex (mutex_); reads and writes are mutually exclusive.
+/// back to the UI thread via QMetaObject::invokeMethod. Each broker's cache is an
+/// immutable snapshot (maps + search index) built OFF the UI thread and swapped
+/// in under mutex_ in O(1); mutex_ guards only the broker → snapshot map and
+/// refreshing_. Lookups and searches copy the snapshot pointer and read it with
+/// no lock held, so a 100k-row rebuild never blocks a lookup.
 class InstrumentService : public QObject {
     Q_OBJECT
   public:
@@ -124,23 +130,54 @@ class InstrumentService : public QObject {
   private:
     explicit InstrumentService(QObject* parent = nullptr) : QObject(parent) {}
 
-    // Cache key: "broker_id:exchange:symbol" or "broker_id:token"
-    // Stored as flat QMap for O(1) lookups.
+    // One broker's instruments. Immutable once built (shared as
+    // shared_ptr<const Cache>), never copied: the search index holds pointers
+    // into by_token's nodes.
     struct Cache {
+        Cache() = default;
+        Cache(const Cache&) = delete;
+        Cache& operator=(const Cache&) = delete;
+
         // (symbol, exchange) → Instrument
         QMap<QPair<QString, QString>, Instrument> by_symbol;
         // instrument_token → Instrument
         QMap<qint64, Instrument> by_token;
         // brsymbol+brexchange → Instrument
         QMap<QPair<QString, QString>, Instrument> by_brsymbol;
-        bool loaded = false;
+
+        // ── Search index over by_token's values (see search_all) ──
+        // by_token iteration order; position = item index.
+        std::vector<const Instrument*> search_items;
+        // Per result type rank (EQ, INDEX, FUT, other): item indices sorted by
+        // (symbol, index) — search_all's result order within a rank, so a symbol
+        // prefix is one binary-searched range.
+        std::array<std::vector<int>, 4> search_buckets;
+        // Items whose symbol is not plain upper-case ASCII. A case-insensitive
+        // prefix match can sit outside the binary-searched range for these, so
+        // they are checked one by one (normally none — parsers upper-case symbols).
+        std::array<std::vector<int>, 4> search_irregular;
+        // Per item: bit set of case-folded ASCII characters present in symbol,
+        // brsymbol and name — rejects most items before any substring scan.
+        std::vector<quint64> search_masks;
     };
+    using CachePtr = std::shared_ptr<const Cache>;
 
-    QMap<QString, Cache> caches_; // keyed by broker_id
-    QSet<QString> refreshing_;    // brokers currently mid-download (prevents double-refresh)
-    mutable QMutex mutex_;        // guards caches_ + refreshing_
+    QMap<QString, CachePtr> caches_; // keyed by broker_id; present = loaded
+    QSet<QString> refreshing_;       // brokers currently mid-download (prevents double-refresh)
+    mutable QMutex mutex_;           // guards caches_ (the pointers) + refreshing_
 
+    /// Build a broker snapshot (maps + search index). Pure — call it OFF the UI
+    /// thread; ~100k+ rows take a noticeable fraction of a second.
+    static CachePtr build_cache_snapshot(const QVector<Instrument>& instruments);
+    /// Swap a prebuilt snapshot in. O(1) under mutex_.
+    void install_cache(const QString& broker_id, CachePtr cache);
+    /// The broker's current snapshot, or null when it is not loaded.
+    CachePtr cache_for(const QString& broker_id) const;
+    /// build_cache_snapshot + install_cache on the calling thread.
     void build_cache(const QString& broker_id, const QVector<Instrument>& instruments);
+    /// Append up to `k` of this snapshot's search hits, in search_all's order.
+    static void search_cache(const Cache& cache, const QString& q, const QString& exch, int k,
+                             QVector<Instrument>& out);
     void do_refresh(const QString& broker_id, const BrokerCredentials& creds);
 
   public:

@@ -5,6 +5,7 @@
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/OrderThreadPool.h"
 #include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
@@ -228,7 +229,7 @@ void BroadcastOrderDialog::on_place_order() {
     // Run broadcast on background thread (P1: never block UI)
     QPointer<BroadcastOrderDialog> self = this;
     auto order_copy = order_;
-    (void)QtConcurrent::run([self, immediate, order_copy, queued]() {
+    (void)QtConcurrent::run(&fincept::trading::order_thread_pool(), [self, immediate, order_copy, queued]() {
         auto results = UnifiedTrading::instance().broadcast_order(immediate, order_copy);
         if (!self)
             return; // QMetaObject::invokeMethod asserts on a null receiver (dialog closed mid-flight)

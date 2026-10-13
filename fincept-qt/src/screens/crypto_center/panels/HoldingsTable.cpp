@@ -195,7 +195,8 @@ void HoldingsTable::refresh_subscription() {
         return;
     current_balance_topic_ = QStringLiteral("wallet:balance:%1").arg(current_pubkey_);
     hub.subscribe(this, current_balance_topic_, [this](const QVariant& v) { on_balance_update(v); });
-    hub.request(current_balance_topic_, /*force=*/true);
+    // force=false: coalesce with the holdings bar / other panels (hub min_interval).
+    hub.request(current_balance_topic_, /*force=*/false);
 }
 
 void HoldingsTable::on_balance_update(const QVariant& v) {
@@ -235,7 +236,7 @@ void HoldingsTable::resubscribe_prices() {
         const auto topic = QStringLiteral("market:price:token:%1").arg(mint);
         price_topic_.insert(mint, topic);
         hub.subscribe(this, topic, [this, mint](const QVariant& v) { on_price_update(mint, v); });
-        hub.request(topic, /*force=*/true);
+        hub.request(topic, /*force=*/false);
     }
 }
 

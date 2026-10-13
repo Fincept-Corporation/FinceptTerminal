@@ -1,8 +1,9 @@
 // src/services/agents/AgentService_Repositories.cpp
 //
-// Persistence-facing methods: memory + session repositories, paper-trading
-// portfolio/positions, and the trade-decision log. Thin wrappers over the
-// Python-side stores reached through the standard run_python_* path.
+// Persistence-facing methods: memory + session repositories and the
+// trade-decision log. Thin wrappers over the Python-side stores reached through
+// the standard run_python_* path. (Paper trading is NOT here: agents use the
+// C++ paper engine through the pt_* MCP tools.)
 //
 // Part of the partial-class split of AgentService.cpp.
 
@@ -159,59 +160,6 @@ void AgentService::add_session_message(const QString& session_id, const QString&
         if (!self)
             return;
         emit self->session_saved(ok && result["success"].toBool(ok));
-    });
-}
-
-// ── Paper trading ────────────────────────────────────────────────────────────
-
-void AgentService::paper_execute_trade(const QString& portfolio_id, const QString& symbol, const QString& action,
-                                       double quantity, double price) {
-    LOG_INFO("AgentService", QString("Paper trade: %1 %2 %3").arg(action, symbol).arg(quantity));
-    QJsonObject params;
-    params["portfolio_id"] = portfolio_id;
-    params["symbol"] = symbol;
-    params["action"] = action;
-    params["quantity"] = quantity;
-    params["price"] = price;
-
-    QPointer<AgentService> self = this;
-    run_python_stdin("paper_execute_trade", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self)
-            return;
-        if (ok)
-            emit self->trade_executed(result);
-        else
-            emit self->error_occurred("paper_trade", result["error"].toString());
-    });
-}
-
-void AgentService::paper_get_portfolio(const QString& portfolio_id) {
-    QJsonObject params;
-    params["portfolio_id"] = portfolio_id;
-
-    QPointer<AgentService> self = this;
-    run_python_stdin("paper_get_portfolio", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self)
-            return;
-        if (ok)
-            emit self->trade_executed(result);
-        else
-            emit self->error_occurred("paper_portfolio", result["error"].toString());
-    });
-}
-
-void AgentService::paper_get_positions(const QString& portfolio_id) {
-    QJsonObject params;
-    params["portfolio_id"] = portfolio_id;
-
-    QPointer<AgentService> self = this;
-    run_python_stdin("paper_get_positions", params, {}, [self](bool ok, QJsonObject result) {
-        if (!self)
-            return;
-        if (ok)
-            emit self->trade_executed(result);
-        else
-            emit self->error_occurred("paper_positions", result["error"].toString());
     });
 }
 

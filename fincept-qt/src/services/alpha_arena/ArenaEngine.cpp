@@ -9,16 +9,18 @@
 #include "storage/secure/SecureStorage.h"
 
 #include <QDateTime>
-#include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPointer>
 #include <QUuid>
 
+#include <memory>
+
 namespace fincept::arena {
 
 static constexpr const char* TAG = "ArenaEngine";
 static constexpr int kKillMarksTimeoutMs = 2000; // bounded wait; a kill must never hang
+static constexpr const char* kArenaKillBusy = "a kill is in progress — wait for it to finish (about 2 seconds)";
 
 static QString approval_summary(const AgentAction& act) {
     return QStringLiteral("%1 %2 %3 $%4 @%5x")
@@ -92,6 +94,8 @@ Result<QString> ArenaEngine::create_competition(const ArenaConfig& cfg) {
 }
 
 Result<void> ArenaEngine::start(const QString& competition_id) {
+    if (kill_in_progress_)
+        return Result<void>::err(kArenaKillBusy);
     ++epoch_;                    // invalidate in-flight async callbacks from any previous run
     if (!active_id_.isEmpty()) { // never two running: end the old one cleanly first
         auto r = stop();
@@ -164,6 +168,8 @@ Result<void> ArenaEngine::start(const QString& competition_id) {
 Result<void> ArenaEngine::pause() {
     if (active_id_.isEmpty())
         return Result<void>::err("no active competition");
+    if (kill_in_progress_)
+        return Result<void>::err(kArenaKillBusy);
     timer_->stop();
     marks_timer_->stop();
     ArenaStore::instance().set_competition_status(active_id_, "paused");
@@ -174,6 +180,8 @@ Result<void> ArenaEngine::pause() {
 Result<void> ArenaEngine::resume() {
     if (active_id_.isEmpty())
         return Result<void>::err("no active competition");
+    if (kill_in_progress_)
+        return Result<void>::err(kArenaKillBusy);
     timer_->start(comp_.cadence_seconds * 1000);
     marks_timer_->start(marks_interval_ms_);
     ArenaStore::instance().set_competition_status(active_id_, "running");
@@ -184,6 +192,8 @@ Result<void> ArenaEngine::resume() {
 Result<void> ArenaEngine::stop() {
     if (active_id_.isEmpty())
         return Result<void>::err("no active competition");
+    if (kill_in_progress_)
+        return Result<void>::err(kArenaKillBusy);
     ++epoch_; // any snapshot/LLM callback still in flight becomes a no-op
     timer_->stop();
     marks_timer_->stop();
@@ -203,45 +213,72 @@ Result<void> ArenaEngine::stop() {
     return Result<void>::ok();
 }
 
-Result<void> ArenaEngine::kill_all() {
+Result<void> ArenaEngine::kill_all(KillDone done) {
     if (!venue_)
         return Result<void>::err("no active competition");
-    timer_->stop(); // no new round may start mid-kill
+    if (kill_in_progress_)
+        return Result<void>::err(kArenaKillBusy);
+    kill_in_progress_ = true;
+    kill_all_pending_ = true; // from here every LLM callback executes nothing (finish_agent)
+    timer_->stop();           // no new round may start mid-kill
     marks_timer_->stop();
-    refresh_marks_blocking(); // close at fresh prices, not last-tick marks
-    for (const auto& a : agents_)
-        venue_->close_all(a.id, round_seq_);
-    // Verify the book is actually flat. On a resumed venue whose marks are empty
-    // (crash-recovery reload + a marks refresh that timed out), close_all skips any
-    // position with no mark and leaves it OPEN — surface that instead of a clean ok.
-    int open_left = 0;
-    for (const auto& a : agents_)
-        open_left += venue_->account(a.id).positions.size();
-    // Un-actioned HITL approvals are moot once we've closed out. Resolve them as
-    // rejected orders (auditable, never silently dropped) and drop the persisted
-    // rows so a later restart cannot resurrect them.
-    for (const auto& pa : pending_hitl_) {
-        ArenaStore::instance().delete_hitl_pending(pa.id);
-        reject_approval(pa, QStringLiteral("kill_all"));
-    }
-    pending_hitl_.clear();
-    ArenaStore::instance().insert_event(active_id_, "", "kill_all",
-                                        open_left ? QStringLiteral("{\"positions_left_open\":%1}").arg(open_left)
-                                                  : QStringLiteral("{}"));
-    auto stopped = stop();
-    if (open_left > 0) {
-        LOG_ERROR(TAG, QStringLiteral("kill_all left %1 position(s) OPEN (no live marks to close at)").arg(open_left));
-        return Result<void>::err(
-            QStringLiteral("Kill incomplete: %1 position(s) could not be closed (no live marks) and remain open.")
-                .arg(open_left)
-                .toStdString());
-    }
-    return stopped;
+    const QString comp_id = active_id_;
+    LOG_INFO(TAG, QStringLiteral("kill_all requested for %1 — refreshing marks before closing").arg(comp_id));
+    // Close at fresh prices, not last-tick marks. Asynchronous: this used to spin
+    // a nested QEventLoop on the GUI thread for up to 2 s.
+    refresh_marks_async([this, comp_id, done]() {
+        Result<void> outcome = Result<void>::ok();
+        if (!venue_ || active_id_ != comp_id) {
+            // Cannot happen while start()/stop() refuse to run mid-kill; kept as a guard.
+            kill_in_progress_ = false;
+            kill_all_pending_ = false;
+            outcome = Result<void>::err("the competition ended before the kill completed");
+        } else {
+            for (const auto& a : agents_)
+                for (const auto& o : venue_->close_all(a.id, round_seq_))
+                    emit order_executed(o.agent_id, o.id, o.status);
+            // Verify the book is actually flat. On a resumed venue whose marks are empty
+            // (crash-recovery reload + a marks refresh that timed out), close_all skips any
+            // position with no mark and leaves it OPEN — surface that instead of a clean ok.
+            int open_left = 0;
+            for (const auto& a : agents_)
+                open_left += venue_->account(a.id).positions.size();
+            // Un-actioned HITL approvals are moot once we've closed out. Resolve them as
+            // rejected orders (auditable, never silently dropped) and drop the persisted
+            // rows so a later restart cannot resurrect them.
+            for (const auto& pa : pending_hitl_) {
+                ArenaStore::instance().delete_hitl_pending(pa.id);
+                reject_approval(pa, QStringLiteral("kill_all"));
+            }
+            pending_hitl_.clear();
+            ArenaStore::instance().insert_event(active_id_, "", "kill_all",
+                                                open_left ? QStringLiteral("{\"positions_left_open\":%1}").arg(open_left)
+                                                          : QStringLiteral("{}"));
+            kill_in_progress_ = false; // stop() refuses to run mid-kill
+            kill_all_pending_ = false;
+            auto stopped = stop();
+            if (open_left > 0) {
+                LOG_ERROR(TAG,
+                          QStringLiteral("kill_all left %1 position(s) OPEN (no live marks to close at)").arg(open_left));
+                outcome = Result<void>::err(
+                    QStringLiteral("Kill incomplete: %1 position(s) could not be closed (no live marks) and remain open.")
+                        .arg(open_left)
+                        .toStdString());
+            } else {
+                outcome = stopped;
+            }
+        }
+        if (done)
+            done(outcome);
+    });
+    return Result<void>::ok();
 }
 
-Result<void> ArenaEngine::kill_agent(const QString& agent_id) {
+Result<void> ArenaEngine::kill_agent(const QString& agent_id, KillDone done) {
     if (active_id_.isEmpty() || !venue_)
         return Result<void>::err("no active competition");
+    if (kill_in_progress_)
+        return Result<void>::err(kArenaKillBusy);
     bool known = false;
     for (const auto& a : agents_)
         if (a.id == agent_id) {
@@ -262,39 +299,50 @@ Result<void> ArenaEngine::kill_agent(const QString& agent_id) {
         }
     emit agent_status_changed(agent_id, "halted_user", reason);
 
-    refresh_marks_blocking(); // close at fresh prices, not last-tick marks
-    const auto closes = venue_->close_all(agent_id, round_seq_);
-    for (const auto& o : closes)
-        emit order_executed(o.agent_id, o.id, o.status);
+    kill_in_progress_ = true;
+    const QString comp_id = active_id_;
+    refresh_marks_async([this, agent_id, comp_id, done]() { // close at fresh prices, not last-tick marks
+        kill_in_progress_ = false;
+        Result<void> outcome = Result<void>::ok();
+        if (!venue_ || active_id_ != comp_id) {
+            outcome = Result<void>::err("the competition ended before the agent's positions could be closed");
+        } else {
+            const auto closes = venue_->close_all(agent_id, round_seq_);
+            for (const auto& o : closes)
+                emit order_executed(o.agent_id, o.id, o.status);
 
-    ArenaStore::instance().insert_event(
-        active_id_, agent_id, "agent_killed",
-        QString::fromUtf8(QJsonDocument(QJsonObject{{"agent_id", agent_id}, {"round_seq", round_seq_}})
-                              .toJson(QJsonDocument::Compact)));
+            ArenaStore::instance().insert_event(
+                active_id_, agent_id, "agent_killed",
+                QString::fromUtf8(QJsonDocument(QJsonObject{{"agent_id", agent_id}, {"round_seq", round_seq_}})
+                                      .toJson(QJsonDocument::Compact)));
 
-    // Final equity snapshot at the current round (PK (comp,agent,round) upserts).
-    const auto acct = venue_->account(agent_id);
-    EquitySnapshotRow s;
-    s.competition_id = active_id_;
-    s.agent_id = agent_id;
-    s.round_seq = round_seq_;
-    s.ts = QDateTime::currentMSecsSinceEpoch();
-    s.equity = acct.equity;
-    s.balance = acct.balance;
-    for (auto it = acct.upnl.begin(); it != acct.upnl.end(); ++it)
-        s.unrealized_pnl += it.value();
-    ArenaStore::instance().insert_equity_snapshot(s);
-    // If the (post-close) book still holds positions, the marks were missing and
-    // close_all left them OPEN — surface it instead of reporting a clean kill.
-    if (!acct.positions.isEmpty()) {
-        LOG_ERROR(TAG, QStringLiteral("kill_agent %1 left %2 position(s) OPEN (no live marks to close at)")
-                           .arg(agent_id)
-                           .arg(acct.positions.size()));
-        return Result<void>::err(
-            QStringLiteral("Kill incomplete: %1 position(s) could not be closed (no live marks) and remain open.")
-                .arg(acct.positions.size())
-                .toStdString());
-    }
+            // Final equity snapshot at the current round (PK (comp,agent,round) upserts).
+            const auto acct = venue_->account(agent_id);
+            EquitySnapshotRow s;
+            s.competition_id = active_id_;
+            s.agent_id = agent_id;
+            s.round_seq = round_seq_;
+            s.ts = QDateTime::currentMSecsSinceEpoch();
+            s.equity = acct.equity;
+            s.balance = acct.balance;
+            for (auto it = acct.upnl.begin(); it != acct.upnl.end(); ++it)
+                s.unrealized_pnl += it.value();
+            ArenaStore::instance().insert_equity_snapshot(s);
+            // If the (post-close) book still holds positions, the marks were missing and
+            // close_all left them OPEN — surface it instead of reporting a clean kill.
+            if (!acct.positions.isEmpty()) {
+                LOG_ERROR(TAG, QStringLiteral("kill_agent %1 left %2 position(s) OPEN (no live marks to close at)")
+                                   .arg(agent_id)
+                                   .arg(acct.positions.size()));
+                outcome = Result<void>::err(
+                    QStringLiteral("Kill incomplete: %1 position(s) could not be closed (no live marks) and remain open.")
+                        .arg(acct.positions.size())
+                        .toStdString());
+            }
+        }
+        if (done)
+            done(outcome);
+    });
     return Result<void>::ok();
 }
 
@@ -326,6 +374,8 @@ Result<void> ArenaEngine::resume_agent(const QString& agent_id) {
 Result<void> ArenaEngine::set_cadence(int seconds) {
     if (active_id_.isEmpty())
         return Result<void>::err("no active competition");
+    if (kill_in_progress_)
+        return Result<void>::err(kArenaKillBusy);
     if (seconds < 60 || seconds > 3600)
         return Result<void>::err("cadence must be 60–3600s");
     comp_.cadence_seconds = seconds;
@@ -376,16 +426,26 @@ void ArenaEngine::run_marks_tick() {
 
 // Kill paths close positions immediately, but the venue's stored marks can be a
 // full marks-interval stale (or missing before the first tick — close_all then
-// leaves such positions open). Run one synchronous marks tick — set_marks plus
-// the mark_all sweep close_all's contract requires — with a bounded wait; on
-// timeout/error fall through and close at the stored marks: a kill never hangs.
-void ArenaEngine::refresh_marks_blocking() {
-    if (!venue_ || !market_)
+// leaves such positions open). Run one marks tick — set_marks plus the mark_all
+// sweep close_all's contract requires — and continue with `then` on the reply or
+// after a bounded wait, whichever comes first: on timeout/error the kill closes
+// at the stored marks, so it never hangs.
+//
+// This used to block in a nested QEventLoop on the GUI thread (excluding user
+// input, so a click during the wait could not re-enter the engine). It is now
+// asynchronous; re-entry is refused by kill_in_progress_ instead.
+void ArenaEngine::refresh_marks_async(std::function<void()> then) {
+    if (!venue_ || !market_) {
+        QTimer::singleShot(0, this, then); // keep the callback asynchronous
         return;
-    QEventLoop loop;
-    QPointer<QEventLoop> alive(&loop); // late (post-timeout) callbacks find it null
+    }
+    // Exactly one of {reply, timeout} continues the kill.
+    auto settled = std::make_shared<bool>(false);
     const quint64 epoch = epoch_;
-    market_->fetch_mids(comp_.instruments, [this, epoch, alive](Result<QHash<QString, double>> r) {
+    market_->fetch_mids(comp_.instruments, [this, epoch, settled, then](Result<QHash<QString, double>> r) {
+        if (*settled)
+            return; // the timeout already closed at the stored marks
+        *settled = true;
         if (epoch == epoch_ && venue_ && r.is_ok()) {
             venue_->set_marks(r.value());
             const qint64 now = QDateTime::currentMSecsSinceEpoch();
@@ -393,18 +453,34 @@ void ArenaEngine::refresh_marks_blocking() {
             last_mark_ts_ = now;
             for (const auto& o : liqs)
                 emit order_executed(o.agent_id, o.id, o.status);
+        } else if (r.is_err()) {
+            LOG_WARN(TAG, QStringLiteral("kill: marks refresh failed (%1) — closing at the last marks")
+                              .arg(QString::fromStdString(r.error())));
         }
-        if (alive)
-            alive->quit();
+        then();
     });
-    QTimer::singleShot(kKillMarksTimeoutMs, &loop, &QEventLoop::quit);
-    // ExcludeUserInputEvents: this wait must not deliver clicks — a "New"/resume/
-    // second-kill within these <=2s would re-enter the engine and corrupt the kill.
-    loop.exec(QEventLoop::ExcludeUserInputEvents);
+    QTimer::singleShot(kKillMarksTimeoutMs, this, [settled, then]() {
+        if (*settled)
+            return;
+        *settled = true;
+        LOG_WARN(TAG, QStringLiteral("kill: marks refresh timed out after %1 ms — closing at the last marks")
+                          .arg(kKillMarksTimeoutMs));
+        then();
+    });
+}
+
+QVector<ArenaEngine::ApprovalView> ArenaEngine::pending_approvals() const {
+    QVector<ApprovalView> out;
+    out.reserve(pending_hitl_.size());
+    for (const auto& pa : pending_hitl_)
+        out.append({pa.id, pa.agent_id, approval_summary(pa.action)});
+    return out;
 }
 
 void ArenaEngine::run_round() {
-    if (round_in_flight_ || active_id_.isEmpty())
+    // A per-agent kill does not hold up the round (that agent is already halted);
+    // a kill_all does — the competition is ending.
+    if (round_in_flight_ || active_id_.isEmpty() || kill_all_pending_)
         return;
     round_in_flight_ = true;
     const int seq = round_seq_ + 1;
@@ -515,7 +591,10 @@ void ArenaEngine::finish_agent(int seq, const AgentRow& agent, const ArenaLlmRes
     // of dispatch — re-check the CURRENT status and, if no longer active, persist
     // the decision with its real status but execute nothing (no venue calls, no
     // HITL queueing, no repair retry).
-    const bool halted = !agent_is_active(agent.id);
+    // A kill_all in progress counts every agent as halted: the book is being
+    // closed at refreshed marks, so a decision landing in that window must not
+    // open anything (it would be closed seconds later, or left open on a miss).
+    const bool halted = kill_all_pending_ || !agent_is_active(agent.id);
     auto skip_halted = [this, seq, &agent]() {
         ArenaStore::instance().insert_event(
             active_id_, agent.id, "actions_skipped_agent_halted",
@@ -647,6 +726,11 @@ void ArenaEngine::resume_after_hitl(const QString& approval_id, bool approved) {
         ArenaStore::instance().delete_hitl_pending(pa.id); // actioned — drop the persisted row
         if (!approved) {
             reject_approval(pa, QStringLiteral("HITL rejected"));
+            return;
+        }
+        if (kill_all_pending_) {
+            // Approved during a kill_all: the competition is closing out.
+            reject_approval(pa, QStringLiteral("kill_all"));
             return;
         }
         if (!venue_)

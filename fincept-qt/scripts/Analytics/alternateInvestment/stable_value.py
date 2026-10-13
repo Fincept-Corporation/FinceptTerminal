@@ -133,7 +133,9 @@ class StableValueFundAnalyzer(AlternativeInvestmentBase):
                 'treasury_yield': float(treasury_yield),
                 'market_rate_bonds': float(market_rate),
                 'money_market_rate': float(money_market_rate),
-                'short_term_bond_rate': float(short_term_bond_rate)
+                'short_term_bond_rate': float(short_term_bond_rate),
+                # Not market data: both are derived from the treasury_yield input.
+                'note': 'Money market = treasury - 0.50%, short-term bond = treasury + 0.50% (assumed)'
             },
             'relative_value': {
                 'vs_money_market': float(net_crediting_rate - money_market_rate),

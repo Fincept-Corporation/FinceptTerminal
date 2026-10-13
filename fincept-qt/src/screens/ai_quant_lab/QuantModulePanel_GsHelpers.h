@@ -16,6 +16,7 @@
 #include <QJsonValue>
 #include <QLabel>
 #include <QList>
+#include <QLocale>
 #include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -84,16 +85,26 @@ inline QString gs_pos_neg_color(double v) {
     return ui::colors::TEXT_PRIMARY();
 }
 
-// Format a JSON value as a human-friendly metric string. Used by the CFA Quant
-// and generic display helpers to render flat scalar metrics tables.
+// Format a JSON value for a generic key/value table (hyperparameters, CFA
+// statistics, fallback results). UNIT-FREE on purpose: the value is shown as
+// the number the script returned. This used to guess units — every |x| < 1
+// became a percentage and every |x| >= 1e6 a currency amount — so a learning
+// rate of 0.05 read "5.00%", a p-value of 0.03 read "3.00%", a correlation of
+// 0.8 read "80.00%" and a 2,000,000-row count read as money. Renderers that
+// know a field's unit format it themselves.
 inline QString format_val(const QJsonValue& val) {
     if (val.isDouble()) {
-        double v = val.toDouble();
-        if (std::abs(v) >= 1e6)
-            return cur::money(v, /*compact=*/true);
-        if (std::abs(v) < 1.0 && std::abs(v) > 0.0001)
-            return QString("%1%").arg(v * 100, 0, 'f', 2);
-        return QString::number(v, 'f', 4);
+        const double v = val.toDouble();
+        if (!std::isfinite(v))
+            return QString::fromUtf8("—");
+        const double a = std::abs(v);
+        if (a < 1e15 && v == std::floor(v))
+            return QLocale::system().toString(static_cast<qlonglong>(v));
+        if (a >= 1000.0)
+            return QLocale::system().toString(v, 'f', 2);
+        if (a >= 1.0)
+            return QString::number(v, 'f', 4);
+        return QString::number(v, 'g', 6); // keeps tiny p-values / ICs readable
     }
     if (val.isBool())
         return val.toBool() ? QCoreApplication::translate("QuantModulePanel", "YES")

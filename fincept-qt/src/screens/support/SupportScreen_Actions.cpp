@@ -1,7 +1,8 @@
 // src/screens/support/SupportScreen_Actions.cpp
 //
-// Ticket data flow: load_tickets, on_create_ticket, on_send_message,
-// on_close_ticket, on_reopen_ticket.
+// Ticket data flow: load_tickets, rebuild_ticket_rows, open_ticket /
+// load_ticket_details, on_create_ticket, on_send_message, on_close_ticket,
+// on_reopen_ticket.
 //
 // Part of the partial-class split of SupportScreen.cpp.
 
@@ -11,8 +12,6 @@
 #include "ui/theme/Theme.h"
 
 #include <QDateTime>
-#include <QDesktopServices>
-#include <QFrame>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -20,91 +19,114 @@
 #include <QPointer>
 #include <QScrollArea>
 #include <QScrollBar>
-#include <QSplitter>
+#include <QTimeZone>
 #include <QTimer>
-#include <QUrl>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
 
 using namespace fincept::screens::support_internal;
 
+namespace {
+
+// Pull an array out of a {"data": {...}} / flat envelope under the first key present.
+QJsonArray support_array(QJsonObject payload, std::initializer_list<const char*> keys) {
+    if (payload.value("data").isObject())
+        payload = payload.value("data").toObject();
+    for (const char* key : keys) {
+        if (payload.value(QLatin1String(key)).isArray())
+            return payload.value(QLatin1String(key)).toArray();
+    }
+    return {};
+}
+
+// The API sends naive UTC timestamps (no offset); read them as UTC, show local.
+QDateTime support_parse_utc(const QString& iso) {
+    QDateTime dt = QDateTime::fromString(iso, Qt::ISODateWithMs);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(iso, Qt::ISODate);
+    if (!dt.isValid())
+        return dt;
+    const QString tail = iso.mid(10);
+    if (!tail.contains('Z') && !tail.contains('+') && !tail.contains('-'))
+        dt = QDateTime(dt.date(), dt.time(), QTimeZone::utc());
+    return dt.toLocalTime();
+}
+
+// Conversation bubble. Message text is user / staff authored: plain text only.
+QWidget* support_message_bubble(QWidget* parent, const QString& sender, const QString& color, const QString& when,
+                                const QString& text) {
+    auto* m = new QWidget(parent);
+    m->setStyleSheet(QString("background:%1;border:1px solid %2;border-left:3px solid %3;")
+                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), color));
+    auto* ml = new QVBoxLayout(m);
+    ml->setContentsMargins(14, 10, 14, 12);
+    ml->setSpacing(6);
+    auto* mh = new QHBoxLayout;
+    mh->addWidget(lbl(sender, color, 11, true));
+    mh->addStretch();
+    mh->addWidget(lbl(when, ui::colors::TEXT_TERTIARY(), 10));
+    ml->addLayout(mh);
+    auto* mb = lbl(text, ui::colors::TEXT_PRIMARY(), 12, false, true);
+    mb->setTextFormat(Qt::PlainText);
+    mb->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    ml->addWidget(mb);
+    return m;
+}
+
+} // namespace
+
 void SupportScreen::load_tickets() {
     last_load_ms_ = QDateTime::currentMSecsSinceEpoch();
     set_busy(true);
 
     QPointer<SupportScreen> self(this);
-    auth::UserApi::instance().get_tickets([self](auth::ApiResponse r) {
-        if (!self)
-            return; // screen closed while the request was in flight
-        self->set_busy(false);
+    auth::UserApi::instance().get_tickets(
+        [self](auth::ApiResponse r) {
+            if (!self)
+                return; // screen closed while the request was in flight
+            self->set_busy(false);
 
-        // Robust response unwrap:
-        // API may return: {"tickets":[...]}  or  {"data":{"tickets":[...]}}
-        // or a bare array at top level, or {"success":true,"data":[...]}
-        QJsonArray tickets;
-        if (r.success) {
-            auto payload = r.data;
-            // Unwrap {"data": ...}
-            if (payload.contains("data") && payload["data"].isObject())
-                payload = payload["data"].toObject();
-            // Try known array keys
-            if (payload.contains("tickets") && payload["tickets"].isArray())
-                tickets = payload["tickets"].toArray();
-            else if (payload.contains("items") && payload["items"].isArray())
-                tickets = payload["items"].toArray();
-            else if (payload.contains("results") && payload["results"].isArray())
-                tickets = payload["results"].toArray();
-            // If the whole response data is itself an array key at root
-            if (tickets.isEmpty()) {
-                for (auto it = payload.begin(); it != payload.end(); ++it) {
-                    if (it.value().isArray()) {
-                        tickets = it.value().toArray();
-                        break;
-                    }
-                }
+            if (!r.success) {
+                // Keep the last list we had (P11) and say the refresh failed. The
+                // old code replaced the list with a canned demo ticket, which also
+                // hid the "could not load" state entirely.
+                self->load_failed_ = true;
+                self->status_lbl_->setText(self->all_tickets_.isEmpty() ? tr("Offline")
+                                                                         : tr("Offline — showing last loaded"));
+                self->status_lbl_->setToolTip(r.error);
+                self->rebuild_ticket_rows();
+                return;
             }
-        }
+            self->load_failed_ = false;
+            self->status_lbl_->setToolTip(QString());
 
-        // Demo ticket — subject is user-visible, the other fields are status/
-        // category API keys that flow through priority_color / status_label so
-        // they get translated downstream.
-        QJsonObject demo;
-        demo["id"] = "DEMO-001";
-        demo["subject"] = tr("Welcome to Fincept Support");
-        demo["status"] = "resolved";
-        demo["priority"] = "low";
-        demo["category"] = "general";
-        demo["created_at"] = "2026-01-01T00:00:00Z";
+            const QJsonArray tickets = support_array(r.data, {"tickets", "items", "results"});
+            int open_c = 0, done_c = 0;
+            for (const auto& v : tickets) {
+                const QString st = v.toObject()["status"].toString().toLower();
+                if (st == "open" || st == "in_progress")
+                    ++open_c;
+                else if (st == "resolved" || st == "closed")
+                    ++done_c;
+            }
+            self->stat_total_->setText(QString::number(tickets.size()));
+            self->stat_open_->setText(QString::number(open_c));
+            self->stat_resolved_->setText(QString::number(done_c));
 
-        QJsonArray all;
-        all.append(demo);
-        for (const auto& v : tickets)
-            all.append(v);
+            self->all_tickets_ = tickets;
+            self->rebuild_ticket_rows();
 
-        // Stats
-        int open_c = 0, done_c = 0;
-        for (const auto& v : all) {
-            QString st = v.toObject()["status"].toString().toLower();
-            if (st == "open" || st == "in_progress" || st == "pending")
-                ++open_c;
-            else if (st == "resolved" || st == "closed")
-                ++done_c;
-        }
-        self->stat_total_->setText(QString::number(all.size()));
-        self->stat_open_->setText(QString::number(open_c));
-        self->stat_resolved_->setText(QString::number(done_c));
-
-        self->all_tickets_ = all;
-        self->load_failed_ = !r.success;
-        self->rebuild_ticket_rows();
-    });
+            // ↻ also refreshes the conversation that is open.
+            if (self->content_stack_ && self->content_stack_->currentIndex() == 2 && self->selected_ticket_id_ > 0)
+                self->load_ticket_details(self->selected_ticket_id_);
+        },
+        this);
 }
 
 // ── rebuild_ticket_rows ───────────────────────────────────────────────────────
 // Renders all_tickets_ into the sidebar, applying the search box and the status
-// filter combo. Both of those controls previously existed but were never
-// connected to anything — typing in the box or changing the filter did nothing.
+// filter combo.
 
 void SupportScreen::rebuild_ticket_rows() {
     auto* lay = qobject_cast<QVBoxLayout*>(ticket_container_->layout());
@@ -114,37 +136,36 @@ void SupportScreen::rebuild_ticket_rows() {
     active_row_btn_ = nullptr;
 
     const QString needle = search_input_ ? search_input_->text().trimmed().toLower() : QString();
-    // Combo order matches retranslateUi(): All / Open / In Progress / Pending /
-    // Resolved / Closed. Index 0 means "no status filter".
-    static const char* kFilterStatus[] = {"", "open", "in_progress", "pending", "resolved", "closed"};
+    // Combo order matches retranslateUi(): All / Open / In Progress / Resolved /
+    // Closed. Index 0 means "no status filter".
+    static const char* kSupportFilterStatus[] = {"", "open", "in_progress", "resolved", "closed"};
     const int fi = filter_combo_ ? filter_combo_->currentIndex() : 0;
-    const QString want_status = (fi > 0 && fi < static_cast<int>(sizeof(kFilterStatus) / sizeof(kFilterStatus[0])))
-                                    ? QString::fromLatin1(kFilterStatus[fi])
-                                    : QString();
+    const int n_filters = static_cast<int>(sizeof(kSupportFilterStatus) / sizeof(kSupportFilterStatus[0]));
+    const QString want_status = (fi > 0 && fi < n_filters) ? QString::fromLatin1(kSupportFilterStatus[fi]) : QString();
 
-    QJsonArray all;
+    QJsonArray shown;
     for (const auto& v : all_tickets_) {
         const auto obj = v.toObject();
         if (!want_status.isEmpty() && obj["status"].toString().toLower() != want_status)
             continue;
         if (!needle.isEmpty()) {
             const QString hay = (obj["subject"].toString() + ' ' + obj["category"].toString() + ' ' +
-                                 obj["description"].toString() + ' ' + obj["id"].toVariant().toString())
+                                 obj["ticket_number"].toString() + ' ' + obj["id"].toVariant().toString())
                                     .toLower();
             if (!hay.contains(needle))
                 continue;
         }
-        all.append(v);
+        shown.append(v);
     }
 
-    if (all.isEmpty()) {
+    if (shown.isEmpty()) {
         QString msg;
-        if (load_failed_)
+        if (load_failed_ && all_tickets_.isEmpty())
             msg = tr("Could not load tickets.\nCheck your connection and press ↻ to retry.");
         else if (!needle.isEmpty() || !want_status.isEmpty())
             msg = tr("No tickets match this search or filter.");
         else
-            msg = tr("No tickets yet");
+            msg = tr("No tickets yet.\nUse “New Ticket” to contact the Fincept team.");
         auto* empty = lbl(msg, ui::colors::TEXT_TERTIARY(), 12, false, true);
         empty->setAlignment(Qt::AlignCenter);
         empty->setContentsMargins(0, 40, 0, 0);
@@ -152,235 +173,195 @@ void SupportScreen::rebuild_ticket_rows() {
         return;
     }
 
-    // Build sidebar rows
-    {
-        for (const auto& v : all) {
-            auto obj = v.toObject();
-            QString id = obj["id"].toVariant().toString();
-            QString subject = obj["subject"].toString();
-            // The demo row's subject is rendered here rather than taken from the
-            // cached JSON so a language switch re-translates it without a refetch.
-            if (id == QLatin1String("DEMO-001"))
-                subject = tr("Welcome to Fincept Support");
-            QString status = obj["status"].toString();
-            QString priority = obj["priority"].toString();
-            QString category = obj["category"].toString();
-            QString created = obj["created_at"].toString();
-            bool is_demo = (id == "DEMO-001");
+    for (const auto& v : shown) {
+        const QJsonObject obj = v.toObject();
+        const int id = obj["id"].toVariant().toInt();
+        const QString status = obj["status"].toString();
+        const QString priority = obj["priority"].toString();
 
-            QString date_str;
-            if (!created.isEmpty()) {
-                QDateTime dt = QDateTime::fromString(created, Qt::ISODate);
-                if (dt.isValid())
-                    date_str = dt.toLocalTime().toString("d MMM yyyy");
-            }
+        QString date_str;
+        const QDateTime dt = support_parse_utc(obj["created_at"].toString());
+        if (dt.isValid())
+            date_str = dt.toString("d MMM yyyy");
 
-            // Row widget (inner content)
-            auto* row_inner = new QWidget(this);
-            row_inner->setStyleSheet("background:transparent;");
-            auto* rl = new QVBoxLayout(row_inner);
-            rl->setContentsMargins(14, 10, 14, 10);
-            rl->setSpacing(5);
+        auto* row_inner = new QWidget(this);
+        row_inner->setStyleSheet("background:transparent;");
+        auto* rl = new QVBoxLayout(row_inner);
+        rl->setContentsMargins(14, 10, 14, 10);
+        rl->setSpacing(5);
 
-            // Top: subject + status dot
-            auto* top = new QHBoxLayout;
-            auto* sdot = lbl("●", status_color(status), 9);
-            sdot->setFixedWidth(14);
-            top->addWidget(sdot);
-            auto* subj = lbl(subject, ui::colors::TEXT_PRIMARY(), 12, true);
-            subj->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-            // Elide long subjects
-            subj->setMaximumWidth(220);
-            top->addWidget(subj, 1);
+        auto* top = new QHBoxLayout;
+        auto* sdot = lbl("●", status_color(status), 9);
+        sdot->setFixedWidth(14);
+        top->addWidget(sdot);
+        auto* subj = lbl(obj["subject"].toString(), ui::colors::TEXT_PRIMARY(), 12, true);
+        subj->setTextFormat(Qt::PlainText); // user-authored
+        subj->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        subj->setMaximumWidth(220);
+        top->addWidget(subj, 1);
+        rl->addLayout(top);
 
-            if (is_demo) {
-                auto* demo_tag = status_badge(tr("DEMO"), ui::colors::INFO(), ui::colors::BG_BASE());
-                top->addWidget(demo_tag);
-            }
-            rl->addLayout(top);
+        auto* meta = new QHBoxLayout;
+        meta->setSpacing(8);
+        meta->addWidget(lbl(obj["category"].toString().toLower().replace('_', ' '), ui::colors::TEXT_TERTIARY(), 10));
+        meta->addWidget(lbl("·", ui::colors::BORDER_MED(), 10));
+        meta->addWidget(lbl(priority.toLower(), priority_color(priority), 10));
+        meta->addStretch();
+        if (!date_str.isEmpty())
+            meta->addWidget(lbl(date_str, ui::colors::TEXT_TERTIARY(), 9));
+        rl->addLayout(meta);
 
-            // Bottom: meta row
-            auto* meta = new QHBoxLayout;
-            meta->setSpacing(8);
-            meta->addWidget(lbl(category.toLower(), ui::colors::TEXT_TERTIARY(), 10));
-            meta->addWidget(lbl("·", ui::colors::BORDER_MED(), 10));
-            auto* pr = lbl(priority.toLower(), priority_color(priority), 10);
-            meta->addWidget(pr);
-            meta->addStretch();
-            if (!date_str.isEmpty())
-                meta->addWidget(lbl(date_str, ui::colors::TEXT_TERTIARY(), 9));
-            rl->addLayout(meta);
+        auto* btn = new QPushButton;
+        btn->setFixedHeight(66);
+        btn->setStyleSheet(QString("QPushButton { background:transparent; border:none;"
+                                   " border-bottom:1px solid %1; padding:0; text-align:left; }"
+                                   "QPushButton:hover { background:%2; }")
+                               .arg(ui::colors::BORDER_DIM(), ui::colors::BG_RAISED()));
+        btn->setToolTip(obj["ticket_number"].toString());
+        auto* btn_lay = new QHBoxLayout(btn);
+        btn_lay->setContentsMargins(0, 0, 0, 0);
+        row_inner->setParent(btn);
+        btn_lay->addWidget(row_inner);
 
-            // Wrap in QPushButton for click
-            auto* btn = new QPushButton;
-            btn->setFixedHeight(66);
-            btn->setStyleSheet(QString("QPushButton { background:transparent; border:none;"
-                                       " border-bottom:1px solid %1; padding:0; text-align:left; }"
-                                       "QPushButton:hover { background:%2; }")
-                                   .arg(ui::colors::BORDER_DIM(), ui::colors::BG_RAISED()));
-            auto* btn_lay = new QHBoxLayout(btn);
-            btn_lay->setContentsMargins(0, 0, 0, 0);
-            row_inner->setParent(btn);
-            btn_lay->addWidget(row_inner);
+        connect(btn, &QPushButton::clicked, this, [this, btn, obj]() {
+            select_ticket_row(btn);
+            open_ticket(obj);
+        });
 
-            const int id_int = is_demo ? -1 : id.toInt();
-            const QString sub_c = subject;
-            const QString st_c = status;
-            const QString pr_c = priority;
-            const QString cat_c = category;
-            const QString cr_c = date_str;
-            const QString body_c = obj["description"].toString();
-            const bool demo_c = is_demo;
+        lay->insertWidget(lay->count() - 1, btn);
 
-            connect(btn, &QPushButton::clicked, this, [=, this]() {
-                select_ticket_row(btn);
-
-                selected_ticket_id_ = id_int;
-                selected_is_demo_ = demo_c;
-                selected_is_closed_ = (st_c.toLower() == "closed" || st_c.toLower() == "resolved");
-
-                // Populate header
-                detail_id_lbl_->setText(tr("Ticket #%1").arg(demo_c ? tr("DEMO") : QString::number(id_int)));
-                detail_subject_lbl_->setText(sub_c);
-
-                detail_status_lbl_->setText(" " + status_label(st_c) + " ");
-                detail_status_lbl_->setStyleSheet(QString("background:%1;color:%2;font-size:10px;font-weight:700;"
-                                                          "padding:0 10px;letter-spacing:0.5px;%3")
-                                                      .arg(status_color(st_c), ui::colors::BG_BASE(), MF));
-
-                detail_meta_lbl_->setText(tr("%1  ·  %2  ·  Opened %3").arg(cat_c.toLower(), pr_c.toLower(), cr_c));
-
-                detail_body_lbl_->setText(body_c.isEmpty() ? tr("No description provided.") : body_c);
-
-                // Show/hide bottom widgets
-                demo_box_->setVisible(demo_c);
-                closed_box_->setVisible(!demo_c && selected_is_closed_);
-                reply_box_->setVisible(!demo_c && !selected_is_closed_);
-                close_btn_->setVisible(!demo_c && !selected_is_closed_);
-                reopen_btn_->setVisible(!demo_c && selected_is_closed_);
-
-                // Clear messages
-                auto* mcl2 = qobject_cast<QVBoxLayout*>(messages_container_->layout());
-                clear_layout_keep_stretch(mcl2);
-
-                if (demo_c) {
-                    // Canned demo message
-                    auto* m = new QWidget(this);
-                    m->setStyleSheet(QString("background:%1;border:1px solid %2;border-left:3px solid #9333ea;")
-                                         .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-                    auto* ml = new QVBoxLayout(m);
-                    ml->setContentsMargins(14, 10, 14, 12);
-                    ml->setSpacing(6);
-                    auto* mh = new QHBoxLayout;
-                    mh->addWidget(lbl(tr("Support Team"), "#9333ea", 11, true));
-                    mh->addStretch();
-                    // Demo timestamp is intentionally fixed at the launch date —
-                    // not a live date. Translated for the localized month name.
-                    mh->addWidget(lbl(tr("1 Jan 2026"), ui::colors::TEXT_TERTIARY(), 10));
-                    ml->addLayout(mh);
-                    auto* mb = lbl(tr("Welcome to Fincept! This demo ticket shows how the support system works.\n"
-                                      "Create a real ticket and our team will respond within 24 hours."),
-                                   ui::colors::TEXT_PRIMARY(), 12, false, true);
-                    ml->addWidget(mb);
-                    mcl2->insertWidget(mcl2->count() - 1, m);
-                } else {
-                    set_busy(true);
-                    QPointer<SupportScreen> guard(this);
-                    auth::UserApi::instance().get_ticket_details(id_int, [this, guard, id_int](auth::ApiResponse dr) {
-                        if (!guard)
-                            return;
-                        set_busy(false);
-                        // The user may have clicked another ticket while this reply was
-                        // in flight; painting it now would show ticket A's conversation
-                        // under ticket B's header.
-                        if (selected_is_demo_ || selected_ticket_id_ != id_int)
-                            return;
-                        if (!dr.success) {
-                            auto* mcl_err = qobject_cast<QVBoxLayout*>(messages_container_->layout());
-                            if (mcl_err)
-                                mcl_err->insertWidget(0, lbl(tr("Could not load this conversation. "
-                                                                "Press ↻ to retry."),
-                                                             ui::colors::NEGATIVE(), 11, false, true));
-                            return;
-                        }
-
-                        // Robust message unwrap — try all known shapes
-                        auto dr_data = dr.data;
-                        if (dr_data.contains("data") && dr_data["data"].isObject())
-                            dr_data = dr_data["data"].toObject();
-                        QJsonArray msgs;
-                        for (const auto& key : {"messages", "replies", "comments", "items"}) {
-                            if (dr_data.contains(key) && dr_data[key].isArray()) {
-                                msgs = dr_data[key].toArray();
-                                break;
-                            }
-                        }
-
-                        auto* mcl3 = qobject_cast<QVBoxLayout*>(messages_container_->layout());
-                        clear_layout_keep_stretch(mcl3);
-
-                        for (const auto& mv : msgs) {
-                            auto mo = mv.toObject();
-                            // Handle various field name conventions the API may use
-                            QString sender_type = mo["sender_type"].toString();
-                            if (sender_type.isEmpty())
-                                sender_type = mo["role"].toString();
-                            if (sender_type.isEmpty())
-                                sender_type = mo["type"].toString();
-                            if (sender_type.isEmpty())
-                                sender_type = mo["sender"].toString();
-                            bool is_user = (sender_type == "user" || sender_type == "customer");
-                            QString sender = is_user ? tr("You") : tr("Support Team");
-                            QString bubble_color = is_user ? ui::colors::CYAN() : "#9333ea";
-
-                            QString ts;
-                            QDateTime mdt = QDateTime::fromString(mo["created_at"].toString(), Qt::ISODate);
-                            if (mdt.isValid())
-                                ts = mdt.toLocalTime().toString("d MMM yyyy  hh:mm");
-
-                            auto* m = new QWidget(this);
-                            m->setStyleSheet(
-                                QString("background:%1;border:1px solid %2;"
-                                        "border-left:3px solid %3;")
-                                    .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), bubble_color));
-                            auto* ml = new QVBoxLayout(m);
-                            ml->setContentsMargins(14, 10, 14, 12);
-                            ml->setSpacing(6);
-                            auto* mh = new QHBoxLayout;
-                            mh->addWidget(lbl(sender, bubble_color, 11, true));
-                            mh->addStretch();
-                            mh->addWidget(lbl(ts, ui::colors::TEXT_TERTIARY(), 10));
-                            ml->addLayout(mh);
-                            auto* mb = lbl(mo["message"].toString(), ui::colors::TEXT_PRIMARY(), 12, false, true);
-                            ml->addWidget(mb);
-                            mcl3->insertWidget(mcl3->count() - 1, m);
-                        }
-
-                        if (msgs.isEmpty()) {
-                            mcl3->insertWidget(0, lbl(tr("No messages yet — be the first to reply."),
-                                                      ui::colors::TEXT_TERTIARY(), 11));
-                        }
-
-                        // Scroll to bottom
-                        QTimer::singleShot(50, this, [this]() {
-                            detail_scroll_->verticalScrollBar()->setValue(
-                                detail_scroll_->verticalScrollBar()->maximum());
-                        });
-                    });
-                }
-
-                content_stack_->setCurrentIndex(2);
-            });
-
-            lay->insertWidget(lay->count() - 1, btn);
-
-            // A refresh (close/reopen, ↻, filter change) rebuilds every row; keep the
-            // ticket that is open in the detail pane highlighted.
-            if (content_stack_ && content_stack_->currentIndex() == 2 &&
-                ((is_demo && selected_is_demo_) || (!is_demo && !selected_is_demo_ && id_int == selected_ticket_id_)))
-                select_ticket_row(btn);
-        }
+        // A refresh (close/reopen, ↻, filter change) rebuilds every row; keep the
+        // ticket that is open in the detail pane highlighted.
+        if (content_stack_ && content_stack_->currentIndex() == 2 && id == selected_ticket_id_)
+            select_ticket_row(btn);
     }
+}
+
+// ── Detail ────────────────────────────────────────────────────────────────────
+
+void SupportScreen::apply_detail_status(const QString& status) {
+    const QString st = status.toLower();
+    // Only "closed" locks the conversation. A reply to a "resolved" ticket is
+    // accepted by the API (it reopens the ticket), so the reply box stays.
+    selected_is_closed_ = (st == QLatin1String("closed"));
+    if (detail_status_lbl_) {
+        detail_status_lbl_->setText(" " + status_label(st) + " ");
+        detail_status_lbl_->setStyleSheet(QString("background:%1;color:%2;font-size:10px;font-weight:700;"
+                                                  "padding:0 10px;letter-spacing:0.5px;%3")
+                                              .arg(status_color(st), ui::colors::BG_BASE(), MF));
+    }
+    if (closed_box_)
+        closed_box_->setVisible(selected_is_closed_);
+    if (reply_box_)
+        reply_box_->setVisible(!selected_is_closed_);
+    if (close_btn_)
+        close_btn_->setVisible(!selected_is_closed_);
+    if (reopen_btn_)
+        reopen_btn_->setVisible(selected_is_closed_);
+}
+
+void SupportScreen::open_ticket(const QJsonObject& ticket) {
+    selected_ticket_id_ = ticket["id"].toVariant().toInt();
+    const QString number = ticket["ticket_number"].toString();
+    detail_id_lbl_->setText(number.isEmpty() ? tr("Ticket #%1").arg(selected_ticket_id_) : number);
+    detail_subject_lbl_->setText(ticket["subject"].toString());
+    const QDateTime opened = support_parse_utc(ticket["created_at"].toString());
+    detail_meta_lbl_->setText(tr("%1  ·  %2  ·  Opened %3")
+                                  .arg(ticket["category"].toString().toLower().replace('_', ' '),
+                                       ticket["priority"].toString().toLower(),
+                                       opened.isValid() ? opened.toString("d MMM yyyy  hh:mm") : QString()));
+    // The list endpoint carries no description; it arrives with the details.
+    detail_body_lbl_->setText(tr("Loading…"));
+    apply_detail_status(ticket["status"].toString());
+
+    clear_layout_keep_stretch(qobject_cast<QVBoxLayout*>(messages_container_->layout()));
+    content_stack_->setCurrentIndex(2);
+    load_ticket_details(selected_ticket_id_);
+}
+
+void SupportScreen::load_ticket_details(int ticket_id) {
+    if (ticket_id <= 0)
+        return;
+    set_busy(true);
+    QPointer<SupportScreen> self(this);
+    auth::UserApi::instance().get_ticket_details(
+        ticket_id,
+        [self, ticket_id](auth::ApiResponse dr) {
+            if (!self)
+                return;
+            self->set_busy(false);
+            // The user may have clicked another ticket while this reply was in
+            // flight; painting it now would show ticket A's conversation under
+            // ticket B's header.
+            if (self->selected_ticket_id_ != ticket_id || !self->messages_container_)
+                return;
+            auto* mcl = qobject_cast<QVBoxLayout*>(self->messages_container_->layout());
+            if (!mcl)
+                return;
+
+            if (!dr.success) {
+                clear_layout_keep_stretch(mcl);
+                auto* err_row = new QWidget(self);
+                auto* erl = new QHBoxLayout(err_row);
+                erl->setContentsMargins(0, 0, 0, 0);
+                auto* err_lbl = lbl(dr.error.isEmpty() ? tr("Could not load this conversation.")
+                                                       : tr("Could not load this conversation: %1").arg(dr.error),
+                                    ui::colors::NEGATIVE(), 11, false, true);
+                err_lbl->setTextFormat(Qt::PlainText);
+                erl->addWidget(err_lbl, 1);
+                auto* retry = new QPushButton(tr("Retry"));
+                retry->setStyleSheet(SS_BTN_GHOST());
+                QPointer<SupportScreen> guard(self);
+                connect(retry, &QPushButton::clicked, self, [guard, ticket_id]() {
+                    if (guard)
+                        guard->load_ticket_details(ticket_id);
+                });
+                erl->addWidget(retry);
+                mcl->insertWidget(0, err_row);
+                if (self->detail_body_lbl_ && self->detail_body_lbl_->text() == tr("Loading…"))
+                    self->detail_body_lbl_->setText(tr("Description unavailable."));
+                return;
+            }
+
+            QJsonObject data = dr.data.value("data").isObject() ? dr.data.value("data").toObject() : dr.data;
+            const QJsonObject ticket = data.value("ticket").toObject();
+            if (!ticket.isEmpty()) {
+                const QString desc = ticket["description"].toString();
+                self->detail_body_lbl_->setText(desc.isEmpty() ? tr("No description provided.") : desc);
+                // Fresh status — the list row may be minutes old.
+                self->apply_detail_status(ticket["status"].toString());
+            } else if (self->detail_body_lbl_->text() == tr("Loading…")) {
+                self->detail_body_lbl_->setText(tr("No description provided."));
+            }
+
+            const QJsonArray msgs = support_array(dr.data, {"messages", "replies", "comments", "items"});
+            clear_layout_keep_stretch(mcl);
+            for (const auto& mv : msgs) {
+                const auto mo = mv.toObject();
+                QString sender_type = mo["sender_type"].toString();
+                if (sender_type.isEmpty())
+                    sender_type = mo["role"].toString();
+                const bool is_user = (sender_type == "user" || sender_type == "customer");
+                const QDateTime mdt = support_parse_utc(mo["created_at"].toString());
+                mcl->insertWidget(mcl->count() - 1,
+                                  support_message_bubble(self, is_user ? tr("You") : tr("Support Team"),
+                                                         is_user ? QString(ui::colors::CYAN()) : QStringLiteral("#9333ea"),
+                                                         mdt.isValid() ? mdt.toString("d MMM yyyy  hh:mm") : QString(),
+                                                         mo["message"].toString()));
+            }
+            if (msgs.isEmpty())
+                mcl->insertWidget(0, lbl(tr("No replies yet. The support team answers here; you will also get an "
+                                            "email."),
+                                         ui::colors::TEXT_TERTIARY(), 11, false, true));
+
+            QPointer<SupportScreen> scroll_guard(self);
+            QTimer::singleShot(50, self.data(), [scroll_guard]() {
+                if (scroll_guard && scroll_guard->detail_scroll_)
+                    scroll_guard->detail_scroll_->verticalScrollBar()->setValue(
+                        scroll_guard->detail_scroll_->verticalScrollBar()->maximum());
+            });
+        },
+        this);
 }
 
 // ── on_create_ticket ──────────────────────────────────────────────────────────
@@ -410,43 +391,55 @@ void SupportScreen::on_create_ticket() {
     set_busy(true);
     create_btn_->setText(tr("Submitting…"));
 
-    // currentData() carries the stable English API key (e.g. "feature_request",
-    // "medium") regardless of which language the user sees in the combo.
+    // currentData() carries the stable API key (e.g. "bug_report", "medium")
+    // regardless of which language the user sees in the combo.
     const QString cat_key = category_combo_->currentData().toString();
     const QString pri_key = priority_combo_->currentData().toString();
 
     QPointer<SupportScreen> self(this);
-    auth::UserApi::instance().create_ticket(subject, desc, cat_key, pri_key, [self](auth::ApiResponse r) {
-        if (!self)
-            return;
-        self->set_busy(false);
-        self->create_btn_->setText(tr("Submit Ticket →"));
-        if (r.success) {
-            self->subject_input_->clear();
-            self->desc_input_->clear();
-            self->content_stack_->setCurrentIndex(0);
-            self->load_tickets();
-        } else {
-            // The old code just returned — the ticket text stayed on screen with
-            // no indication that submission had failed.
-            QMessageBox::warning(self, tr("Could not create ticket"),
-                                 r.error.isEmpty() ? tr("The ticket could not be submitted. Please check your "
-                                                        "connection and try again — your text has been kept.")
-                                                   : tr("The ticket could not be submitted:\n%1").arg(r.error));
-        }
-    });
+    auth::UserApi::instance().create_ticket(
+        subject, desc, cat_key, pri_key,
+        [self](auth::ApiResponse r) {
+            if (!self)
+                return;
+            self->set_busy(false);
+            if (self->create_btn_)
+                self->create_btn_->setText(tr("Submit Ticket →"));
+            if (r.success) {
+                const QJsonObject d = r.data.value("data").isObject() ? r.data.value("data").toObject() : r.data;
+                if (self->subject_input_)
+                    self->subject_input_->clear();
+                if (self->desc_input_)
+                    self->desc_input_->clear();
+                self->content_stack_->setCurrentIndex(0);
+                const QString number = d["ticket_number"].toString();
+                self->load_tickets();
+                // set_busy() resets the status line; show the receipt after it.
+                QPointer<SupportScreen> guard(self);
+                QTimer::singleShot(0, self.data(), [guard, number]() {
+                    if (guard && guard->status_lbl_ && !number.isEmpty())
+                        guard->status_lbl_->setText(tr("Created %1").arg(number));
+                });
+            } else {
+                QMessageBox::warning(self, tr("Could not create ticket"),
+                                     r.error.isEmpty() ? tr("The ticket could not be submitted. Please check your "
+                                                            "connection and try again — your text has been kept.")
+                                                       : tr("The ticket could not be submitted:\n%1").arg(r.error));
+            }
+        },
+        this);
 }
 
 // ── on_send_message ───────────────────────────────────────────────────────────
 
 void SupportScreen::on_send_message() {
-    if (selected_ticket_id_ < 0 || selected_is_demo_)
+    if (selected_ticket_id_ <= 0 || selected_is_closed_)
         return;
     // Ctrl+Enter bypasses the button's disabled state, so a held/repeated key
     // would send the same reply several times while the first is in flight.
     if (send_btn_ && !send_btn_->isEnabled())
         return;
-    QString msg = msg_input_->toPlainText().trimmed();
+    const QString msg = msg_input_->toPlainText().trimmed();
     if (msg.isEmpty())
         return;
 
@@ -454,101 +447,103 @@ void SupportScreen::on_send_message() {
     send_btn_->setText(tr("Sending…"));
 
     QPointer<SupportScreen> self(this);
-    auth::UserApi::instance().add_ticket_message(selected_ticket_id_, msg, [this, self, msg](auth::ApiResponse r) {
-        if (!self)
-            return;
-        set_busy(false);
-        send_btn_->setText(tr("Send Reply →"));
-        if (!r.success) {
-            QMessageBox::warning(this, tr("Reply not sent"),
-                                 r.error.isEmpty() ? tr("Your reply could not be sent. It has been kept in the "
-                                                        "box so you can try again.")
-                                                   : tr("Your reply could not be sent:\n%1").arg(r.error));
-            return;
-        }
+    const int ticket_id = selected_ticket_id_;
+    auth::UserApi::instance().add_ticket_message(
+        ticket_id, msg,
+        [self, msg, ticket_id](auth::ApiResponse r) {
+            if (!self)
+                return;
+            self->set_busy(false);
+            if (self->send_btn_)
+                self->send_btn_->setText(tr("Send Reply →"));
+            if (!r.success) {
+                QMessageBox::warning(self, tr("Reply not sent"),
+                                     r.error.isEmpty() ? tr("Your reply could not be sent. It has been kept in the "
+                                                            "box so you can try again.")
+                                                       : tr("Your reply could not be sent:\n%1").arg(r.error));
+                return;
+            }
+            if (self->selected_ticket_id_ != ticket_id)
+                return; // user moved on; the next open re-fetches the thread
+            if (self->msg_input_)
+                self->msg_input_->clear();
+            // A reply to a resolved ticket reopens it server-side.
+            const QJsonObject d = r.data.value("data").isObject() ? r.data.value("data").toObject() : r.data;
+            if (d.contains("ticket_status"))
+                self->apply_detail_status(d["ticket_status"].toString());
 
-        msg_input_->clear();
-        auto* mcl = qobject_cast<QVBoxLayout*>(messages_container_->layout());
-        if (!mcl)
-            return;
-
-        auto* m = new QWidget(this);
-        m->setStyleSheet(QString("background:%1;border:1px solid %2;border-left:3px solid %3;")
-                             .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::CYAN()));
-        auto* ml = new QVBoxLayout(m);
-        ml->setContentsMargins(14, 10, 14, 12);
-        ml->setSpacing(6);
-        auto* mh = new QHBoxLayout;
-        mh->addWidget(lbl(tr("You"), ui::colors::CYAN(), 11, true));
-        mh->addStretch();
-        mh->addWidget(lbl(QDateTime::currentDateTime().toString("d MMM yyyy  hh:mm"), ui::colors::TEXT_TERTIARY(), 10));
-        ml->addLayout(mh);
-        auto* mb = lbl(msg, ui::colors::TEXT_PRIMARY(), 12, false, true);
-        ml->addWidget(mb);
-        mcl->insertWidget(mcl->count() - 1, m);
-
-        // Scroll to bottom
-        QTimer::singleShot(50, this, [this]() {
-            detail_scroll_->verticalScrollBar()->setValue(detail_scroll_->verticalScrollBar()->maximum());
-        });
-    });
+            auto* mcl = qobject_cast<QVBoxLayout*>(self->messages_container_->layout());
+            if (!mcl)
+                return;
+            mcl->insertWidget(mcl->count() - 1,
+                              support_message_bubble(self, tr("You"), ui::colors::CYAN(),
+                                                     QDateTime::currentDateTime().toString("d MMM yyyy  hh:mm"), msg));
+            QPointer<SupportScreen> guard(self);
+            QTimer::singleShot(50, self.data(), [guard]() {
+                if (guard && guard->detail_scroll_)
+                    guard->detail_scroll_->verticalScrollBar()->setValue(
+                        guard->detail_scroll_->verticalScrollBar()->maximum());
+            });
+        },
+        this);
 }
 
 // ── on_close_ticket / on_reopen_ticket ────────────────────────────────────────
 
 void SupportScreen::on_close_ticket() {
-    if (selected_ticket_id_ < 0)
+    if (selected_ticket_id_ <= 0)
         return;
     // Closing a ticket is destructive from the user's point of view (the reply
     // box disappears) — confirm first.
-    if (QMessageBox::question(this, tr("Close ticket"),
-                              tr("Close ticket #%1? You can reopen it later.").arg(selected_ticket_id_),
+    if (QMessageBox::question(this, tr("Close ticket"), tr("Close this ticket? You can reopen it later."),
                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
 
     set_busy(true);
     QPointer<SupportScreen> self(this);
-    auth::UserApi::instance().update_ticket_status(selected_ticket_id_, "closed", [this, self](auth::ApiResponse r) {
-        if (!self)
-            return;
-        set_busy(false);
-        if (!r.success) {
-            QMessageBox::warning(this, tr("Could not close ticket"),
-                                 r.error.isEmpty() ? tr("The ticket status could not be updated.")
-                                                   : tr("The ticket status could not be updated:\n%1").arg(r.error));
-            return;
-        }
-        selected_is_closed_ = true;
-        close_btn_->hide();
-        reopen_btn_->show();
-        reply_box_->hide();
-        closed_box_->show();
-        load_tickets();
-    });
+    const int ticket_id = selected_ticket_id_;
+    auth::UserApi::instance().update_ticket_status(
+        ticket_id, "closed",
+        [self, ticket_id](auth::ApiResponse r) {
+            if (!self)
+                return;
+            self->set_busy(false);
+            if (!r.success) {
+                QMessageBox::warning(self, tr("Could not close ticket"),
+                                     r.error.isEmpty() ? tr("The ticket status could not be updated.")
+                                                       : tr("The ticket status could not be updated:\n%1").arg(r.error));
+                return;
+            }
+            if (self->selected_ticket_id_ == ticket_id)
+                self->apply_detail_status(QStringLiteral("closed"));
+            self->load_tickets();
+        },
+        this);
 }
 
 void SupportScreen::on_reopen_ticket() {
-    if (selected_ticket_id_ < 0)
+    if (selected_ticket_id_ <= 0)
         return;
     set_busy(true);
     QPointer<SupportScreen> self(this);
-    auth::UserApi::instance().update_ticket_status(selected_ticket_id_, "open", [this, self](auth::ApiResponse r) {
-        if (!self)
-            return;
-        set_busy(false);
-        if (!r.success) {
-            QMessageBox::warning(this, tr("Could not reopen ticket"),
-                                 r.error.isEmpty() ? tr("The ticket status could not be updated.")
-                                                   : tr("The ticket status could not be updated:\n%1").arg(r.error));
-            return;
-        }
-        selected_is_closed_ = false;
-        reopen_btn_->hide();
-        close_btn_->show();
-        reply_box_->show();
-        closed_box_->hide();
-        load_tickets();
-    });
+    const int ticket_id = selected_ticket_id_;
+    auth::UserApi::instance().update_ticket_status(
+        ticket_id, "open",
+        [self, ticket_id](auth::ApiResponse r) {
+            if (!self)
+                return;
+            self->set_busy(false);
+            if (!r.success) {
+                QMessageBox::warning(self, tr("Could not reopen ticket"),
+                                     r.error.isEmpty() ? tr("The ticket status could not be updated.")
+                                                       : tr("The ticket status could not be updated:\n%1").arg(r.error));
+                return;
+            }
+            if (self->selected_ticket_id_ == ticket_id)
+                self->apply_detail_status(QStringLiteral("open"));
+            self->load_tickets();
+        },
+        this);
 }
 
 } // namespace fincept::screens

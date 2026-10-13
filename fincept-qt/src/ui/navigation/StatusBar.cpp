@@ -6,8 +6,11 @@
 #include "core/symbol/SymbolRef.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EnterprisePromo.h"
+#include "ui/widgets/PythonSetupChip.h"
 
 #include <QEvent>
+#include <QPushButton>
 
 namespace fincept::ui {
 
@@ -27,11 +30,38 @@ StatusBar::StatusBar(QWidget* parent) : QWidget(parent) {
 
     hl->addWidget(mk("v" FINCEPT_VERSION_STRING, "sbVersion"));
     hl->addWidget(mk("  |  ", "sbSep"));
+
+    // Edition: this build is the open-source one; ENTERPRISE ↗ opens the
+    // private edition's page. Styled by refresh_theme() — no inline sheets.
+    edition_label_ = mk({}, "sbEdition");
+    hl->addWidget(edition_label_);
+    hl->addWidget(mk(QString::fromUtf8(" \xc2\xb7 "), "sbSep")); // U+00B7 middle dot
+    enterprise_btn_ = new QPushButton(this);
+    enterprise_btn_->setObjectName("sbEnterprise");
+    enterprise_btn_->setFlat(true);
+    enterprise_btn_->setCursor(Qt::PointingHandCursor);
+    enterprise_btn_->setFocusPolicy(Qt::NoFocus);
+    connect(enterprise_btn_, &QPushButton::clicked, this, []() {
+        enterprise::open_url(enterprise::url_with_ref(enterprise::site_url(), QStringLiteral("statusbar")));
+    });
+    hl->addWidget(enterprise_btn_);
+    hl->addWidget(mk("  |  ", "sbSep"));
+
     const char* feeds[] = {"EQ", "FX", "CM", "FI", "CR"};
     for (auto& f : feeds) {
         hl->addWidget(mk(f, "sbFeed"));
         hl->addWidget(mk(" ", "sbSpacer"));
     }
+
+    // ── Status chips — add_status_widget() inserts here, before the stretch ──
+    chips_layout_ = new QHBoxLayout;
+    chips_layout_->setContentsMargins(8, 0, 0, 0);
+    chips_layout_->setSpacing(8);
+    hl->addLayout(chips_layout_);
+    // Python environment install/sync progress — hidden unless a setup or
+    // background sync is running or the last one failed (click retries).
+    chips_layout_->addWidget(new PythonSetupChip(this));
+
     hl->addStretch();
 
     // Phase 7 polish: the active-symbol indicator. Sits left of READY so
@@ -64,6 +94,19 @@ void StatusBar::changeEvent(QEvent* e) {
 void StatusBar::retranslateUi() {
     if (ready_label_)
         ready_label_->setText(ready_state_ ? tr("READY") : tr("BUSY"));
+    if (edition_label_)
+        edition_label_->setText(tr("OPEN SOURCE"));
+    if (enterprise_btn_) {
+        enterprise_btn_->setText(tr("ENTERPRISE ↗"));
+        enterprise_btn_->setToolTip(tr("Fincept Terminal Enterprise — the private edition for firms (opens fincept.in)"));
+    }
+}
+
+void StatusBar::add_status_widget(QWidget* w) {
+    if (!w || !chips_layout_)
+        return;
+    w->setParent(this);
+    chips_layout_->addWidget(w);
 }
 
 void StatusBar::wire_link_indicator() {
@@ -135,13 +178,15 @@ void StatusBar::refresh_theme() {
     setStyleSheet(QString("#appStatusBar { background:%1; border-top:1px solid %2; }"
                           "#sbVersion { color:%3; background:transparent; }"
                           "#sbSep { color:%2; background:transparent; }"
+                          "#sbEdition { color:%3; background:transparent; letter-spacing:0.5px; }"
+                          "QPushButton#sbEnterprise { color:%5; background:transparent; border:none; padding:0;"
+                          "  font-weight:700; letter-spacing:0.5px; }"
+                          "QPushButton#sbEnterprise:hover { color:%6; }"
                           "#sbFeed { color:%3; background:transparent; }"
                           "#sbSpacer { background:transparent; }"
                           "#sbReady { color:%4; font-weight:700; background:transparent; }")
-                      .arg(colors::BG_BASE())
-                      .arg(colors::BORDER_DIM())
-                      .arg(colors::TEXT_DIM())
-                      .arg(colors::POSITIVE()));
+                      .arg(colors::BG_BASE(), colors::BORDER_DIM(), colors::TEXT_DIM(), colors::POSITIVE(),
+                           colors::AMBER(), colors::TEXT_PRIMARY()));
 }
 
 void StatusBar::set_ready(bool ready) {

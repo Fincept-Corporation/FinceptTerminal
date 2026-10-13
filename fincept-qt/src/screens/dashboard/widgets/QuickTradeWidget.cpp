@@ -2,6 +2,7 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
@@ -31,7 +32,8 @@ static QString combo_style() {
         .arg(ui::colors::BORDER_MED());
 }
 
-QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget(tr("QUICK TRADE"), parent, ui::colors::AMBER()) {
+QuickTradeWidget::QuickTradeWidget(const QJsonObject& cfg, QWidget* parent)
+    : BaseWidget(tr("QUICK TRADE"), parent, ui::colors::AMBER()) {
     auto* vl = content_layout();
     vl->setContentsMargins(10, 10, 10, 10);
     vl->setSpacing(8);
@@ -153,21 +155,49 @@ QuickTradeWidget::QuickTradeWidget(QWidget* parent) : BaseWidget(tr("QUICK TRADE
     connect(order_type_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
         price_input_->setEnabled(idx != 0); // disable for MARKET
         price_input_->setPlaceholderText(idx == 0 ? tr("market") : QStringLiteral("0.00"));
+        update_estimate();
     });
-    connect(qty_input_, &QLineEdit::textChanged, this, [this](const QString&) {
-        if (current_price_ > 0) {
-            double qty = qty_input_->text().toDouble();
-            double total = qty * current_price_;
-            est_total_->setText(tr("EST. TOTAL  $%1").arg(total, 0, 'f', 2));
-        }
-    });
+    price_input_->setValidator(new QDoubleValidator(0, 1e9, 6, price_input_));
+    // The estimate used to follow only the quantity box and always priced at
+    // the last trade — wrong for a LIMIT/STOP order with a price entered.
+    connect(qty_input_, &QLineEdit::textChanged, this, [this](const QString&) { update_estimate(); });
+    connect(price_input_, &QLineEdit::textChanged, this, [this](const QString&) { update_estimate(); });
     connect(this, &BaseWidget::refresh_requested, this, &QuickTradeWidget::lookup_symbol);
 
     apply_styles();
+    apply_config(cfg);
 
     // Initial lookup
     set_loading(true);
     // Hub path: initial lookup happens from showEvent.
+}
+
+QJsonObject QuickTradeWidget::config() const {
+    QJsonObject o;
+    const QString sym = current_symbol_.isEmpty() ? symbol_input_->text().trimmed().toUpper() : current_symbol_;
+    if (!sym.isEmpty())
+        o.insert("symbol", sym);
+    return o;
+}
+
+void QuickTradeWidget::apply_config(const QJsonObject& cfg) {
+    const QString sym = cfg.value("symbol").toString().trimmed().toUpper();
+    if (sym.isEmpty() || sym == symbol_input_->text().trimmed().toUpper())
+        return;
+    symbol_input_->setText(sym);
+    if (isVisible())
+        lookup_symbol();
+}
+
+void QuickTradeWidget::update_estimate() {
+    const double qty = qty_input_->text().toDouble();
+    const bool priced_order = order_type_->currentIndex() != 0;
+    const double entered = price_input_->text().toDouble();
+    const double px = (priced_order && entered > 0) ? entered : current_price_;
+    if (qty > 0 && px > 0)
+        est_total_->setText(tr("EST. TOTAL  %1").arg(dash_fmt::grouped(qty * px, 2)));
+    else
+        est_total_->setText(tr("EST. TOTAL  --"));
 }
 
 void QuickTradeWidget::showEvent(QShowEvent* e) {
@@ -197,6 +227,7 @@ void QuickTradeWidget::apply_styles() {
                                   .arg(ui::colors::TEXT_PRIMARY()));
     change_label_->setStyleSheet(
         QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
+    reset_css_cache(change_label_);
     price_label_->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: bold; background: transparent;")
                                     .arg(ui::colors::TEXT_PRIMARY()));
     bid_label_->setStyleSheet(
@@ -234,7 +265,15 @@ void QuickTradeWidget::lookup_symbol() {
         return;
     }
 
+    // The first lookup on show just confirms the configured symbol.
+    const bool symbol_changed = !current_symbol_.isEmpty() && sym != current_symbol_;
     current_symbol_ = sym;
+    if (symbol_changed)
+        emit config_changed(config());
+    // Subscribing while hidden (e.g. an MCP "refresh all") would keep the
+    // topic polled until the next hide; showEvent() looks up again.
+    if (!isVisible())
+        return;
     auto& hub = datahub::DataHub::instance();
     // Swap subscription to the new symbol; drop the old one first.
     hub.unsubscribe(this);
@@ -257,15 +296,15 @@ void QuickTradeWidget::apply_quote(const services::QuoteData& q) {
     current_symbol_ = q.symbol.isEmpty() ? current_symbol_ : q.symbol;
 
     sym_label_->setText(current_symbol_);
-    price_label_->setText(QString("$%1").arg(q.price, 0, 'f', 2));
+    price_label_->setText(dash_fmt::price(q.price, current_symbol_));
 
-    double chg = q.change_pct;
-    QString chg_str = QString("%1%2%").arg(chg >= 0 ? "▲ +" : "▼ ").arg(chg, 0, 'f', 2);
+    const double chg = q.change_pct;
+    const QString arrow = chg > 0 ? QStringLiteral("▲ ") : chg < 0 ? QStringLiteral("▼ ") : QString();
     QString chg_col = chg > 0   ? ui::colors::POSITIVE()
                       : chg < 0 ? ui::colors::NEGATIVE()
                                 : ui::colors::TEXT_SECONDARY();
-    change_label_->setText(chg_str);
-    change_label_->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(chg_col));
+    change_label_->setText(arrow + dash_fmt::signed_pct(chg));
+    set_css_cached(change_label_, QString("color: %1; font-size: 10px; background: transparent;").arg(chg_col));
 
     // QuoteData from yfinance has no bid/ask — show em-dashes rather than
     // a fabricated spread (the previous price*0.0005 placeholder was
@@ -275,9 +314,7 @@ void QuickTradeWidget::apply_quote(const services::QuoteData& q) {
     bid_label_->setText(tr("BID  —"));
     ask_label_->setText(tr("ASK  —"));
 
-    double qty = qty_input_->text().toDouble();
-    if (qty > 0)
-        est_total_->setText(tr("EST. TOTAL  $%1").arg(qty * q.price, 0, 'f', 2));
+    update_estimate();
 }
 
 void QuickTradeWidget::hub_unsubscribe_all() {
@@ -328,7 +365,7 @@ void QuickTradeWidget::submit_order() {
                        "To place %1 %2 %3, use the Equity Trading or Crypto Trading screen, which routes the order to "
                        "your selected broker/paper account with confirmation.")
                         .arg(side)
-                        .arg(qty, 0, 'f', 0)
+                        .arg(dash_fmt::quantity(qty))
                         .arg(sym),
                     QMessageBox::NoButton, this);
     QPushButton* open_btn = box.addButton(tr("Open Equity Trading"), QMessageBox::AcceptRole);
@@ -372,11 +409,8 @@ void QuickTradeWidget::retranslateUi() {
         bid_label_->setText(current_price_ > 0 ? tr("BID  —") : tr("BID --"));
     if (ask_label_)
         ask_label_->setText(current_price_ > 0 ? tr("ASK  —") : tr("ASK --"));
-    if (est_total_) {
-        const double qty = qty_input_ ? qty_input_->text().toDouble() : 0.0;
-        est_total_->setText(current_price_ > 0 && qty > 0 ? tr("EST. TOTAL  $%1").arg(qty * current_price_, 0, 'f', 2)
-                                                          : tr("EST. TOTAL  --"));
-    }
+    if (est_total_ && qty_input_ && order_type_ && price_input_)
+        update_estimate();
     // submit_btn_ text is side-aware ("PLACE BUY ORDER" etc.) — let on_side_changed re-derive it.
     if (side_combo_)
         on_side_changed(side_combo_->currentIndex());

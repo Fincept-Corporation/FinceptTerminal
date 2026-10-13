@@ -37,12 +37,14 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
 
   private slots:
     void on_providers_loaded(const QVector<services::DbnProvider>& providers);
-    void on_datasets_loaded(const QVector<services::DbnDataset>& datasets, const services::DbnPagination& page,
-                            bool append);
-    void on_series_loaded(const QVector<services::DbnSeriesInfo>& series, const services::DbnPagination& page,
+    void on_datasets_loaded(const QString& provider_code, const QVector<services::DbnDataset>& datasets,
+                            const services::DbnPagination& page, bool append);
+    void on_series_loaded(const QString& provider_code, const QString& dataset_code, const QString& query,
+                          const QVector<services::DbnSeriesInfo>& series, const services::DbnPagination& page,
                           bool append);
     void on_observations_loaded(const services::DbnDataPoint& data);
-    void on_search_results_loaded(const QVector<services::DbnSearchResult>& results,
+    void on_observations_failed(const QString& series_id, const QString& message);
+    void on_search_results_loaded(const QString& query, const QVector<services::DbnSearchResult>& results,
                                   const services::DbnPagination& page, bool append);
     void on_service_error(const QString& context, const QString& message);
     void on_fetch_clicked();
@@ -110,6 +112,9 @@ class DBnomicsScreen : public QWidget, public IStatefulScreen {
 
     QSet<QString> watched_series_; // series ids subscribed on the hub (re-subscribed on every show)
     QString pending_series_id_;    // the series the user just picked, until its observations arrive
+    // Series ids saved with the views (restore_state) that have not arrived yet; re-added on arrival.
+    QStringList restore_single_;
+    QVector<QStringList> restore_slots_; // parallel to slots_
 
     QWidget* comparison_content_ = nullptr;
     QVBoxLayout* comparison_layout_ = nullptr;

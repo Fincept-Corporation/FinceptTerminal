@@ -6,13 +6,50 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QTextLayout>
+#include <QTextOption>
+
+#include <limits>
 
 namespace fincept::screens {
+
+namespace {
+// Shapes `text` once, exactly as QPainter::drawText(QPointF, QString) would on
+// `device` (plain text, one unwrapped line, `dir` as the base direction), with
+// glyph positions re-based on the baseline: drawGlyphRun(QPointF(x, baseline))
+// then puts every glyph where drawText(QPointF(x, baseline), text) did.
+QList<QGlyphRun> news_ticker_layout_runs(const QString& text, const QFont& font, Qt::LayoutDirection dir,
+                                         QPaintDevice* device) {
+    QTextLayout layout(text, font, device);
+    QTextOption opt;
+    opt.setWrapMode(QTextOption::NoWrap);
+    opt.setTextDirection(dir);
+    layout.setTextOption(opt);
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    qreal ascent = 0;
+    if (line.isValid()) {
+        line.setLineWidth(std::numeric_limits<int>::max() / 128);
+        line.setPosition(QPointF(0, 0));
+        ascent = line.ascent();
+    }
+    layout.endLayout();
+    QList<QGlyphRun> runs = layout.glyphRuns();
+    for (auto& run : runs) {
+        QList<QPointF> positions = run.positions();
+        for (auto& pos : positions)
+            pos.ry() -= ascent;
+        run.setPositions(positions);
+    }
+    return runs;
+}
+} // namespace
 
 NewsTickerStrip::NewsTickerStrip(QWidget* parent)
     : QWidget(parent), ticker_font_(ui::fonts::DATA_FAMILY, 10), ticker_fm_(ticker_font_) {
     setObjectName("newsTickerStrip");
     setFixedHeight(22);
+    refresh_colors();
 
     connect(&scroll_timer_, &QTimer::timeout, this, [this]() {
         offset_ += 1.0;
@@ -23,8 +60,17 @@ NewsTickerStrip::NewsTickerStrip(QWidget* parent)
     // Timer interval set but NOT started — parent manages via pause/resume (P3)
     scroll_timer_.setInterval(50); // 20fps
 
-    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
-            [this](const ui::ThemeTokens&) { update(); });
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this, [this](const ui::ThemeTokens&) {
+        refresh_colors();
+        update();
+    });
+}
+
+void NewsTickerStrip::refresh_colors() {
+    source_color_ = QColor(ui::colors::CYAN());
+    headline_color_ = QColor(ui::colors::TEXT_SECONDARY());
+    for (auto& entry : entries_)
+        entry.tag_color = QColor(services::priority_color(entry.article.priority));
 }
 
 void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breaking_articles) {
@@ -66,6 +112,11 @@ void NewsTickerStrip::set_articles(const QVector<services::NewsArticle>& breakin
         entry.headline_width = ticker_fm_.horizontalAdvance(entry.headline_text);
         entry.total_width =
             entry.tag_width + SEGMENT_GAP + entry.source_width + SEGMENT_GAP + entry.headline_width + ITEM_SPACING;
+
+        entry.tag_runs = news_ticker_layout_runs(entry.tag_text, ticker_font_, layoutDirection(), this);
+        entry.source_runs = news_ticker_layout_runs(entry.source_text, ticker_font_, layoutDirection(), this);
+        entry.headline_runs = news_ticker_layout_runs(entry.headline_text, ticker_font_, layoutDirection(), this);
+        entry.tag_color = QColor(services::priority_color(article.priority));
 
         total_width_ += entry.total_width;
         entries_.append(entry);
@@ -121,25 +172,40 @@ void NewsTickerStrip::paintEvent(QPaintEvent*) {
     p.setFont(ticker_font_);
 
     int text_y = (height() + ticker_fm_.ascent() - ticker_fm_.descent()) / 2;
+    const int viewport_w = width();
     double x = -offset_;
     int passes = total_width_ > 0 ? (width() / total_width_) + 2 : 1;
+    // Pixel-identical to drawText(QPointF(x, text_y), text) — the runs carry
+    // drawText's own shaping with positions relative to the baseline.
+    auto draw_runs = [&p, text_y](double at_x, const QList<QGlyphRun>& runs) {
+        for (const auto& run : runs)
+            p.drawGlyphRun(QPointF(at_x, text_y), run);
+    };
 
+    // Strings, widths, colours and the laid-out text are all prepared outside
+    // paintEvent (P9); this runs 20x a second.
     for (int pass = 0; pass < passes; ++pass) {
         for (const auto& entry : entries_) {
+            // Skip entries scrolled off either edge — every headline of every
+            // pass used to be shaped and drawn each frame.
+            if (x + entry.total_width < 0 || x > viewport_w) {
+                x += entry.total_width;
+                continue;
+            }
+
             // Tag in priority color
-            QString pcolor = services::priority_color(entry.article.priority);
-            p.setPen(QColor(pcolor));
-            p.drawText(QPointF(x, text_y), entry.tag_text);
+            p.setPen(entry.tag_color);
+            draw_runs(x, entry.tag_runs);
             x += entry.tag_width + SEGMENT_GAP;
 
             // Source in cyan
-            p.setPen(QColor(ui::colors::CYAN()));
-            p.drawText(QPointF(x, text_y), entry.source_text);
+            p.setPen(source_color_);
+            draw_runs(x, entry.source_runs);
             x += entry.source_width + SEGMENT_GAP;
 
             // Headline in secondary text
-            p.setPen(QColor(ui::colors::TEXT_SECONDARY()));
-            p.drawText(QPointF(x, text_y), entry.headline_text);
+            p.setPen(headline_color_);
+            draw_runs(x, entry.headline_runs);
             x += entry.headline_width + ITEM_SPACING;
         }
     }

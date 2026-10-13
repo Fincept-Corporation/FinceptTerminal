@@ -43,7 +43,7 @@ void OecdPanel::activate() {
 void OecdPanel::build_controls(QHBoxLayout* thl) {
     auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 

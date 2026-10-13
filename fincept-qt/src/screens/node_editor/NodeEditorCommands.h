@@ -69,6 +69,22 @@ inline void drop_nodes(NodeScene* scene, const QVector<NodeDef>& nodes) {
         scene->remove_node(nd.id); // cascades its edges
 }
 
+/// Refresh `nodes` from the live scene before they are dropped. Parameter, name and
+/// flag edits are not undo commands, so a node pasted, then edited, then undone and
+/// redone used to come back with its pre-edit parameters. Capturing at drop time makes
+/// redo/undo restore exactly what was removed.
+inline void capture_live(NodeScene* scene, QVector<NodeDef>& nodes) {
+    if (!scene)
+        return;
+    for (auto& nd : nodes) {
+        if (auto* item = scene->find_node(nd.id)) {
+            nd = item->node_def();
+            nd.x = item->pos().x();
+            nd.y = item->pos().y();
+        }
+    }
+}
+
 /// Collect the edges that touch any node in `ids` (so a delete can be undone
 /// with its wiring intact).
 inline QVector<EdgeDef> edges_touching(NodeScene* scene, const QSet<QString>& ids) {
@@ -93,7 +109,10 @@ class AddNodesCommand : public QUndoCommand {
     }
 
     void redo() override { apply_nodes(scene_, nodes_, edges_); }
-    void undo() override { drop_nodes(scene_, nodes_); }
+    void undo() override {
+        capture_live(scene_, nodes_);
+        drop_nodes(scene_, nodes_);
+    }
 
   private:
     NodeScene* scene_ = nullptr;
@@ -111,7 +130,10 @@ class RemoveNodesCommand : public QUndoCommand {
         setText(label);
     }
 
-    void redo() override { drop_nodes(scene_, nodes_); }
+    void redo() override {
+        capture_live(scene_, nodes_);
+        drop_nodes(scene_, nodes_);
+    }
     void undo() override { apply_nodes(scene_, nodes_, edges_); }
 
   private:
@@ -213,8 +235,10 @@ class ReplaceGraphCommand : public QUndoCommand {
             scene_->deserialize(after_);
     }
     void undo() override {
-        if (scene_)
-            scene_->deserialize(before_);
+        if (!scene_)
+            return;
+        after_ = scene_->serialize(); // keep edits made after the swap for redo
+        scene_->deserialize(before_);
     }
 
   private:

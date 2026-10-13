@@ -8,10 +8,23 @@
 #include <QHash>
 #include <QMutex>
 #include <QObject>
+#include <QSet>
 #include <QThread>
 #include <QTimer>
 
 namespace fincept::algo {
+
+/// Outcome of stopping one deployment (stop_deployment / stop_all_live).
+struct AlgoStopResult {
+    QString deployment_id;
+    QString strategy_name;
+    QString symbol;
+    QString mode;            // paper | live
+    bool runner_found = false;  // a runner was active in this process
+    bool orders_blocked = false; // kill flag set: the runner can emit no further order
+    bool db_marked_stopped = false; // will not auto-resume after a restart
+    QString note;
+};
 
 class AlgoEngine : public QObject {
     Q_OBJECT
@@ -20,7 +33,21 @@ class AlgoEngine : public QObject {
 
     void start_deployment(const fincept::services::algo::AlgoDeployment& deployment,
                           const fincept::services::algo::AlgoStrategy& strategy);
-    void stop_deployment(const QString& deployment_id);
+    /// Stop a deployment - idempotent and safe from any state:
+    ///  1. the runner's kill flag is set immediately (no further order signals,
+    ///     even if the engine thread is busy or hung),
+    ///  2. the DB row is marked 'stopped' right away so it never auto-resumes,
+    ///  3. the runner's own stop() is queued for orderly cleanup, and
+    ///  4. a watchdog on the GUI thread verifies within kStopConfirmMs that the
+    ///     runner acknowledged; if not, the market-data feed is closed, the runner
+    ///     is force-detached and error_occurred reports it honestly.
+    /// A deployment with no runner in this process (stale/errored row) is just
+    /// marked stopped. Call from the GUI thread.
+    AlgoStopResult stop_deployment(const QString& deployment_id);
+    /// Stop every LIVE deployment (running/starting/error/crashed rows and any live
+    /// runner) through stop_deployment(). Used by the Action Center kill switch so
+    /// an algo cannot re-enter right after the account was squared off. GUI thread.
+    QVector<AlgoStopResult> stop_all_live(const QString& reason);
     void pause_deployment(const QString& deployment_id);
     void resume_deployment(const QString& deployment_id);
     // Permanently delete a deployment and all its rows (deployments, metrics,
@@ -71,6 +98,11 @@ class AlgoEngine : public QObject {
     Q_DISABLE_COPY(AlgoEngine)
 
     void execute_order(const AlgoOrderSignal& signal);
+    AlgoStopResult stop_deployment_impl(const QString& deployment_id, const QString& note);
+    /// UPDATE algo_deployments SET status='stopped' (note -> error_message when non-empty).
+    bool mark_stopped_in_db(const QString& deployment_id, const QString& note);
+    /// GUI-thread watchdog: did the runner acknowledge the stop?
+    void verify_stop(const QString& deployment_id);
     // Multi-leg F&O basket execution (P3.4). Dispatched from execute_order when
     // signal.legs is non-empty. Paper (signal.mode != "live") routes every leg to
     // the deployment's paper portfolio via pt_place_order — NEVER the broker, even
@@ -91,6 +123,8 @@ class AlgoEngine : public QObject {
     QThread engine_thread_;
     mutable QMutex mutex_;
     QHash<QString, DeploymentRunner*> runners_;
+    // Deployments with a stop in flight (watchdog armed). Guarded by mutex_.
+    QSet<QString> stopping_;
     // ActionCenter pending id → deployment id, for orders this engine parked in
     // the Semi-Auto approval queue. Guarded by mutex_.
     QHash<QString, QString> approvals_;

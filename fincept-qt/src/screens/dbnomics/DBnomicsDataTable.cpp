@@ -4,8 +4,9 @@
 #include "ui/theme/Theme.h"
 
 #include <QHeaderView>
+#include <QDate>
 #include <QLabel>
-#include <QSet>
+#include <QMap>
 #include <QStackedWidget>
 #include <QTableWidgetItem>
 #include <QTimer>
@@ -156,27 +157,41 @@ void DBnomicsDataTable::set_data(const QVector<services::DbnDataPoint>& series) 
     }
     showing_placeholder_ = false;
 
-    // Collect all unique periods across all series, sorted descending
-    QSet<QString> period_set;
-    for (const auto& dp : series) {
-        for (const auto& obs : dp.observations) {
-            period_set.insert(obs.period);
-        }
-    }
-    QVector<QString> periods(period_set.begin(), period_set.end());
-    std::sort(periods.begin(), periods.end(), std::greater<QString>());
+    // Collect all unique periods across all series, newest first BY PERIOD START: period strings of
+    // mixed frequency ("2024-12" vs "2024-Q4") do not sort lexically.
+    QMap<QString, QDate> period_start;
+    for (const auto& dp : series)
+        for (const auto& obs : dp.observations)
+            if (!period_start.contains(obs.period))
+                period_start.insert(obs.period, obs.start);
+    QVector<QString> periods(period_start.keyBegin(), period_start.keyEnd());
+    std::sort(periods.begin(), periods.end(), [&period_start](const QString& a, const QString& b) {
+        const QDate da = period_start.value(a);
+        const QDate db = period_start.value(b);
+        if (da.isValid() && db.isValid() && da != db)
+            return da > db;
+        return a > b;
+    });
     const int total_periods = static_cast<int>(periods.size());
     if (total_periods > kMaxRows)
         periods.resize(kMaxRows);
     const int shown_periods = static_cast<int>(periods.size());
-    // Be explicit that the table is truncated — it silently showed only the
-    // 50 most recent periods with no indication the series went further back.
+    // Be explicit that the table is truncated, and say what the numbers are (unit / frequency /
+    // seasonal adjustment as DBnomics reports them for the series).
     if (header_label_) {
-        header_label_->setText(total_periods > shown_periods
-                                   ? tr("OBSERVATION DATA — LATEST %1 OF %2 PERIODS")
-                                         .arg(shown_periods)
-                                         .arg(total_periods)
-                                   : tr("OBSERVATION DATA — %1 PERIODS").arg(total_periods));
+        QString text = total_periods > shown_periods
+                           ? tr("OBSERVATION DATA — LATEST %1 OF %2 PERIODS").arg(shown_periods).arg(total_periods)
+                           : tr("OBSERVATION DATA — %1 PERIODS").arg(total_periods);
+        if (series.size() == 1) {
+            const auto& dp = series.first();
+            QStringList facts;
+            for (const QString& f : {dp.unit, dp.frequency, dp.seasonal})
+                if (!f.isEmpty())
+                    facts << f;
+            if (!facts.isEmpty())
+                text += QStringLiteral("  ·  ") + facts.join(QStringLiteral(" · ")).toUpper();
+        }
+        header_label_->setText(text);
     }
 
     // Columns: Period + one per series

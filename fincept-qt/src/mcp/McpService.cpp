@@ -9,8 +9,10 @@
 #include "mcp/McpProvider.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "mcp/ToolRetriever.h"
+#include "storage/repositories/SettingsRepository.h"
 
 #include <QCoreApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QPromise>
 #include <QRegularExpression>
@@ -89,9 +91,92 @@ void McpService::initialize() {
 
     McpManager::instance().start_health_check();
 
+    // The user's per-tool on/off choices (MCP Servers screen) — the catalogue
+    // is fully registered by now (McpInit calls initialize() last).
+    apply_persisted_tool_states();
+
     LOG_INFO(TAG, QString("McpService initialized — %1 internal tools, %2 external servers queued")
                       .arg(McpProvider::instance().tool_count())
                       .arg(to_start.size()));
+}
+
+// ============================================================================
+// Persisted tool enable/disable
+// ============================================================================
+
+namespace {
+constexpr const char* kMcpDisabledToolsKey = "mcp.disabled_tools";
+
+// The persisted disabled set. `ok` is false when the read itself failed — the
+// caller must then not write the set back (SettingsRepository::get contract).
+QStringList mcp_svc_read_disabled_tools(bool* ok) {
+    const auto r = SettingsRepository::instance().get(QString::fromLatin1(kMcpDisabledToolsKey), QStringLiteral("[]"));
+    if (r.is_err()) {
+        if (ok)
+            *ok = false;
+        return {};
+    }
+    if (ok)
+        *ok = true;
+    QStringList names;
+    for (const auto& v : QJsonDocument::fromJson(r.value().toUtf8()).array()) {
+        const QString n = v.toString().trimmed();
+        if (!n.isEmpty() && !names.contains(n))
+            names.append(n);
+    }
+    return names;
+}
+} // namespace
+
+void McpService::set_tool_enabled_persistent(const QString& tool_name, bool enabled) {
+    if (tool_name.trimmed().isEmpty())
+        return;
+    McpProvider::instance().set_tool_enabled(tool_name, enabled);
+
+    bool ok = false;
+    QStringList disabled = mcp_svc_read_disabled_tools(&ok);
+    if (!ok) {
+        // Writing now would replace the user's stored set with this one entry.
+        LOG_WARN(TAG, QString("Tool '%1' %2 for this session only — could not read the saved tool states")
+                          .arg(tool_name, enabled ? "enabled" : "disabled"));
+        return;
+    }
+    if (enabled)
+        disabled.removeAll(tool_name);
+    else if (!disabled.contains(tool_name))
+        disabled.append(tool_name);
+
+    QJsonArray arr;
+    for (const auto& n : disabled)
+        arr.append(n);
+    const auto w = SettingsRepository::instance().set(
+        QString::fromLatin1(kMcpDisabledToolsKey), QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)),
+        QStringLiteral("mcp"));
+    if (w.is_err())
+        LOG_WARN(
+            TAG,
+            QString("Could not persist tool state for '%1': %2").arg(tool_name, QString::fromStdString(w.error())));
+}
+
+void McpService::apply_persisted_tool_states() {
+    bool ok = false;
+    const QStringList disabled = mcp_svc_read_disabled_tools(&ok);
+    if (!ok) {
+        LOG_WARN(TAG, "Could not read saved tool states — every tool starts enabled this session");
+        return;
+    }
+    int applied = 0;
+    auto& provider = McpProvider::instance();
+    for (const auto& name : disabled) {
+        // A name that no longer exists (renamed/removed tool) is kept in the
+        // saved set harmlessly; it simply has nothing to disable.
+        if (!provider.has_tool(name))
+            continue;
+        provider.set_tool_enabled(name, false);
+        ++applied;
+    }
+    if (applied > 0)
+        LOG_INFO(TAG, QString("Applied %1 user-disabled tool(s)").arg(applied));
 }
 
 void McpService::shutdown() {
@@ -138,15 +223,24 @@ QByteArray McpService::filter_signature(const ToolFilter& f) {
 // non-default ToolFilter.
 static constexpr int kHardMaxTools = 50;
 
+// How a filtered selection is ordered and capped. The two consumers differ on
+// purpose: an LLM provider payload must stay small and byte-stable (prompt
+// caching), an agent catalogue must not lose tools the user asked for.
+enum class McpToolSelection {
+    LlmPayload,     // category rank → name; max_tools 0 ⇒ kHardMaxTools
+    AgentCatalogue, // read-only first → category rank → name; max_tools 0 ⇒ no cap
+};
+
 // Apply ToolFilter (categories include/exclude, name regex include/exclude,
 // max_tools cap) to a list of UnifiedTools. Pulled out as a free function so
-// both the OpenAI-format path and the Anthropic / Gemini / Fincept catalog
-// builders can share identical filter semantics.
+// the OpenAI-format path, the Anthropic / Gemini / Fincept catalog builders and
+// the agent catalogue share identical predicate semantics.
 //
 // Telemetry: counts how many candidates were truncated by the max_tools
 // cap and emits a warning so we can spot screens whose Tier-2 categories
 // are too wide. Truncation isn't an error — but it is a signal.
-static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools, const ToolFilter& filter) {
+static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools, const ToolFilter& filter,
+                                                  McpToolSelection mode = McpToolSelection::LlmPayload) {
     QList<QRegularExpression> include_rx;
     for (const auto& p : filter.name_patterns)
         include_rx.append(QRegularExpression(p));
@@ -154,7 +248,9 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
     for (const auto& p : filter.exclude_name_patterns)
         exclude_rx.append(QRegularExpression(p));
 
-    const int effective_cap = filter.max_tools > 0 ? filter.max_tools : kHardMaxTools;
+    const int effective_cap = filter.max_tools > 0                       ? filter.max_tools
+                              : mode == McpToolSelection::AgentCatalogue ? 0
+                                                                         : kHardMaxTools;
 
     // Stage 1 — keep candidates that pass include/exclude predicates.
     // Cap is applied after sort, not during iteration, so a stable order
@@ -200,25 +296,31 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
     // include list (external tools with empty category) sort to the end
     // with a sentinel rank.
     // Secondary key: tool name alphabetical.
+    // Agent catalogues put read-only tools ahead of everything else so that a
+    // user-capped catalogue keeps the research tools rather than the mutators.
     QHash<QString, int> cat_rank;
     for (int i = 0; i < filter.categories.size(); ++i)
         cat_rank.insert(filter.categories[i], i);
     const int sentinel = filter.categories.size();
+    const bool read_only_first = mode == McpToolSelection::AgentCatalogue;
 
-    std::stable_sort(kept.begin(), kept.end(), [&cat_rank, sentinel](const UnifiedTool& a, const UnifiedTool& b) {
-        const int ra = cat_rank.value(a.category, sentinel);
-        const int rb = cat_rank.value(b.category, sentinel);
-        if (ra != rb)
-            return ra < rb;
-        return a.name < b.name;
-    });
+    std::stable_sort(kept.begin(), kept.end(),
+                     [&cat_rank, sentinel, read_only_first](const UnifiedTool& a, const UnifiedTool& b) {
+                         if (read_only_first && a.is_destructive != b.is_destructive)
+                             return !a.is_destructive;
+                         const int ra = cat_rank.value(a.category, sentinel);
+                         const int rb = cat_rank.value(b.category, sentinel);
+                         if (ra != rb)
+                             return ra < rb;
+                         return a.name < b.name;
+                     });
 
-    // Stage 3 — apply cap.
+    // Stage 3 — apply cap (0 = uncapped, agent catalogues only).
     const int kept_before_cap = static_cast<int>(kept.size());
-    if (static_cast<int>(kept.size()) > effective_cap)
+    if (effective_cap > 0 && kept_before_cap > effective_cap)
         kept.resize(effective_cap);
 
-    if (kept_before_cap > effective_cap) {
+    if (effective_cap > 0 && kept_before_cap > effective_cap) {
         LOG_WARN(TAG, QString("apply_tool_filter: truncated %1 → %2 (cap=%3, configured_cap=%4) — "
                               "consider tightening categories for this screen/agent")
                           .arg(kept_before_cap)
@@ -244,8 +346,20 @@ std::vector<UnifiedTool> McpService::get_all_tools(const ToolFilter& filter) {
     return filtered;
 }
 
-QJsonArray McpService::format_tools_for_openai() {
-    return format_tools_for_openai(ToolFilter{});
+std::vector<UnifiedTool> McpService::get_agent_tools(const ToolFilter& filter) {
+    QMutexLocker lock(&mutex_);
+    cached_tools_locked();
+
+    // Separate key space from the LLM selection above: same filter, different
+    // ordering and cap semantics.
+    const QByteArray key = QByteArrayLiteral("agent|") + filter_signature(filter);
+    auto it = filtered_tools_cache_.constFind(key);
+    if (it != filtered_tools_cache_.constEnd())
+        return it.value();
+
+    auto selected = apply_tool_filter(cached_tools_, filter, McpToolSelection::AgentCatalogue);
+    filtered_tools_cache_.insert(key, selected);
+    return selected;
 }
 
 // Tool RAG Tier-0 — the always-loaded set when mcp_use_tool_rag is on.
@@ -267,6 +381,11 @@ static const QSet<QString>& tier_0_tool_names() {
     static const QSet<QString> kTier0 = {
         "tool_list",
         "tool_describe",
+        // Generic dispatcher: calls any tool found via tool_list by name. The
+        // activation path re-declares discovered tools, but it is capped
+        // (kMaxActivatedTools) and some models will not call a function that
+        // only appeared mid-turn; tool_invoke is the always-available route.
+        "tool_invoke",
         "navigate_to_tab",
         "list_tabs",
         "get_current_tab",
@@ -558,6 +677,56 @@ QJsonObject McpService::input_schema_for_function(const QString& function_name) 
 // ============================================================================
 // Tool Execution
 // ============================================================================
+
+McpService::ToolTarget McpService::resolve_tool_target(const QString& name, const QString& server_id) {
+    ToolTarget t;
+    const QString bare = name.trimmed();
+    const QString sid = server_id.trimmed();
+    if (bare.isEmpty()) {
+        t.error = QStringLiteral("No tool name given.");
+        return t;
+    }
+
+    auto& provider = McpProvider::instance();
+    if (sid.isEmpty() || sid == QLatin1String(INTERNAL_SERVER_ID)) {
+        if (const auto info = provider.find_tool(bare)) {
+            t.server_id = QString::fromLatin1(INTERNAL_SERVER_ID);
+            t.category = info->category;
+            t.is_destructive = info->is_destructive;
+            return t;
+        }
+        if (provider.has_tool(bare)) {
+            t.error = QStringLiteral("Tool '%1' is disabled by the user.").arg(bare);
+            return t;
+        }
+        if (!sid.isEmpty()) {
+            t.error = QStringLiteral("No built-in tool named '%1'. Use tool_list to search for tools.").arg(bare);
+            return t;
+        }
+    }
+
+    QStringList servers;
+    for (const auto& u : get_all_tools()) {
+        if (u.is_internal || u.name != bare)
+            continue;
+        if (!sid.isEmpty() && u.server_id != sid)
+            continue;
+        servers << u.server_id;
+    }
+    if (servers.isEmpty()) {
+        t.error = QStringLiteral("No tool named '%1'%2. Use tool_list to search for tools.")
+                      .arg(bare, sid.isEmpty() ? QString() : QStringLiteral(" on server '%1'").arg(sid));
+        return t;
+    }
+    if (servers.size() > 1) {
+        t.error = QStringLiteral("Tool '%1' exists on several servers (%2) — pass server_id.")
+                      .arg(bare, servers.join(QStringLiteral(", ")));
+        return t;
+    }
+    t.server_id = servers.front();
+    t.is_destructive = true; // MCP wire carries no destructiveness metadata (see refresh_cache)
+    return t;
+}
 
 ToolResult McpService::execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args,
                                     bool allow_defer) {

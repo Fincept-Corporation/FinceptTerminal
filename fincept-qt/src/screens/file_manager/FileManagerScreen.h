@@ -2,26 +2,31 @@
 #include "screens/common/IStatefulScreen.h"
 #include "services/file_manager/FileManagerService.h"
 
-#include <QButtonGroup>
-#include <QComboBox>
 #include <QEvent>
-#include <QJsonArray>
-#include <QLabel>
-#include <QLineEdit>
-#include <QProgressBar>
-#include <QPushButton>
-#include <QScrollArea>
-#include <QSet>
-#include <QSplitter>
-#include <QTableWidget>
-#include <QTextEdit>
-#include <QVBoxLayout>
 #include <QWidget>
+
+class QButtonGroup;
+class QLabel;
+class QLineEdit;
+class QModelIndex;
+class QProgressBar;
+class QPushButton;
+class QSplitter;
+class QStandardItemModel;
+class QTableView;
+class QTableWidget;
+class QTextEdit;
+class QTimer;
+class QVBoxLayout;
 
 namespace fincept::screens {
 
-/// File Manager Screen — lists all files tracked by FileManagerService.
-/// Features: filter chips, sort controls, inline preview, bulk delete, quota bar.
+class FileManagerFilterProxy;
+
+/// File Manager Screen — every file tracked by FileManagerService in one
+/// sortable table (model/view, so thousands of files stay responsive), with
+/// source filter chips, search, inline preview, rename, open / reveal, bulk
+/// delete and a storage summary.
 class FileManagerScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
@@ -38,78 +43,70 @@ class FileManagerScreen : public QWidget, public IStatefulScreen {
   protected:
     void showEvent(QShowEvent* event) override;
     void changeEvent(QEvent* event) override;
-    /// Turns a click anywhere on a file card into a preview. The card body had
-    /// installEventFilter(this) but no override, so clicking a card did nothing.
-    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
     void build_ui();
     void build_filter_bar(QVBoxLayout* root);
-    void build_quota_bar(QVBoxLayout* root);
     QWidget* build_preview_panel();
     void retranslateUi();
 
-    void render_files();
+    void reload_model();
+    void apply_filter();
     void upload_files();
     void download_file(const QString& file_id);
-    void delete_file(const QString& file_id);
-    void delete_selected();
+    void delete_files(const QStringList& ids);
+    void rename_file(const QString& file_id);
     void open_with(const QString& file_id);
+    void open_external(const QString& file_id);
+    void activate(const QModelIndex& index);
+    void show_context_menu(const QPoint& pos);
     void show_preview(const QString& file_id);
     void clear_preview();
     void update_stats();
     void update_bulk_bar();
+    QStringList selected_ids() const;
+    QString current_id() const;
 
     static QString format_size(qint64 bytes);
-    static QString file_type_color(const QString& mime);
     static QString open_with_label(const QString& mime);
     static QString route_for_mime(const QString& mime);
 
-    // ── Search / filter bar ──────────────────────────────────────────────
+    // ── Header / filter ──────────────────────────────────────────────────
+    QLabel* title_label_ = nullptr;
+    QLabel* subtitle_label_ = nullptr;
+    QLabel* stats_label_ = nullptr;
+    QPushButton* refresh_btn_ = nullptr;
+    QPushButton* upload_btn_ = nullptr;
     QLineEdit* search_input_ = nullptr;
-    QComboBox* sort_combo_ = nullptr;
-    QLabel* sort_label_ = nullptr; // "Sort:" (cached for retranslateUi)
-    // Screen filter chips — one QPushButton per source screen + "All"
-    QWidget* chips_bar_ = nullptr;
+    QTimer* search_debounce_ = nullptr;
     QButtonGroup* chip_group_ = nullptr;
     QString active_screen_filter_; // "" = all
-
-    // ── Quota bar ────────────────────────────────────────────────────────
     QProgressBar* quota_bar_ = nullptr;
     QLabel* quota_label_ = nullptr;
-    static constexpr qint64 kQuotaBytes = 500LL * 1024 * 1024; // 500 MB
+    /// Soft budget for the storage bar — the terminal never deletes files on its own.
+    static constexpr qint64 kQuotaBytes = 500LL * 1024 * 1024;
 
-    // ── File list ────────────────────────────────────────────────────────
-    QWidget* file_container_ = nullptr;
-    QVBoxLayout* file_layout_ = nullptr;
-    QScrollArea* file_scroll_ = nullptr; // owns the scroll position preserved across re-renders
-    QVector<QPushButton*> check_btns_;   // per-card checkbox buttons
-    QVector<QString> check_ids_;         // parallel file IDs
-    QSet<QString> checked_ids_;          // survives render_files() teardown
-    QPushButton* bulk_delete_btn_ = nullptr;
+    // ── File table ───────────────────────────────────────────────────────
+    QStandardItemModel* model_ = nullptr;
+    FileManagerFilterProxy* proxy_ = nullptr;
+    QTableView* table_ = nullptr;
+    QLabel* empty_label_ = nullptr;
     QWidget* bulk_bar_ = nullptr;
-    QLabel* bulk_sel_label_ = nullptr;      // "Selected files:" (cached for retranslateUi)
-    QPushButton* bulk_clear_btn_ = nullptr; // "CLEAR SELECTION" (cached for retranslateUi)
+    QLabel* bulk_sel_label_ = nullptr;
+    QPushButton* bulk_delete_btn_ = nullptr;
+    QPushButton* bulk_clear_btn_ = nullptr;
 
     // ── Preview panel ────────────────────────────────────────────────────
     QWidget* preview_panel_ = nullptr;
+    QLabel* preview_header_label_ = nullptr;
     QLabel* preview_title_ = nullptr;
     QLabel* preview_meta_ = nullptr;
     QTextEdit* preview_text_ = nullptr;
     QTableWidget* preview_table_ = nullptr;
     QLabel* preview_empty_ = nullptr;
+    QString preview_id_;
 
-    // ── Header controls ──────────────────────────────────────────────────
-    QLabel* stats_label_ = nullptr;
-    QPushButton* upload_btn_ = nullptr;
-    QPushButton* refresh_btn_ = nullptr;
-    QLabel* title_label_ = nullptr;          // "FILE MANAGER" (cached for retranslateUi)
-    QLabel* subtitle_label_ = nullptr;       // header subtitle (cached for retranslateUi)
-    QLabel* preview_header_label_ = nullptr; // "PREVIEW" (cached for retranslateUi)
-
-    // ── Splitter ─────────────────────────────────────────────────────────
     QSplitter* splitter_ = nullptr;
-
     bool loaded_ = false;
 };
 

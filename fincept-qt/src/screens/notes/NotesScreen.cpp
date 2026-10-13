@@ -15,6 +15,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeySequence>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPointer>
 #include <QRegularExpression>
@@ -22,7 +23,10 @@
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QCursor>
+#include <QDesktopServices>
 #include <QTextStream>
+#include <QTime>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -152,6 +156,17 @@ static QString priority_color(const QString& p) {
 
 NotesScreen::NotesScreen(QWidget* parent) : QWidget(parent) {
     setStyleSheet(QString("background: %1;").arg(BG_BASE()));
+
+    // Single-shot timers: interval + connection here, started only by user input.
+    autosave_timer_ = new QTimer(this);
+    autosave_timer_->setSingleShot(true);
+    autosave_timer_->setInterval(2500);
+    connect(autosave_timer_, &QTimer::timeout, this, [this]() { autosave_now(); });
+    search_timer_ = new QTimer(this);
+    search_timer_->setSingleShot(true);
+    search_timer_->setInterval(150);
+    connect(search_timer_, &QTimer::timeout, this, &NotesScreen::update_notes_list);
+
     build_ui();
     load_notes();
 
@@ -375,6 +390,10 @@ QWidget* NotesScreen::build_editor_panel() {
     view_meta_->setStyleSheet(
         QString("color: %1; font-size: 11px; font-family: 'Consolas','Courier New',monospace;").arg(TEXT_SECONDARY()));
     view_meta_->setWordWrap(true);
+    // Tickers are links ("Open in…" menu).
+    view_meta_->setTextFormat(Qt::RichText);
+    view_meta_->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
+    connect(view_meta_, &QLabel::linkActivated, this, [this](const QString& link) { on_symbol_link(QUrl(link)); });
     vl->addWidget(view_meta_);
 
     auto* sep = new QFrame;
@@ -382,19 +401,18 @@ QWidget* NotesScreen::build_editor_panel() {
     sep->setStyleSheet(QString("color: %1;").arg(BORDER_DIM()));
     vl->addWidget(sep);
 
-    // Scroll area for content
-    auto* view_scroll = new QScrollArea;
-    view_scroll->setWidgetResizable(true);
-    view_scroll->setStyleSheet("QScrollArea { background: transparent; border: none; }");
-    view_content_ = new QLabel;
-    view_content_->setStyleSheet(QString("color: %1; font-size: 14px; font-family: 'Consolas','Courier New',monospace; "
-                                         "line-height: 1.6; background: transparent; padding: 4px;")
+    // Rendered note body: Markdown (headings, lists, tables, emphasis, links) with
+    // $TICKER cashtags turned into symbol links. Links never navigate the browser.
+    view_content_ = new QTextBrowser;
+    view_content_->setOpenLinks(false);
+    view_content_->setOpenExternalLinks(false);
+    view_content_->setStyleSheet(QString("QTextBrowser { color: %1; font-size: 14px; background: transparent;"
+                                         " border: none; padding: 4px; }")
                                      .arg(TEXT_PRIMARY()));
-    view_content_->setWordWrap(true);
-    view_content_->setTextFormat(Qt::PlainText);
-    view_content_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    view_scroll->setWidget(view_content_);
-    vl->addWidget(view_scroll, 1);
+    view_content_->document()->setDefaultStyleSheet(
+        QString("a { color: %1; } code, pre { font-family: Consolas, 'Courier New', monospace; }").arg(AMBER()));
+    connect(view_content_, &QTextBrowser::anchorClicked, this, &NotesScreen::on_symbol_link);
+    vl->addWidget(view_content_, 1);
 
     right_stack_->addWidget(view_page); // index 1
 
@@ -415,11 +433,16 @@ QWidget* NotesScreen::build_editor_panel() {
     edit_cancel_btn_ = new QPushButton(tr("CANCEL"));
     edit_cancel_btn_->setStyleSheet(kSecondaryBtn());
     connect(edit_cancel_btn_, &QPushButton::clicked, this, [this]() {
-        if (has_unsaved_edits() &&
-            QMessageBox::question(this, tr("Discard changes"), tr("Discard the changes to this note?"),
+        // CANCEL means "back to the note as I opened it" — including anything autosave
+        // already wrote during this edit.
+        if ((has_unsaved_edits() || autosaved_in_session_) &&
+            QMessageBox::question(this, tr("Discard changes"),
+                                  tr("Discard every change made since you started editing this note?"),
                                   QMessageBox::Discard | QMessageBox::Cancel,
                                   QMessageBox::Cancel) != QMessageBox::Discard)
             return;
+        autosave_timer_->stop();
+        revert_edit_session();
         editor_baseline_ = editor_fingerprint();
         if (selected_note_id_ > 0) {
             enter_view_mode();
@@ -437,6 +460,10 @@ QWidget* NotesScreen::build_editor_panel() {
     edit_toolbar->addWidget(edit_export_btn_);
 
     edit_toolbar->addStretch();
+    autosave_label_ = new QLabel;
+    autosave_label_->setStyleSheet(
+        QString("color: %1; font-size: 11px; font-family: 'Consolas','Courier New',monospace;").arg(TEXT_TERTIARY()));
+    edit_toolbar->addWidget(autosave_label_);
     edl->addLayout(edit_toolbar);
 
     // Title
@@ -514,8 +541,16 @@ QWidget* NotesScreen::build_editor_panel() {
     // Content editor
     edit_content_ = new QTextEdit;
     edit_content_->setStyleSheet(kTextEdit());
-    edit_content_->setPlaceholderText(tr("Write your note here..."));
+    edit_content_->setPlaceholderText(tr("Write your note here... (Markdown: # heading, **bold**, - list, $AAPL)"));
     edl->addWidget(edit_content_, 1);
+
+    connect(edit_title_, &QLineEdit::textEdited, this, &NotesScreen::on_editor_edited);
+    connect(edit_tags_, &QLineEdit::textEdited, this, &NotesScreen::on_editor_edited);
+    connect(edit_tickers_, &QLineEdit::textEdited, this, &NotesScreen::on_editor_edited);
+    connect(edit_content_, &QTextEdit::textChanged, this, &NotesScreen::on_editor_edited);
+    connect(edit_category_, &QComboBox::activated, this, &NotesScreen::on_editor_edited);
+    connect(edit_priority_, &QComboBox::activated, this, &NotesScreen::on_editor_edited);
+    connect(edit_sentiment_, &QComboBox::activated, this, &NotesScreen::on_editor_edited);
 
     right_stack_->addWidget(edit_page); // index 2
 
@@ -549,10 +584,21 @@ void NotesScreen::update_notes_list() {
         // Category filter
         if (!archived_view && current_category_ != "ALL" && n.category != current_category_)
             continue;
-        // Search filter
+        // Search filter: every word must appear somewhere (title, body, tags, tickers);
+        // a leading $ matches a ticker ("$aapl").
         if (!search.isEmpty()) {
-            if (!n.title.toLower().contains(search) && !n.content.toLower().contains(search) &&
-                !n.tags.toLower().contains(search) && !n.tickers.toLower().contains(search))
+            const QString hay = n.title.toLower() + QLatin1Char('\n') + n.content.toLower() + QLatin1Char('\n') +
+                                n.tags.toLower() + QLatin1Char('\n') + n.tickers.toLower();
+            bool all = true;
+            for (QString term : search.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+                if (term.startsWith(QLatin1Char('$')) && term.size() > 1)
+                    term = term.mid(1);
+                if (!hay.contains(term)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (!all)
                 continue;
         }
         filtered_notes_.append(n);
@@ -625,7 +671,12 @@ bool NotesScreen::has_unsaved_edits() const {
 }
 
 bool NotesScreen::confirm_leave_editor() {
+    autosave_timer_->stop();
     if (!has_unsaved_edits())
+        return true;
+    // Notes autosave: leaving the editor just writes the pending edits. Only a note that
+    // cannot be saved yet (no title) still asks.
+    if (!edit_title_->text().trimmed().isEmpty() && autosave_now())
         return true;
     const auto reply = QMessageBox::warning(
         this, tr("Unsaved note"), tr("This note has unsaved changes.\n\nSave them before leaving?"),
@@ -693,6 +744,9 @@ void NotesScreen::on_new_note() {
     }
 
     is_editing_ = true;
+    has_session_original_ = false;
+    autosaved_in_session_ = false;
+    autosave_label_->clear();
     right_stack_->setCurrentIndex(2);
     editor_baseline_ = editor_fingerprint();
     edit_title_->setFocus();
@@ -708,15 +762,10 @@ void NotesScreen::on_save_note() {
         return;
     }
 
-    fincept::FinancialNote note;
-    note.title = title;
-    note.content = edit_content_->toPlainText();
-    note.category = edit_category_->currentData().toString();
-    note.priority = edit_priority_->currentText();
-    note.sentiment = edit_sentiment_->currentText();
-    note.tags = edit_tags_->text().trimmed();
-    note.tickers = edit_tickers_->text().trimmed().toUpper();
-    note.word_count = note.content.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
+    autosave_timer_->stop();
+    // Keeps favourite / archived / colour / reminder: saving an edited favourite used to
+    // un-favourite it (and un-archive an archived one) because those were rebuilt blank.
+    fincept::FinancialNote note = note_from_editor();
 
     auto& repo = fincept::NotesRepository::instance();
 
@@ -750,6 +799,7 @@ void NotesScreen::on_save_note() {
 
     // The editor now matches what is on disk.
     editor_baseline_ = editor_fingerprint();
+    autosaved_in_session_ = false;
 
     load_notes();
 
@@ -815,7 +865,137 @@ void NotesScreen::on_toggle_archive() {
 }
 
 void NotesScreen::on_search_changed(const QString& /*text*/) {
-    update_notes_list();
+    search_timer_->start(); // debounce: one list rebuild per pause in typing
+}
+
+// ── Autosave ─────────────────────────────────────────────────────────────────
+
+void NotesScreen::on_editor_edited() {
+    if (!is_editing_)
+        return;
+    autosave_timer_->start();
+}
+
+fincept::FinancialNote NotesScreen::note_from_editor() const {
+    fincept::FinancialNote note;
+    if (selected_note_id_ > 0) {
+        for (const auto& n : notes_) {
+            if (n.id == selected_note_id_) {
+                note = n;
+                break;
+            }
+        }
+        note.id = selected_note_id_;
+    }
+    note.title = edit_title_->text().trimmed();
+    note.content = edit_content_->toPlainText();
+    note.category = edit_category_->currentData().toString();
+    note.priority = edit_priority_->currentText();
+    note.sentiment = edit_sentiment_->currentText();
+    note.tags = edit_tags_->text().trimmed();
+    note.tickers = edit_tickers_->text().trimmed().toUpper();
+    note.word_count = note.content.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
+    return note;
+}
+
+bool NotesScreen::autosave_now() {
+    if (!is_editing_ || !has_unsaved_edits())
+        return true;
+    const fincept::FinancialNote note = note_from_editor();
+    if (note.title.isEmpty()) {
+        autosave_label_->setText(tr("AUTOSAVE: needs a title"));
+        return false;
+    }
+    auto& repo = fincept::NotesRepository::instance();
+    bool ok = false;
+    if (selected_note_id_ > 0) {
+        ok = repo.update(note).is_ok();
+    } else {
+        auto r = repo.create(note);
+        ok = r.is_ok();
+        if (ok)
+            selected_note_id_ = static_cast<int>(r.value());
+    }
+    if (!ok) {
+        LOG_ERROR("Notes", "Autosave failed");
+        autosave_label_->setText(tr("AUTOSAVE FAILED — use SAVE"));
+        return false;
+    }
+    autosaved_in_session_ = true;
+    editor_baseline_ = editor_fingerprint();
+    autosave_label_->setText(tr("AUTOSAVED %1").arg(QTime::currentTime().toString("HH:mm:ss")));
+    load_notes(); // refresh list/stats; the editor keeps its contents
+    return true;
+}
+
+void NotesScreen::revert_edit_session() {
+    if (!autosaved_in_session_)
+        return;
+    auto& repo = fincept::NotesRepository::instance();
+    if (has_session_original_) {
+        if (repo.update(session_original_).is_err())
+            LOG_ERROR("Notes", "Could not restore the note after CANCEL");
+    } else if (selected_note_id_ > 0) {
+        // A brand-new note that only exists because autosave created it.
+        if (repo.remove(selected_note_id_).is_ok())
+            selected_note_id_ = -1;
+    }
+    autosaved_in_session_ = false;
+    load_notes();
+}
+
+QString NotesScreen::markdown_with_symbol_links(const QString& content) {
+    // $AAPL / $BRK.B / $RELIANCE.NS → link; skipped inside `code` and ``` fences.
+    static const QRegularExpression cashtag(QStringLiteral("(?<![\\w$])\\$([A-Za-z][A-Za-z0-9.\\-^=]{0,14})\\b"));
+    QStringList out;
+    bool in_fence = false;
+    for (const QString& line : content.split(QLatin1Char('\n'))) {
+        if (line.trimmed().startsWith(QLatin1String("```"))) {
+            in_fence = !in_fence;
+            out << line;
+            continue;
+        }
+        if (in_fence || line.contains(QLatin1Char('`'))) {
+            out << line;
+            continue;
+        }
+        QString l = line;
+        l.replace(cashtag, QStringLiteral("[$\\1](fincept-symbol:\\1)"));
+        out << l;
+    }
+    return out.join(QLatin1Char('\n'));
+}
+
+void NotesScreen::on_symbol_link(const QUrl& url) {
+    if (url.scheme() != QLatin1String("fincept-symbol")) {
+        // Ordinary links in a note open in the system browser only on an explicit click.
+        if (url.scheme() == QLatin1String("http") || url.scheme() == QLatin1String("https"))
+            QDesktopServices::openUrl(url);
+        return;
+    }
+    const QString sym = url.path().trimmed().toUpper();
+    if (sym.isEmpty())
+        return;
+    QMenu menu(this);
+    menu.addSection(tr("Open %1 in…").arg(sym));
+    struct Target {
+        QString screen_id;
+        QString label;
+    };
+    const QVector<Target> targets = {
+        {QStringLiteral("equity_research"), tr("Equity Research")},
+        {QStringLiteral("equity_trading"), tr("Equity Trading")},
+        {QStringLiteral("news"), tr("News")},
+        {QStringLiteral("watchlist"), tr("Watchlist")},
+        {QStringLiteral("backtesting"), tr("Backtesting")},
+    };
+    for (const auto& t : targets) {
+        const QString screen_id = t.screen_id;
+        menu.addAction(t.label, this, [sym, screen_id]() {
+            EventBus::instance().publish("nav.open_symbol", {{"screen_id", screen_id}, {"symbol", sym}});
+        });
+    }
+    menu.exec(QCursor::pos());
 }
 
 void NotesScreen::on_export_note() {
@@ -872,12 +1052,21 @@ void NotesScreen::show_note(const fincept::FinancialNote& note) {
     meta_parts << tr("SENT: %1").arg(note.sentiment);
     if (!note.tags.isEmpty())
         meta_parts << tr("TAGS: %1").arg(note.tags);
-    if (!note.tickers.isEmpty())
-        meta_parts << tr("TICKERS: %1").arg(note.tickers);
-    meta_parts << note.updated_at;
+    for (auto& part : meta_parts)
+        part = part.toHtmlEscaped();
+    if (!note.tickers.isEmpty()) {
+        QStringList links;
+        for (const QString& t : note.tickers.split(QRegularExpression("[,\\s]+"), Qt::SkipEmptyParts)) {
+            const QString sym = t.trimmed().toUpper();
+            links << QStringLiteral("<a href=\"fincept-symbol:%1\" style=\"color:%2;\">%1</a>")
+                         .arg(sym.toHtmlEscaped(), AMBER());
+        }
+        meta_parts << tr("TICKERS: %1").arg(links.join(QStringLiteral(" ")));
+    }
+    meta_parts << note.updated_at.toHtmlEscaped();
 
     view_meta_->setText(meta_parts.join("  |  "));
-    view_content_->setText(note.content);
+    view_content_->setMarkdown(markdown_with_symbol_links(note.content));
     // The same button restores a note that is already archived.
     if (view_archive_btn_)
         view_archive_btn_->setText(note.is_archived ? tr("UNARCHIVE") : tr("ARCHIVE"));
@@ -899,8 +1088,14 @@ void NotesScreen::enter_edit_mode() {
     // a delete elsewhere) start from a clean editor rather than leaving the
     // previous note's text in the fields.
     bool found = false;
+    has_session_original_ = false;
+    autosaved_in_session_ = false;
+    if (autosave_label_)
+        autosave_label_->clear();
     for (const auto& n : notes_) {
         if (n.id == selected_note_id_) {
+            session_original_ = n;
+            has_session_original_ = true;
             edit_title_->setText(n.title);
             edit_content_->setPlainText(n.content);
             int cat_idx = edit_category_->findData(n.category);
@@ -1116,6 +1311,9 @@ void NotesScreen::restore_state(const QVariantMap& state) {
 
 void NotesScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    // MCP events are only received while visible — pick up anything that changed
+    // meanwhile (the editor's fields are not touched by a reload).
+    load_notes();
     subscribe_mcp_events();
     // Rate-gated pull of cloud notes on screen entry (no-op when sync is off).
     fincept::services::cloud::CloudSyncEngine::instance().request_pull(QStringLiteral("note"));
@@ -1123,6 +1321,11 @@ void NotesScreen::showEvent(QShowEvent* event) {
 
 void NotesScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+    // Flush a pending autosave instead of letting the timer fire on a hidden screen.
+    if (autosave_timer_->isActive()) {
+        autosave_timer_->stop();
+        autosave_now();
+    }
     unsubscribe_mcp_events();
 }
 
@@ -1147,6 +1350,7 @@ void NotesScreen::subscribe_mcp_events() {
     auto& bus = EventBus::instance();
     mcp_event_subs_.append(bus.subscribe(this, "notes.created", on_notes_changed));
     mcp_event_subs_.append(bus.subscribe(this, "notes.deleted", on_notes_changed));
+    mcp_event_subs_.append(bus.subscribe(this, "notes.updated", on_notes_changed));
 }
 
 void NotesScreen::unsubscribe_mcp_events() {

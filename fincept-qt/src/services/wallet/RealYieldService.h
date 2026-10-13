@@ -21,10 +21,10 @@ namespace fincept::wallet {
 /// realised yield, `<endpoint>/revenue/current` for the terminal-wide
 /// weekly bucket.
 ///
-/// **Mock path** (active until endpoint is configured): publishes derived
-/// numbers consistent with the Phase 5 mock buyback ($42,310 / 25 % staker
-/// share = $10,577.50 distributed) and the StakingService mock locks
-/// (3 demo positions, lifetime $1,296). Same `is_mock=true` discipline.
+/// **No endpoint configured**: `treasury:revenue` publishes a sample bucket
+/// consistent with the Phase 5 sample buyback ($42,310/week) with
+/// `is_mock=true`; `wallet:yield:<pubkey>` publishes an "unavailable" error —
+/// no per-wallet yield is ever invented.
 ///
 /// Cross-phase reuse: `treasury:revenue` is also consumed by the Phase 5
 /// dashboard and any future revenue-driven UI. Bucketed weekly to match

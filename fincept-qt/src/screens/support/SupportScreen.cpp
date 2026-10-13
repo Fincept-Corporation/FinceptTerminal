@@ -151,22 +151,40 @@ SupportScreen::SupportScreen(QWidget* parent) : QWidget(parent) {
     auth::UserApi::instance().get_support_categories(
         [this](auth::ApiResponse r) {
             if (r.success) {
-                // Try common response shapes: {"categories":[...]} or bare array
+                // GET /support/categories answers {"ticket_categories":[...],
+                // "feedback_categories":[...], "priorities":[...]}. Only
+                // "categories" / "items" used to be read, so the server list was
+                // never applied and three of the hard-coded fallback categories
+                // (feature_request / account / other) were rejected by the API.
                 QJsonArray cats;
                 auto payload = r.data;
                 if (payload.contains("data") && payload["data"].isObject())
                     payload = payload["data"].toObject();
-                if (payload.contains("categories") && payload["categories"].isArray())
-                    cats = payload["categories"].toArray();
-                else if (payload.contains("items") && payload["items"].isArray())
-                    cats = payload["items"].toArray();
+                for (const char* key : {"ticket_categories", "categories", "items"}) {
+                    if (payload.value(QLatin1String(key)).isArray()) {
+                        cats = payload.value(QLatin1String(key)).toArray();
+                        break;
+                    }
+                }
 
                 if (!cats.isEmpty()) {
                     server_categories_.clear();
                     for (const auto& v : cats) {
-                        QString cat = v.isString() ? v.toString() : v.toObject()["name"].toString();
-                        if (!cat.isEmpty())
-                            server_categories_.append({cat[0].toUpper() + cat.mid(1).replace('_', ' '), cat});
+                        const QString cat = v.isString() ? v.toString() : v.toObject()["name"].toString();
+                        if (cat.isEmpty())
+                            continue;
+                        QString display;
+                        if (cat == QLatin1String("technical"))
+                            display = tr("Technical");
+                        else if (cat == QLatin1String("billing"))
+                            display = tr("Billing");
+                        else if (cat == QLatin1String("general"))
+                            display = tr("General");
+                        else if (cat == QLatin1String("bug_report"))
+                            display = tr("Bug Report");
+                        else
+                            display = cat.at(0).toUpper() + QString(cat.mid(1)).replace('_', ' ');
+                        server_categories_.append({display, cat});
                     }
                     populate_category_combo();
                 }
@@ -267,8 +285,9 @@ void SupportScreen::retranslateUi() {
         const int idx = filter_combo_->currentIndex();
         filter_combo_->blockSignals(true);
         filter_combo_->clear();
-        filter_combo_->addItems(
-            {tr("All Tickets"), tr("Open"), tr("In Progress"), tr("Pending"), tr("Resolved"), tr("Closed")});
+        // Matches the API's statuses (open / in_progress / resolved / closed);
+        // the old "Pending" entry could never match anything.
+        filter_combo_->addItems({tr("All Tickets"), tr("Open"), tr("In Progress"), tr("Resolved"), tr("Closed")});
         if (idx >= 0 && idx < filter_combo_->count())
             filter_combo_->setCurrentIndex(idx);
         filter_combo_->blockSignals(false);
@@ -317,7 +336,6 @@ void SupportScreen::retranslateUi() {
         close_btn_ = nullptr;
         reopen_btn_ = nullptr;
         reply_box_ = nullptr;
-        demo_box_ = nullptr;
         closed_box_ = nullptr;
 
         content_stack_->addWidget(build_empty_state());
@@ -329,7 +347,6 @@ void SupportScreen::retranslateUi() {
         // Fall back to the empty state; the sidebar row re-selects on click.
         if (saved_view == 2) {
             selected_ticket_id_ = -1;
-            selected_is_demo_ = false;
             selected_is_closed_ = false;
             content_stack_->setCurrentIndex(0);
         } else {

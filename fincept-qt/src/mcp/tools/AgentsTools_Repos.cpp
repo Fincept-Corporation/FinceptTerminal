@@ -2,7 +2,8 @@
 //
 // Repository / persistence tools: planner CRUD + execute, memory + knowledge,
 // AgentConfigRepository CRUD, WorkflowRepository CRUD, memory repo variants,
-// session management, paper trading, trade decisions.
+// session management, trade decisions. (Agents paper-trade through the C++
+// engine's pt_* tools — PaperTradingTools.cpp.)
 //
 // Part of the topic-based split of AgentsTools.cpp.
 
@@ -741,126 +742,6 @@ void agents_internal::register_repos_tools(std::vector<ToolDef>& tools) {
                 // No error_occurred listener for add_session_message(): it reports failure through its own
                 // result signal, and that signal's category-keyed errors belong to other calls.
                 svc->add_session_message(sid, role, content);
-            });
-        };
-        tools.push_back(std::move(t));
-    }
-
-    // ── Paper trading (agent-side, distinct from PaperTradingTools) ────
-    // All three emit the same `trade_executed` signal — concurrent calls
-    // can cross results. Caller is responsible for serialising calls per
-    // portfolio_id if precise ordering matters.
-    {
-        ToolDef t;
-        t.name = "agent_paper_execute_trade";
-        t.description = "Execute a paper trade via the agent backend (buy/sell qty @ price).";
-        t.category = "agents";
-        t.is_destructive = true;
-        t.auth_required = AuthLevel::ExplicitConfirm;
-        t.default_timeout_ms = 30000;
-        t.input_schema = ToolSchemaBuilder()
-                             .string("portfolio_id", "Portfolio id")
-                             .required()
-                             .length(1, 128)
-                             .string("symbol", "Ticker symbol")
-                             .required()
-                             .length(1, 32)
-                             .string("action", "buy / sell")
-                             .required()
-                             .enums({"buy", "sell"})
-                             .number("quantity", "Quantity to trade")
-                             .required()
-                             .min(0)
-                             .number("price", "Execution price")
-                             .required()
-                             .min(0)
-                             .build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString pid = args["portfolio_id"].toString();
-            const QString sym = args["symbol"].toString();
-            const QString action = args["action"].toString();
-            const double qty = args["quantity"].toDouble();
-            const double px = args["price"].toDouble();
-            auto* svc = &services::AgentService::instance();
-            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise,
-                                               [svc, pid, sym, action, qty, px](auto resolve) {
-                                                   auto* holder = new QObject(svc);
-                                                   QObject::connect(svc, &services::AgentService::trade_executed,
-                                                                    holder, [resolve, holder](QJsonObject r) {
-                                                                        resolve(ToolResult::ok_data(r));
-                                                                        holder->deleteLater();
-                                                                    });
-                                                   // error_occurred carries a category, not a request id — only take our own (paper_trade).
-                                                   QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                                                    [resolve, holder](QString err_ctx, QString msg) {
-                                                                        if (err_ctx != QLatin1String("paper_trade"))
-                                                                            return;
-                                                                        resolve(ToolResult::fail(msg));
-                                                                        holder->deleteLater();
-                                                                    });
-                                                   svc->paper_execute_trade(pid, sym, action, qty, px);
-                                               });
-        };
-        tools.push_back(std::move(t));
-    }
-
-    {
-        ToolDef t;
-        t.name = "agent_paper_get_portfolio";
-        t.description = "Get an agent-side paper-trading portfolio snapshot by id.";
-        t.category = "agents";
-        t.default_timeout_ms = 30000;
-        t.input_schema = ToolSchemaBuilder().string("portfolio_id", "Portfolio id").required().length(1, 128).build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString pid = args["portfolio_id"].toString();
-            auto* svc = &services::AgentService::instance();
-            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, pid](auto resolve) {
-                auto* holder = new QObject(svc);
-                QObject::connect(svc, &services::AgentService::trade_executed, holder,
-                                 [resolve, holder](QJsonObject r) {
-                                     resolve(ToolResult::ok_data(r));
-                                     holder->deleteLater();
-                                 });
-                // error_occurred carries a category, not a request id — only take our own (paper_portfolio).
-                QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString err_ctx, QString msg) {
-                                     if (err_ctx != QLatin1String("paper_portfolio"))
-                                         return;
-                                     resolve(ToolResult::fail(msg));
-                                     holder->deleteLater();
-                                 });
-                svc->paper_get_portfolio(pid);
-            });
-        };
-        tools.push_back(std::move(t));
-    }
-
-    {
-        ToolDef t;
-        t.name = "agent_paper_get_positions";
-        t.description = "Get current positions for an agent-side paper-trading portfolio.";
-        t.category = "agents";
-        t.default_timeout_ms = 30000;
-        t.input_schema = ToolSchemaBuilder().string("portfolio_id", "Portfolio id").required().length(1, 128).build();
-        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
-            const QString pid = args["portfolio_id"].toString();
-            auto* svc = &services::AgentService::instance();
-            AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, pid](auto resolve) {
-                auto* holder = new QObject(svc);
-                QObject::connect(svc, &services::AgentService::trade_executed, holder,
-                                 [resolve, holder](QJsonObject r) {
-                                     resolve(ToolResult::ok_data(r));
-                                     holder->deleteLater();
-                                 });
-                // error_occurred carries a category, not a request id — only take our own (paper_positions).
-                QObject::connect(svc, &services::AgentService::error_occurred, holder,
-                                 [resolve, holder](QString err_ctx, QString msg) {
-                                     if (err_ctx != QLatin1String("paper_positions"))
-                                         return;
-                                     resolve(ToolResult::fail(msg));
-                                     holder->deleteLater();
-                                 });
-                svc->paper_get_positions(pid);
             });
         };
         tools.push_back(std::move(t));

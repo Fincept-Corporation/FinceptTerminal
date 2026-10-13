@@ -64,6 +64,28 @@ inline bool parse_doubles(const QString& text, QJsonArray& out, QString* bad_tok
     return true;
 }
 
+// Validate a JSON 2-D numeric matrix: every row an array of `cols` numbers
+// (cols < 0: take the first row's width). Returns "" when valid, otherwise a
+// user-facing reason. Ragged rows / strings used to reach the Python side and
+// come back as an unrelated numpy traceback.
+inline QString check_numeric_matrix(const QJsonArray& rows, int cols = -1) {
+    const auto tr_ = [](const char* s) { return QCoreApplication::translate("QuantModulePanel", s); };
+    if (rows.isEmpty())
+        return tr_("The matrix is empty.");
+    const int want = cols >= 0 ? cols : static_cast<int>(rows.first().toArray().size());
+    for (int r = 0; r < rows.size(); ++r) {
+        if (!rows.at(r).isArray())
+            return tr_("Row %1 is not an array.").arg(r + 1);
+        const QJsonArray row = rows.at(r).toArray();
+        if (row.size() != want)
+            return tr_("Row %1 has %2 values; expected %3.").arg(r + 1).arg(row.size()).arg(want);
+        for (const auto& v : row)
+            if (!v.isDouble())
+                return tr_("Row %1 contains a non-numeric value.").arg(r + 1);
+    }
+    return {};
+}
+
 // Split a comma-separated string into a JSON array of trimmed, non-empty
 // strings. Replaces the ad-hoc `for (auto& s : text.split(',')) arr.append(...)`
 // loops that shipped `[""]` to Python when the field was left blank.

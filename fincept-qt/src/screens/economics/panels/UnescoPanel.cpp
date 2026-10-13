@@ -94,7 +94,7 @@ UnescoPanel::UnescoPanel(QWidget* parent) : EconPanelBase(kUnescoSourceId, kUnes
     auto* thl = new QHBoxLayout(theme_hdr);
     thl->setContentsMargins(8, 0, 8, 0);
     theme_lbl_ = new QLabel(tr("THEME"));
-    theme_lbl_->setStyleSheet(ctrl_label_style());
+    theme_lbl_->setStyleSheet(ctrl_label_style()); // sidebar: outside the panel_style() container
     theme_combo_ = new QComboBox;
     theme_combo_->addItem(tr("Education"), "education");
     theme_combo_->addItem(tr("Science & Tech"), "science");
@@ -151,7 +151,7 @@ void UnescoPanel::activate() {
 void UnescoPanel::build_controls(QHBoxLayout* thl) {
     auto make_lbl = [](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 

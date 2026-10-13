@@ -108,14 +108,26 @@ void SectorHeatmapWidget::hub_unsubscribe_all() {
 }
 
 void SectorHeatmapWidget::rebuild_from_cache() {
+    // One slot per sector in declared order — a sector whose quote has not
+    // arrived keeps its place (shown as "--") instead of the following tiles
+    // sliding into its cell, which made positions jump while data streamed in.
     QVector<services::QuoteData> quotes;
-    quotes.reserve(row_cache_.size());
-    for (const auto& sym : sector_symbols()) {
+    const auto syms = sector_symbols();
+    quotes.reserve(syms.size());
+    bool any = false;
+    for (const auto& sym : syms) {
         auto it = row_cache_.constFind(sym);
-        if (it != row_cache_.constEnd())
+        if (it != row_cache_.constEnd()) {
             quotes.append(it.value());
+            any = true;
+        } else {
+            services::QuoteData placeholder;
+            placeholder.symbol = sym;
+            placeholder.price = -1; // marker: no quote yet
+            quotes.append(placeholder);
+        }
     }
-    if (!quotes.isEmpty())
+    if (any)
         populate(quotes);
 }
 
@@ -154,10 +166,18 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
         const auto& q = quotes[idx];
         Cell& c = cell_at(idx);
         c.frame->setVisible(true);
+        const bool have = q.price >= 0;
 
-        const int intensity = static_cast<int>(std::min(std::abs(q.change_pct) * 60.0, 200.0));
-        QColor tint(q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
-        tint.setAlpha(40 + intensity);
+        // Tint in 0.25 % steps: a continuous alpha changed the sheet (and paid
+        // a CSS re-parse) on almost every tick for a sub-basis-point move.
+        const double bucketed = std::floor(std::abs(q.change_pct) / 0.25) * 0.25;
+        const int intensity = static_cast<int>(std::min(bucketed * 60.0, 200.0));
+        QColor tint(!have                ? ui::colors::BG_RAISED()
+                    : q.change_pct > 0   ? ui::colors::POSITIVE()
+                    : q.change_pct < 0   ? ui::colors::NEGATIVE()
+                                         : ui::colors::BG_RAISED());
+        if (have && q.change_pct != 0)
+            tint.setAlpha(40 + intensity);
         const QString bg = QString("background: %1; border: 1px solid %2; border-radius: 2px;")
                                .arg(tint.name(QColor::HexArgb), ui::colors::BORDER_DIM());
         // Skip the CSS reparse when the tint is unchanged (the common case
@@ -174,12 +194,15 @@ void SectorHeatmapWidget::populate(const QVector<services::QuoteData>& quotes) {
         link_symbol(c.frame, q.symbol);
         c.name->setToolTip(QString("%1  (%2)").arg(display, q.symbol));
 
-        c.chg->setText(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
-        const int sign = q.change_pct >= 0 ? 1 : -1;
+        c.chg->setText(!have ? QStringLiteral("--")
+                             : QString("%1%2%").arg(q.change_pct > 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
+        const int sign = !have ? 2 : q.change_pct > 0 ? 1 : q.change_pct < 0 ? -1 : 3; // 2 = none, 3 = flat
         if (sign != c.last_sign) {
             c.last_sign = sign;
             c.chg->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                                     .arg(sign > 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+                                     .arg(sign == 1    ? ui::colors::POSITIVE()
+                                          : sign == -1 ? ui::colors::NEGATIVE()
+                                                       : ui::colors::TEXT_TERTIARY()));
         }
     }
 

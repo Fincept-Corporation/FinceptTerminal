@@ -39,7 +39,10 @@
 #include <QShowEvent>
 #include <QTextDocument>
 #include <QTextFrame>
+#include <QTimer>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 namespace fincept::screens {
 
@@ -287,6 +290,108 @@ void ReportBuilderScreen::refresh_structure() {
     }
     int sel_idx = (selected_id_ > 0) ? Service::instance().index_of(selected_id_) : -1;
     comp_toolbar_->update_structure(items, sel_idx);
+}
+
+// ── Live data blocks ─────────────────────────────────────────────────────────
+
+namespace {
+
+// Two decimals for normal prices; small prices (FX crosses, crypto) keep 6 significant
+// digits instead of collapsing to "0.00".
+QString rb_price_text(double v) {
+    if (std::abs(v) >= 1.0 || v == 0.0)
+        return QString::number(v, 'f', 2);
+    return QString::number(v, 'g', 6);
+}
+
+} // namespace
+
+void ReportBuilderScreen::fetch_quote(const QString& symbol) {
+    const QString sym = symbol.trimmed().toUpper();
+    if (sym.isEmpty())
+        return;
+
+    // Mark every block showing this symbol as loading (one hub request serves them all).
+    auto& svc = Service::instance();
+    for (const auto& c : svc.components()) {
+        if (c.type == QLatin1String("market_data") && c.config.value("symbol").compare(sym, Qt::CaseInsensitive) == 0 &&
+            c.config.value("status") != QLatin1String("loading")) {
+            auto cfg = c.config;
+            cfg["status"] = "loading";
+            cfg.remove("error");
+            svc.update_component(c.id, c.content, cfg);
+        }
+    }
+    if (pending_quotes_.contains(sym))
+        return; // already in flight
+    pending_quotes_.insert(sym);
+
+    const QString topic = QStringLiteral("market:quote:") + sym;
+    QPointer<ReportBuilderScreen> self = this;
+
+    // Write the result (or the failure) into every block of this symbol still loading.
+    auto settle = [self, sym](const fincept::services::QuoteData* q, const QString& error) {
+        if (!self)
+            return;
+        self->pending_quotes_.remove(sym);
+        fincept::datahub::DataHub::instance().unsubscribe(self, QStringLiteral("market:quote:") + sym);
+        fincept::datahub::DataHub::instance().unsubscribe_errors(self, QStringLiteral("market:quote:") + sym);
+        auto& s = Service::instance();
+        const QString as_of = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm t");
+        for (const auto& c : s.components()) {
+            if (c.type != QLatin1String("market_data") ||
+                c.config.value("symbol").compare(sym, Qt::CaseInsensitive) != 0 ||
+                c.config.value("status") != QLatin1String("loading"))
+                continue;
+            auto cfg = c.config;
+            if (q && q->price > 0) {
+                cfg["price"] = rb_price_text(q->price);
+                cfg["change"] = rb_price_text(q->change);
+                cfg["change_pct"] = QString::number(q->change_pct, 'f', 2);
+                cfg["name"] = q->name;
+                cfg["high"] = q->high > 0 ? rb_price_text(q->high) : "";
+                cfg["low"] = q->low > 0 ? rb_price_text(q->low) : "";
+                cfg["volume"] = q->volume > 0 ? QString::number(q->volume, 'f', 0) : "";
+                cfg["as_of"] = as_of;
+                cfg["status"] = "ok";
+                cfg.remove("error");
+            } else {
+                // Keep the last good values (and their as-of) visible, flag the failure.
+                cfg["status"] = cfg.value("price").isEmpty() ? "error" : "ok";
+                cfg["error"] = error;
+            }
+            s.update_component(c.id, c.content, cfg);
+        }
+    };
+
+    auto& hub = fincept::datahub::DataHub::instance();
+    hub.subscribe<fincept::services::QuoteData>(this, topic, [settle](const fincept::services::QuoteData& q) {
+        settle(&q, q.price > 0 ? QString() : QStringLiteral("no price in the quote"));
+    });
+    // A producer failure (unknown symbol, provider down) settles at once with its reason.
+    hub.subscribe_errors(this, topic, [settle](const QString& err) { settle(nullptr, err); });
+    // Always a fresh request: a user who presses Fetch / Refresh Data wants a quote taken
+    // now, not whatever the hub cached earlier (which carried no timestamp at all).
+    hub.request(topic, /*force=*/true);
+    // A bad symbol or a dead feed must not leave the block "Fetching…" forever (and
+    // printed that way into an exported PDF).
+    QTimer::singleShot(20000, this, [self, sym, settle]() {
+        if (self && self->pending_quotes_.contains(sym))
+            settle(nullptr, ReportBuilderScreen::tr("no quote received within 20 s"));
+    });
+}
+
+void ReportBuilderScreen::refresh_live_data() {
+    QSet<QString> symbols;
+    for (const auto& c : Service::instance().components()) {
+        if (c.type == QLatin1String("market_data")) {
+            const QString sym = c.config.value("symbol").trimmed().toUpper();
+            if (!sym.isEmpty())
+                symbols.insert(sym);
+        }
+    }
+    for (const QString& sym : symbols)
+        fetch_quote(sym);
 }
 
 // ── Dialogs ──────────────────────────────────────────────────────────────────

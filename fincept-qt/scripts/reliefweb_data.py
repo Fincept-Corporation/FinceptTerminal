@@ -9,8 +9,11 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
-API_KEY = os.environ.get('RELIEFWEB_API_KEY', '')
-BASE_URL = "https://api.reliefweb.int/v1"
+# ReliefWeb retired API v1 (HTTP 410). API v2 only answers requests that carry an appname
+# ReliefWeb has approved (request one at https://apidoc.reliefweb.int/parameters#appname);
+# any other appname gets HTTP 403. The approved name is stored like an API key.
+APP_ID = os.environ.get('RELIEFWEB_APP_ID', '').strip()
+BASE_URL = "https://api.reliefweb.int/v2"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
@@ -19,8 +22,12 @@ session.mount('http://', adapter)
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
+    if not APP_ID:
+        return {"error": "ReliefWeb API v2 requires an approved appname: request one at "
+                         "https://apidoc.reliefweb.int/parameters#appname and save it as RELIEFWEB_APP_ID "
+                         "in Settings > Credentials"}
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
-    default_params = {"appname": "fincept-terminal", "slim": 1}
+    default_params = {"appname": APP_ID, "slim": 1}
     if params:
         default_params.update(params)
     try:
@@ -28,7 +35,11 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        try:
+            msg = e.response.json().get("error", {}).get("message") or str(e)
+        except ValueError:
+            msg = str(e)
+        return {"error": f"HTTP {e.response.status_code}: {msg}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
     except (json.JSONDecodeError, ValueError) as e:

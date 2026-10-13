@@ -637,6 +637,40 @@ void SurfaceAnalyticsScreen::on_surface_received(const fincept::DatabentoSurface
         stress_data_.z = r.z;
         replaced = ChartType::StressTestPnL;
         did_replace = true;
+    } else if (type == "yield_curve" && !r.z.empty()) {
+        // Rows = settlement dates (newest first), columns = maturities in months.
+        yield_data_ = {};
+        for (float m : r.x_axis)
+            yield_data_.maturities.push_back(static_cast<int>(std::lround(m)));
+        yield_data_.time_points.assign(r.y_axis.begin(), r.y_axis.end());
+        yield_data_.time_labels = r.y_labels;
+        yield_data_.z = r.z;
+        replaced = ChartType::YieldCurve;
+        did_replace = true;
+    } else if (type == "forward_rate" && !r.z.empty()) {
+        fwd_rate_data_ = {};
+        for (float st : r.x_axis)
+            fwd_rate_data_.start_tenors.push_back(static_cast<int>(std::lround(st)));
+        fwd_rate_data_.forward_periods.assign(r.y_axis.begin(), r.y_axis.end());
+        fwd_rate_data_.z = r.z;
+        replaced = ChartType::ForwardRate;
+        did_replace = true;
+    } else if (type == "rate_path" && !r.z.empty()) {
+        monetary_data_ = {};
+        monetary_data_.central_banks = r.x_labels;
+        monetary_data_.meetings_ahead.assign(r.y_axis.begin(), r.y_axis.end());
+        monetary_data_.step_labels = r.y_labels;
+        monetary_data_.z = r.z;
+        replaced = ChartType::MonetaryPolicyPath;
+        did_replace = true;
+    } else if (type == "fx_forward_points" && !r.z.empty()) {
+        fx_fwd_data_ = {};
+        fx_fwd_data_.pairs = r.x_labels;
+        fx_fwd_data_.tenors.assign(r.y_axis.begin(), r.y_axis.end());
+        fx_fwd_data_.tenor_labels = r.y_labels;
+        fx_fwd_data_.z = r.z;
+        replaced = ChartType::FXForwardPoints;
+        did_replace = true;
     }
 
     if (did_replace)

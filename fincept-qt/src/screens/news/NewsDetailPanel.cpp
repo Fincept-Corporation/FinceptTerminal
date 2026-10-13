@@ -1,11 +1,14 @@
 #include "screens/news/NewsDetailPanel.h"
 
-#include "core/events/EventBus.h"
+#include "auth/AuthTypes.h"
 #include "core/logging/Logger.h"
+#include "network/http/HttpClient.h"
+#include "screens/news/NewsFeedPanel.h"
 #include "services/file_manager/FileManagerService.h"
 #include "storage/repositories/NewsArticleRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -13,7 +16,9 @@
 #include <QDesktopServices>
 #include <QFile>
 #include <QFileInfo>
+#include <QCursor>
 #include <QGridLayout>
+#include <QMenu>
 #include <QPointer>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -31,6 +36,8 @@ namespace {
 // unwrapped width — otherwise revealing the AI-analysis section balloons the
 // panel's size hint and pushes it past the screen edge.
 constexpr int kPanelWidth = 420;
+/// Below this balance the credit footer turns amber and offers Plans & Pricing.
+constexpr double kNewsLowCreditThreshold = 20.0;
 } // namespace
 
 NewsDetailPanel::NewsDetailPanel(QWidget* parent) : QWidget(parent) {
@@ -167,26 +174,31 @@ QWidget* NewsDetailPanel::build_content_view() {
     impact_label_->setObjectName("newsDetailImpact");
     layout->addWidget(impact_label_);
 
-    // Tickers — each one is a link that opens the symbol in Equity Research
-    // (via the nav.open_symbol event, which also constructs the screen if it has
-    // not been opened yet). Tickers are A-Z tokens extracted by the parser, but
-    // the label is still built from escaped / percent-encoded parts.
+    // Tickers — each one is a link that opens the shared ticker menu (Equity
+    // Research / Equity Trading / Backtesting / watchlist / filter). Tickers are
+    // A-Z tokens extracted by the parser, but the label is still built from
+    // escaped / percent-encoded parts.
     tickers_label_ = new QLabel(content);
     tickers_label_->setObjectName("newsDetailTickers");
     tickers_label_->setTextFormat(Qt::RichText);
     tickers_label_->setTextInteractionFlags(Qt::TextBrowserInteraction);
     tickers_label_->setOpenExternalLinks(false);
     tickers_label_->setWordWrap(true);
-    tickers_label_->setToolTip(tr("Click a ticker to open it in Equity Research"));
-    connect(tickers_label_, &QLabel::linkActivated, this, [](const QString& link) {
+    tickers_label_->setToolTip(tr("Click a ticker for research, chart, backtest and watchlist actions"));
+    connect(tickers_label_, &QLabel::linkActivated, this, [this](const QString& link) {
         // Only ever act on our own scheme.
         if (!link.startsWith(QLatin1String("sym:")))
             return;
         const QString symbol = QUrl::fromPercentEncoding(link.mid(4).toUtf8());
         if (symbol.isEmpty())
             return;
-        EventBus::instance().publish("nav.open_symbol",
-                                     QVariantMap{{"screen_id", "equity_research"}, {"symbol", symbol}});
+        QMenu menu(this);
+        QPointer<NewsDetailPanel> self = this;
+        NewsFeedPanel::add_ticker_actions(&menu, symbol, this, [self](const QString& t) {
+            if (self)
+                emit self->ticker_filter_requested(t);
+        });
+        menu.exec(QCursor::pos());
     });
     layout->addWidget(tickers_label_);
 
@@ -207,6 +219,8 @@ QWidget* NewsDetailPanel::build_content_view() {
     copy_title_btn_->setToolTip(tr("Copy article headline to clipboard"));
     analyze_btn_ = new QPushButton(tr("ANALYZE"), content);
     analyze_btn_->setObjectName("newsDetailAnalyzeBtn");
+    analyze_btn_->setToolTip(tr("Fincept AI analysis of the full article — uses Fincept API credits "
+                                "(the cost and remaining balance are shown after each run)"));
     save_btn_ = new QPushButton(tr("SAVE"), content);
     save_btn_->setObjectName("newsDetailSaveBtn");
     save_btn_->setToolTip(tr("Save article to File Manager"));
@@ -236,6 +250,15 @@ QWidget* NewsDetailPanel::build_content_view() {
     for (int c = 0; c < kCols; ++c)
         action_layout->setColumnStretch(c, 1);
     layout->addWidget(actions);
+
+    // Plans & Pricing shortcut — only shown when the analysis credits ran out / run low.
+    plans_btn_ = new QPushButton(content);
+    plans_btn_->setObjectName("newsDetailOpenBtn");
+    plans_btn_->setFixedHeight(24);
+    plans_btn_->setCursor(Qt::PointingHandCursor);
+    plans_btn_->hide();
+    connect(plans_btn_, &QPushButton::clicked, this, [this]() { ui::billing::open_plans(this); });
+    layout->addWidget(plans_btn_);
 
     connect(open_btn_, &QPushButton::clicked, this, [this]() {
         if (!has_article_)
@@ -457,8 +480,7 @@ QWidget* NewsDetailPanel::build_content_view() {
 
     // Credits footer (e.g. "Credits used: 1 / remaining: 9").
     ai_credits_ = new QLabel(analysis_section_);
-    ai_credits_->setObjectName("newsDetailAiCredits");
-    ai_credits_->setStyleSheet("color:#94a3b8; font-size:10px;");
+    ai_credits_->setObjectName("newsDetailAiCredits"); // colours: rules in the news screen sheet
     ai_credits_->hide();
     analysis_layout->addWidget(ai_credits_);
 
@@ -633,6 +655,7 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     // copy or send to the analysis endpoint.
     const bool has_link = !article.link.isEmpty();
     analyze_btn_->setEnabled(has_link);
+    plans_btn_->hide();
     open_btn_->setEnabled(has_link);
     copy_btn_->setEnabled(has_link);
     analyze_timeout_->stop();
@@ -680,10 +703,20 @@ void NewsDetailPanel::refresh_bookmark_state() {
     });
 }
 
-void NewsDetailPanel::show_analysis_failed() {
+void NewsDetailPanel::show_analysis_failed(const QString& error) {
     analyze_timeout_->stop();
     analyze_btn_->setEnabled(true);
+    // Out of credits: retrying cannot help — say so and offer the plans.
+    if (HttpClient::status_from_error(error.toStdString()) == 402) {
+        analyze_btn_->setText(tr("NO CREDITS"));
+        analyze_btn_->setToolTip(HttpClient::message_from_error(error.toStdString()));
+        plans_btn_->setText(tr("INSUFFICIENT CREDITS — SEE PLANS"));
+        plans_btn_->show();
+        return;
+    }
     analyze_btn_->setText(tr("FAILED - RETRY"));
+    if (!error.isEmpty())
+        analyze_btn_->setToolTip(tr("Analysis failed: %1").arg(error.left(200)));
 }
 
 void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
@@ -871,12 +904,26 @@ void NewsDetailPanel::show_analysis(const services::NewsAnalysis& analysis) {
         ai_keywords_->hide();
     }
 
-    // Credits footer — only shown when the backend reported a credit
-    // count (zero/zero means the API didn't surface it).
-    if (analysis.credits_used > 0 || analysis.credits_remaining > 0) {
-        ai_credits_->setText(
-            tr("Credits used: %1  •  remaining: %2").arg(analysis.credits_used).arg(analysis.credits_remaining));
+    // Credits footer — fractional balances (one call can cost 0.35 credits), shown
+    // only when the backend reported them (negative = not reported).
+    if (analysis.credits_used >= 0 || analysis.credits_remaining >= 0) {
+        QStringList parts;
+        if (analysis.credits_used >= 0)
+            parts << tr("Credits used: %1").arg(auth::format_credits(analysis.credits_used));
+        if (analysis.credits_remaining >= 0)
+            parts << tr("remaining: %1").arg(auth::format_credits(analysis.credits_remaining));
+        ai_credits_->setText(parts.join(QStringLiteral("  •  ")));
+        const bool low = analysis.credits_remaining >= 0 && analysis.credits_remaining < kNewsLowCreditThreshold;
+        ai_credits_->setProperty("low", low);
+        ai_credits_->style()->unpolish(ai_credits_);
+        ai_credits_->style()->polish(ai_credits_);
         ai_credits_->show();
+        if (low) {
+            plans_btn_->setText(tr("LOW CREDITS — SEE PLANS"));
+            plans_btn_->show();
+        } else {
+            plans_btn_->hide();
+        }
     } else {
         ai_credits_->hide();
     }
@@ -1055,7 +1102,7 @@ void NewsDetailPanel::retranslateUi() {
     if (bookmark_btn_)
         bookmark_btn_->setToolTip(tr("Bookmark article"));
     if (tickers_label_)
-        tickers_label_->setToolTip(tr("Click a ticker to open it in Equity Research"));
+        tickers_label_->setToolTip(tr("Click a ticker for research, chart, backtest and watchlist actions"));
     // analyze_btn_ / bookmark_btn_ labels are state-dependent and refresh when
     // the next article is shown — intentionally not forced here. Per-row dynamic
     // content (badges, metrics, entities) re-renders from live data.

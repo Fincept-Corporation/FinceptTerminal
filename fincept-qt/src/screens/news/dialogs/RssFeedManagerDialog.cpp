@@ -2,13 +2,11 @@
 
 #include "core/logging/Logger.h"
 #include "screens/news/dialogs/RssFeedEditDialog.h"
+#include "services/news/RssFeedProbeService.h"
 
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QMessageBox>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPointer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -25,9 +23,6 @@ constexpr int kColUrl = 4;
 constexpr int kColCategory = 5;
 constexpr int kColRegion = 6;
 constexpr int kColTier = 7;
-
-constexpr const char* kBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 } // anonymous namespace
 
@@ -269,60 +264,31 @@ void RssFeedManagerDialog::on_toggle_enabled() {
     reload_table();
 }
 
-QNetworkAccessManager* RssFeedManagerDialog::nam() {
-    // P10 — one manager per dialog, not one per test click.
-    if (!nam_)
-        nam_ = new QNetworkAccessManager(this);
-    return nam_;
-}
-
 void RssFeedManagerDialog::on_test_url() {
     const int row = selected_row();
     if (row < 0)
         return;
     const QString url = rows_[row].feed.url;
+    const QString source = rows_[row].feed.source;
     if (url.isEmpty() || !QUrl(url).isValid()) {
         QMessageBox::warning(this, tr("Test"), tr("Feed URL is invalid."));
         return;
     }
 
     test_btn_->setEnabled(false);
-    status_label_->setText(tr("Testing %1...").arg(rows_[row].feed.source));
-
-    QNetworkRequest req((QUrl(url)));
-    req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
-    req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    req.setTransferTimeout(6000);
+    status_label_->setText(tr("Testing %1...").arg(source));
 
     QPointer<RssFeedManagerDialog> self = this;
-    auto* reply = nam()->get(req);
-    connect(reply, &QNetworkReply::finished, this, [self, reply]() {
-        reply->deleteLater();
+    services::RssFeedProbeService::instance().probe(url, this, [self, source](const services::RssProbeResult& r) {
         if (!self)
             return;
-        self->test_btn_->setEnabled(true);
-        if (reply->error() != QNetworkReply::NoError) {
-            const int http = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            QMessageBox::warning(self, tr("Test"),
-                                 tr("Request failed: HTTP %1 — %2").arg(http).arg(reply->errorString()));
-            self->status_label_->setText(tr("Test failed."));
-            return;
-        }
-        const QByteArray data = reply->readAll();
-        const QByteArray head = data.trimmed().left(256).toLower();
-        if (head.startsWith("<?xml") || head.startsWith("<rss") || head.startsWith("<feed") ||
-            head.startsWith("<rdf")) {
-            QMessageBox::information(self, tr("Test"), tr("✓ Feed responded with %1 bytes of XML.").arg(data.size()));
-            self->status_label_->setText(tr("Test OK."));
-        } else if (head.contains("<html") || head.contains("<!doctype html")) {
-            QMessageBox::warning(self, tr("Test"), tr("Server returned HTML — likely a block or login page."));
-            self->status_label_->setText(tr("Test returned HTML."));
-        } else {
-            QMessageBox::warning(self, tr("Test"),
-                                 tr("Response doesn't look like RSS/Atom XML (%1 bytes).").arg(data.size()));
-            self->status_label_->setText(tr("Test unclear."));
-        }
+        self->test_btn_->setEnabled(self->selected_row() >= 0);
+        const QString text = services::RssFeedProbeService::describe(r);
+        self->status_label_->setText(r.ok() ? tr("%1: OK").arg(source) : tr("%1: failed").arg(source));
+        if (r.ok() && r.item_count > 0 && !text.startsWith(QStringLiteral("⚠")))
+            QMessageBox::information(self, tr("Test — %1").arg(source), text);
+        else
+            QMessageBox::warning(self, tr("Test — %1").arg(source), text);
     });
 }
 

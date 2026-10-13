@@ -1,5 +1,6 @@
 #include "screens/fno/ChainSubTab.h"
 
+#include "trading/OrderThreadPool.h"
 #include "core/logging/Logger.h"
 #include "core/symbol/IGroupLinked.h"
 #include "core/symbol/SymbolContext.h"
@@ -802,7 +803,7 @@ void ChainSubTab::on_order_requested(qint64 token, double strike, bool is_call, 
 
     // Live placement hits the broker REST synchronously — run off the UI thread.
     QPointer<ChainSubTab> self = this;
-    (void)QtConcurrent::run([self, account_id, order]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, account_id, order]() {
         auto result = UnifiedTrading::instance().place_order(account_id, order);
         if (!self)
             return;

@@ -1,13 +1,24 @@
 #include "screens/dashboard/widgets/BaseWidget.h"
 
 #include "core/events/EventBus.h"
+#include "datahub/DataHub.h"
 #include "screens/dashboard/widgets/LoadingOverlay.h"
+#include "services/backtesting/BacktestingService.h"
+#include "storage/repositories/WatchlistRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QApplication>
+#include <QClipboard>
+#include <QContextMenuEvent>
+#include <QCursor>
+#include <QJsonArray>
+#include <QMenu>
 #include <QPalette>
 #include <QSize>
 #include <QStyle>
+#include <QTableWidget>
+#include <QToolTip>
 
 namespace fincept::screens::widgets {
 
@@ -17,6 +28,15 @@ namespace {
 constexpr const char* kBaseWidgetSymbolProp = "fincept_link_symbol";
 // ...and by link_screen() to tag a row that opens a whole screen.
 constexpr const char* kBaseWidgetScreenProp = "fincept_link_screen";
+// ...and by set_css_cached() to remember the last stylesheet it applied.
+constexpr const char* kBaseWidgetCssProp = "fincept_cached_css";
+
+// Index levels (^GSPC), FX/futures (EURUSD=X, GC=F) and Yahoo crypto pairs
+// (BTC-USD) are not broker-tradable equities — same rule as the Watchlist menu.
+bool base_widget_is_tradable_equity(const QString& symbol) {
+    return !symbol.startsWith(QLatin1Char('^')) && !symbol.contains(QLatin1Char('=')) &&
+           !symbol.endsWith(QLatin1String("-USD"));
+}
 
 // One place for the three title-bar button stylesheets. The constructor used to
 // style config/refresh/close inline and refresh_base_theme() only restyled the
@@ -194,6 +214,7 @@ void BaseWidget::set_loading(bool loading) {
     loading_label_->setText(loading ? tr("LOADING...") : QString());
     if (!loading_overlay_)
         return;
+    error_shown_ = false;
     if (loading) {
         loading_overlay_->start_indeterminate();
         last_progress_loaded_ = 0;
@@ -208,6 +229,7 @@ void BaseWidget::set_loading_progress(int loaded, int expected) {
     if (!loading_overlay_)
         return;
     const bool active = (expected > 0) && (loaded < expected);
+    error_shown_ = false;
     loading_label_->setVisible(active);
     loading_label_->setText(active ? tr("LOADING...") : QString());
     loading_overlay_->set_progress(loaded, expected);
@@ -222,29 +244,21 @@ void BaseWidget::set_error(const QString& error) {
     if (error.isEmpty())
         return;
 
-    // Hide loading state — error overrides any in-flight progress.
-    if (loading_overlay_)
-        loading_overlay_->finish();
+    // Error overrides any in-flight progress. The overlay draws the message
+    // over the (intact) content; the next set_loading(true) — e.g. the title
+    // bar refresh — switches it back to the loading state.
     if (loading_label_) {
         loading_label_->setVisible(false);
         loading_label_->setText(QString());
     }
     disarm_watchdog();
+    error_shown_ = true;
+    if (loading_overlay_)
+        loading_overlay_->set_error(error);
+}
 
-    // Clear content and show error
-    QLayoutItem* item;
-    while ((item = content_layout_->takeAt(0)) != nullptr) {
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-
-    auto* err_label = new QLabel(error);
-    err_label->setAlignment(Qt::AlignCenter);
-    err_label->setWordWrap(true);
-    err_label->setStyleSheet(
-        QString("color: %1; font-size: 9px; padding: 16px; background: transparent;").arg(ui::colors::NEGATIVE()));
-    content_layout_->addWidget(err_label);
+bool BaseWidget::is_waiting_for_first_data() const {
+    return loading_overlay_ && loading_overlay_->is_active() && !error_shown_ && last_progress_loaded_ == 0;
 }
 
 void BaseWidget::set_title(const QString& title) {
@@ -282,9 +296,10 @@ void BaseWidget::on_config_clicked() {
     if (!dlg)
         return;
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    // Subclasses are expected to emit config_changed() inside the dialog's
-    // accept flow; BaseWidget just opens the dialog modally.
-    dlg->exec();
+    // Subclasses emit config_changed() inside the dialog's accept flow, so
+    // nothing here waits for the result: open() is window-modal without the
+    // nested event loop exec() ran on the GUI thread (P1).
+    dlg->open();
 }
 
 void BaseWidget::showEvent(QShowEvent* event) {
@@ -296,8 +311,33 @@ void BaseWidget::showEvent(QShowEvent* event) {
     // workspace, off-screen tile) would otherwise burn its 20 s budget
     // before the subscription is even dispatched. Restart the timer so
     // the budget begins when the user can actually see the spinner.
-    if (loading_overlay_ && loading_overlay_->is_active() && last_progress_loaded_ == 0)
+    // hideEvent() disarms it, so a spinner that was up when the tile was hidden
+    // gets a fresh budget here too. Not while an error is on show — the
+    // watchdog's generic "no data yet" must not replace a specific error.
+    if (loading_overlay_ && loading_overlay_->is_active() && !error_shown_)
         arm_watchdog();
+}
+
+void BaseWidget::hideEvent(QHideEvent* event) {
+    QFrame::hideEvent(event);
+    // See the header: drop every hub subscription this tile owns, whatever
+    // the subclass did. Subclasses' own unsubscribe calls become no-ops.
+    datahub::DataHub::instance().unsubscribe(this);
+    // A watchdog armed for an on-screen spinner must not fire for a tile the
+    // user cannot see; showEvent() re-arms it if the spinner is still up.
+    disarm_watchdog();
+}
+
+void BaseWidget::set_css_cached(QWidget* w, const QString& css) {
+    if (!w || w->property(kBaseWidgetCssProp).toString() == css)
+        return;
+    w->setProperty(kBaseWidgetCssProp, css);
+    w->setStyleSheet(css);
+}
+
+void BaseWidget::reset_css_cache(QWidget* w) {
+    if (w)
+        w->setProperty(kBaseWidgetCssProp, QVariant());
 }
 
 void BaseWidget::arm_watchdog() {
@@ -366,12 +406,106 @@ void BaseWidget::open_symbol(const QString& symbol, const QString& screen_id, co
 void BaseWidget::link_symbol(QWidget* w, const QString& symbol) {
     if (!w)
         return;
+    // Recycled rows call this on every refresh — skip the no-op re-link.
+    if (w->property(kBaseWidgetSymbolProp).toString() == symbol)
+        return;
     w->setProperty(kBaseWidgetSymbolProp, symbol);
     w->setCursor(Qt::PointingHandCursor);
-    w->setToolTip(tr("Double-click to open %1 in Equity Research").arg(symbol));
+    w->setToolTip(tr("Double-click to open %1 in Equity Research · right-click for more").arg(symbol));
     // installEventFilter() on an already-installed filter just moves it to the
     // front of the list, so re-linking a recycled row never stacks filters.
     w->installEventFilter(this);
+}
+
+void BaseWidget::show_symbol_menu(const QString& symbol_in, const QPoint& global_pos, const QString& asset_class,
+                                  const QString& exchange) {
+    const QString symbol = symbol_in.trimmed();
+    if (symbol.isEmpty())
+        return;
+    const bool crypto = asset_class == QLatin1String("crypto");
+
+    // Heap + popup(), not a stack QMenu + exec(): exec() spins a nested event
+    // loop, and a tile destroyed while its menu is open (layout reload, MCP
+    // remove) would then delete a stack object through its parent.
+    auto* menu = new QMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    connect(menu->addAction(tr("Open in Equity Research")), &QAction::triggered, this,
+            [this, symbol]() { open_symbol(symbol, QStringLiteral("equity_research")); });
+    if (crypto) {
+        connect(menu->addAction(tr("Open in Crypto Trading")), &QAction::triggered, this,
+                [this, symbol, exchange]() {
+                    open_symbol(symbol, QStringLiteral("crypto_trading"), QStringLiteral("crypto"), exchange);
+                });
+    } else if (base_widget_is_tradable_equity(symbol)) {
+        connect(menu->addAction(tr("Open in Equity Trading")), &QAction::triggered, this,
+                [this, symbol, asset_class, exchange]() {
+                    open_symbol(symbol, QStringLiteral("equity_trading"), asset_class, exchange);
+                });
+    }
+    connect(menu->addAction(tr("Open in News")), &QAction::triggered, this,
+            [this, symbol]() { open_symbol(symbol, QStringLiteral("news")); });
+    if (!crypto) {
+        connect(menu->addAction(tr("Backtest This Symbol")), &QAction::triggered, this, [symbol]() {
+            QJsonObject config;
+            config["symbols"] = QJsonArray{symbol};
+            services::backtest::BacktestingService::instance().set_pending_portfolio_config(config);
+            EventBus::instance().publish("nav.switch_screen", QVariantMap{{"screen_id", QStringLiteral("backtesting")}});
+        });
+    }
+
+    // One entry per saved watchlist (same flow as the Screener's row menu).
+    const auto lists = fincept::WatchlistRepository::instance().list_all();
+    if (lists.is_ok() && !lists.value().isEmpty()) {
+        QMenu* wl_menu = menu->addMenu(tr("Add to Watchlist"));
+        for (const auto& wl : lists.value()) {
+            connect(wl_menu->addAction(wl.name), &QAction::triggered, this,
+                    [this, symbol, list_id = wl.id, list_name = wl.name]() {
+                        auto& repo = fincept::WatchlistRepository::instance();
+                        const auto stocks = repo.get_stocks(list_id);
+                        if (stocks.is_ok()) {
+                            for (const auto& s : stocks.value()) {
+                                if (s.symbol.compare(symbol, Qt::CaseInsensitive) == 0) {
+                                    QToolTip::showText(QCursor::pos(), tr("%1 is already in %2").arg(symbol, list_name),
+                                                       this);
+                                    return;
+                                }
+                            }
+                        }
+                        const auto r = repo.add_stock(list_id, symbol, QString());
+                        QToolTip::showText(QCursor::pos(),
+                                           r.is_ok() ? tr("Added %1 to %2").arg(symbol, list_name)
+                                                     : tr("Could not add %1 to %2").arg(symbol, list_name),
+                                           this);
+                        if (r.is_ok()) // let an open Watchlist panel pick the change up
+                            EventBus::instance().publish(
+                                "watchlist.updated",
+                                QVariantMap{{"watchlist_id", list_id}, {"action", QStringLiteral("add")},
+                                            {"symbol", symbol}});
+                    });
+        }
+    }
+
+    menu->addSeparator();
+    connect(menu->addAction(tr("Copy Symbol")), &QAction::triggered, this,
+            [symbol]() { QApplication::clipboard()->setText(symbol); });
+    menu->popup(global_pos);
+}
+
+void BaseWidget::install_symbol_menu(QTableWidget* table, int col, int role) {
+    if (!table)
+        return;
+    table->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table, &QWidget::customContextMenuRequested, this, [this, table, col, role](const QPoint& pos) {
+        auto* hit = table->itemAt(pos);
+        if (!hit)
+            return;
+        auto* sym_item = table->item(hit->row(), col);
+        if (!sym_item)
+            return;
+        const QString sym = sym_item->data(role).toString();
+        if (!sym.isEmpty())
+            show_symbol_menu(sym, table->viewport()->mapToGlobal(pos));
+    });
 }
 
 void BaseWidget::link_screen(QWidget* w, const QString& screen_id, const QString& tooltip) {
@@ -384,6 +518,13 @@ void BaseWidget::link_screen(QWidget* w, const QString& screen_id, const QString
 }
 
 bool BaseWidget::eventFilter(QObject* obj, QEvent* event) {
+    if (event->type() == QEvent::ContextMenu) {
+        const QString sym = obj->property(kBaseWidgetSymbolProp).toString();
+        if (!sym.isEmpty()) {
+            show_symbol_menu(sym, static_cast<QContextMenuEvent*>(event)->globalPos());
+            return true;
+        }
+    }
     if (event->type() == QEvent::MouseButtonDblClick) {
         const QVariant sym = obj->property(kBaseWidgetSymbolProp);
         if (sym.isValid() && !sym.toString().isEmpty()) {

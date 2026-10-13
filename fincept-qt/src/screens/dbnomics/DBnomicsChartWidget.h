@@ -34,9 +34,9 @@ class DBnomicsChartWidget : public QWidget {
   private:
     void build_ui();
     void retranslateUi();
-    void render_line_area(const QVector<services::DbnDataPoint>& series, services::DbnChartType type);
+    /// Line / area / scatter on a date axis (period start days).
+    void render_time_series(const QVector<services::DbnDataPoint>& series, bool area, bool scatter);
     void render_bar(const QVector<services::DbnDataPoint>& series);
-    void render_scatter(const QVector<services::DbnDataPoint>& series);
 
     int y_tick_count() const;
     int x_tick_count(int period_count) const;

@@ -35,18 +35,28 @@ struct FredAnalDataset {
     QString label;
     QString command;
     QStringList args;
+    // Single-series datasets: what the numbers are (FRED series metadata). Empty for the multi-series
+    // groups, whose rows mix units.
+    QString units;
+    QString frequency;
+    QString seasonal;
 };
 
+// "M3 Money Supply" was removed: the Fed discontinued M3 in March 2006, FRED has no current M3
+// series, and the request ("m3") always failed.
 static const QList<FredAnalDataset> kFredAnalDatasets = {
-    {"Yield Curve (Treasury Rates)", "yield_curve", {}},
-    {"M1 Money Supply", "money_supply", {"m1"}},
-    {"M2 Money Supply", "money_supply", {"m2"}},
-    {"M3 Money Supply", "money_supply", {"m3"}},
-    {"Fed Funds Rate (Credit)", "credit", {"fed_funds_rate"}},
-    {"Prime Rate (Credit)", "credit", {"prime_rate"}},
-    {"Financial Stress Index", "stress", {}},
-    {"Consumer Sentiment", "sentiment", {}},
-    {"PCE Price Index", "pce", {}},
+    {"Yield Curve (Treasury Rates)", "yield_curve", {}, "", "", ""},
+    {"M1 Money Supply (M1SL)", "money_supply", {"m1"}, "Billions of Dollars", "Monthly", "Seasonally Adjusted"},
+    {"M2 Money Supply (M2SL)", "money_supply", {"m2"}, "Billions of Dollars", "Monthly", "Seasonally Adjusted"},
+    {"Monetary Base (BOGMBASE)", "money_supply", {"monetary_base"}, "Millions of Dollars", "Monthly",
+     "Not Seasonally Adjusted"},
+    {"M2 Velocity (M2V)", "money_supply", {"m2_velocity"}, "Ratio", "Quarterly", "Seasonally Adjusted"},
+    {"Fed Funds Rate, effective (FEDFUNDS)", "credit", {"fed_funds_rate"}, "Percent", "Monthly",
+     "Not Seasonally Adjusted"},
+    {"Bank Prime Loan Rate (DPRIME)", "credit", {"prime_rate"}, "Percent", "Daily", "Not Seasonally Adjusted"},
+    {"Financial Stress Index", "stress", {}, "", "", ""},
+    {"Consumer Sentiment", "sentiment", {}, "", "", ""},
+    {"PCE Price Index", "pce", {}, "", "", ""},
 };
 
 FredAnalyticsPanel::FredAnalyticsPanel(QWidget* parent)
@@ -63,7 +73,7 @@ void FredAnalyticsPanel::activate() {
 
 void FredAnalyticsPanel::build_controls(QHBoxLayout* thl) {
     dataset_lbl_ = new QLabel(tr("DATASET"));
-    dataset_lbl_->setStyleSheet(ctrl_label_style());
+    dataset_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     dataset_combo_ = new QComboBox;
     for (const auto& d : kFredAnalDatasets)
@@ -204,14 +214,26 @@ void FredAnalyticsPanel::on_result(const QString& request_id, const services::Ec
         return;
     }
 
-    const int idx = dataset_combo_->currentIndex();
-    const QString title =
-        "FRED Analytics: " +
-        (idx >= 0 && idx < kFredAnalDatasets.size() ? kFredAnalDatasets[idx].label : request_id.mid(7));
+    // Identify the dataset from the request id ("fredan_<command>[_<args>]"), not the combo.
+    const FredAnalDataset* ds = nullptr;
+    for (const auto& d : kFredAnalDatasets) {
+        if (request_id == "fredan_" + d.command + (d.args.isEmpty() ? QString() : "_" + d.args.join("_"))) {
+            ds = &d;
+            break;
+        }
+    }
+    const QString title = "FRED Analytics: " + (ds ? ds->label : request_id.mid(7));
 
     // A flattened table mixes series on different scales, so LATEST/CHANGE/MIN/MAX/AVG would
     // be meaningless (same call as ImfPanel's cross-section view). Single series get them back.
     set_stats_visible(!flattened);
+    if (ds && !flattened) {
+        SeriesMeta meta;
+        meta.units = ds->units;
+        meta.frequency = ds->frequency;
+        meta.seasonal_adj = ds->seasonal;
+        set_series_meta(meta);
+    }
     display(rows, title);
     LOG_INFO("FredAnalyticsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }

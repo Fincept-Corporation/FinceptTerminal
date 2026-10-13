@@ -1,6 +1,7 @@
 #include "screens/report_builder/PropertiesPanel.h"
 
 #include "screens/report_builder/ReportBuilderScreen.h"
+#include "screens/report_builder/ReportTableCodec.h"
 #include "ui/theme/Theme.h"
 
 #include <QApplication>
@@ -24,6 +25,8 @@
 #include <QStandardPaths>
 #include <QTableWidget>
 #include <QTextEdit>
+
+#include <algorithm>
 
 namespace fincept::screens {
 
@@ -132,11 +135,34 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
     }
 
     // ── Table: full cell editor ───────────────────────────────────────────────
+    // One source of truth: the table's config["csv"] — the same text the canvas renders
+    // and the MCP tools write. The editor used to read and write a separate "data" JSON
+    // map while the canvas preferred "csv", so a table created by a template/AI showed
+    // placeholder cells here and every edit was silently ignored on the page.
     if (component->type == "table") {
-        int rows = component->config.value("rows", "3").toInt();
+        QVector<QStringList> grid = report_table::parse(component->config.value("csv"));
+        if (grid.isEmpty() && component->config.contains("data")) {
+            // Legacy "r_c" JSON map → grid (converted to csv on the first edit).
+            const QJsonObject cell_data = QJsonDocument::fromJson(component->config.value("data").toUtf8()).object();
+            const int lr = component->config.value("rows", "3").toInt();
+            const int lc = component->config.value("cols", "3").toInt();
+            for (int r = 0; r < lr; ++r) {
+                QStringList row;
+                for (int c = 0; c < lc; ++c)
+                    row << cell_data.value(QString("%1_%2").arg(r).arg(c)).toString();
+                grid.append(row);
+            }
+        }
+        int rows = grid.isEmpty() ? component->config.value("rows", "3").toInt() : static_cast<int>(grid.size());
         int cols = component->config.value("cols", "3").toInt();
+        if (!grid.isEmpty()) {
+            cols = 0;
+            for (const auto& r : grid)
+                cols = std::max(cols, static_cast<int>(r.size()));
+        }
+        rows = std::clamp(rows, 1, 200);
+        cols = std::clamp(cols, 1, 20);
 
-        // Row/col spinboxes
         auto* dim_row = new QWidget(this);
         dim_row->setStyleSheet("background: transparent;");
         auto* drl = new QHBoxLayout(dim_row);
@@ -145,7 +171,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
 
         drl->addWidget(make_label(tr("Rows:")));
         auto* rows_spin = new QSpinBox;
-        rows_spin->setRange(1, 50);
+        rows_spin->setRange(1, 200); // the canvas renders up to 200 rows
         rows_spin->setValue(rows);
         drl->addWidget(rows_spin);
 
@@ -156,8 +182,7 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
         drl->addWidget(cols_spin);
         editor_layout_->addWidget(dim_row);
 
-        // Cell editor table
-        editor_layout_->addWidget(make_label(tr("Cell data:")));
+        editor_layout_->addWidget(make_label(tr("Cell data (first row = header):")));
         auto* cell_table = new QTableWidget(rows, cols);
         cell_table->setMinimumHeight(150);
         cell_table->setMaximumHeight(250);
@@ -169,41 +194,31 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                     "QTableWidget::item:selected { background: %4; }")
                 .arg(ui::colors::DARK(), ui::colors::GRAY(), ui::colors::BORDER(), ui::colors::BG_RAISED()));
 
-        // Populate from saved JSON data
-        QJsonObject cell_data;
-        if (component->config.contains("data")) {
-            QJsonDocument doc = QJsonDocument::fromJson(component->config.value("data").toUtf8());
-            if (doc.isObject())
-                cell_data = doc.object();
-        }
-
+        const bool blank = grid.isEmpty();
         for (int r = 0; r < rows; ++r) {
             for (int c = 0; c < cols; ++c) {
-                QString key = QString("%1_%2").arg(r).arg(c);
-                QString val = cell_data.contains(key) ? cell_data.value(key).toString()
-                                                      : (r == 0 ? QString("Header %1").arg(c + 1) : "");
+                QString val = (r < grid.size() && c < grid[r].size()) ? grid[r][c] : QString();
+                if (blank && r == 0)
+                    val = QString("Header %1").arg(c + 1);
                 cell_table->setItem(r, c, new QTableWidgetItem(val));
             }
         }
         editor_layout_->addWidget(cell_table);
 
-        // Save cell data when any cell changes
         auto save_cells = [this, cell_table]() {
-            QJsonObject obj;
+            QVector<QStringList> out;
             for (int r = 0; r < cell_table->rowCount(); ++r) {
+                QStringList row;
                 for (int c = 0; c < cell_table->columnCount(); ++c) {
                     auto* it = cell_table->item(r, c);
-                    if (it && !it->text().isEmpty()) {
-                        obj[QString("%1_%2").arg(r).arg(c)] = it->text();
-                    }
+                    row << (it ? it->text() : QString());
                 }
+                out.append(row);
             }
-            QString json = QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
-            emit config_changed(current_index_, "data", json);
+            emit config_changed(current_index_, "csv", report_table::encode(out));
         };
         connect(cell_table, &QTableWidget::itemChanged, this, save_cells);
 
-        // Resize table when dims change
         connect(rows_spin, &QSpinBox::valueChanged, this, [this, cell_table, save_cells](int val) {
             emit config_changed(current_index_, "rows", QString::number(val));
             cell_table->setRowCount(val);
@@ -292,10 +307,6 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 emit config_changed(current_index_, "fetch_history", sym);
         });
 
-        auto* hint = new QLabel(tr("Tip: re-select component after\nediting data to re-render."));
-        hint->setWordWrap(true);
-        hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED()));
-        editor_layout_->addWidget(hint);
     }
 
     // ── Stats Block: title + key:value pairs + auto-fetch ────────────────────
@@ -415,10 +426,6 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
                 [this, data_edit]() { emit config_changed(current_index_, "data", data_edit->toPlainText()); });
         editor_layout_->addWidget(data_edit);
 
-        auto* hint = new QLabel(tr("Tip: re-select after editing\ndata to refresh sparkline."));
-        hint->setWordWrap(true);
-        hint->setStyleSheet(QString("color: %1; font-size: 10px; background: transparent;").arg(ui::colors::MUTED()));
-        editor_layout_->addWidget(hint);
     }
 
     // ── Image: file + clipboard + width + alignment + caption ────────────────
@@ -545,9 +552,11 @@ void PropertiesPanel::show_properties(const ReportComponent* component, int inde
             sep2->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER()));
             editor_layout_->addWidget(sep2);
 
-            auto* price_row =
-                new QLabel(tr("Price: %1   Chg: %2%")
-                               .arg(component->config.value("price"), component->config.value("change_pct")));
+            QString price_text = tr("Price: %1   Chg: %2%")
+                                     .arg(component->config.value("price"), component->config.value("change_pct"));
+            if (!component->config.value("as_of").isEmpty())
+                price_text += "\n" + tr("As of %1").arg(component->config.value("as_of"));
+            auto* price_row = new QLabel(price_text);
             price_row->setStyleSheet(
                 QString("color: %1; font-size: 12px; background: transparent;").arg(ui::colors::AMBER()));
             editor_layout_->addWidget(price_row);

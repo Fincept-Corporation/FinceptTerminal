@@ -68,6 +68,12 @@ class DataNormalizationService : public QObject {
     /// already an absolute http(s) URL is returned as-is.
     static QString join_url(const QString& base, const QString& endpoint);
 
+    /// Replace the {AUTH} placeholder with the mapping's AUTH VALUE — for APIs
+    /// that take the key as a query parameter (?apikey={AUTH}) or a custom
+    /// header (X-Finnhub-Token: {AUTH}). `url_encode` percent-encodes it.
+    /// SECURITY: the result carries a credential — never log it.
+    static QString substitute_auth(const QString& text, const QString& auth_token, bool url_encode);
+
     /// True for absolute http:// or https:// URLs. HttpClient treats anything
     /// else as relative to the Fincept API and would attach the user's Fincept
     /// session headers to it, so mappings must be rejected before dispatch.

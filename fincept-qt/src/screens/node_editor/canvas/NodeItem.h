@@ -22,7 +22,9 @@ class NodeItem : public QGraphicsObject {
 
     void set_name(const QString& name);
     void set_parameter(const QString& key, const QJsonValue& value);
-    void set_execution_state(const QString& state); // "idle", "running", "completed", "error"
+    void set_execution_state(const QString& state); // "idle", "running", "completed", "skipped", "error"
+    /// Mark the node as failing pre-run validation: red border + `message` as tooltip.
+    void set_validation_error(const QString& message);
     /// Node-level execution flags edited from the properties panel / context menu.
     void set_disabled(bool disabled);
     void set_continue_on_fail(bool value);
@@ -37,7 +39,6 @@ class NodeItem : public QGraphicsObject {
   signals:
     void node_moved(const QString& id, double x, double y);
     void node_selected(const QString& id);
-    void node_deselected(const QString& id);
     void delete_requested(const QString& id);
     void duplicate_requested(const QString& id);
     void execute_from_requested(const QString& id);

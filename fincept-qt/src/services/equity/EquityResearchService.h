@@ -49,6 +49,14 @@ class EquityResearchService : public QObject {
     /// supply the key at fetch time.
     QString configured_newsapi_key() const;
 
+    /// One-shot OHLCV pull for the "Download price data (CSV)" dialog — any yfinance
+    /// period/interval (intraday included), never cached, never broadcast (one caller,
+    /// one result). `done(ok, candles, error)` runs on the service thread; `candles` is
+    /// ascending by time. Implemented in EquityResearchService_Ext.cpp.
+    using HistoryCallback = std::function<void(bool ok, QVector<Candle> candles, QString error)>;
+    void fetch_price_history(const QString& symbol, const QString& period, const QString& interval,
+                             HistoryCallback done);
+
   signals:
     void search_results_loaded(QVector<fincept::services::equity::SearchResult> results);
     void quote_loaded(fincept::services::equity::QuoteData quote);
@@ -97,6 +105,13 @@ class EquityResearchService : public QObject {
     static constexpr int kHistoricalTtlSec = 120;
     static constexpr int kNewsTtlSec = 180;
     static constexpr int kFinancialsTtlSec = 600; // statements only change quarterly
+    // Last-known-good statements: replayed (flagged stale) the moment a symbol is reopened
+    // after the 10-minute copy expired, while the refresh runs — and kept on screen, still
+    // flagged, if that refresh fails.
+    static constexpr int kFinancialsLkgTtlSec = 30 * 24 * 3600;
+    // Indicator values off DAILY bars; recomputing them on every Technicals-tab visit spawned
+    // a compute_technicals.py process each time.
+    static constexpr int kTechnicalsTtlSec = 300;
 
     // ── Debounce ──────────────────────────────────────────────────────────────
     static constexpr int kDebounceMs = 350;
@@ -115,6 +130,11 @@ class EquityResearchService : public QObject {
     // callback that never fires cannot wedge the symbol forever.
     QHash<QString, qint64> financials_inflight_;
     QHash<QString, qint64> technicals_inflight_;
+    // Same folding for the header-bar/Overview/Analysis legs: the screen, the Overview tab
+    // and the Analysis tab each ask for the same quote/info/history when a symbol opens.
+    QHash<QString, qint64> quote_inflight_;
+    QHash<QString, qint64> info_inflight_;
+    QHash<QString, qint64> historical_inflight_;
     static constexpr qint64 kInflightMaxAgeMs = 90'000;
 };
 

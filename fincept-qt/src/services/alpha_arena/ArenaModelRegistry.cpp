@@ -1,5 +1,6 @@
 #include "services/alpha_arena/ArenaModelRegistry.h"
 
+#include "auth/AuthManager.h"
 #include "core/logging/Logger.h"
 #include "services/llm/LlmService.h"
 #include "services/llm/ProviderCatalog.h"
@@ -148,6 +149,11 @@ Result<ArenaCredentials> ArenaModelRegistry::resolve_credentials(const QString& 
                     break;
                 }
     }
+    // The Fincept key lives in AuthManager (session → SecureStorage), not in the
+    // llm_configs row — exactly how LlmService resolves it. Without this, Fincept
+    // agents posted no X-API-Key and every decision came back 401.
+    if (cred.api_key.isEmpty() && provider.compare(QLatin1String("fincept"), Qt::CaseInsensitive) == 0)
+        cred.api_key = fincept::auth::AuthManager::instance().fincept_api_key();
     if (cred.base_url.isEmpty())
         cred.base_url = ProviderCatalog::default_base_url(provider);
     if (cred.api_key.isEmpty() && ProviderCatalog::requires_api_key(provider))

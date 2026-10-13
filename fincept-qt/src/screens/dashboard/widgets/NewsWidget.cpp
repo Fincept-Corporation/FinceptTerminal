@@ -34,8 +34,11 @@ NewsWidget::NewsWidget(QWidget* parent) : BaseWidget(tr("MARKET NEWS"), parent, 
 
     // Refresh button on the title bar — force-refresh through the hub.
     // Per-producer rate limit still applies, so this can't hammer upstream.
-    connect(this, &BaseWidget::refresh_requested, this,
-            []() { datahub::DataHub::instance().request(QString::fromLatin1(kTopic), /*force=*/true); });
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (is_showing_error())
+            set_loading(true); // retry: back to the loading state
+        datahub::DataHub::instance().request(QString::fromLatin1(kTopic), /*force=*/true);
+    });
 
     apply_styles();
     set_loading(true);
@@ -74,6 +77,10 @@ void NewsWidget::hub_subscribe() {
             return;
         set_loading(false);
         populate(v.value<QVector<services::NewsArticle>>());
+    });
+    hub.subscribe_errors(this, QString::fromLatin1(kTopic), [this](const QString& error) {
+        if (is_waiting_for_first_data())
+            set_error(tr("News feed failed: %1 — click refresh to retry").arg(error));
     });
     hub_active_ = true;
     // Cold-start cache fallback: if the hub already has a cached value

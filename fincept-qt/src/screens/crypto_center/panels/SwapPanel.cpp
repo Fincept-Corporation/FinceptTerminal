@@ -439,7 +439,7 @@ void SwapPanel::on_wallet_connected(const QString& pubkey, const QString& /*labe
         if (current_balance_topic_.isEmpty()) {
             current_balance_topic_ = QStringLiteral("wallet:balance:%1").arg(pubkey);
             hub.subscribe(this, current_balance_topic_, [this](const QVariant& v) { on_balance_update(v); });
-            hub.request(current_balance_topic_, /*force=*/true);
+            hub.request(current_balance_topic_, /*force=*/false);
         }
         resubscribe_prices();
     }
@@ -479,7 +479,7 @@ void SwapPanel::showEvent(QShowEvent* e) {
     if (!current_pubkey_.isEmpty() && current_balance_topic_.isEmpty()) {
         current_balance_topic_ = QStringLiteral("wallet:balance:%1").arg(current_pubkey_);
         hub.subscribe(this, current_balance_topic_, [this](const QVariant& v) { on_balance_update(v); });
-        hub.request(current_balance_topic_, /*force=*/true);
+        hub.request(current_balance_topic_, /*force=*/false); // coalesced via hub min_interval
     }
     resubscribe_prices();
     slippage_label_->setText(format_bps(slippage_pct() * 100));

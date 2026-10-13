@@ -117,16 +117,33 @@ class CoveredCallAnalyzer(AlternativeInvestmentBase):
         # Premium taxed as short-term income
         premium_after_tax = premium_income * (Decimal('1') - self.ordinary_tax_rate)
 
-        # Scenario 2: Stock CALLED AWAY
-        # Any gain becomes short-term (even if held > 1 year)
-        assumed_cost_basis = self.stock_price * Decimal('0.90')  # Assume bought 10% lower
-        gain_per_share = self.strike_price - assumed_cost_basis
+        # Scenario 2: Stock CALLED AWAY. Uses the position's real cost basis when
+        # given (it used to assume 90% of the current price whatever was entered).
+        cost_basis = getattr(self.parameters, 'cost_basis', None) if hasattr(self, 'parameters') else None
+        if cost_basis is None:
+            cost_basis = self.stock_price * Decimal('0.90')
+            basis_note = 'Cost basis not given - assumed 90% of the current price'
+        else:
+            cost_basis = Decimal(str(cost_basis))
+            basis_note = 'Cost basis as entered'
+        gain_per_share = self.strike_price - cost_basis
+        shares = Decimal(str(self.shares_owned))
+        total_gain = gain_per_share * shares
+        holding_days = int(self.holding_period)
 
-        # If held > 1 year but called: LTCG becomes short-term
-        tax_if_ltcg = gain_per_share * Decimal(str(self.shares_owned)) * self.ltcg_rate
-        tax_if_called = (gain_per_share * Decimal(str(self.shares_owned)) + premium_income) * self.ordinary_tax_rate
-
-        # Tax penalty from call
+        # US rules: stock already held > 1 year keeps long-term treatment when a
+        # (qualified) covered call is assigned - the premium simply adds to the
+        # proceeds. Under 1 year the gain is short-term anyway, and an
+        # unqualified call (deep ITM / short-dated) suspends the holding period.
+        tax_if_ltcg = (total_gain + premium_income) * self.ltcg_rate
+        if holding_days > 365:
+            tax_if_called = tax_if_ltcg
+            warning = ('Stock held > 1 year: assignment of a qualified covered call keeps long-term '
+                       'treatment (premium added to proceeds). Unqualified calls can still affect losses.')
+        else:
+            tax_if_called = (total_gain + premium_income) * self.ordinary_tax_rate
+            warning = ('Held <= 1 year: an assigned call realises a short-term gain; an unqualified call also '
+                       'suspends the holding period, delaying long-term treatment.')
         tax_penalty = tax_if_called - tax_if_ltcg
 
         return {
@@ -134,19 +151,22 @@ class CoveredCallAnalyzer(AlternativeInvestmentBase):
                 'premium_income': float(premium_income),
                 'tax_rate_on_premium': float(self.ordinary_tax_rate),
                 'after_tax_premium': float(premium_after_tax),
-                'note': 'Premium taxed as ordinary income'
+                'note': 'Expired premium is a short-term capital gain, taxed at ordinary rates'
             },
             'scenario_2_stock_called': {
+                'cost_basis_per_share': float(cost_basis),
+                'cost_basis_note': basis_note,
                 'gain_per_share': float(gain_per_share),
-                'total_gain': float(gain_per_share * Decimal(str(self.shares_owned))),
-                'holding_period_days': self.holding_period,
-                'tax_if_ltcg': float(tax_if_ltcg),
-                'tax_if_called_short_term': float(tax_if_called),
+                'total_gain': float(total_gain),
+                'holding_period_days': holding_days,
+                'tax_if_long_term': float(tax_if_ltcg),
+                'tax_if_called': float(tax_if_called),
                 'tax_penalty_from_call': float(tax_penalty),
-                'penalty_pct_of_gain': float(tax_penalty / (gain_per_share * Decimal(str(self.shares_owned)))) if gain_per_share > 0 else 0,
-                'analysis_warning': 'Call destroys LTCG treatment - converts to short-term'
+                'penalty_rate_of_gain': float(tax_penalty / total_gain) if total_gain > 0 else 0,
+                'analysis_warning': warning
             },
-            'analysis_conclusion': 'Tax consequences make covered calls toxic in taxable accounts'
+            'analysis_conclusion': ('Covered calls are most tax-efficient in tax-deferred accounts or on stock '
+                                    'already held over a year')
         }
 
     def opportunity_cost_analysis(self, market_scenarios: List[Decimal] = None) -> Dict[str, Any]:

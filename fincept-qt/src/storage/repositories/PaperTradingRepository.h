@@ -24,6 +24,10 @@ class PaperTradingRepository : public BaseRepository<trading::PtPortfolio> {
     Result<void> insert_order(const trading::PtOrder& o);
     Result<trading::PtOrder> get_order(const QString& id);
     Result<QVector<trading::PtOrder>> get_orders(const QString& portfolio_id, const QString& status = {});
+    /// Resting orders only (status 'pending' or 'partial'), newest first —
+    /// filtered in SQL. Live blotters poll this every ~1.5 s and never show
+    /// filled / cancelled history, which get_orders() would return in full.
+    Result<QVector<trading::PtOrder>> get_open_orders(const QString& portfolio_id);
     /// Orders whose created_at falls in [from_iso, to_iso) (UTC ISO strings). Used
     /// by the order book's per-day view so each day starts empty.
     Result<QVector<trading::PtOrder>> get_orders_between(const QString& portfolio_id, const QString& from_iso,

@@ -835,6 +835,7 @@ void PlanningView::set_snapshots(const QVector<portfolio::PortfolioSnapshot>& sn
 
 void PlanningView::set_metrics(const portfolio::ComputedMetrics& metrics) {
     metrics_ = metrics;
+    recompute_assumptions();
     if (has_data_) {
         recalculate();
         recalculate_goals();
@@ -846,37 +847,26 @@ void PlanningView::recompute_assumptions() {
     hist_cagr_ = 0.0;
     hist_vol_ = 0.0;
 
-    auto snaps = snapshots_;
-    std::sort(snaps.begin(), snaps.end(),
-              [](const auto& a, const auto& b) { return a.snapshot_date < b.snapshot_date; });
-    QVector<double> rets;
-    for (int i = 1; i < snaps.size(); ++i) {
-        const double p = snaps[i - 1].total_value;
-        const double c = snaps[i].total_value;
-        if (p > 1.0)
-            rets.append((c - p) / p);
-    }
-    if (rets.size() >= 20) {
-        const int n = rets.size();
-        const double mean = std::accumulate(rets.begin(), rets.end(), 0.0) / n;
-        double var = 0.0;
-        for (double r : rets)
-            var += (r - mean) * (r - mean);
-        const double daily_vol = std::sqrt(var / (n - 1));
-        hist_cagr_ = std::pow(1.0 + mean, 252.0) - 1.0; // annualise daily mean
-        hist_vol_ = daily_vol * std::sqrt(252.0);
-        // Clamp to sane planning bounds (a 30-day sample can be extreme).
+    // Calibrate from the service's flow-adjusted (time-weighted) figures. The
+    // old code compounded raw day-over-day NAV changes, so every BUY counted
+    // as a gain — a portfolio that doubled its money via deposits "returned"
+    // 35% (the clamp) — and annualised the arithmetic daily mean with ^252.
+    const int periods = metrics_.perf_observations;
+    if (metrics_.annualized_return.has_value() && metrics_.volatility.has_value() && periods >= 60) {
+        hist_cagr_ = *metrics_.annualized_return / 100.0;
+        hist_vol_ = *metrics_.volatility / 100.0;
+        // Clamp to sane planning bounds (a short sample can be extreme).
         hist_cagr_ = std::max(-0.5, std::min(0.35, hist_cagr_));
         hist_vol_ = std::max(0.01, std::min(1.0, hist_vol_));
         have_history_ = true;
     }
 
     const QString note = have_history_
-                             ? tr("◉ Calibrated to your portfolio: %1% expected return, %2% volatility "
-                                  "(from %3 days of history). Edit any field to override.")
+                             ? tr("◉ Calibrated to your portfolio: %1% annualised time-weighted return, %2% "
+                                  "volatility (from %3 periods of history). Edit any field to override.")
                                    .arg(QString::number(hist_cagr_ * 100, 'f', 1))
                                    .arg(QString::number(hist_vol_ * 100, 'f', 1))
-                                   .arg(rets.size())
+                                   .arg(periods)
                              : tr("○ Not enough portfolio history yet to calibrate — using your typed assumptions. "
                                   "Estimates improve as daily snapshots accumulate.");
     if (retire_assump_note_)
@@ -887,9 +877,8 @@ void PlanningView::recompute_assumptions() {
     // Seed the return inputs from the real CAGR (user can still override) - ONCE
     // per portfolio. This runs on every snapshot reload, i.e. every refresh, and
     // re-seeding each time overwrote whatever the user had typed into the very
-    // fields the note above tells them to edit. The snapshots carry their own
-    // portfolio id, so this also works before set_data() has delivered a summary.
-    const QString snap_pid = snapshots_.isEmpty() ? QString() : snapshots_.first().portfolio_id;
+    // fields the note above tells them to edit.
+    const QString snap_pid = summary_.portfolio.id;
     if (have_history_ && !snap_pid.isEmpty() && snap_pid != assumptions_seeded_for_) {
         assumptions_seeded_for_ = snap_pid;
         const double pct = hist_cagr_ * 100.0;
@@ -1268,12 +1257,17 @@ void PlanningView::recalculate() {
     // \u2500\u2500 Drawdown stress (real metric)
     // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     if (retire_stress_label_) {
-        const double dd_pct = metrics_.max_drawdown ? std::abs(*metrics_.max_drawdown) : 30.0;
+        const bool have_dd = metrics_.max_drawdown.has_value();
+        const double dd_pct = have_dd ? std::abs(*metrics_.max_drawdown) : 30.0;
         const double shocked = projected * (1.0 - dd_pct / 100.0);
         const double shocked_funded = (target > 1e-6) ? (shocked / target * 100.0) : 0.0;
+        // The label claimed "your historical max" even when no drawdown had
+        // been measured and the 30% was an assumption.
         retire_stress_label_->setText(
-            tr("Stress: a %1% drawdown (your historical max) near retirement would cut the projection to "
-               "%2 %3 \u2014 %4% of target.")
+            (have_dd ? tr("Stress: a %1% drawdown (your historical max) near retirement would cut the projection to "
+                          "%2 %3 \u2014 %4% of target.")
+                     : tr("Stress: an assumed %1% drawdown (no measured history yet) near retirement would cut the "
+                          "projection to %2 %3 \u2014 %4% of target."))
                 .arg(QString::number(dd_pct, 'f', 0))
                 .arg(currency_)
                 .arg(QString::number(shocked, 'f', 0))

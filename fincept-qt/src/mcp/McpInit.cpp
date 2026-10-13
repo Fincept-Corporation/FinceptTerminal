@@ -6,9 +6,11 @@
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
 #include "mcp/TerminalMcpBridge.h"
+#include "mcp/server/McpHttpServer.h"
 #include "mcp/tools/AgenticMemoryTools.h"
 #include "mcp/tools/AgentsTools.h"
 #include "mcp/tools/AiChatTools.h"
+#include "mcp/tools/CodingAgentTools.h"
 #include "mcp/tools/AltInvestmentsTools.h"
 #include "mcp/tools/CryptoTradingTools.h"
 #include "mcp/tools/DBnomicsTools.h"
@@ -19,7 +21,6 @@
 #include "mcp/tools/EquityResearchTools.h"
 #include "mcp/tools/ExcelTools.h"
 #include "mcp/tools/FileManagerTools.h"
-#include "mcp/tools/ForumTools.h"
 #include "mcp/tools/GeopoliticsTools.h"
 #include "mcp/tools/GovDataTools.h"
 #include "mcp/tools/JobTools.h"
@@ -154,8 +155,6 @@ void initialize_all_tools() {
     // data sources tab
     provider.register_tools(tools::get_data_sources_tools());
 
-    // forum tab
-    provider.register_tools(tools::get_forum_tools());
 
     // profile tab
     provider.register_tools(tools::get_profile_tools());
@@ -211,6 +210,9 @@ void initialize_all_tools() {
     // Always exposed so the LLM can lazy-discover specialised tools.
     provider.register_tools(tools::get_meta_tools());
 
+    // Agent Workbench — local Claude Code / Codex runs (status/start/get/list).
+    provider.register_tools(tools::get_coding_agent_tools());
+
     // Long-running-job + oversized-result protocol — job_status/result/cancel/list
     // and result_fetch. Tier-0 (always sent), because a model holding a job
     // receipt or a truncated-result envelope must be able to redeem it without
@@ -227,6 +229,10 @@ void initialize_all_tools() {
 
     // Initialize unified service (starts external servers in background)
     McpService::instance().initialize();
+
+    // External-agent MCP server (Claude Code / Codex / Cursor). Only when the
+    // user enabled "start with the terminal"; needs the catalogue above.
+    McpHttpServer::instance().start_if_enabled();
 }
 
 void shutdown_mcp() {
@@ -240,9 +246,11 @@ void shutdown_mcp() {
         return;
     }
 
-    // Close the local agent bridge first so no new tool call can arrive while
-    // the provider registry is being cleared out from under it.
+    // Close the local agent bridge and the external-agent MCP server first so no
+    // new tool call can arrive while the provider registry is being cleared out
+    // from under it.
     TerminalMcpBridge::instance().stop();
+    McpHttpServer::instance().stop();
 
     // Stops the health-check timer, then every external server process.
     // Without this the child processes (npx/uvx/python MCP servers) outlive the

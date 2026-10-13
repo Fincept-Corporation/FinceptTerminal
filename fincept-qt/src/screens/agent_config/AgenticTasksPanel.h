@@ -1,7 +1,7 @@
 // src/screens/agent_config/AgenticTasksPanel.h
 //
 // AGENTIC view — durable, long-running tasks with per-step progress.
-// Visible only when Settings > Developer > "Enable Agentic Mode" is on.
+// Visible while Settings > Developer > "Enable Agentic Mode" is on (the default).
 //
 // Subscribes to AgentService::task_event for live updates; on show, requests
 // list_tasks() to populate the list. Provides Pause/Resume/Cancel/Delete
@@ -103,6 +103,7 @@ class AgenticTasksPanel : public QWidget {
     QPushButton* reply_btn_ = nullptr;
 
     QString selected_task_id_;
+    QJsonObject selected_task_config_; // stored agent config of the selected task (no secrets)
     bool first_show_ = true;
     bool stale_ = false;                 // events arrived while hidden — refresh on next show
     QTimer* refresh_throttle_ = nullptr; // single-shot, armed by request_refresh()

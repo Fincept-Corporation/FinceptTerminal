@@ -76,7 +76,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     void rebuild_routes_from_vessels(const QVector<services::maritime::VesselData>& vessels);
     void populate_routes_table();
     void update_intelligence(int region_total, int loaded);
-    void update_credits(int remaining);
+    /// Show the API credit balance (fractional); PLANS when low. < 0 = not reported.
+    void update_credits(double remaining);
     /// `fit_camera` re-frames the map around the new pins; false keeps the user's pan/zoom.
     void update_map(const QVector<services::maritime::VesselData>& vessels, bool fit_camera);
     void apply_theme();
@@ -93,7 +94,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     /// Re-issue the most recent load (bbox if one is set, else global sample).
     /// Shared by the manual refresh button and the auto-refresh timer.
     void do_refresh();
-    void set_status(const QString& text, const ui::ColorToken& color);
+    /// `tone`: "positive" / "amber" / "negative" / "muted" (root-sheet colour rule).
+    void set_status(const QString& text, const char* tone);
     /// Issue a world-bbox search and flag the result for spatial downsampling
     /// so the map fans out instead of clustering on whatever bbox the user
     /// last typed.
@@ -114,8 +116,8 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     // Top bar widgets (needed for apply_theme)
     QWidget* top_bar_ = nullptr;
     QLabel* brand_label_ = nullptr;
-    QLabel* classified_label_ = nullptr;
     QLabel* credits_label_ = nullptr;
+    QPushButton* plans_btn_ = nullptr; // Plans & Pricing — shown when credits run low / out
     QLabel* not_found_label_ = nullptr; // shown when multi-vessel returns missing IMOs
 
     // Left / right panel roots
@@ -253,7 +255,6 @@ class MaritimeScreen : public QWidget, public IStatefulScreen {
     QPushButton* ports_btn_ = nullptr;
     QPushButton* ports_in_view_btn_ = nullptr;
     QLabel* rd_title_ = nullptr;
-    QLabel* classified_footer_ = nullptr;
     // Status bar captions + static value.
     QLabel* sb_source_cap_ = nullptr;
     QLabel* sb_records_cap_ = nullptr;

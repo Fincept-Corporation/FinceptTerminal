@@ -8,8 +8,12 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
+#include <QProcessEnvironment>
+#include <QSet>
 
 #include <memory>
+
+class QTimer;
 
 namespace fincept::services {
 
@@ -21,6 +25,29 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     Q_OBJECT
   public:
     static AgentService& instance();
+
+    /// Deferred startup work, called once from main's deferred init (after the
+    /// window is up). When Agentic Mode is on and a task DB exists it spawns ONE
+    /// Python process that recovers tasks orphaned by the previous session
+    /// (running → paused, so RESUME works) and reports the next scheduled
+    /// run, then arms a single due-time timer — so saved schedules fire after a
+    /// restart without the AGENTIC tab ever being opened.
+    void initialize_deferred();
+
+    /// Per-profile directory for durable agent state (agent_tasks.db: tasks,
+    /// schedules, skills, archival memory, reflexions). <AppPaths::data()>/agents
+    /// — never the scripts directory, which dev builds prune and installs keep
+    /// read-only / shared across users. Created on first call. Handed to Python
+    /// in every agent payload (`agent_data_dir`) and as FINCEPT_AGENT_DATA_DIR.
+    static QString agent_data_dir();
+
+    /// Agentic Mode switch (Settings › Developer). On by default.
+    static bool agentic_mode_enabled();
+
+    /// The Agents screen reports its visibility here so a run that finishes
+    /// while the user is elsewhere raises a desktop notification. Counted, so
+    /// several Agent Studio instances (multi-window) are handled.
+    void note_agents_screen_visible(bool visible);
 
     // ── Producer interface ──────────────────────────────────────────────────
     QStringList topic_patterns() const override;
@@ -65,7 +92,11 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     QString run_team(const QString& query, const QJsonObject& team_config);
 
     // ── Workflow execution ───────────────────────────────────────────────────
+    /// `workflow_type` must be one of workflow_types(); anything else fails
+    /// with agent_result(success=false) — the type is used as the Python action.
     QString run_workflow(const QString& workflow_type, const QJsonObject& params = {});
+    /// The workflow types run_workflow() accepts (the WORKFLOWS tab's list).
+    static QStringList workflow_types();
 
     // ── Agentic Mode (gated by `agentic_mode_enabled` setting) ───────────────
     // Spawns a streaming Python subprocess that runs an AgenticRunner against
@@ -79,7 +110,12 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     // For resume/pause/cancel/get/list: returns the request_id correlator;
     //   the task_id is the input.
     QString start_task(const QString& query, const QJsonObject& config);
-    QString resume_task(const QString& task_id);
+    /// `task_config` is the task row's stored `config` (as list_tasks/get_task
+    /// return it). It carries the agent's own tool policy (tool_filter,
+    /// allow_destructive_tools, agent_id…) so the resumed run is held to the same
+    /// rules; credentials and bridge tokens are never stored and are minted
+    /// fresh for every resume. Empty = default agent policy.
+    QString resume_task(const QString& task_id, const QJsonObject& task_config = {});
     QString pause_task(const QString& task_id);
     QString cancel_task(const QString& task_id);
     /// Permanently remove a task record (cancel only signals a running task to stop).
@@ -88,7 +124,8 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     QString get_task(const QString& task_id);
     /// HITL: user replies to a clarifying question persisted on the task row.
     /// Returns the streaming request_id; events arrive on task:event:<task_id>.
-    QString reply_to_question(const QString& task_id, const QString& answer);
+    /// `task_config` as for resume_task().
+    QString reply_to_question(const QString& task_id, const QString& answer, const QJsonObject& task_config = {});
 
     // ── Scheduled recurring tasks (Phase 3D) ─────────────────────────────────
     /// Register a recurring agentic task. `schedule_expr` uses the small DSL
@@ -128,12 +165,6 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     void get_session(const QString& session_id);
     void add_session_message(const QString& session_id, const QString& role, const QString& content);
 
-    // ── Paper trading ────────────────────────────────────────────────────────
-    void paper_execute_trade(const QString& portfolio_id, const QString& symbol, const QString& action, double quantity,
-                             double price);
-    void paper_get_portfolio(const QString& portfolio_id);
-    void paper_get_positions(const QString& portfolio_id);
-
     // ── Trade decisions ──────────────────────────────────────────────────────
     void save_trade_decision(const QJsonObject& decision);
     void get_trade_decisions(const QString& competition_id = {}, const QString& model_name = {});
@@ -141,7 +172,6 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     // ── Config CRUD (delegates to AgentConfigRepository) ─────────────────────
     void save_config(const AgentConfig& config);
     void delete_config(const QString& id);
-    void set_active_config(const QString& id);
 
     // ── Cache management ─────────────────────────────────────────────────────
     void clear_cache();
@@ -169,7 +199,6 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     void knowledge_results(QJsonArray results);
     void session_saved(bool success);
     void session_loaded(QJsonObject session);
-    void trade_executed(QJsonObject result);
     void trade_decisions_loaded(QJsonArray decisions);
     void multi_query_result(QJsonObject result);
     void error_occurred(const QString& context, const QString& message);
@@ -206,6 +235,9 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     QJsonObject build_api_keys() const;
     QJsonObject build_payload(const QString& action, const QJsonObject& params = {},
                               const QJsonObject& config = {}) const;
+    /// PythonRunner's standard env plus FINCEPT_AGENT_DATA_DIR — used by every
+    /// finagent_core spawn so all of them agree on where agent state lives.
+    QProcessEnvironment agent_process_env() const;
     /// `model` block for a saved LLM profile id; when `profile_id` is empty (or
     /// unknown) the assignment-chain default for `context_type` is used. Empty
     /// object when no provider resolves — callers then fall back to the global
@@ -250,12 +282,36 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     /// through publish_task_event(). Returns the request_id correlator.
     QString run_agentic_streaming(const QString& action, const QJsonObject& params, const QJsonObject& config,
                                   const QString& known_task_id = {});
-    /// One tick of the scheduler — pulls due schedules from Python and fires
-    /// each as a fresh agentic task. Called on a QTimer (30s) once any
-    /// schedule exists.
+
+    // ── Scheduler ────────────────────────────────────────────────────────────
+    // Python owns the schedule table and the DSL; it reports the earliest
+    // enabled `next_run_at` (epoch ms) with every list/tick, and C++ sleeps on
+    // ONE single-shot timer until then. A Python process is spawned only when a
+    // schedule is actually due — the old 30 s poll spawned one every 30 s
+    // whether or not anything was scheduled.
+
+    /// Claim the due schedules (Python `agentic_schedule_tick`) and fire each as
+    /// a fresh agentic task.
     void tick_schedules();
-    void ensure_schedule_timer();
-    QObject* schedule_timer_ = nullptr;
+    /// Record the next due time reported by Python (0 = nothing scheduled).
+    void apply_schedule_due(qint64 next_due_ms);
+    void rearm_schedule_timer();
+    void on_schedule_timer();
+    QTimer* schedule_timer_ = nullptr;
+    qint64 next_schedule_due_ms_ = 0;
+    bool schedule_tick_in_flight_ = false;
+
+    // ── Completion notifications ─────────────────────────────────────────────
+    /// Desktop notification for a finished streaming run started while the
+    /// Agents screen was visible, if it is no longer visible.
+    void maybe_notify_run_done(const AgentExecutionResult& r);
+    /// Desktop notification for a terminal / needs-input agentic task event
+    /// while the Agents screen is not visible.
+    void maybe_notify_task_event(const QString& task_id, const QJsonObject& event);
+    int visible_agent_screens_ = 0;
+    QSet<QString> notify_runs_;            // streaming runs eligible for a finish notification
+    QHash<QString, QString> task_queries_; // task_id → query, for notification text
+
     bool hub_registered_ = false;
 };
 

@@ -1,5 +1,7 @@
 #include "screens/markets/MarketsScreen.h"
 
+#include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolGroupRegistry.h"
 #include "screens/markets/MarketPanelEditor.h"
 #include "screens/markets/MarketPanelStore.h"
 #include "services/markets/MarketDataService.h"
@@ -7,6 +9,8 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QAbstractItemModel>
+#include <QBrush>
 #include <QComboBox>
 #include <QDateTime>
 #include <QEvent>
@@ -20,7 +24,9 @@
 #include <QShortcut>
 #include <QShowEvent>
 #include <QSplitter>
+#include <QTableWidget>
 #include <QTimeZone>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
@@ -37,6 +43,30 @@ static QString lbl_ss(const QString& color, bool bold = false, int px = -1) {
         .arg(sz)
         .arg(ui::fonts::DATA_FAMILY())
         .arg(bold ? "font-weight:bold;" : "");
+}
+
+/// Raw ticker of a MarketPanel row: column 0 shows the display name and carries the ticker in
+/// Qt::UserRole (the contract MarketPanel's own context menu uses); falls back to the cell text.
+static QString markets_ticker_at(QTableWidget* table, int row) {
+    auto* item = (table && row >= 0) ? table->item(row, 0) : nullptr;
+    if (!item)
+        return {};
+    const QString t = item->data(Qt::UserRole).toString().trimmed();
+    return t.isEmpty() ? item->text().trimmed() : t;
+}
+
+/// SymbolRef asset class for a yfinance-style Markets ticker, so receivers can tell an index or a
+/// futures/FX/crypto quote from an equity.
+static QString markets_link_asset_class(const QString& ticker) {
+    if (ticker.startsWith(QLatin1Char('^')))
+        return QStringLiteral("index");
+    if (ticker.endsWith(QLatin1String("=X")))
+        return QStringLiteral("fx");
+    if (ticker.endsWith(QLatin1String("=F")))
+        return QStringLiteral("future");
+    if (ticker.endsWith(QLatin1String("-USD")) || ticker.endsWith(QLatin1String("-USDT")))
+        return QStringLiteral("crypto");
+    return QStringLiteral("equity");
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +220,103 @@ void MarketsScreen::wire_panel(MarketPanel* p) {
     connect(p, &MarketPanel::edit_requested, this, &MarketsScreen::open_editor);
     connect(p, &MarketPanel::delete_requested, this, &MarketsScreen::on_panel_delete);
     connect(p, &MarketPanel::config_changed, this, &MarketsScreen::on_panel_config_changed);
+
+    // Symbol-group link through the panel's table (see MarketsScreen.h).
+    if (auto* table = p->findChild<QTableWidget*>()) {
+        connect(table, &QTableWidget::cellClicked, this, [this, table](int row, int) {
+            const QString ticker = markets_ticker_at(table, row);
+            if (ticker.isEmpty())
+                return;
+            clicked_symbol_ = ticker;
+            linked_symbol_ = ticker; // mark the selection like a received symbol
+            apply_link_highlight();
+            publish_row_symbol(ticker);
+        });
+        // The panel rebuilds its row items on every quote delivery, which drops the highlight:
+        // re-apply it once the burst of updates has been processed.
+        connect(table->model(), &QAbstractItemModel::dataChanged, this, [this]() {
+            if (!applying_link_highlight_ && !linked_symbol_.isEmpty())
+                schedule_link_highlight();
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Symbol-group link (IGroupLinked)
+// ---------------------------------------------------------------------------
+
+void MarketsScreen::set_group(fincept::SymbolGroup g) {
+    link_group_ = g;
+    apply_link_highlight(); // highlight colour follows the group
+}
+
+void MarketsScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
+    if (!ref.is_valid())
+        return;
+    linked_symbol_ = ref.symbol.trimmed();
+    apply_link_highlight(); // panels without the ticker simply show no highlight
+}
+
+fincept::SymbolRef MarketsScreen::current_symbol() const {
+    const QString sym = !clicked_symbol_.isEmpty() ? clicked_symbol_ : linked_symbol_;
+    // Same rule as publish_row_symbol(): only an equity may seed a link group.
+    if (sym.isEmpty() || markets_link_asset_class(sym) != QLatin1String("equity"))
+        return {};
+    fincept::SymbolRef ref;
+    ref.symbol = sym;
+    ref.asset_class = QStringLiteral("equity");
+    return ref;
+}
+
+void MarketsScreen::publish_row_symbol(const QString& ticker) {
+    if (link_group_ == fincept::SymbolGroup::None)
+        return;
+    // Only equities drive the group: the linked screens (Equity Trading's order ticket, News'
+    // headline search, the Watchlist) take stock tickers, and an index / future / FX / crypto quote
+    // (^GSPC, GC=F, EURUSD=X, BTC-USD) would switch them to something they cannot use. Those rows
+    // still reach Equity Research through the panel's own double-click / "Open in" menu.
+    const QString asset_class = markets_link_asset_class(ticker);
+    if (asset_class != QLatin1String("equity"))
+        return;
+    fincept::SymbolRef ref;
+    ref.symbol = ticker;
+    ref.asset_class = asset_class;
+    fincept::SymbolContext::instance().set_group_symbol(link_group_, ref, this);
+}
+
+void MarketsScreen::schedule_link_highlight() {
+    if (link_highlight_pending_)
+        return;
+    link_highlight_pending_ = true;
+    QTimer::singleShot(0, this, [this]() { apply_link_highlight(); });
+}
+
+void MarketsScreen::apply_link_highlight() {
+    link_highlight_pending_ = false;
+    QColor hl = link_group_ != fincept::SymbolGroup::None ? fincept::SymbolGroupRegistry::instance().color(link_group_)
+                                                          : QColor(ui::colors::AMBER());
+    hl.setAlpha(70);
+    const QBrush brush(hl);
+    applying_link_highlight_ = true; // our own setData() calls must not re-schedule
+    for (MarketPanel* p : std::as_const(panels_)) {
+        auto* table = p ? p->findChild<QTableWidget*>() : nullptr;
+        if (!table)
+            continue;
+        for (int r = 0; r < table->rowCount(); ++r) {
+            const bool match = !linked_symbol_.isEmpty() &&
+                               markets_ticker_at(table, r).compare(linked_symbol_, Qt::CaseInsensitive) == 0;
+            for (int c = 0; c < table->columnCount(); ++c) {
+                auto* item = table->item(r, c);
+                if (!item)
+                    continue;
+                if (match)
+                    item->setBackground(brush);
+                else if (item->data(Qt::BackgroundRole).isValid())
+                    item->setData(Qt::BackgroundRole, QVariant());
+            }
+        }
+    }
+    applying_link_highlight_ = false;
 }
 
 void MarketsScreen::rebuild_splitter_layout() {

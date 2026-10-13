@@ -23,6 +23,7 @@
 #include <QDateTime>
 #include <QDateTimeAxis>
 #include <QDesktopServices>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QFrame>
@@ -86,6 +87,38 @@ QPushButton* QuantModulePanel::make_run_button(const QString& text, QWidget* par
                            .arg(module_.color.name(), ui::colors::BG_BASE(), module_.color.lighter(115).name(),
                                 module_.color.darker(110).name()));
     return btn;
+}
+
+QPushButton* QuantModulePanel::make_sample_button(QLineEdit* edit, QWidget* parent, const QString& tip,
+                                                  std::function<QString()> generator) {
+    // Styled by the panel stylesheet (refresh_theme, #quantSampleButton) — no
+    // per-button setStyleSheet.
+    auto* btn = new QPushButton(tr("LOAD SYNTHETIC SAMPLE"), parent);
+    btn->setObjectName(QStringLiteral("quantSampleButton"));
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setFixedHeight(22);
+    btn->setToolTip(tr("%1\nGenerated (synthetic) data for trying the module — not market data. Results computed "
+                       "on it are flagged SAMPLE INPUT.")
+                        .arg(tip));
+    btn->setAccessibleName(tr("Load synthetic sample input"));
+    QPointer<QLineEdit> guard(edit);
+    connect(btn, &QPushButton::clicked, this, [guard, generator]() {
+        if (!guard)
+            return;
+        const QString text = generator();
+        guard->setText(text);
+        guard->setProperty("quantSampleText", text);
+    });
+    return btn;
+}
+
+bool QuantModulePanel::visible_inputs_are_sample() const {
+    for (auto* e : findChildren<QLineEdit*>()) {
+        const QString sample = e->property("quantSampleText").toString();
+        if (!sample.isEmpty() && e->isVisible() && e->text() == sample)
+            return true;
+    }
+    return false;
 }
 
 QWidget* QuantModulePanel::build_input_row(const QString& label, QWidget* input, QWidget* parent) {
@@ -181,7 +214,13 @@ void QuantModulePanel::refresh_theme() {
     // Panel-wide base colours plus the shared table rules, so a result table that is created
     // without its own style sheet still matches the theme.
     setStyleSheet(QString("* { background:%1; color:%2; }").arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY()) +
-                  table_ss());
+                  table_ss() +
+                  QString("QPushButton#quantSampleButton, QPushButton#quantQuietButton { color:%1; background:transparent;"
+                          "border:1px solid %2; padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px;"
+                          "border-radius:2px; }"
+                          "QPushButton#quantSampleButton:hover, QPushButton#quantQuietButton:hover { color:%3;"
+                          "border-color:%3; background:rgba(255,255,255,0.04); }")
+                      .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
 
     if (panel_header_)
         panel_header_->setStyleSheet(QString("background:%1; border-bottom:1px solid %2;")
@@ -218,12 +257,18 @@ void QuantModulePanel::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     for (auto* t : findChildren<QTimer*>(QStringLiteral("quantSpinnerTimer")))
         t->start();
+    // RD-Agent monitor auto-refresh resumes only if the last listing had a
+    // running task (its timeout stops itself if the monitor tab is not shown).
+    if (auto* poll = findChild<QTimer*>(QStringLiteral("rdTaskPollTimer")); poll && poll->property("rdActive").toBool())
+        poll->start();
 }
 
 void QuantModulePanel::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
     for (auto* t : findChildren<QTimer*>(QStringLiteral("quantSpinnerTimer")))
         t->stop();
+    if (auto* poll = findChild<QTimer*>(QStringLiteral("rdTaskPollTimer")))
+        poll->stop();
 }
 
 void QuantModulePanel::retranslateUi() {
@@ -521,6 +566,10 @@ void QuantModulePanel::show_loading(const QString& message) {
     set_run_buttons_enabled(this, false);
     if (status_label_)
         status_label_->setText(message);
+    // Every run button calls show_loading() right before the service call, with
+    // its own tab's inputs on screen — the moment to note whether they are the
+    // synthetic LOAD SAMPLE data.
+    sample_input_pending_ = visible_inputs_are_sample();
 
     // Container card
     auto* box = new QWidget(this);
@@ -541,30 +590,47 @@ void QuantModulePanel::show_loading(const QString& message) {
     static const QStringList kFrames = {"|", "/", "-", "\\"};
     spinner->setText(kFrames[0]);
 
-    auto* timer = new QTimer(box);
-    timer->setObjectName(QStringLiteral("quantSpinnerTimer"));
-    timer->setInterval(120);
-    int frame_idx = 0;
-    QPointer<QLabel> spin_guard(spinner);
-    connect(timer, &QTimer::timeout, box, [spin_guard, frame_idx]() mutable {
-        if (!spin_guard)
-            return;
-        frame_idx = (frame_idx + 1) % kFrames.size();
-        spin_guard->setText(kFrames[frame_idx]);
-    });
-    if (isVisible())
-        timer->start(); // otherwise showEvent() starts it when the panel is next shown
-
     auto* msg = new QLabel(message, box);
     msg->setWordWrap(true);
     msg->setStyleSheet(QString("color:%1; font-size:11px; font-family:'Courier New'; background:transparent;")
                            .arg(ui::colors::TEXT_PRIMARY()));
 
-    auto* hint = new QLabel(tr("Running on the embedded Python runtime — "
-                               "first invocation per session takes longer (cold start)."),
-                            box);
+    // The hint carries a live elapsed clock: a multi-minute training run used to
+    // show the same static text from start to finish, indistinguishable from a
+    // hang. Elapsed time is real progress information; a % would be invented.
+    auto hint_text = [](qint64 secs) {
+        return QuantModulePanel::tr("Elapsed %1:%2 — running on the embedded Python runtime; the first run per "
+                                    "session is slower (cold start).")
+            .arg(secs / 60)
+            .arg(secs % 60, 2, 10, QLatin1Char('0'));
+    };
+    auto* hint = new QLabel(hint_text(0), box);
     hint->setWordWrap(true);
     hint->setStyleSheet(QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+
+    auto* timer = new QTimer(box);
+    timer->setObjectName(QStringLiteral("quantSpinnerTimer"));
+    timer->setInterval(120);
+    int frame_idx = 0;
+    qint64 shown_secs = 0;
+    QElapsedTimer clock;
+    clock.start();
+    QPointer<QLabel> spin_guard(spinner);
+    QPointer<QLabel> hint_guard(hint);
+    connect(timer, &QTimer::timeout, box,
+            [spin_guard, hint_guard, frame_idx, shown_secs, clock, hint_text]() mutable {
+                if (!spin_guard)
+                    return;
+                frame_idx = (frame_idx + 1) % kFrames.size();
+                spin_guard->setText(kFrames[frame_idx]);
+                const qint64 secs = clock.elapsed() / 1000;
+                if (secs != shown_secs && hint_guard) {
+                    shown_secs = secs;
+                    hint_guard->setText(hint_text(secs));
+                }
+            });
+    if (isVisible())
+        timer->start(); // otherwise showEvent() starts it when the panel is next shown
 
     auto* text_col = new QVBoxLayout;
     text_col->setContentsMargins(0, 0, 0, 0);
@@ -581,6 +647,7 @@ void QuantModulePanel::show_loading(const QString& message) {
 void QuantModulePanel::on_error(const QString& module_id, const QString& message) {
     if (module_id != module_.id)
         return;
+    sample_input_pending_ = false;
     if (module_id == "rl_trading") {
         if (rl_train_button_)
             rl_train_button_->setEnabled(true);
@@ -606,6 +673,13 @@ void QuantModulePanel::on_error(const QString& module_id, const QString& message
     // results pane, so a failed RD-Agent request (status check, task list, stop, ...) showed
     // nothing in the tab the user was looking at. When the RD-Agent output box is the visible
     // one, report there and on its status strip instead.
+    if (module_id == QLatin1String("deep_agent")) {
+        for (auto* b : findChildren<QPushButton*>(QStringLiteral("quantRunButton")))
+            if (b->property("deepRun").toBool())
+                b->setEnabled(true);
+        if (agent_output_ && agent_output_->isVisible())
+            agent_output_->setPlainText(text);
+    }
     if (module_id == QLatin1String("deep_agent") && rd_agent_output_ && rd_agent_output_->isVisible()) {
         rd_agent_output_->setPlainText(text);
         if (auto* lbl = this->findChild<QLabel*>(QStringLiteral("rdStatusTxt")))

@@ -2,6 +2,8 @@
 
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "core/symbol/SymbolContext.h"
+#include "screens/asia_markets/AsiaSymbolLinks.h"
 #include "services/asia_markets/AsiaMarketsService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/tables/NumericTableWidgetItem.h"
@@ -11,7 +13,9 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonDocument>
+#include <QMenu>
 #include <QPointer>
+#include <QSignalBlocker>
 #include <QScrollArea>
 #include <QShowEvent>
 #include <QSplitter>
@@ -406,6 +410,10 @@ QWidget* AsiaMarketsScreen::create_data_panel() {
     data_table_->horizontalHeader()->setSortIndicatorShown(true);
     data_table_->setSortingEnabled(true);
     data_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    // Security rows lead somewhere: link-group publish on selection, "Open in…" on right-click.
+    data_table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(data_table_, &QTableWidget::customContextMenuRequested, this, &AsiaMarketsScreen::show_row_menu);
+    connect(data_table_, &QTableWidget::itemSelectionChanged, this, &AsiaMarketsScreen::publish_selection_to_group);
 
     json_view_ = new QTextEdit;
     json_view_->setObjectName("asiaJsonView");
@@ -773,6 +781,11 @@ void AsiaMarketsScreen::execute_query(const QString& endpoint, const QStringList
 // ── Display ─────────────────────────────────────────────────────────────────
 
 void AsiaMarketsScreen::display_table(const QJsonArray& rows_json, const QStringList& ordered_columns) {
+    // Repopulating must not look like a user selection (that would publish a symbol to the group).
+    QSignalBlocker block_selection(data_table_);
+    data_table_->clearSelection();
+    symbol_col_ = -1;
+    name_col_ = -1;
     if (rows_json.isEmpty()) {
         // Don't leave the previous endpoint's rows on screen under a "No data returned" status.
         data_table_->setRowCount(0);
@@ -791,6 +804,8 @@ void AsiaMarketsScreen::display_table(const QJsonArray& rows_json, const QString
     }
 
     int max_rows = qMin(rows_json.size(), 2000);
+    symbol_col_ = asia_links::symbol_column(columns);
+    name_col_ = asia_links::name_column(columns);
 
     // Block all signals + updates during population
     data_table_->setSortingEnabled(false);
@@ -859,15 +874,91 @@ void AsiaMarketsScreen::display_error(const QString& error) {
     data_status_->setText(tr("Error: %1").arg(error.simplified().left(160)));
     record_count_->hide();
 
-    data_table_->clear();
-    data_table_->setRowCount(0);
-    data_table_->setColumnCount(0);
+    {
+        QSignalBlocker block_selection(data_table_);
+        data_table_->clear();
+        data_table_->setRowCount(0);
+        data_table_->setColumnCount(0);
+    }
+    symbol_col_ = -1;
+    name_col_ = -1;
 
     QJsonObject err_obj;
     err_obj["error"] = error;
     json_view_->setPlainText(QJsonDocument(err_obj).toJson(QJsonDocument::Indented));
 
     LOG_ERROR("AsiaMarkets", error);
+}
+
+// ── Symbol linking ───────────────────────────────────────────────────────────
+
+QString AsiaMarketsScreen::yf_symbol_at_row(int row) const {
+    if (symbol_col_ < 0 || row < 0 || row >= data_table_->rowCount())
+        return {};
+    const auto* item = data_table_->item(row, symbol_col_);
+    return item ? asia_links::yf_symbol_for_code(item->text()) : QString();
+}
+
+QString AsiaMarketsScreen::name_at_row(int row) const {
+    if (name_col_ < 0 || row < 0 || row >= data_table_->rowCount())
+        return {};
+    const auto* item = data_table_->item(row, name_col_);
+    return item ? item->text().trimmed() : QString();
+}
+
+void AsiaMarketsScreen::publish_selection_to_group() {
+    if (link_group_ == fincept::SymbolGroup::None)
+        return;
+    const QString yf = yf_symbol_at_row(data_table_->currentRow());
+    if (yf.isEmpty())
+        return;
+    fincept::SymbolContext::instance().set_group_symbol(
+        link_group_, fincept::SymbolRef::equity(yf, asia_links::exchange_for_yf(yf)), this);
+}
+
+void AsiaMarketsScreen::on_group_symbol_changed(const fincept::SymbolRef& ref) {
+    if (!ref.is_valid())
+        return;
+    // A-share / HK symbols become the SYMBOL parameter, so the next per-security query follows the
+    // group (nothing is fetched here — a follower must stay cheap).
+    const QString native = asia_links::native_code_for(ref.symbol);
+    if (!native.isEmpty() && symbol_input_)
+        symbol_input_->setText(native);
+
+    if (symbol_col_ < 0)
+        return;
+    QString target = asia_links::yf_symbol_for_code(ref.symbol);
+    if (target.isEmpty())
+        target = ref.symbol.trimmed();
+    for (int r = 0; r < data_table_->rowCount(); ++r) {
+        if (yf_symbol_at_row(r).compare(target, Qt::CaseInsensitive) == 0) {
+            QSignalBlocker block(data_table_); // a follower must not re-publish
+            data_table_->selectRow(r);
+            data_table_->scrollToItem(data_table_->item(r, symbol_col_), QAbstractItemView::PositionAtCenter);
+            return;
+        }
+    }
+}
+
+fincept::SymbolRef AsiaMarketsScreen::current_symbol() const {
+    const QString yf = yf_symbol_at_row(data_table_ ? data_table_->currentRow() : -1);
+    if (yf.isEmpty())
+        return {};
+    return fincept::SymbolRef::equity(yf, asia_links::exchange_for_yf(yf));
+}
+
+void AsiaMarketsScreen::show_row_menu(const QPoint& pos) {
+    auto* item = data_table_->itemAt(pos);
+    if (!item)
+        return;
+    const int row = item->row();
+    const QString yf = yf_symbol_at_row(row);
+    if (yf.isEmpty())
+        return; // this result has no security-code column
+    data_table_->selectRow(row); // act on the row under the cursor (publishes to the group, if linked)
+    QMenu menu(this);
+    asia_links::add_symbol_actions(menu, this, data_table_, yf, name_at_row(row));
+    menu.exec(data_table_->viewport()->mapToGlobal(pos));
 }
 
 void AsiaMarketsScreen::set_loading(bool loading) {

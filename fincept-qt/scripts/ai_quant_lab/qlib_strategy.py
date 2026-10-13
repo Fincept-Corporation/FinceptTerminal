@@ -371,33 +371,33 @@ class StrategyService:
         """Calculate risk parity weights using optimization"""
         n_assets = cov_matrix.shape[0]
         cov = np.asarray(cov_matrix, dtype=float)
+        vols = np.sqrt(np.clip(np.diag(cov), 1e-18, None))
 
-        def risk_budget_objective(weights):
-            # Risk parity: every asset contributes an equal SHARE of portfolio risk.
-            # The shares must be normalised to sum to 1 before comparing with 1/n.
-            # The old code compared absolute contributions (which sum to the portfolio
-            # volatility, ~0.01) against 1/n, so the optimiser raised volatility
-            # instead -- it put ~99% of the weight in the most volatile asset.
-            variance = weights @ cov @ weights
-            if variance <= 0:
-                return 1e6
-            risk_share = weights * (cov @ weights) / variance
-            return np.sum((risk_share - 1.0 / n_assets) ** 2)
+        # Equal risk contribution via the convex log-barrier problem (Spinu 2013;
+        # Maillard, Roncalli & Teiletche 2010):
+        #     min_y  0.5 * y' S y - (1/n) * sum(log y),   y > 0
+        # Its unique optimum has y_i (S y)_i = 1/n for every i, i.e. equal risk
+        # shares; w = y / sum(y). The previous SLSQP least-squares fit on risk
+        # shares stalled on non-convex ground: with a hedging (negatively
+        # correlated) asset it returned e.g. 50% / 50% / -0.05% risk shares for a
+        # 3-asset book and still reported it as risk parity.
+        def objective(y):
+            return 0.5 * y @ cov @ y - np.sum(np.log(y)) / n_assets
 
-        # Constraints
-        cons = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
-        bounds = tuple((0.001, 1) for _ in range(n_assets))
-        init_weights = np.array([1.0/n_assets] * n_assets)
+        def gradient(y):
+            return cov @ y - 1.0 / (n_assets * y)
 
         result = optimize.minimize(
-            risk_budget_objective,
-            init_weights,
-            method='SLSQP',
-            bounds=bounds,
-            constraints=cons
+            objective,
+            1.0 / vols,
+            jac=gradient,
+            method='L-BFGS-B',
+            bounds=[(1e-12, None)] * n_assets,
+            options={'ftol': 1e-15, 'gtol': 1e-12, 'maxiter': 10000},
         )
-
-        return result.x
+        y = result.x if result.success and np.all(np.isfinite(result.x)) else 1.0 / vols
+        # Inverse-volatility is the documented fallback (exact ERC when correlations are equal).
+        return y / np.sum(y)
 
     def _calculate_risk_contributions(self, weights: np.ndarray, cov_matrix: pd.DataFrame) -> Dict[str, float]:
         """Calculate risk contribution of each asset"""
@@ -436,13 +436,18 @@ class StrategyService:
 
             # Maximum drawdown
             cumulative = (1 + returns).cumprod()
-            running_max = cumulative.expanding().max()
+            # Peak includes the starting capital, so a first-day loss counts.
+            running_max = cumulative.expanding().max().clip(lower=1.0)
             drawdown = (cumulative - running_max) / running_max
             max_drawdown = drawdown.min()
 
-            # Sortino ratio (downside deviation)
-            downside_returns = returns[returns < 0]
-            downside_std = downside_returns.std() * np.sqrt(252)
+            # Sortino ratio: downside deviation below the (daily) risk-free rate,
+            # sqrt(mean(min(r - rf, 0)^2)) over ALL days, annualised. It used the
+            # std of the negative days only — a dispersion measure that ignores how
+            # often losses happen and inflates/deflates Sortino arbitrarily.
+            rf_daily = risk_free_rate / 252.0
+            shortfall = np.minimum(returns.values - rf_daily, 0.0)
+            downside_std = np.sqrt(np.mean(shortfall ** 2)) * np.sqrt(252)
             sortino = (annual_return - risk_free_rate) / downside_std if downside_std > 0 else 0
 
             # Calmar ratio

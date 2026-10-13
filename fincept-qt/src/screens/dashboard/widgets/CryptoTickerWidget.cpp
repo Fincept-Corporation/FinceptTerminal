@@ -14,12 +14,26 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QStyle>
+#include <QVBoxLayout>
 
 namespace fincept::screens::widgets {
 
 namespace {
 const QStringList kDefaultPairs = {"BTC/USD", "ETH/USD", "SOL/USD"};
 constexpr const char* kDefaultExchange = "kraken";
+
+// The change label's colour is driven by a "dir" property matched in the rows
+// host's stylesheet. Ticks arrive at up to 20 Hz per pair; a per-tick
+// setStyleSheet() re-parsed CSS every time, while the colour only changes when
+// the sign flips — so re-polish only then (CLAUDE.md P7).
+void crypto_ticker_set_dir(QLabel* label, const char* dir) {
+    if (label->property("dir").toString() == QLatin1String(dir))
+        return;
+    label->setProperty("dir", QString::fromLatin1(dir));
+    label->style()->unpolish(label);
+    label->style()->polish(label);
+}
 } // namespace
 
 CryptoTickerWidget::CryptoTickerWidget(const QJsonObject& cfg, QWidget* parent)
@@ -81,10 +95,17 @@ void CryptoTickerWidget::build_rows() {
     }
     rows_.clear();
 
-    auto* hdr = new QLabel(exchange_.toUpper());
-    hdr->setStyleSheet(
-        QString("color:%1;font-size:9px;background:transparent;padding:2px 0;").arg(ui::colors::TEXT_TERTIARY()));
-    vl->addWidget(hdr);
+    // One host carries the stylesheet for every label below (objectName +
+    // "dir" property selectors) — see apply_styles().
+    rows_host_ = new QWidget(this);
+    rows_host_->setObjectName("cryptoTickerRows");
+    auto* host_layout = new QVBoxLayout(rows_host_);
+    host_layout->setContentsMargins(0, 0, 0, 0);
+    host_layout->setSpacing(vl->spacing());
+
+    auto* hdr = new QLabel(exchange_.toUpper(), rows_host_);
+    hdr->setObjectName("cryptoTickerHdr");
+    host_layout->addWidget(hdr);
 
     auto* grid = new QGridLayout();
     grid->setContentsMargins(0, 0, 0, 0);
@@ -93,17 +114,21 @@ void CryptoTickerWidget::build_rows() {
     for (int i = 0; i < pairs_.size(); ++i) {
         const QString& pair = pairs_[i];
         Row r;
-        r.symbol = new QLabel(pair);
-        r.price = new QLabel("—");
+        r.symbol = new QLabel(pair, rows_host_);
+        r.symbol->setObjectName("cryptoTickerSym");
+        r.price = new QLabel("—", rows_host_);
+        r.price->setObjectName("cryptoTickerPrice");
         r.price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        r.change = new QLabel("—");
+        r.change = new QLabel("—", rows_host_);
+        r.change->setObjectName("cryptoTickerChg");
         r.change->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         grid->addWidget(r.symbol, i, 0);
         grid->addWidget(r.price, i, 1);
         grid->addWidget(r.change, i, 2);
         rows_.insert(pair, r);
     }
-    vl->addLayout(grid);
+    host_layout->addLayout(grid);
+    vl->addWidget(rows_host_);
     vl->addStretch(1);
     apply_styles();
 }
@@ -150,8 +175,7 @@ void CryptoTickerWidget::on_ticker(const QString& pair, const fincept::trading::
     r.price->setText(QString::number(t.last, 'f', t.last < 10 ? 4 : 2));
     const QString sign = t.percentage >= 0 ? "+" : "";
     r.change->setText(QString("%1%2%").arg(sign).arg(t.percentage, 0, 'f', 2));
-    const QColor col = t.percentage >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
-    r.change->setStyleSheet(QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(col.name()));
+    crypto_ticker_set_dir(r.change, t.percentage >= 0 ? "up" : "down");
     received_.insert(pair);
     set_loading_progress(received_.size(), pairs_.size());
 }
@@ -198,20 +222,18 @@ void CryptoTickerWidget::on_theme_changed() {
 }
 
 void CryptoTickerWidget::apply_styles() {
-    const QString sym_css =
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
-    const QString price_css =
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
-    const QString chg_css =
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
-    for (auto it = rows_.begin(); it != rows_.end(); ++it) {
-        if (it->symbol)
-            it->symbol->setStyleSheet(sym_css);
-        if (it->price)
-            it->price->setStyleSheet(price_css);
-        if (it->change && it->change->text() == "—")
-            it->change->setStyleSheet(chg_css);
-    }
+    if (!rows_host_)
+        return; // ctor runs this before the first build_rows()
+    // A change label with no "dir" yet (still "—") keeps the tertiary colour.
+    rows_host_->setStyleSheet(
+        QString("QLabel#cryptoTickerHdr{color:%1;font-size:9px;background:transparent;padding:2px 0;}"
+                "QLabel#cryptoTickerSym{color:%2;font-size:11px;font-weight:700;background:transparent;}"
+                "QLabel#cryptoTickerPrice{color:%2;font-size:11px;font-weight:600;background:transparent;}"
+                "QLabel#cryptoTickerChg{color:%1;font-size:11px;font-weight:600;background:transparent;}"
+                "QLabel#cryptoTickerChg[dir=\"up\"]{color:%3;}"
+                "QLabel#cryptoTickerChg[dir=\"down\"]{color:%4;}")
+            .arg(ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),
+                 ui::colors::NEGATIVE()));
 }
 
 void CryptoTickerWidget::retranslateUi() {

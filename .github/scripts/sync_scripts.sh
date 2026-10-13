@@ -12,7 +12,8 @@
 #   *.deleted.*, *.bak, *.orig,
 #   *.db, *.sqlite, *.sqlite3,
 #   .DS_Store, Thumbs.db,
-#   .git, .firecrawl
+#   .git, .firecrawl,
+#   tests, _tools  (dev-only: pytest suites, one-off migration scripts)
 #
 # Implementation note: we use `tar --exclude ... | tar -x` instead of rsync
 # because rsync is NOT pre-installed on GitHub's windows-2022 runner
@@ -58,4 +59,6 @@ tar \
     --exclude='Thumbs.db' \
     --exclude='.git' \
     --exclude='.firecrawl' \
+    --exclude='tests' \
+    --exclude='_tools' \
     -C "$SRC" -cf - . | tar -C "$DEST" -xf -

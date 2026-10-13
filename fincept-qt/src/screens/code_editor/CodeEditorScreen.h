@@ -6,7 +6,9 @@
 
 #include "screens/common/IStatefulScreen.h"
 
+#include <QComboBox>
 #include <QEvent>
+#include <QHash>
 #include <QGridLayout>
 #include <QHideEvent>
 #include <QJsonArray>
@@ -14,6 +16,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollArea>
@@ -82,6 +85,12 @@ class CellWidget : public QWidget {
     /// stale title on the next sync/save.
     void set_title(const QString& title) { title_ = title; }
     QString cell_id() const { return cell_id_; }
+    /// Live run: clear the old output and show a streaming pane.
+    void begin_stream();
+    /// Append streamed stdout/stderr text to the live pane.
+    void append_stream(const QString& text, bool is_stderr);
+    /// Show the run time next to the output header ("OUT [3] · 1.24 s").
+    void set_elapsed(qint64 ms);
 
   signals:
     void run_requested(const QString& cell_id);
@@ -150,6 +159,9 @@ class CellWidget : public QWidget {
 
     // Insert hint
     QWidget* insert_hint_ = nullptr;
+
+    // Streaming output while the cell runs
+    QPlainTextEdit* live_out_ = nullptr;
 };
 
 // -- Sidebar cell navigator ---------------------------------------------------
@@ -217,6 +229,8 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     void on_clear_outputs();
     void on_toggle_sidebar();
     void on_rename_cell(const QString& cell_id);
+    /// Interrupt every running cell and drop the RUN ALL queue (STOP / Esc).
+    void on_stop_all();
 
     // Header / Library
     void on_view_changed(int index); // 0 = Library, 1 = Editor
@@ -261,9 +275,15 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     /// Fingerprint at the last new/open/save — compared against the live one to
     /// detect unsaved edits.
     QString clean_fingerprint_;
-    /// Cells still waiting on a PythonRunner callback. RUN ALL queues several,
-    /// so a single bool would clear the "BUSY" badge on the first return.
-    int pending_runs_ = 0;
+    /// Running cells: cell id → NotebookLibraryService run id (for STOP).
+    QHash<QString, QString> active_runs_;
+    /// RUN ALL runs cells one at a time, top to bottom, and stops at the first
+    /// error (Jupyter semantics); these are the cells still to run.
+    QStringList run_queue_;
+    void run_next_queued();
+    /// Kernel ("numpy2" | "numpy1") and per-cell time limit, persisted.
+    QString kernel_ = QStringLiteral("numpy2");
+    int timeout_s_ = 1800;
 
     // UI
     QSplitter* splitter_ = nullptr;
@@ -284,7 +304,9 @@ class CodeEditorScreen : public QWidget, public IStatefulScreen {
     QPushButton* btn_clear_out_ = nullptr;
     QPushButton* btn_run_all_ = nullptr;
     QPushButton* btn_sidebar_ = nullptr;
-    QLabel* py_label_ = nullptr;
+    QPushButton* btn_stop_ = nullptr;
+    QComboBox* kernel_combo_ = nullptr;
+    QComboBox* timeout_combo_ = nullptr;
     QLabel* shortcuts_label_ = nullptr;
 
     // Tracks whether the kernel is busy so retranslateUi can re-render the badge.

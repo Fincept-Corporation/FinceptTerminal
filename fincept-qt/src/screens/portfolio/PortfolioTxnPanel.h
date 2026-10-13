@@ -33,6 +33,17 @@ class PortfolioTxnPanel : public QWidget {
     void collapse_toggled(bool collapsed);
     /// Double-click on a transaction row: the owner opens that ticker elsewhere.
     void symbol_activated(QString symbol);
+    /// Row menu "Open in …" (screen id, ticker) — published as nav.open_symbol.
+    void open_symbol_requested(QString screen_id, QString symbol);
+    /// Row menu edit / delete of a ledger row, by transaction id.
+    void edit_transaction_requested(QString transaction_id);
+    void delete_transaction_requested(QString transaction_id);
+    /// Row menu "Export Full Ledger (CSV)".
+    void export_requested();
+
+  public:
+    /// Rows the owner requests for this panel (most recent first).
+    static constexpr int kRecentRows = 50;
 
   private:
     void build_ui();

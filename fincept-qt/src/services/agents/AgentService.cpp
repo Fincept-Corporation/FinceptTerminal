@@ -12,12 +12,15 @@
 #include "services/agents/AgentService.h"
 
 #include "auth/AuthManager.h"
+#include "core/config/AppPaths.h"
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/TopicPolicy.h"
 #include "mcp/McpProvider.h"
 #include "mcp/McpTypes.h"
 #include "mcp/TerminalMcpBridge.h"
+#include "mcp/server/CallApproval.h"
 #include "python/PythonRunner.h"
 #include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
@@ -25,9 +28,13 @@
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/LlmProfileRepository.h"
 #include "storage/repositories/McpServerRepository.h"
+#include "storage/repositories/SettingsRepository.h"
+#include "ui/notifications/DesktopNotifier.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMetaObject>
@@ -38,6 +45,7 @@
 #include <QUuid>
 #include <QVariant>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -49,9 +57,11 @@ namespace {
 constexpr int kPythonReadyGraceMs = 30000;
 
 // Default excludes applied to every agent: UI-driving tools (navigation /
-// system / settings), the recursive chat tools (ai-chat), and the tool
-// discovery meta tools. Non-negotiable — per-agent config may only ADD to
-// them. TerminalMcpBridge enforces the same set at dispatch.
+// system / settings), the recursive chat tools (ai-chat), and the meta tools.
+// Non-negotiable — per-agent config may only ADD to them. TerminalMcpBridge
+// enforces the same set at dispatch (an Essentials run is exempted from "meta"
+// for tool_list / tool_describe / tool_invoke only — its route to everything
+// else).
 const QStringList& default_tool_excludes() {
     static const QStringList kCats = {QStringLiteral("navigation"), QStringLiteral("system"),
                                       QStringLiteral("settings"), QStringLiteral("ai-chat"), QStringLiteral("meta")};
@@ -71,7 +81,7 @@ const QStringList& default_tool_excludes() {
 ///   exclude_categories[]    — blacklist, ON TOP of the defaults
 ///   name_patterns[]         — regex include on tool name
 ///   exclude_name_patterns[] — regex exclude on tool name
-///   max_tools (int)         — hard cap on catalog size
+///   max_tools (int)         — cap on catalog size (0 = every matching tool)
 mcp::ToolFilter resolve_tool_filter(const QJsonObject& config) {
     mcp::ToolFilter filter;
     filter.exclude_categories = default_tool_excludes();
@@ -108,8 +118,18 @@ mcp::ToolFilter resolve_tool_filter(const QJsonObject& config) {
                 filter.exclude_name_patterns.append(p);
         }
     }
-    filter.max_tools = tf.value("max_tools").toInt(0);
+    filter.max_tools = std::max(0, tf.value("max_tools").toInt(0));
     return filter;
+}
+
+/// Which catalogue an agent gets. An agent that names categories or name
+/// patterns gets exactly those tools; one that does not gets the curated
+/// essentials set plus tool_list / tool_describe / tool_invoke, through which it
+/// can reach every other tool its policy allows. (It used to get a silent
+/// 50-tool alphabetical slice of the whole catalogue instead.)
+mcp::AgentToolCatalog agent_svc_catalog_for(const mcp::ToolFilter& filter) {
+    return filter.categories.isEmpty() && filter.name_patterns.isEmpty() ? mcp::AgentToolCatalog::Essentials
+                                                                         : mcp::AgentToolCatalog::Filtered;
 }
 
 // McpServer.args is stored as a JSON array (current) or a space-separated
@@ -250,60 +270,182 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {
     // Auth checker — process-wide. Distinguishes agent-originated calls
     // (via TerminalMcpBridge::is_call_in_progress) from chat-path calls so
     // chat behaviour is unchanged. Rules:
-    //   - AuthLevel >= Verified  → always deny (no path can prove the
-    //     gate non-interactively)
-    //   - is_destructive + agent → deny (agents can't show a confirm modal;
-    //     opt-in via per-agent config is Phase 5 work)
+    //   - AuthLevel >= Verified  → allowed ONLY inside a call the user approved
+    //     in the terminal UI (see "The approval path" below); denied otherwise
+    //   - is_destructive + agent → deny unless the agent presented the
+    //     destructive capability token (per-agent opt-in)
     //   - is_destructive + chat  → allow (subject to the fail-closed
     //     destructive capability gate McpProvider::check_authorization
     //     applies BEFORE this checker runs)
     //   - everything else        → allow
     //
-    // ── The confirmation-modal seam ──────────────────────────────────────────
+    // ── The approval path (AuthLevel >= Verified, incl. ExplicitConfirm) ─────
     //
-    // The `required >= AuthLevel::Verified` line below is the SINGLE line to
-    // change when the confirmation modal lands. It denies unconditionally, so
-    // the 28 tools declared AuthLevel::ExplicitConfirm are refused on every
-    // path — including for a user who has explicitly granted destructive
-    // capability in Settings → Security. That is deliberate and stays as-is:
-    // "ask the user" cannot be honoured while there is nobody to ask, and
-    // failing closed is the only safe reading of a tool that asked to be
-    // confirmed.
-    //
-    // What it currently blocks, so whoever builds the modal knows the blast
-    // radius:
-    //   - Correctly blocked, and must STAY blocked without an explicit
-    //     per-call confirmation — real money and live credentials:
-    //       live-trading (6): live_place_order, live_smart_order,
-    //         live_cancel_order, live_cancel_all_orders, live_close_position,
-    //         live_close_all_positions
-    //       profile     (1): profile_get_api_key   (returns live key material)
-    //       mcp-servers (6): install_mcp_server_from_marketplace,
-    //         add_mcp_server, remove_mcp_server, start_mcp_server,
-    //         restart_mcp_server, call_external_mcp_tool
-    //         (each spawns or drives an arbitrary local child process)
-    //   - Over-blocked pending the modal — destructive but recoverable, and
-    //     arguably covered by the Settings capability grant alone:
-    //       workspace (7): apply_layout, delete_layout, apply_layout_template,
-    //         restore_last_workspace, delete_workspace_snapshot,
-    //         restore_workspace_snapshot, close_window
-    //       dashboard (3): load_dashboard_layout, apply_dashboard_template,
-    //         clear_dashboard_layout
-    //       agents    (3): delete_agent_config, delete_workflow,
-    //         agent_paper_execute_trade
-    //       excel     (1): delete_excel_sheet
-    //       file_manager (1): download_managed_file
-    //
-    // When the modal exists, replace the line with a call that prompts and
-    // returns the user's verdict. Do NOT relax it to `> Verified` or drop the
-    // ExplicitConfirm level — the 13 tools in the first group depend on it.
+    // These tools — live trading (real money), profile_get_api_key (live key
+    // material), the mcp-servers tools that spawn or drive arbitrary local
+    // processes, plus a handful of recoverable-but-destructive workspace /
+    // dashboard / agents / excel / file-manager tools — must never run on an
+    // agent's or model's say-so alone. They run only when the user approved
+    // THIS call: the dispatcher (McpHttpServer for external agents, via
+    // ToolApprovalDialog) wraps the approved execute_tool() in a
+    // mcp::ScopedApprovedCall on the dispatching thread, and McpProvider runs
+    // this checker synchronously on that same thread before any hop, so
+    // ScopedApprovedCall::active() is true for exactly that one call and can
+    // never leak into another (thread-local, RAII-scoped — mcp/server/
+    // CallApproval.h). Every other path — the chat tool loop, the agent
+    // bridge, workflows, tool_invoke without an approval — still fails closed:
+    // "ask the user" cannot be honoured where nobody was asked. Do NOT relax
+    // this to `> Verified` or drop the ExplicitConfirm level.
     mcp::McpProvider::instance().set_auth_checker([](mcp::AuthLevel required, bool is_destructive) -> bool {
         if (required >= mcp::AuthLevel::Verified)
-            return false;
+            return mcp::ScopedApprovedCall::active();
         if (is_destructive && mcp::TerminalMcpBridge::is_call_in_progress() &&
             !mcp::TerminalMcpBridge::is_destructive_allowed())
             return false;
         return true;
+    });
+
+    // Completion notifications. Hooked on our own signals so every emission
+    // site (normal finish, ERROR line, process failure) is covered once.
+    connect(this, &AgentService::agent_stream_done, this,
+            [this](const AgentExecutionResult& r) { maybe_notify_run_done(r); });
+    connect(this, &AgentService::task_event, this,
+            [this](const QString& task_id, const QJsonObject& event) { maybe_notify_task_event(task_id, event); });
+
+    // Agentic Mode toggled at runtime (Settings › Developer): arm or disarm the
+    // schedule timer right away instead of waiting for the next restart.
+    connect(&EventBus::instance(), &EventBus::eventPublished, this,
+            [this](const QString& event, const QVariantMap& data) {
+                if (event != QLatin1String("settings.agentic_mode_changed"))
+                    return;
+                if (!data.value(QStringLiteral("enabled")).toBool())
+                    apply_schedule_due(0);
+                else
+                    initialize_deferred();
+            });
+}
+
+// ── Agent state directory / Agentic Mode ─────────────────────────────────────
+
+QString AgentService::agent_data_dir() {
+    // AppPaths::data() is profile-aware. mkpath is idempotent and cheap (a
+    // stat when the dir exists), and keeping no cache makes this safe to call
+    // from any thread (MCP handlers read the same DB).
+    const QString dir = AppPaths::data() + QStringLiteral("/agents");
+    if (!QDir().mkpath(dir))
+        LOG_WARN("AgentService", "Could not create agent data dir: " + dir);
+    return dir;
+}
+
+bool AgentService::agentic_mode_enabled() {
+    // Default ON: the durable-task path (task creation → runner → events →
+    // AGENTIC panel, pause/resume/cancel, schedules) works end to end. A failed
+    // read falls back to the default rather than hiding the feature.
+    const auto r = SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"), QStringLiteral("true"));
+    return !r.is_ok() || r.value() != QLatin1String("false");
+}
+
+void AgentService::note_agents_screen_visible(bool visible) {
+    visible_agent_screens_ = std::max(0, visible_agent_screens_ + (visible ? 1 : -1));
+}
+
+void AgentService::maybe_notify_run_done(const AgentExecutionResult& r) {
+    // Only runs started from the Agents screen are eligible: a run started from
+    // the Portfolio panel or by an MCP tool delivers its result where it was
+    // asked, and the user is looking there.
+    if (!notify_runs_.remove(r.request_id))
+        return;
+    if (visible_agent_screens_ > 0)
+        return; // the user is watching the result arrive
+    if (r.error == QLatin1String(kCancelledError))
+        return; // the user stopped it themselves
+    QString body = r.success ? r.response : r.error;
+    body = body.simplified();
+    if (body.size() > 160)
+        body = body.left(159) + QStringLiteral("…");
+    ui::DesktopNotifier::instance().notify(r.success ? tr("Agent run finished") : tr("Agent run failed"),
+                                           body.isEmpty() ? tr("Open Agent Studio to see the result.") : body,
+                                           r.success ? 1 /* Success */ : 3 /* Error */);
+}
+
+void AgentService::maybe_notify_task_event(const QString& task_id, const QJsonObject& event) {
+    const QString kind = event.value(QStringLiteral("kind")).toString();
+    if (kind == QLatin1String("task_started")) {
+        const QString q = event.value(QStringLiteral("query")).toString().simplified();
+        if (!q.isEmpty())
+            task_queries_.insert(task_id, q.left(90));
+        return;
+    }
+    const bool finished = kind == QLatin1String("done") || kind == QLatin1String("error") ||
+                          kind == QLatin1String("budget_stop") || kind == QLatin1String("cancelled");
+    const bool needs_input = kind == QLatin1String("question");
+    if (!finished && !needs_input)
+        return;
+    const QString query = finished ? task_queries_.take(task_id) : task_queries_.value(task_id);
+    // Paused / cancelled are user actions — nothing to tell them.
+    if (kind == QLatin1String("cancelled") || visible_agent_screens_ > 0)
+        return;
+
+    QString title;
+    QString body;
+    int severity = 0;
+    if (kind == QLatin1String("done")) {
+        title = tr("Agentic task completed");
+        body = query;
+        severity = 1;
+    } else if (kind == QLatin1String("question")) {
+        title = tr("Agentic task needs your input");
+        body = event.value(QStringLiteral("question")).toString().simplified().left(160);
+        severity = 2;
+    } else if (kind == QLatin1String("budget_stop")) {
+        title = tr("Agentic task stopped: budget reached");
+        body = query;
+        severity = 2;
+    } else {
+        title = tr("Agentic task failed");
+        body = event.value(QStringLiteral("error")).toString().simplified().left(160);
+        severity = 3;
+    }
+    if (body.isEmpty())
+        body = tr("Open Agent Studio › AGENTIC for details.");
+    ui::DesktopNotifier::instance().notify(title, body, severity);
+}
+
+// ── Deferred startup ─────────────────────────────────────────────────────────
+
+void AgentService::initialize_deferred() {
+    if (!agentic_mode_enabled())
+        return;
+    // No DB yet means no task or schedule was ever created in this profile —
+    // nothing to recover or arm, and no reason to start Python.
+    if (!QFileInfo::exists(agent_data_dir() + QStringLiteral("/agent_tasks.db")))
+        return;
+    // The orphan recovery runs once per process, and only while no agentic
+    // task of THIS session can be running: at startup, or the first time the
+    // mode is switched on (while it is off nothing starts tasks or fires
+    // schedules). Afterwards a call only re-syncs the schedule timer.
+    // (GUI thread only.)
+    static bool s_agent_svc_recovered = false;
+    if (s_agent_svc_recovered) {
+        schedule_list();
+        return;
+    }
+    s_agent_svc_recovered = true;
+    QPointer<AgentService> self = this;
+    // run_python_light waits for interpreter detection (cold start) instead of
+    // failing at once with "Python not available".
+    run_python_light(QStringLiteral("agentic_startup"), {}, [self](bool ok, QJsonObject result) {
+        if (!self)
+            return;
+        if (!ok) {
+            LOG_WARN("AgentService", "Agentic startup check failed: " + result.value("error").toString().left(200));
+            return;
+        }
+        const int recovered = result.value(QStringLiteral("recovered")).toInt();
+        if (recovered > 0)
+            LOG_INFO("AgentService",
+                     QString("Marked %1 agentic task(s) interrupted by the last shutdown as paused").arg(recovered));
+        self->apply_schedule_due(static_cast<qint64>(result.value(QStringLiteral("next_run_epoch_ms")).toDouble()));
     });
 }
 
@@ -477,13 +619,14 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
         // `terminal_tools` must still be held to it.
         const mcp::ToolFilter filter = resolve_tool_filter(enriched_config);
         const bool include_external = enriched_config.value("include_external_mcp").toBool(true);
+        const mcp::AgentToolCatalog catalog = agent_svc_catalog_for(filter);
 
         if (!enriched_config.contains("terminal_mcp_token")) {
-            // Run-scoped token, not the process token: it carries `filter` to
-            // the bridge so an agent that names a tool its own config excluded
-            // is refused at dispatch, not merely omitted from its catalog.
-            // Retired by run_python_stdin when the agent process exits.
-            enriched_config["terminal_mcp_token"] = bridge.begin_run(filter, include_external);
+            // Run-scoped token: it carries `filter` to the bridge so an agent
+            // that names a tool its own config excluded is refused at dispatch,
+            // not merely omitted from its catalog. Retired by the runner when
+            // the agent process exits.
+            enriched_config["terminal_mcp_token"] = bridge.begin_run(filter, include_external, catalog);
         }
         // Capability token — only injected when the agent config opts in.
         // Without this header on each request the bridge will block any
@@ -493,7 +636,7 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
             enriched_config["terminal_mcp_destructive_token"] = bridge.destructive_token();
         }
         if (!enriched_config.contains("terminal_tools"))
-            enriched_config["terminal_tools"] = bridge.tool_definitions(filter, include_external);
+            enriched_config["terminal_tools"] = bridge.tool_definitions(filter, include_external, catalog);
 
         // Dry-run mode is opt-in and read by the Python TerminalToolkit. When
         // true, the toolkit short-circuits each call and returns a synthetic
@@ -504,11 +647,23 @@ QJsonObject AgentService::build_payload(const QString& action, const QJsonObject
         // the agent set it; CreateAgentPanel writes the key at save time.)
     }
 
+    // Per-profile durable agent state (tasks, schedules, skills, memory). Python
+    // also reads FINCEPT_AGENT_DATA_DIR from the environment (agent_process_env);
+    // carrying it in the payload keeps a run correct even for a caller that
+    // spawns main.py with some other environment.
+    payload["agent_data_dir"] = agent_data_dir();
+
     if (!enriched_params.isEmpty())
         payload["params"] = enriched_params;
     if (!enriched_config.isEmpty())
         payload["config"] = enriched_config;
     return payload;
+}
+
+QProcessEnvironment AgentService::agent_process_env() const {
+    QProcessEnvironment env = python::PythonRunner::instance().build_python_env();
+    env.insert(QStringLiteral("FINCEPT_AGENT_DATA_DIR"), agent_data_dir());
+    return env;
 }
 
 QJsonObject AgentService::model_config_for_profile(const QString& profile_id, const QString& context_type) const {
@@ -617,8 +772,8 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
     auto* proc = new QProcess(this);
     // Share the standard Python env + cwd + Windows console suppression with
     // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
-    // FINAGENT_DATA_DIR, and PYTHONPATH.
-    proc->setProcessEnvironment(py.build_python_env());
+    // FINAGENT_DATA_DIR, PYTHONPATH and FINCEPT_AGENT_DATA_DIR.
+    proc->setProcessEnvironment(agent_process_env());
     proc->setWorkingDirectory(py.scripts_dir());
 #ifdef _WIN32
     proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {

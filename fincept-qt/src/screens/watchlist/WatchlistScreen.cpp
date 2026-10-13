@@ -1,5 +1,7 @@
 #include "screens/watchlist/WatchlistScreen.h"
 
+#include "screens/watchlist/WatchlistColumnPrefs.h"
+
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
@@ -10,7 +12,6 @@
 #include "services/backtesting/BacktestingService.h"
 #include "services/cloud/CloudSyncEngine.h"
 #include "ui/formatting/NumberFormat.h"
-#include "ui/tables/NumericTableWidgetItem.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -37,11 +38,56 @@
 #include <QTextStream>
 #include <QVBoxLayout>
 
+#include <array>
 #include <limits>
 
 namespace fincept::screens {
 
 using namespace fincept::ui;
+
+namespace {
+
+// Numeric watchlist cell: DISPLAYS the formatted text, SORTS by a numeric key —
+// same ordering as ui::NumericTableWidgetItem, but the key can be updated in
+// place, so a quote refresh no longer allocates a new item for every cell.
+class WatchlistNumItem : public QTableWidgetItem {
+  public:
+    WatchlistNumItem(const QString& text, double key) : QTableWidgetItem(text), key_(key) {}
+
+    bool operator<(const QTableWidgetItem& other) const override {
+        if (const auto* o = dynamic_cast<const WatchlistNumItem*>(&other))
+            return key_ < o->key_;
+        return QTableWidgetItem::operator<(other);
+    }
+
+    double key() const { return key_; }
+    void set_key(double key) { key_ = key; }
+
+  private:
+    double key_ = 0.0;
+};
+
+// One numeric cell's content (PRICE, CHANGE, CHG %, HIGH, LOW, VOLUME).
+struct WatchlistNumCell {
+    QString text;
+    double key = 0.0;
+    QColor fg;
+};
+
+// Re-seat the rows so table row i holds the items of current row src[i].
+void watchlist_permute_rows(QTableWidget* table, const QVector<int>& src) {
+    const int rows = table->rowCount();
+    const int cols = table->columnCount();
+    QVector<QTableWidgetItem*> taken(static_cast<qsizetype>(rows) * cols, nullptr);
+    for (int r = 0; r < rows; ++r)
+        for (int c = 0; c < cols; ++c)
+            taken[static_cast<qsizetype>(r) * cols + c] = table->takeItem(r, c);
+    for (int r = 0; r < rows; ++r)
+        for (int c = 0; c < cols; ++c)
+            table->setItem(r, c, taken[static_cast<qsizetype>(src[r]) * cols + c]);
+}
+
+} // namespace
 
 // ── Style builders (read live theme tokens) ─────────────────────────────────
 
@@ -408,6 +454,12 @@ QWidget* WatchlistScreen::build_main_panel() {
         {tr("SYMBOL"), tr("NAME"), tr("PRICE"), tr("CHANGE"), tr("CHG %"), tr("HIGH"), tr("LOW"), tr("VOLUME")});
     table_->set_column_widths({100, 160, 100, 90, 80, 90, 90, 110});
     table_->setSortingEnabled(true); // opt-in: WatchlistScreen stamps numeric EditRole values
+    // A user re-sort orders ties by the current rows, not by the watchlist; the
+    // next populate_table() puts the canonical order back (as a rebuild did).
+    connect(table_->horizontalHeader(), &QHeaderView::sortIndicatorChanged, this,
+            [this](int, Qt::SortOrder) { sort_order_dirty_ = true; });
+    // Column chooser (header right-click): persists hidden columns, widths and sort.
+    WatchlistColumnPrefs::attach(table_, QStringLiteral("watchlist.table_columns"));
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
 
@@ -781,7 +833,6 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
     // Disable sorting during population to prevent per-row re-sorting
     // (avoids both visual flickering and O(n log n) overhead per insert).
     table_->setSortingEnabled(false);
-    table_->clear_data();
 
     // Build a map for quick lookup
     QMap<QString, services::QuoteData> quote_map;
@@ -795,33 +846,26 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
     // replaced by the bare double. A missing figure sorts below every real one.
     const QString kMissingText = QStringLiteral("--");
     const double kMissingKey = -std::numeric_limits<double>::infinity();
-    auto put_num = [this](int r, int c, const QString& text, double key, const QColor& fg = QColor()) {
-        auto* cell = new ui::NumericTableWidgetItem(text, key);
-        cell->setForeground(fg.isValid() ? fg : QColor(colors::WHITE()));
-        table_->setItem(r, c, cell);
-    };
+    const QColor white(colors::WHITE());
 
-    for (const auto& s : stocks_) {
-        const auto it = quote_map.constFind(s.symbol);
-
-        // NAME: resolved company name, else the one stored with the list entry (CSV import /
-        // AI chat), else whatever the quote carries (which is just the ticker).
+    // NAME: resolved company name, else the one stored with the list entry (CSV import /
+    // AI chat), else whatever the quote carries (which is just the ticker).
+    auto name_for = [this](const fincept::WatchlistStock& s, const services::QuoteData* q) {
         QString name = names_.value(s.symbol);
         if (name.isEmpty())
             name = s.name;
-        if (name.isEmpty() && it != quote_map.constEnd())
-            name = it.value().name;
-        table_->add_row({s.symbol, name, kMissingText, kMissingText, kMissingText, kMissingText, kMissingText,
-                         kMissingText});
-        const int row = table_->rowCount() - 1;
-
-        if (it == quote_map.constEnd()) {
-            for (int c = 2; c <= 7; ++c)
-                put_num(row, c, kMissingText, kMissingKey);
-            continue;
+        if (name.isEmpty() && q)
+            name = q->name;
+        return name;
+    };
+    // PRICE, CHANGE, CHG %, HIGH, LOW, VOLUME — table columns 2..7.
+    auto num_cells = [&](const fincept::WatchlistStock& s, const services::QuoteData* q) {
+        std::array<WatchlistNumCell, 6> cells;
+        if (!q) {
+            for (auto& cell : cells)
+                cell = WatchlistNumCell{kMissingText, kMissingKey, white};
+            return cells;
         }
-
-        const auto& q = it.value();
         // Currency symbol of the instrument once known (₹ for .NS, … ); "$" until names resolve.
         const QString cur = names_.contains(s.symbol)
                                 ? services::MarketDataService::instance().currency_prefix(s.symbol)
@@ -832,18 +876,103 @@ void WatchlistScreen::populate_table(const QVector<services::QuoteData>& quotes)
         };
 
         // Green = good, Red = bad
-        const QColor chg_color(q.change_pct >= 0 ? colors::POSITIVE() : colors::NEGATIVE());
+        const QColor chg_color(q->change_pct >= 0 ? colors::POSITIVE() : colors::NEGATIVE());
 
-        put_num(row, 2, money(q.price), q.price > 0.0 ? q.price : kMissingKey);                 // PRICE
-        put_num(row, 3, QString("%1%2").arg(q.change >= 0 ? "+" : "").arg(q.change, 0, 'f', 2), // CHANGE
-                q.change, chg_color);
-        put_num(row, 4, QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2), // CHG %
-                q.change_pct, chg_color);
-        put_num(row, 5, money(q.high), q.high > 0.0 ? q.high : kMissingKey); // HIGH
-        put_num(row, 6, money(q.low), q.low > 0.0 ? q.low : kMissingKey);    // LOW
-        put_num(row, 7, fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q.volume)),
-                q.volume > 0.0 ? q.volume : kMissingKey); // VOLUME
+        cells[0] = {money(q->price), q->price > 0.0 ? q->price : kMissingKey, white}; // PRICE
+        cells[1] = {QString("%1%2").arg(q->change >= 0 ? "+" : "").arg(q->change, 0, 'f', 2), q->change,
+                    chg_color}; // CHANGE
+        cells[2] = {QString("%1%2%").arg(q->change_pct >= 0 ? "+" : "").arg(q->change_pct, 0, 'f', 2),
+                    q->change_pct, chg_color};                                      // CHG %
+        cells[3] = {money(q->high), q->high > 0.0 ? q->high : kMissingKey, white}; // HIGH
+        cells[4] = {money(q->low), q->low > 0.0 ? q->low : kMissingKey, white};    // LOW
+        cells[5] = {fincept::ui::formatting::format_compact_volume(static_cast<qint64>(q->volume)),
+                    q->volume > 0.0 ? q->volume : kMissingKey, white}; // VOLUME
+        return cells;
+    };
+
+    // Rows map 1:1 onto stocks_. While the symbol set is unchanged, update the
+    // existing rows in place — a quote burst used to clear the table and allocate
+    // every cell again (14 items per row) several times a second.
+    QHash<QString, int> row_of;
+    bool reuse = !stocks_.isEmpty() && table_->rowCount() == stocks_.size();
+    if (reuse) {
+        QSet<QString> listed;
+        listed.reserve(stocks_.size());
+        for (const auto& s : stocks_)
+            listed.insert(s.symbol);
+        reuse = listed.size() == stocks_.size(); // a duplicated symbol: rebuild
+        row_of.reserve(stocks_.size());
+        for (int r = 0; reuse && r < table_->rowCount(); ++r) {
+            const QString sym = symbol_at_row(r);
+            reuse = listed.contains(sym) && !row_of.contains(sym) && table_->item(r, 1);
+            for (int c = 2; reuse && c <= 7; ++c)
+                reuse = dynamic_cast<WatchlistNumItem*>(table_->item(r, c)) != nullptr;
+            row_of.insert(sym, r);
+        }
     }
+
+    const int sort_col = table_->horizontalHeader()->sortIndicatorSection();
+    bool sort_keys_changed = false;
+    if (reuse) {
+        for (const auto& s : stocks_) {
+            const int row = row_of.value(s.symbol);
+            const auto it = quote_map.constFind(s.symbol);
+            const services::QuoteData* q = it != quote_map.constEnd() ? &it.value() : nullptr;
+
+            // setText()/setForeground() are no-ops (no repaint) when the value is unchanged.
+            table_->item(row, 0)->setForeground(white);
+            QTableWidgetItem* name_item = table_->item(row, 1);
+            const QString name = name_for(s, q);
+            if (name_item->text() != name) {
+                name_item->setText(name);
+                sort_keys_changed = sort_keys_changed || sort_col == 1;
+            }
+            name_item->setForeground(white);
+
+            const auto cells = num_cells(s, q);
+            for (int c = 0; c < 6; ++c) {
+                auto* cell = static_cast<WatchlistNumItem*>(table_->item(row, c + 2));
+                cell->setText(cells[c].text);
+                cell->setForeground(cells[c].fg);
+                if (cell->key() != cells[c].key) {
+                    cell->set_key(cells[c].key);
+                    sort_keys_changed = sort_keys_changed || sort_col == c + 2;
+                }
+            }
+        }
+    } else {
+        table_->clear_data();
+        for (const auto& s : stocks_) {
+            const auto it = quote_map.constFind(s.symbol);
+            const services::QuoteData* q = it != quote_map.constEnd() ? &it.value() : nullptr;
+            table_->add_row({s.symbol, name_for(s, q)});
+            const int row = table_->rowCount() - 1;
+            const auto cells = num_cells(s, q);
+            for (int c = 0; c < 6; ++c) {
+                auto* cell = new WatchlistNumItem(cells[c].text, cells[c].key);
+                cell->setForeground(cells[c].fg);
+                table_->setItem(row, c + 2, cell);
+            }
+        }
+    }
+
+    // The visible order must be exactly what a full rebuild gives: Qt's stable sort
+    // (on re-enable below) starting from stocks_ order. Re-used rows already are in
+    // that order unless the sort column's values moved, the user re-sorted (ties then
+    // follow the old rows), or the watchlist order changed — only then re-seat them.
+    QStringList stock_order;
+    stock_order.reserve(stocks_.size());
+    for (const auto& s : stocks_)
+        stock_order.append(s.symbol);
+    if (reuse && (sort_keys_changed || sort_order_dirty_ || stock_order != sorted_stock_order_)) {
+        QVector<int> src;
+        src.reserve(stocks_.size());
+        for (const auto& s : stocks_)
+            src.append(row_of.value(s.symbol));
+        watchlist_permute_rows(table_, src);
+    }
+    sort_order_dirty_ = false;
+    sorted_stock_order_ = stock_order;
 
     // Re-enable sorting — Qt will apply the current sort column/order once.
     table_->setSortingEnabled(true);

@@ -13,6 +13,8 @@
 #include <QMimeDatabase>
 #include <QTextStream>
 
+#include <algorithm>
+
 namespace fincept::mcp::tools {
 
 std::vector<ToolDef> get_file_manager_tools() {
@@ -131,7 +133,10 @@ std::vector<ToolDef> get_file_manager_tools() {
         t.input_schema.properties = QJsonObject{
             {"id", QJsonObject{{"type", "string"}, {"description", "File ID returned by list_files"}}},
             {"max_chars", QJsonObject{{"type", "integer"},
-                                      {"description", "Maximum characters to return (default 32000, max 128000)"}}}};
+                                      {"description", "Maximum characters to return (default 32000, max 128000)"}}},
+            {"offset", QJsonObject{{"type", "integer"},
+                                   {"description", "Character offset to start reading from (page through a large "
+                                                   "file with offset = previous offset + returned chars)"}}}};
         t.input_schema.required = {"id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString id = args["id"].toString().trimmed();
@@ -164,10 +169,12 @@ std::vector<ToolDef> get_file_manager_tools() {
             if (max_chars <= 0 || max_chars > 128000)
                 max_chars = 32000;
 
+            const qint64 offset = std::max<qint64>(0, args["offset"].toInteger(0));
+            if (offset > 0)
+                in.read(offset); // skip (character-based, so it never splits a UTF-8 sequence)
             QString content = in.read(max_chars);
+            const bool truncated = !in.atEnd(); // more text follows — not a guess from the length
             file.close();
-
-            bool truncated = (content.length() == max_chars);
 
             LOG_INFO("FileManagerTools",
                      "read_file_contents: " + f.original_name + " (" + QString::number(content.length()) + " chars)");
@@ -178,7 +185,10 @@ std::vector<ToolDef> get_file_manager_tools() {
                                                    {"sourceScreen", f.source_screen},
                                                    {"uploadedAt", f.uploaded_at},
                                                    {"sizeBytes", f.size},
+                                                   {"offset", offset},
                                                    {"truncated", truncated},
+                                                   {"next_offset", truncated ? QJsonValue(offset + content.length())
+                                                                             : QJsonValue()},
                                                    {"content", content}});
         };
         tools.push_back(std::move(t));
@@ -198,7 +208,10 @@ std::vector<ToolDef> get_file_manager_tools() {
             {"screen", QJsonObject{{"type", "string"},
                                    {"description", "Source screen: excel, portfolio, backtesting, news, "
                                                    "equity_research, algo_trading, ai_quant_lab, notes, "
-                                                   "code_editor, report_builder, data_sources"}}},
+                                                   "code_editor, report_builder, data_sources, workflow_node, "
+                                                   "file_manager"}}},
+            {"limit", QJsonObject{{"type", "integer"},
+                                  {"description", "Maximum files to return, newest first (default 50, max 500)"}}},
             {"mime", QJsonObject{{"type", "string"},
                                  {"description", "MIME type fragment to match, e.g. 'csv', 'json', 'pdf'"}}},
             {"after", QJsonObject{{"type", "string"},
@@ -249,10 +262,23 @@ std::vector<ToolDef> get_file_manager_tools() {
                                           {"sourceScreen", obj["sourceScreen"]}});
             }
 
-            if (result.isEmpty())
-                return ToolResult::ok_data(QJsonObject{{"matches", 0}, {"files", QJsonArray{}}});
-
-            return ToolResult::ok_data(QJsonObject{{"matches", result.size()}, {"files", result}});
+            // Newest first, bounded — the shaper would otherwise keep an arbitrary head.
+            QVector<QJsonObject> sorted;
+            for (const auto& v : result)
+                sorted.push_back(v.toObject());
+            std::sort(sorted.begin(), sorted.end(), [](const QJsonObject& a, const QJsonObject& b) {
+                return a["uploadedAt"].toString() > b["uploadedAt"].toString();
+            });
+            const int limit = std::clamp(args["limit"].toInt(50), 1, 500);
+            QJsonArray files;
+            for (int i = 0; i < sorted.size() && i < limit; ++i)
+                files.append(sorted[i]);
+            QJsonObject out{{"matches", static_cast<int>(result.size())}, {"files", files}};
+            if (result.size() > files.size())
+                out["note"] = QStringLiteral("Showing the %1 newest of %2 matches — narrow the search or raise `limit`.")
+                                  .arg(files.size())
+                                  .arg(result.size());
+            return ToolResult::ok_data(out);
         };
         tools.push_back(std::move(t));
     }

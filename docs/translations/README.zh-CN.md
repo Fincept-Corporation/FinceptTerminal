@@ -1,16 +1,17 @@
 > [!IMPORTANT]
-> ## 🔒 Fincept Terminal **Enterprise** — 私有版本。上线特价：**立减 90%，限时。**
-> 自有实时数据 · 多智能体 AI 研究 · 实时券商与算法交易 · 优先支持
+> ## 🔒 Fincept Terminal **Enterprise** — 私有版本现已推出。
+> 实时数据 · 多智能体 AI 研究 · 实时券商、回测与算法执行 · 优先支持 ·
+> 股票研究 · 投资组合管理 · 金融工作流 · 量化研究实验室 · 海事 · 地缘政治
 >
-> | 方案 | 原价 | **上线特价** |
-> |:--|:--:|:--:|
-> | **Exclusive** | ~~99 美元~~ | **10 美元** /用户/月 |
-> | **Exclusive+** | ~~199 美元~~ | **20 美元** /用户/月 |
-> | **Exclusive Pro** ⭐ 最受欢迎 | ~~299 美元~~ | **40 美元** /用户/月 |
+> | 方案 | 价格 |
+> |:--|:--:|
+> | **Exclusive** | **15 美元** /用户/月 |
+> | **Exclusive+** | **30 美元** /用户/月 |
+> | **Exclusive Pro** ⭐ 最受欢迎 | **45 美元** /用户/月 |
 >
-> [![🔥 锁定上线特价 →](https://img.shields.io/badge/%F0%9F%94%A5_%E9%94%81%E5%AE%9A%E4%B8%8A%E7%BA%BF%E7%89%B9%E4%BB%B7_%E2%86%92-C06524?style=for-the-badge)](https://fincept.in/enterprise/signup) &nbsp; [![比较方案](https://img.shields.io/badge/%E6%AF%94%E8%BE%83%E6%96%B9%E6%A1%88-1F2328?style=for-the-badge)](https://fincept.in/pricing)
+> [![获取 Enterprise →](https://img.shields.io/badge/%E8%8E%B7%E5%8F%96_Enterprise_%E2%86%92-C06524?style=for-the-badge)](https://fincept.in/enterprise/signup) &nbsp; [![比较方案](https://img.shields.io/badge/%E6%AF%94%E8%BE%83%E6%96%B9%E6%A1%88-1F2328?style=for-the-badge)](https://fincept.in/pricing)
 >
-> <sub>早期席位永久锁定上线特价 · 无年度绑定，随时取消 · 本开源仓库继续以 AGPL-3.0 免费提供</sub>
+> <sub>无年度绑定，随时取消 · 本开源仓库继续以 AGPL-3.0 免费提供</sub>
 
 # Fincept Terminal
 
@@ -44,10 +45,10 @@
 | | 开源版 | **Enterprise** |
 |---|---|---|
 | **许可证** | AGPL-3.0 —— 强传染性 | 专有 —— 无 copyleft 义务 |
-| **成本** | 免费，另加自付的数据与 LLM 账单 | 每用户每月 ~~99 / 199 / 299 美元~~ **10 / 20 / 40 美元**（上线特价）|
+| **成本** | 免费，另加自付的数据与 LLM 账单 | 每用户每月 **15 / 30 / 45 美元** |
 | **数据** | 免费公开数据源，需自备密钥 | 专有数据集、更长历史、时点数据 |
 | **AI** | 自备 LLM 密钥 | 含 400–5,000 积分 · 多智能体研究 · 私有数据室 |
-| **交易** | 模拟交易 + 券商接入 | 实时券商路由 + 实时算法部署 |
+| **交易** | 模拟交易 + 通过你的券商实盘交易 | 托管实时路由、执行分析、优先 SLA |
 | **管控** | — | SSO/SAML、审计日志、RBAC、SLA 保障支持 |
 
 [**了解 Enterprise →**](https://fincept.in/enterprise) · [完整对比](https://fincept.in/comparison) · [价格](https://fincept.in/pricing) · [常见问题](https://fincept.in/faq)
@@ -60,12 +61,12 @@
 
 | | **Exclusive** | **Exclusive+** | **Exclusive Pro** ★ |
 |---|---|---|---|
-| | ~~99 美元~~ **10 美元**/用户/月 | ~~199 美元~~ **20 美元**/用户/月 | ~~299 美元~~ **40 美元**/用户/月 |
+| | **15 美元**/用户/月 | **30 美元**/用户/月 | **45 美元**/用户/月 |
 | AI 积分 / 月 | 400 | 2,000 | 5,000 |
 | 深度研究 + 智能体团队 | — | ✓ | ✓ |
 | 实时交易 + 算法 | — | — | ✓ |
 
-按月付费、无绑定、无最低席位数、按季付费享 9 折 —— 上线特价下折合**每用户每年 120–480 美元**，而一个彭博终端席位约为 27,000 美元。**高校：** 5 个 Exclusive Pro 席位每月 **699 美元**。这就是全部价格表：没有议价报价，也没有单独出售的商业许可证。
+按月付费、无年度绑定、无最低席位数 —— 折合**每用户每年 180–540 美元**，而一个彭博终端席位约为 27,000 美元。按季付费与高校条款见[价格页面](https://fincept.in/pricing)。没有议价报价，也没有单独出售的商业许可证。
 
 Enterprise 需要独立账号 —— 免费 Fincept 账号无法登录。
 

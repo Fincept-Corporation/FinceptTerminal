@@ -7,11 +7,12 @@
 #include "screens/common/IStatefulScreen.h"
 #include "services/llm/LlmService.h"
 
+#include <QHash>
+#include <QJsonArray>
 #include <QLabel>
 #include <QLineEdit>
 #include <QList>
 #include <QListWidget>
-#include <QMutex>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPropertyAnimation>
@@ -20,6 +21,7 @@
 #include <QStringList>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QVector>
 #include <QWidget>
 
 #include <vector>
@@ -54,7 +56,6 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
-    void resizeEvent(QResizeEvent* e) override;
     void changeEvent(QEvent* event) override;
 
   private slots:
@@ -96,17 +97,29 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     QLabel* hdr_session_lbl_ = nullptr;
     QLabel* hdr_model_lbl_ = nullptr;
     QLabel* hdr_tokens_lbl_ = nullptr;
+    QPushButton* export_btn_ = nullptr;
 
     // ── Chat area ────────────────────────────────────────────────────────
     QScrollArea* scroll_area_ = nullptr;
     QWidget* messages_container_ = nullptr;
     QVBoxLayout* messages_layout_ = nullptr;
     QWidget* welcome_panel_ = nullptr;
+    QPushButton* load_earlier_btn_ = nullptr; // "N earlier messages hidden" (render window)
     QPlainTextEdit* input_box_ = nullptr;
     QPushButton* send_btn_ = nullptr;
     QPushButton* attach_btn_ = nullptr;
     QLabel* attach_badge_ = nullptr; // shows attached file name
     QString attached_file_path_;
+
+    // "This conversation used X / Y" — the active LLM is global, so a
+    // conversation reopened after a provider switch silently continues on a
+    // different model. Surfaced above the composer with a one-click switch back.
+    QWidget* model_notice_ = nullptr;
+    QLabel* model_notice_lbl_ = nullptr;
+    QPushButton* model_notice_btn_ = nullptr;
+    QString conv_provider_; // provider/model of the conversation's latest answer
+    QString conv_model_;
+    bool model_notice_dismissed_ = false;
 
     // ── Typing indicator ─────────────────────────────────────────────────
     QWidget* typing_indicator_ = nullptr;
@@ -121,11 +134,11 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     QString pending_req_provider_;
     QString pending_req_model_;
     QString active_session_title_;
-    mutable QMutex history_mutex_;
     std::vector<ai_chat::ConversationMessage> history_;
     bool streaming_ = false;
-    // True while the in-flight request is a streamed one that cancel_active_request()
-    // can interrupt; makes the send button double as "Stop" (see set_input_enabled).
+    // True while the in-flight request went through chat_streaming() (session
+    // lane — cancel_active_request() reaches it); false for the blocking chat()
+    // fallback, which can only be detached, not interrupted.
     bool stoppable_ = false;
     bool scroll_pending_ = false;
     // Auto-follow the newest content. Cleared when the user scrolls up to read,
@@ -135,8 +148,39 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     // mistake an auto-scroll for the user scrolling.
     bool programmatic_scroll_ = false;
     QPointer<QLabel> streaming_bubble_;
+    QPointer<QWidget> streaming_row_;
+    QPointer<QLabel> streaming_role_lbl_;
     int total_tokens_ = 0;
     int total_messages_ = 0;
+
+    // ── Stop that really stops ───────────────────────────────────────────
+    // Stop asks LlmService to cancel; most turns end within ~100 ms. A turn
+    // blocked inside a tool cannot be interrupted, so after kStopGraceMs the UI
+    // stops waiting: the turn is closed as "(stopped)" and the request is
+    // DETACHED — its late chunks are dropped by generation, and its late
+    // finished_streaming() (the next one for that session: the session lane is
+    // FIFO) is swallowed via abandoned_responses_.
+    static constexpr int kStopGraceMs = 2500;
+    quint64 request_gen_ = 0;
+    bool stop_requested_ = false;
+    QTimer* stop_grace_timer_ = nullptr;
+    QHash<QString, int> abandoned_responses_; // session id → late responses to ignore
+
+    // Regenerate / Retry action on the newest answer (only one is live).
+    QPointer<QPushButton> answer_action_btn_;
+    // The newest answer's row + role label, dimmed when it is regenerated.
+    QPointer<QWidget> last_answer_row_;
+    QPointer<QLabel> last_answer_role_lbl_;
+
+    // ── Render window (bounded memory) ──────────────────────────────────
+    // Every bubble is a QLabel holding a rich-text document; a thousand-message
+    // conversation kept a thousand of them alive. Only the newest
+    // render_limit_ messages are built; older ones load on demand.
+    static constexpr int kDefaultRenderLimit = 150;
+    static constexpr int kMaxLiveRows = 450; // live session: trim oldest rows past this
+    int render_limit_ = kDefaultRenderLimit;
+    int hidden_message_count_ = 0;
+    QList<QPointer<QWidget>> rendered_rows_;
 
     // ── Per-stream "Thinking" (chain-of-thought) section ─────────────────────
     // Reasoning models stream their thoughts on a separate channel (see
@@ -146,20 +190,31 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     QPointer<QPushButton> thinking_header_;
     QPointer<QLabel> thinking_body_;
     QString thinking_text_;
+    bool thinking_flush_armed_ = false;
 
     // ── Per-stream "Tools" section ───────────────────────────────────────────
-    // Tool-progress lines arrive on their own channel (see tool_stream_prefix())
-    // and land in a card of their own rather than being appended into the answer
-    // bubble — plumbing like tool_list / tool_describe is not part of the reply.
-    // Expanded while running so the user can see progress, collapsed on finish.
+    // Tool activity arrives on its own channel (see tool_stream_prefix()): a
+    // start line per call, then a completion record (LlmToolActivity.h) with
+    // outcome + duration. One collapsible card per turn: a compact header
+    // ("12 tool calls · 1 failed · 18.4 s") over one line per step / run.
+    struct ToolStep {
+        enum class State { Running, Ok, Failed, Job };
+        QString label;  // "get_quote · AAPL"
+        QString base;   // "get_quote" — runs of the same base collapse into "×N"
+        QString detail; // failure reason / job id
+        State state = State::Running;
+        qint64 started_ms = 0;  // UI clock, for steps that never get a record
+        qint64 elapsed_ms = -1; // from the completion record
+        bool parallel = false;
+    };
     QPointer<QWidget> tools_card_;
     QPointer<QPushButton> tools_header_;
     QPointer<QLabel> tools_body_;
-    QString tools_text_;
-    QStringList tools_lines_;  // rendered lines; last one is rewritten to collapse runs
-    QString tools_run_base_;   // tool name of the run currently being collapsed
-    int tools_run_count_ = 0;  // length of that run
-    int tools_count_ = 0;      // total steps, for the collapsed header
+    QVector<ToolStep> tool_steps_;
+    QStringList tool_job_ids_;   // background jobs seen this turn (receipts + job_* calls)
+    QStringList tracked_job_ids_; // jobs whose card line still refreshes (any turn)
+    QHash<QString, QPointer<QLabel>> job_labels_; // job id → the card label showing it
+    QTimer* job_timer_ = nullptr;
 
     // ── Build ────────────────────────────────────────────────────────────
     void build_ui();
@@ -169,6 +224,7 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     QWidget* build_header_bar();
     QWidget* build_welcome();
     QWidget* build_input_area();
+    QWidget* build_model_notice();
     QWidget* build_typing_indicator();
     void refresh_theme();
 
@@ -176,18 +232,52 @@ class AiChatScreen : public QWidget, public IStatefulScreen, public fincept::IGr
     void load_sessions();
     void load_messages(const QString& session_id);
     void create_new_session();
-    void add_message_bubble(const QString& role, const QString& content, const QString& timestamp = {});
+    QLabel* add_message_bubble(const QString& role, const QString& content, const QString& timestamp = {},
+                               const QString& footer_meta = {});
     QLabel* add_streaming_bubble();
-    // Collapsible "Thinking" card for the in-flight assistant message.
+    void insert_row(QWidget* row, Qt::Alignment align = {});
+    void trim_rendered_rows();
+    void on_load_earlier();
+
+    // ── Request lifecycle ────────────────────────────────────────────────
+    void start_request(const QString& wire_text, std::vector<ai_chat::ConversationMessage> snapshot);
+    void finish_turn(const ai_chat::LlmResponse& response);
+    void on_stop_requested();
+    void detach_stopped_request();
+    void on_regenerate();
+    void add_answer_action(QLabel* body, bool failed);
+    void retire_answer_action();
+    void show_fincept_notice(const ai_chat::LlmResponse& response);
+    QString answer_footer_meta(const QString& provider, const QString& model, int tokens) const;
+    static std::vector<ai_chat::ConversationMessage> wire_history(const std::vector<ai_chat::ConversationMessage>& h);
+
+    // ── Thinking / tools cards (AiChatScreen_Tools.cpp) ──────────────────
     void append_thinking_chunk(const QString& text);
     void create_thinking_card();
+    void flush_thinking();
     void finalize_thinking_card();
     void reset_thinking_state();
-    // Collapsible "Tools" card for the in-flight assistant message.
     void append_tool_chunk(const QString& text);
     void create_tools_card();
+    void render_tools_card();
     void finalize_tools_card();
     void reset_tools_state();
+    void track_job(const QString& job_id);
+    void refresh_job_lines();
+    QString tool_trailer() const; // persisted with the answer (see strip_tool_trailer)
+    static QString strip_tool_trailer(const QString& content, QJsonArray* steps);
+    void add_static_tools_card(const QJsonArray& steps);
+    static QString render_tool_lines(const QVector<ToolStep>& steps);
+    static QString tools_summary(const QVector<ToolStep>& steps, bool finished);
+
+    // ── Conversation tools ───────────────────────────────────────────────
+    void on_export_markdown();
+    void on_copy_conversation_markdown();
+    QString conversation_markdown() const;
+    void update_model_notice();
+    void on_use_conversation_model();
+    void show_session_menu(const QPoint& pos);
+
     void clear_messages();
     void scroll_to_bottom();
     void set_input_enabled(bool enabled);

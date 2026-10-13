@@ -43,6 +43,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QUrl>
 #include <QValueAxis>
 
@@ -64,40 +65,178 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
                               .arg(ui::fonts::DATA_FAMILY));
     results_layout_->addWidget(header);
 
-    // Key-value table for scalar fields
-    QStringList keys;
-    for (auto it = payload.begin(); it != payload.end(); ++it)
-        if (!it.value().isObject() && !it.value().isArray())
-            keys.append(it.key());
-
-    if (!keys.isEmpty()) {
-        auto* table = new QTableWidget(keys.size(), 2);
-        table->setHorizontalHeaderLabels({tr("Metric"), tr("Value")});
-        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        table->setAlternatingRowColors(true);
-        table->horizontalHeader()->setStretchLastSection(true);
-        table->verticalHeader()->setVisible(false);
-        table->setMaximumHeight(qMin(keys.size() * 30 + 30, 400));
-        table->setStyleSheet(table_ss());
-
+    // Fallback renderer for commands without a dedicated display. It used to
+    // show only the top-level scalars plus the whole payload as a JSON text
+    // dump, so any list result (models, factors, windows, trades) was readable
+    // only as raw JSON. Now: scalars → key/value table, arrays of objects →
+    // column tables, scalar arrays → a summary row, nested objects → their own
+    // key/value section. Raw JSON stays available behind a toggle.
+    // Tables take their look from the panel stylesheet (refresh_theme →
+    // table_ss), so nothing here calls setStyleSheet per table.
+    constexpr int kMaxRows = 200;
+    constexpr int kMaxCols = 12;
+    auto pretty_key = [](QString k) {
+        k.replace('_', ' ');
+        return k.toUpper();
+    };
+    auto cell_text = [](const QJsonValue& v) -> QString {
+        if (v.isObject() || v.isArray()) {
+            const QJsonDocument doc = v.isObject() ? QJsonDocument(v.toObject()) : QJsonDocument(v.toArray());
+            return QString::fromUtf8(doc.toJson(QJsonDocument::Compact)).left(120);
+        }
+        if (v.isNull() || v.isUndefined())
+            return QString::fromUtf8("—");
+        return format_val(v);
+    };
+    auto make_table = [this](int rows, const QStringList& headers) {
+        auto* t = new QTableWidget(rows, headers.size(), this);
+        t->setHorizontalHeaderLabels(headers);
+        t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        t->setAlternatingRowColors(true);
+        t->setSortingEnabled(false);
+        t->horizontalHeader()->setStretchLastSection(true);
+        t->verticalHeader()->setVisible(false);
+        t->setMaximumHeight(qMin(rows * 26 + 32, 420));
+        return t;
+    };
+    auto add_kv_table = [&](const QJsonObject& obj) {
+        QStringList keys;
+        for (auto it = obj.begin(); it != obj.end(); ++it)
+            if (!it.value().isObject() && !it.value().isArray())
+                keys.append(it.key());
+        if (keys.isEmpty())
+            return;
+        auto* table = make_table(keys.size(), {tr("Metric"), tr("Value")});
         for (int r = 0; r < keys.size(); ++r) {
-            auto label = keys[r];
-            label.replace('_', ' ');
-            table->setItem(r, 0, new QTableWidgetItem(label.toUpper()));
-            auto* vi = new QTableWidgetItem(format_val(payload[keys[r]]));
+            table->setItem(r, 0, new QTableWidgetItem(pretty_key(keys[r])));
+            auto* vi = new QTableWidgetItem(cell_text(obj.value(keys[r])));
             vi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             table->setItem(r, 1, vi);
         }
         table->resizeColumnsToContents();
         results_layout_->addWidget(table);
+    };
+
+    add_kv_table(payload);
+
+    for (auto it = payload.begin(); it != payload.end(); ++it) {
+        const QString title = pretty_key(it.key());
+        if (it.value().isObject()) {
+            const QJsonObject obj = it.value().toObject();
+            if (obj.isEmpty())
+                continue;
+            results_layout_->addWidget(gs_section_header(title, module_.color.name()));
+            add_kv_table(obj);
+            QStringList nested;
+            for (auto n = obj.begin(); n != obj.end(); ++n)
+                if (n.value().isObject() || n.value().isArray())
+                    nested << pretty_key(n.key());
+            if (!nested.isEmpty()) {
+                auto* note = new QLabel(tr("Nested fields (see raw JSON): %1").arg(nested.join(QStringLiteral(", "))));
+                note->setWordWrap(true);
+                results_layout_->addWidget(note);
+            }
+            continue;
+        }
+        if (!it.value().isArray())
+            continue;
+        const QJsonArray arr = it.value().toArray();
+        if (arr.isEmpty()) {
+            results_layout_->addWidget(gs_section_header(tr("%1  |  empty").arg(title), module_.color.name()));
+            continue;
+        }
+        if (arr.first().isObject()) {
+            // Column set = union of keys over the shown rows, in first-seen order.
+            QStringList cols;
+            const int shown = qMin(static_cast<int>(arr.size()), kMaxRows);
+            for (int r = 0; r < shown && cols.size() < kMaxCols; ++r) {
+                const QJsonObject row = arr.at(r).toObject();
+                for (auto c = row.begin(); c != row.end() && cols.size() < kMaxCols; ++c)
+                    if (!cols.contains(c.key()))
+                        cols << c.key();
+            }
+            const QString count = shown < arr.size() ? tr("first %1 of %2 rows").arg(shown).arg(arr.size())
+                                                     : tr("%n row(s)", "", static_cast<int>(arr.size()));
+            results_layout_->addWidget(
+                gs_section_header(QStringLiteral("%1  |  %2").arg(title, count), module_.color.name()));
+            QStringList headers;
+            for (const auto& c : cols)
+                headers << pretty_key(c);
+            auto* table = make_table(shown, headers);
+            for (int r = 0; r < shown; ++r) {
+                const QJsonObject row = arr.at(r).toObject();
+                for (int c = 0; c < cols.size(); ++c) {
+                    const QJsonValue v = row.value(cols[c]);
+                    auto* item = new QTableWidgetItem(cell_text(v));
+                    if (v.isDouble())
+                        item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                    table->setItem(r, c, item);
+                }
+            }
+            table->resizeColumnsToContents();
+            results_layout_->addWidget(table);
+            continue;
+        }
+        // Scalar array: numeric → summary statistics; otherwise a joined list.
+        bool numeric = true;
+        double mn = 0.0, mx = 0.0, sum = 0.0;
+        int n_num = 0;
+        for (const auto& v : arr) {
+            if (!v.isDouble()) {
+                numeric = false;
+                break;
+            }
+            const double x = v.toDouble();
+            mn = n_num == 0 ? x : qMin(mn, x);
+            mx = n_num == 0 ? x : qMax(mx, x);
+            sum += x;
+            ++n_num;
+        }
+        if (numeric && n_num > 0) {
+            results_layout_->addWidget(gs_section_header(
+                tr("%1  |  series of %2 values").arg(title).arg(n_num), module_.color.name()));
+            auto* table = make_table(1, {tr("Count"), tr("First"), tr("Last"), tr("Min"), tr("Max"), tr("Mean")});
+            const QStringList cells = {QString::number(n_num), format_val(arr.first()), format_val(arr.last()),
+                                       format_val(QJsonValue(mn)), format_val(QJsonValue(mx)),
+                                       format_val(QJsonValue(sum / n_num))};
+            for (int c = 0; c < cells.size(); ++c) {
+                auto* item = new QTableWidgetItem(cells[c]);
+                item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                table->setItem(0, c, item);
+            }
+            results_layout_->addWidget(table);
+        } else {
+            QStringList parts;
+            for (int i = 0; i < arr.size() && i < kMaxRows; ++i)
+                parts << cell_text(arr.at(i));
+            results_layout_->addWidget(
+                gs_section_header(tr("%1  |  %n item(s)", "", static_cast<int>(arr.size())).arg(title),
+                                  module_.color.name()));
+            auto* list = new QLabel(parts.join(QStringLiteral(", ")) +
+                                    (arr.size() > kMaxRows ? tr(" … (+%1 more)").arg(arr.size() - kMaxRows) : QString()));
+            list->setWordWrap(true);
+            list->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            results_layout_->addWidget(list);
+        }
     }
 
-    // Raw JSON
+    // Raw JSON — collapsed by default; for checking exact values / bug reports.
     auto* raw = new QTextEdit;
     raw->setReadOnly(true);
-    raw->setMaximumHeight(200);
+    raw->setMaximumHeight(240);
     raw->setPlainText(QJsonDocument(payload).toJson(QJsonDocument::Indented));
     raw->setStyleSheet(output_ss());
+    raw->hide();
+    auto* raw_toggle = new QPushButton(tr("SHOW RAW JSON"));
+    raw_toggle->setCursor(Qt::PointingHandCursor);
+    raw_toggle->setFixedHeight(24);
+    raw_toggle->setObjectName(QStringLiteral("quantQuietButton")); // styled by refresh_theme()
+    connect(raw_toggle, &QPushButton::clicked, this, [raw, raw_toggle]() {
+        raw->setVisible(!raw->isVisible());
+        raw_toggle->setText(raw->isVisible() ? QuantModulePanel::tr("HIDE RAW JSON")
+                                             : QuantModulePanel::tr("SHOW RAW JSON"));
+    });
+    results_layout_->addWidget(raw_toggle);
     results_layout_->addWidget(raw);
 
     // Export button — saves raw JSON to File Manager
@@ -125,6 +264,13 @@ void QuantModulePanel::display_result(const QJsonObject& payload) {
                                                                    QFileInfo(dest).size(), "application/json",
                                                                    "ai_quant_lab");
             LOG_INFO("AIQuantLab", "Exported result: " + stored_name);
+            if (status_label_)
+                status_label_->setText(tr("Exported to File Manager: %1").arg(stored_name));
+        } else {
+            // A failed export used to do nothing at all.
+            LOG_WARN("AIQuantLab", "Export failed: " + f.errorString());
+            if (status_label_)
+                status_label_->setText(tr("Export failed: %1").arg(f.errorString()));
         }
     });
     results_layout_->addWidget(export_btn);
@@ -143,12 +289,26 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
     // the card renderers below never looked at the key. Runs after whichever renderer handles
     // the payload, and puts the banner above the cards. get_data renders its own warning card.
     const auto warning_banner = qScopeGuard([this, &payload, &command]() {
-        const QString warning = payload.value("warning").toString().trimmed();
-        if (warning.isEmpty() || command == "get_data" || !results_layout_)
+        const bool sample = sample_input_pending_;
+        sample_input_pending_ = false;
+        if (!results_layout_)
             return;
-        auto* banner = gs_section_header(QString::fromUtf8("⚠ ") + warning, ui::colors::WARNING());
-        banner->setWordWrap(true);
-        results_layout_->insertWidget(0, banner);
+        const QString warning = payload.value("warning").toString().trimmed();
+        if (!warning.isEmpty() && command != "get_data") {
+            auto* banner = gs_section_header(QString::fromUtf8("⚠ ") + warning, ui::colors::WARNING());
+            banner->setWordWrap(true);
+            results_layout_->insertWidget(0, banner);
+        }
+        // Results computed on LOAD SYNTHETIC SAMPLE data look exactly like real
+        // ones; say so above them, every time.
+        if (sample) {
+            auto* banner = gs_section_header(tr("SAMPLE INPUT — computed on generated (synthetic) data from LOAD "
+                                                "SYNTHETIC SAMPLE, not on market data. Replace the inputs with "
+                                                "your own series for a real analysis."),
+                                             ui::colors::WARNING());
+            banner->setWordWrap(true);
+            results_layout_->insertWidget(0, banner);
+        }
     });
 
     // RL Trading: training finished → re-enable button, keep progress/logs visible so
@@ -260,8 +420,16 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
 
     // ── LangGraph deep analysis result ───────────────────────────────────────
     if (command == "execute_task") {
+        for (auto* b : findChildren<QPushButton*>(QStringLiteral("quantRunButton")))
+            if (b->property("deepRun").toBool())
+                b->setEnabled(true);
         if (!payload["success"].toBool()) {
-            display_error(payload["error"].toString(tr("Unknown error")));
+            const QString err = payload["error"].toString(tr("Unknown error"));
+            // agent_output_ still says "Running multi-agent analysis..." — replace
+            // it, or the failure (painted in the pane below) reads as in-progress.
+            if (agent_output_)
+                agent_output_->setPlainText(tr("Deep analysis failed:\n\n%1").arg(err));
+            display_error(err);
             return;
         }
         auto text = payload["result"].toString();
@@ -312,6 +480,9 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
         auto task_id = payload["task_id"].toString();
         auto est = payload["estimated_time"].toString();
         rd_status(tr("Task %1 started").arg(task_id));
+        // Populate the monitor right away (in-memory listing); its result arms
+        // the auto-refresh while the task runs.
+        AIQuantLabService::instance().rd_agent_list_tasks({});
         if (rd_agent_output_)
             rd_agent_output_->setPlainText(
                 tr("Task started: %1\nEstimated time: %2\n\nUse Task Monitor → REFRESH to track progress.")
@@ -322,6 +493,12 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
     // ── RD-Agent: list_tasks ──────────────────────────────────────────────────
     if (command == "list_tasks" && rd_task_table_) {
         auto tasks = payload["tasks"].toArray();
+        // Keep the user's selection across the rebuild — the monitor now
+        // auto-refreshes every 5 s while a task runs.
+        QString selected_id;
+        if (const int cur = rd_task_table_->currentRow(); cur >= 0 && rd_task_table_->item(cur, 0))
+            selected_id = rd_task_table_->item(cur, 0)->text();
+        bool any_running = false;
         rd_task_table_->setRowCount(0);
         for (const auto& t : tasks) {
             auto obj = t.toObject();
@@ -330,6 +507,7 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             rd_task_table_->setItem(row, 0, new QTableWidgetItem(obj["task_id"].toString()));
             rd_task_table_->setItem(row, 1, new QTableWidgetItem(obj["type"].toString()));
             auto status_str = obj["status"].toString();
+            any_running = any_running || status_str == QLatin1String("running");
             auto* status_item = new QTableWidgetItem(status_str);
             if (status_str == "running")
                 status_item->setForeground(QColor("" + QString(ui::colors::WARNING()) + ""));
@@ -344,8 +522,20 @@ void QuantModulePanel::on_result(const QString& module_id, const QString& comman
             rd_task_table_->setItem(row, 4,
                                     new QTableWidgetItem(ic.isNull() ? "-" : QString::number(ic.toDouble(), 'f', 4)));
             rd_task_table_->setItem(row, 5, new QTableWidgetItem(obj["elapsed_time"].toString("-")));
+            if (!selected_id.isEmpty() && obj["task_id"].toString() == selected_id)
+                rd_task_table_->setCurrentCell(row, 0);
         }
-        rd_status(tr("%1 task(s)").arg(tasks.size()));
+        if (auto* poll = findChild<QTimer*>(QStringLiteral("rdTaskPollTimer"))) {
+            poll->setProperty("rdActive", any_running);
+            if (any_running && rd_task_table_->isVisible()) {
+                if (!poll->isActive())
+                    poll->start();
+            } else {
+                poll->stop();
+            }
+        }
+        rd_status(any_running ? tr("%1 task(s) · auto-refreshing every 5 s").arg(tasks.size())
+                              : tr("%1 task(s)").arg(tasks.size()));
         return;
     }
 

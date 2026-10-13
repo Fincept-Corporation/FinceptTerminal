@@ -92,7 +92,24 @@ void MacroCalendarService::refresh(const QStringList& topics) {
                 return;
             auto& hub = fincept::datahub::DataHub::instance();
             if (!result.is_ok()) {
-                const QString msg = QString::fromStdString(result.error());
+                const std::string err = result.error();
+                const int status = HttpClient::status_from_error(err);
+                // Consumers show this text: make the common failures actionable instead of "HTTP_402".
+                QString msg = QString::fromStdString(err);
+                if (status == 401 || status == 403)
+                    msg = QStringLiteral("Sign in to Fincept to load the macro calendar (HTTP %1)").arg(status);
+                else if (status == 402)
+                    msg = QStringLiteral("Out of Fincept credits — the macro calendar needs ~1 credit per refresh");
+                else if (status == 0)
+                    msg = QStringLiteral("Fincept API unreachable — %1").arg(HttpClient::message_from_error(err));
+                LOG_WARN("MacroCalendarService", msg);
+                hub.publish_error(QString::fromLatin1(kTopic), msg);
+                return;
+            }
+            // {success:false, message} on a 200 is a failure, not "no events this week".
+            const QJsonObject root = result.value().object();
+            if (root.contains(QStringLiteral("success")) && !root.value(QStringLiteral("success")).toBool()) {
+                const QString msg = root.value(QStringLiteral("message")).toString(QStringLiteral("Calendar request failed"));
                 LOG_WARN("MacroCalendarService", msg);
                 hub.publish_error(QString::fromLatin1(kTopic), msg);
                 return;

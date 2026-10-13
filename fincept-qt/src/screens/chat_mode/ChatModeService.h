@@ -122,7 +122,7 @@ class ChatModeService : public QObject {
     void resume_monitor(const QString& monitor_id, VoidCallback cb);
 
     // ── Credits ───────────────────────────────────────────────────────────────
-    using CreditsCallback = std::function<void(bool ok, int credits, QString error)>;
+    using CreditsCallback = std::function<void(bool ok, double credits, QString error)>;
     void get_credits(CreditsCallback cb);
 
     // ── Terminal tool bridge ─────────────────────────────────────────────────

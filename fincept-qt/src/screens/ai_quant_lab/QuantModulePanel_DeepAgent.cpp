@@ -20,6 +20,7 @@
 #include <QSpinBox>
 #include <QString>
 #include <QTabWidget>
+#include <QTimer>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -103,7 +104,9 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
     da_vl->addWidget(build_input_row(tr("Thread ID"), thread_id, da_w));
 
     auto* da_run = make_run_button(tr("RUN DEEP ANALYSIS"), da_w);
-    connect(da_run, &QPushButton::clicked, this, [this, task_edit, agent_type, thread_id, llm_combo]() {
+    // Re-enabled by the execute_task result / the deep_agent error handler.
+    da_run->setProperty("deepRun", true);
+    connect(da_run, &QPushButton::clicked, this, [this, da_run, task_edit, agent_type, thread_id, llm_combo]() {
         auto task = task_edit->toPlainText().trimmed();
         if (task.isEmpty()) {
             display_error(tr("Please enter an analysis task."));
@@ -116,6 +119,9 @@ QWidget* QuantModulePanel::build_deep_agent_panel() {
         }
         status_label_->setText(tr("Running..."));
         clear_results();
+        // A second click used to start a second multi-minute, multi-LLM-call run
+        // whose answer then overwrote the first.
+        da_run->setEnabled(false);
         // The result lands in agent_output_, so put the in-flight message there
         // too — otherwise the box keeps showing the previous run's answer and
         // the user has no signal that anything is happening. (show_loading()
@@ -558,6 +564,33 @@ QWidget* QuantModulePanel::build_rd_agent_tab(QComboBox* llm_combo) {
     rd_agent_output_->setFixedHeight(160);
     rd_agent_output_->setStyleSheet(output_ss());
     tm_vl->addWidget(rd_agent_output_);
+
+    // Auto-refresh while a task is running. list_tasks is served from the
+    // service's in-memory registry (no Python process), so a 5 s cadence is
+    // cheap. The timer only runs while the Task Monitor is on screen (panel
+    // show/hide + the visibility check below) and while the last listing had a
+    // running task (on_result sets "rdActive"); otherwise progress was only
+    // visible after a manual REFRESH.
+    auto* rd_poll = new QTimer(this);
+    rd_poll->setObjectName(QStringLiteral("rdTaskPollTimer"));
+    rd_poll->setInterval(5000);
+    connect(rd_poll, &QTimer::timeout, this, [tm_w, filter_combo, rd_poll]() {
+        if (!tm_w->isVisible()) {
+            rd_poll->stop();
+            return;
+        }
+        const auto filter = filter_combo->currentData().toString();
+        AIQuantLabService::instance().rd_agent_list_tasks(filter == "All" ? QString{} : filter);
+    });
+    connect(sub, &QTabWidget::currentChanged, this, [sub, tm_w, filter_combo, rd_poll](int idx) {
+        if (sub->widget(idx) == tm_w) {
+            // Entering the monitor: list now (cheap) — on_result decides whether to keep polling.
+            const auto filter = filter_combo->currentData().toString();
+            AIQuantLabService::instance().rd_agent_list_tasks(filter == "All" ? QString{} : filter);
+        } else {
+            rd_poll->stop();
+        }
+    });
 
     // Wire toolbar buttons
     connect(refresh_btn, &QPushButton::clicked, this, [filter_combo, status_txt]() {

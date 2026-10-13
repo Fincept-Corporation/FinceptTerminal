@@ -12,8 +12,24 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QPlainTextEdit>
+#include <QStyle>
+#include <QVBoxLayout>
 
 namespace fincept::screens::widgets {
+
+namespace {
+// The probability label's colour band ("hi" >= 65 %, "lo" <= 35 %, else "mid")
+// is a property matched in the rows host's stylesheet. Every WS price message
+// used to call setStyleSheet() (full CSS re-parse); now the label is only
+// re-polished when the band actually changes (CLAUDE.md P7).
+void pm_price_set_band(QLabel* label, const char* band) {
+    if (label->property("lvl").toString() == QLatin1String(band))
+        return;
+    label->setProperty("lvl", QString::fromLatin1(band));
+    label->style()->unpolish(label);
+    label->style()->polish(label);
+}
+} // namespace
 
 PolymarketPriceWidget::PolymarketPriceWidget(const QJsonObject& cfg, QWidget* parent)
     : BaseWidget(tr("POLYMARKET"), parent) {
@@ -75,25 +91,35 @@ void PolymarketPriceWidget::build_rows() {
     }
     rows_.clear();
 
+    // One host carries the stylesheet for the hint / every row label
+    // (objectName + "lvl" property selectors) — see apply_styles().
+    rows_host_ = new QWidget(this);
+    rows_host_->setObjectName("pmPriceRows");
+
     if (entries_.isEmpty()) {
-        auto* hint = new QLabel(tr("No markets configured — click gear to add"));
-        hint->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;padding:4px 0;").arg(ui::colors::TEXT_TERTIARY()));
-        vl->addWidget(hint);
+        auto* host_layout = new QVBoxLayout(rows_host_);
+        host_layout->setContentsMargins(0, 0, 0, 0);
+        auto* hint = new QLabel(tr("No markets configured — click gear to add"), rows_host_);
+        hint->setObjectName("pmPriceHint");
+        host_layout->addWidget(hint);
+        vl->addWidget(rows_host_);
         vl->addStretch(1);
+        apply_styles();
         return;
     }
 
-    auto* grid = new QGridLayout();
+    auto* grid = new QGridLayout(rows_host_);
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setHorizontalSpacing(10);
     grid->setVerticalSpacing(3);
     for (int i = 0; i < entries_.size(); ++i) {
         const auto& e = entries_[i];
         Row r;
-        r.label = new QLabel(e.label);
+        r.label = new QLabel(e.label, rows_host_);
+        r.label->setObjectName("pmPriceLabel");
         r.label->setToolTip(e.asset_id);
-        r.pct = new QLabel("—");
+        r.pct = new QLabel("—", rows_host_);
+        r.pct->setObjectName("pmPricePct");
         r.pct->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         grid->addWidget(r.label, i, 0);
         grid->addWidget(r.pct, i, 1);
@@ -103,7 +129,7 @@ void PolymarketPriceWidget::build_rows() {
         link_screen(r.pct, QStringLiteral("polymarket"), tr("Double-click to open the Polymarket screen"));
         rows_.insert(e.asset_id, r);
     }
-    vl->addLayout(grid);
+    vl->addWidget(rows_host_);
     vl->addStretch(1);
     apply_styles();
 }
@@ -161,12 +187,7 @@ void PolymarketPriceWidget::on_price(const QString& asset_id, double price) {
         return;
     const double pct = qBound(0.0, price, 1.0) * 100.0;
     it->pct->setText(QString::number(pct, 'f', 1) + "%");
-    QColor col = ui::colors::TEXT_PRIMARY();
-    if (pct >= 65)
-        col = ui::colors::POSITIVE();
-    else if (pct <= 35)
-        col = ui::colors::NEGATIVE();
-    it->pct->setStyleSheet(QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(col.name()));
+    pm_price_set_band(it->pct, pct >= 65 ? "hi" : (pct <= 35 ? "lo" : "mid"));
     set_loading(false);
 }
 
@@ -214,16 +235,18 @@ void PolymarketPriceWidget::on_theme_changed() {
 }
 
 void PolymarketPriceWidget::apply_styles() {
-    const QString label_css =
-        QString("color:%1;font-size:11px;font-weight:600;background:transparent;").arg(ui::colors::TEXT_PRIMARY());
-    const QString pct_css =
-        QString("color:%1;font-size:11px;font-weight:700;background:transparent;").arg(ui::colors::TEXT_TERTIARY());
-    for (auto it = rows_.begin(); it != rows_.end(); ++it) {
-        if (it->label)
-            it->label->setStyleSheet(label_css);
-        if (it->pct && it->pct->text() == "—")
-            it->pct->setStyleSheet(pct_css);
-    }
+    if (!rows_host_)
+        return; // ctor runs this before the first build_rows()
+    // A probability label with no "lvl" yet (still "—") keeps the tertiary colour.
+    rows_host_->setStyleSheet(
+        QString("QLabel#pmPriceHint{color:%2;font-size:10px;background:transparent;padding:4px 0;}"
+                "QLabel#pmPriceLabel{color:%1;font-size:11px;font-weight:600;background:transparent;}"
+                "QLabel#pmPricePct{color:%2;font-size:11px;font-weight:700;background:transparent;}"
+                "QLabel#pmPricePct[lvl=\"hi\"]{color:%3;}"
+                "QLabel#pmPricePct[lvl=\"lo\"]{color:%4;}"
+                "QLabel#pmPricePct[lvl=\"mid\"]{color:%1;}")
+            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_TERTIARY(), ui::colors::POSITIVE(),
+                 ui::colors::NEGATIVE()));
 }
 
 void PolymarketPriceWidget::retranslateUi() {

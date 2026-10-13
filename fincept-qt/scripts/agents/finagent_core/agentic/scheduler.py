@@ -19,16 +19,18 @@ responsible for actually starting the agentic task; this module never spawns.
 """
 from __future__ import annotations
 
+import calendar
 import json
 import re
 import sqlite3
 import uuid
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from finagent_core.paths import agent_tasks_db_path
 
-_DEFAULT_DB = str(Path(__file__).parent.parent.parent.parent / "agent_tasks.db")
+
+# Shared agentic DB in the per-profile agent data dir — see finagent_core/paths.py.
 
 
 _CREATE_TABLE = """
@@ -54,8 +56,8 @@ _CREATE_INDEX = (
 class ScheduledTaskStore:
     """SQLite-backed schedule store with a small DSL for run cadence."""
 
-    def __init__(self, db_path: str = _DEFAULT_DB):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or agent_tasks_db_path()
         self._ensure_schema()
 
     def _conn(self) -> sqlite3.Connection:
@@ -154,7 +156,20 @@ class ScheduledTaskStore:
                 )
                 d["last_run_at"] = now.isoformat()
                 d["next_run_at"] = nxt.isoformat()
+                d["next_run_epoch_ms"] = iso_utc_to_epoch_ms(d["next_run_at"])
         return due
+
+    # ── Next due time (drives the host's single due-time timer) ─────────────
+
+    def next_due_epoch_ms(self) -> Optional[int]:
+        """Earliest next_run_at over ENABLED schedules, as UTC epoch ms; None when
+        nothing is scheduled. The terminal sleeps until then instead of polling,
+        so a Python process is only spawned when a schedule is actually due."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT MIN(next_run_at) FROM agent_scheduled_tasks WHERE enabled = 1"
+            ).fetchone()
+        return iso_utc_to_epoch_ms(row[0]) if row and row[0] else None
 
     # ── Row hydration ────────────────────────────────────────────────────────
 
@@ -164,7 +179,19 @@ class ScheduledTaskStore:
         cfg_raw = d.pop("config_json", None)
         d["config"] = json.loads(cfg_raw) if cfg_raw else {}
         d["enabled"] = bool(d.get("enabled", 0))
+        d["next_run_epoch_ms"] = iso_utc_to_epoch_ms(d.get("next_run_at"))
         return d
+
+
+def iso_utc_to_epoch_ms(value: Optional[str]) -> Optional[int]:
+    """Naive-UTC ISO string (how this module stores times) -> epoch milliseconds."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return calendar.timegm(dt.timetuple()) * 1000 + dt.microsecond // 1000
 
 
 # ── Schedule DSL parser ──────────────────────────────────────────────────────

@@ -13,6 +13,7 @@
 // replays it on a language change.
 #include "screens/equity_research/EquityAnalysisTab.h"
 
+#include "screens/equity_research/EquityResearchFormat.h"
 #include "services/equity/EquityResearchService.h"
 #include "ui/theme/Theme.h"
 
@@ -219,6 +220,8 @@ void EquityAnalysisTab::set_symbol(const QString& symbol) {
     current_symbol_ = symbol;
     info_loaded_ = false;
     loading_overlay_->show_loading(tr("LOADING ANALYSIS…"));
+    // Shown lazily: the info the header bar already loaded is re-emitted from cache.
+    services::equity::EquityResearchService::instance().load_info_only(symbol);
 }
 
 void EquityAnalysisTab::build_ui() {
@@ -658,6 +661,8 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_growth_(const services::equ
 
     v.line1 = tr("Revenue %1").arg(fmt_pct(s.revenue_growth));
     v.line2 = tr("Earnings %1").arg(fmt_pct(s.earnings_growth));
+    // yfinance growth fields compare the latest quarter with the year-ago quarter.
+    v.line3 = tr("latest quarter, YoY");
 
     const double g = s.revenue_growth != 0.0 ? s.revenue_growth : s.earnings_growth;
     if (g > 0.20) {
@@ -671,11 +676,11 @@ EquityAnalysisTab::Verdict EquityAnalysisTab::assess_growth_(const services::equ
     } else if (g >= -0.02) {
         v.rating_key = QT_TR_NOOP("FLAT");
         v.tone = Tone::Neutral;
-        v.rationale = tr("Revenue is roughly unchanged year over year.");
+        v.rationale = tr("Latest-quarter revenue is roughly unchanged year over year.");
     } else {
         v.rating_key = QT_TR_NOOP("DECLINING");
         v.tone = Tone::Bad;
-        v.rationale = tr("Revenue is contracting year over year.");
+        v.rationale = tr("Latest-quarter revenue is below the year-ago quarter.");
     }
     return v;
 }
@@ -750,18 +755,8 @@ QString EquityAnalysisTab::fmt_pct(double v) const {
 }
 
 QString EquityAnalysisTab::cur_symbol_() const {
-    const QString c = cached_info_.currency.toUpper();
-    if (c == "INR")
-        return QStringLiteral("₹");
-    if (c == "EUR")
-        return QStringLiteral("€");
-    if (c == "GBP")
-        return QStringLiteral("£");
-    if (c == "JPY")
-        return QStringLiteral("¥");
-    if (c.isEmpty() || c == "USD")
-        return QStringLiteral("$");
-    return c + QStringLiteral(" ");
+    // Same symbol table as every other Equity Research tab (C$, HK$, NT$, …), not a 4-entry subset.
+    return equity_fmt::currency_symbol(cached_info_.currency);
 }
 
 QString EquityAnalysisTab::fmt_money(double v) const {

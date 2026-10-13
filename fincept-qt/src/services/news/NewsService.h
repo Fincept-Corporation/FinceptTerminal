@@ -110,8 +110,12 @@ struct NewsAnalysis {
     QVector<AnalysisEntity> people;
     QVector<AnalysisEntity> locations;
     AnalysisContent content;
-    int credits_used = 0;
-    int credits_remaining = 0;
+    /// Fractional (one call can cost 0.35); < 0 = not reported by the server.
+    double credits_used = -1;
+    double credits_remaining = -1;
+    /// Failure detail when the callback reports !ok (e.g. "HTTP_402: ..." for
+    /// insufficient credits). Empty on success.
+    QString error;
 };
 
 // ── RSS Feed definition ─────────────────────────────────────────────────────
@@ -124,14 +128,6 @@ struct RSSFeed {
     QString region;
     QString source;
     int tier = 3;
-};
-
-// ── AI Summarization ────────────────────────────────────────────────────────
-
-struct HeadlineSummary {
-    QString summary;
-    int64_t cached_at = 0;
-    QString headline_signature; // hash of headlines used to generate
 };
 
 // ── Service ─────────────────────────────────────────────────────────────────
@@ -169,7 +165,8 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     /// hitting the network. Returns nullopt when nothing is cached.
     std::optional<NewsAnalysis> cached_analysis(const QString& url);
 
-    /// Summarize top N headlines via AI. Cached for 10 min per headline signature.
+    /// Deterministic offline digest of the top N headlines (most important first,
+    /// grouped by category). No network, no AI.
     void summarize_headlines(const QVector<NewsArticle>& articles, int count, SummaryCallback cb);
 
     int feed_count() const { return feed_count_; }
@@ -272,10 +269,20 @@ class NewsService : public QObject, public fincept::datahub::Producer {
     /// thread (history, bookmarks, seen state and FTS all read from it).
     void persist_articles_async(const QVector<NewsArticle>& articles);
 
+    /// Worker-thread half of one feed fetch: shape check + RSS/Atom parse
+    /// (with enrichment / threat classification) of the reply payload the GUI
+    /// thread copied out. Pure — touches no service state.
+    static QVector<NewsArticle> parse_feed_payload(const QByteArray& data, int http_code, bool ok,
+                                                   const QString& error, const RSSFeed& feed);
+
+    /// Serialise `articles` into the "news:articles" cache entry on a worker
+    /// thread (CacheDatabase gives each thread its own connection). A write that
+    /// a newer list superseded before it landed is dropped.
+    static void store_cache_async(const QVector<NewsArticle>& articles);
+
     QNetworkAccessManager* nam_ = nullptr;
     QTimer* refresh_timer_ = nullptr;
     static constexpr int kArticleCacheTtlSec = 600; // 10 min
-    static constexpr int kSummaryCacheTtlSec = 600;
     int feed_count_ = 0;
     QStringList active_sources_;
 

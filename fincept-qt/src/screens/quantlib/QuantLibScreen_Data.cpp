@@ -586,32 +586,46 @@ const QHash<QString, QStringList>& module_endpoints() {
     return data;
 }
 
-// ── Endpoint example bodies (verified against live API) ─────────────────────
+// ── Endpoint example bodies ─────────────────────────────────────────────────
+//
+// Default request body per endpoint (the parameter form is built from these).
+// Every key must be a field of the endpoint's request model on the server
+// (FinceptAPI quantlib_api/<module>.py): Pydantic ignores unknown keys, so a
+// misspelt field is silently dropped and the server computes with its own
+// default instead — e.g. "steps" on the binomial trees (the field is n_steps)
+// or "mean"/"std" on core/distributions/normal/* (standard normal only) used
+// to return a different number than the body suggested. Checked statically
+// against the server's request models: no unknown keys, no missing required
+// fields.
 
 const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
     static const QHash<QString, QString> map = {
         // core/types
         {"core/types/money/create", R"({"amount":100,"currency":"USD"})"},
         {"core/types/money/convert", R"({"amount":100,"from_currency":"USD","to_currency":"EUR","rate":0.92})"},
-        {"core/types/rate/convert", R"({"value":0.05,"from_type":"annual","to_type":"continuous"})"},
+        // unit: decimal | percentage | bps — returns the rate in all three units.
+        {"core/types/rate/convert", R"({"value":5.0,"unit":"percentage"})"},
         {"core/types/spread/from-bps", R"({"bps":50})"},
         {"core/types/tenor/add-to-date", R"({"start_date":"2024-01-01","tenor":"3M"})"},
         {"core/types/notional-schedule", R"({"notional":1000000,"periods":4,"schedule_type":"constant"})"},
         // core/conventions
-        {"core/conventions/parse-date", R"({"date_string":"2024-01-15","format":"%Y-%m-%d"})"},
+        {"core/conventions/parse-date", R"({"date_string":"2024-01-15"})"},
         {"core/conventions/format-date", R"({"date_str":"2024-01-15","format":"%d/%m/%Y"})"},
-        {"core/conventions/days-to-years", R"({"value":365,"day_count":"ACT/365"})"},
-        {"core/conventions/years-to-days", R"({"value":1.0,"day_count":"ACT/365"})"},
-        {"core/conventions/normalize-rate", R"({"value":0.05,"compounding":"annual"})"},
-        {"core/conventions/normalize-volatility", R"({"value":0.2,"tenor":"1Y"})"},
+        // convention: actual (365.25) | 365 | 360 | business (252)
+        {"core/conventions/days-to-years", R"({"value":365,"convention":"actual"})"},
+        {"core/conventions/years-to-days", R"({"value":1.0,"convention":"actual"})"},
+        // unit: decimal | percent | bps — normalises to a decimal rate.
+        {"core/conventions/normalize-rate", R"({"value":5.0,"unit":"percent"})"},
+        {"core/conventions/normalize-volatility", R"({"value":20.0,"vol_type":"lognormal","is_percent":true})"},
         // core/autodiff
         {"core/autodiff/dual-eval", R"({"func_name":"sin","x":1.0})"},
         {"core/autodiff/gradient", R"({"func_name":"sin","x":[1.0]})"},
         {"core/autodiff/taylor-expand", R"({"func_name":"sin","x0":0.0,"order":3})"},
-        // core/distributions
-        {"core/distributions/normal/cdf", R"({"x":1.645,"mean":0,"std":1})"},
-        {"core/distributions/normal/pdf", R"({"x":0.0,"mean":0,"std":1})"},
-        {"core/distributions/normal/ppf", R"({"p":0.95,"mean":0,"std":1})"},
+        // core/distributions — the normal endpoints are the STANDARD normal (no
+        // mean/std fields: standardise x yourself).
+        {"core/distributions/normal/cdf", R"({"x":1.645})"},
+        {"core/distributions/normal/pdf", R"({"x":0.0})"},
+        {"core/distributions/normal/ppf", R"({"p":0.95})"},
         {"core/distributions/t/cdf", R"({"x":1.96,"df":30})"},
         {"core/distributions/t/pdf", R"({"x":0.0,"df":10})"},
         {"core/distributions/t/ppf", R"({"p":0.975,"df":30})"},
@@ -688,7 +702,7 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"pricing/black76/floorlet",
          R"({"forward_rate":0.05,"discount_factor":0.95,"volatility":0.2,"t_start":1.0,"t_end":1.25,"strike":0.052,"notional":1000000})"},
         {"pricing/black76/swaption",
-         R"({"forward_swap_rate":0.05,"annuity":4.5,"volatility":0.2,"t_expiry":1.0,"strike":0.055,"notional":1000000,"option_type":"call"})"},
+         R"({"forward_swap_rate":0.05,"annuity":4.5,"volatility":0.2,"t_expiry":1.0,"strike":0.055,"notional":1000000,"is_payer":true})"},
         // pricing/bachelier
         {"pricing/bachelier/price",
          R"({"forward":100,"strike":105,"normal_volatility":5.0,"time_to_maturity":1.0,"risk_free_rate":0.05,"option_type":"call"})"},
@@ -700,26 +714,29 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"({"forward":100,"strike":105,"time_to_maturity":1.0,"market_price":5.0,"risk_free_rate":0.05,"option_type":"call"})"},
         {"pricing/bachelier/shifted-lognormal",
          R"({"forward":100,"strike":105,"volatility":0.2,"time_to_maturity":1.0,"shift":0.03,"risk_free_rate":0.05,"option_type":"call"})"},
+        // direction: lognormal_to_normal (volatility = Black vol) | normal_to_lognormal (volatility = normal vol)
         {"pricing/bachelier/vol-conversion",
-         R"({"normal_vol":5.0,"volatility":0.2,"forward":100,"strike":105,"time_to_maturity":1.0})"},
-        // pricing/binomial
+         R"({"volatility":0.2,"forward":100,"strike":105,"time_to_maturity":1.0,"direction":"lognormal_to_normal"})"},
+        // pricing/binomial — method: CRR | JR | LR | TIAN
         {"pricing/binomial/european",
-         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"option_type":"call"})"},
+         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"dividend_yield":0.0,"volatility":0.2,"time_to_maturity":1.0,"n_steps":100,"option_type":"call","method":"CRR"})"},
         {"pricing/binomial/american",
-         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"option_type":"call"})"},
+         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"dividend_yield":0.0,"volatility":0.2,"time_to_maturity":1.0,"n_steps":100,"option_type":"put","method":"CRR"})"},
         {"pricing/binomial/bermudan",
-         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"exercise_dates":[0.5,1.0],"option_type":"call"})"},
+         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"dividend_yield":0.0,"volatility":0.2,"time_to_maturity":1.0,"n_steps":100,"exercise_dates":[0.5,1.0],"option_type":"put","method":"CRR"})"},
         {"pricing/binomial/barrier",
-         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"volatility":0.2,"time_to_maturity":1.0,"steps":100,"barrier":110,"is_knock_in":false,"is_down":false,"option_type":"call"})"},
+         R"({"spot":100,"strike":105,"risk_free_rate":0.05,"dividend_yield":0.0,"volatility":0.2,"time_to_maturity":1.0,"n_steps":100,"barrier":110,"is_knock_in":false,"is_down":false,"rebate":0.0,"option_type":"call","method":"CRR"})"},
         // pricing/kirk & exotic
         {"pricing/kirk/spread-price",
          R"({"F1":100,"F2":95,"strike":5,"sigma1":0.2,"sigma2":0.18,"rho":0.7,"risk_free_rate":0.05,"time_to_maturity":1.0})"},
         {"pricing/kirk/spread-greeks",
          R"({"F1":100,"F2":95,"strike":5,"sigma1":0.2,"sigma2":0.18,"rho":0.7,"risk_free_rate":0.05,"time_to_maturity":1.0})"},
+        // Exchange option: q1/q2 are the assets' continuous dividend yields (no rate input — it cancels).
         {"pricing/margrabe",
-         R"({"S1":100,"S2":95,"sigma1":0.2,"sigma2":0.18,"rho":0.7,"r":0.05,"time_to_maturity":1.0,"Q1":0,"Q2":0})"},
+         R"({"S1":100,"S2":95,"q1":0.0,"q2":0.0,"sigma1":0.2,"sigma2":0.18,"rho":0.7,"time_to_maturity":1.0})"},
+        // Basket CALL (Levy moment matching); correlations = the full matrix, flattened row-major.
         {"pricing/basket-levy",
-         R"({"forwards":[100,95,105],"weights":[0.4,0.3,0.3],"strike":100,"sigmas":[0.2,0.18,0.22],"correlations":[1,0.5,0.3,0.5,1,0.4,0.3,0.4,1],"risk_free_rate":0.05,"time_to_maturity":1.0,"option_type":"call"})"},
+         R"({"forwards":[100,95,105],"weights":[0.4,0.3,0.3],"strike":100,"sigmas":[0.2,0.18,0.22],"correlations":[1,0.5,0.3,0.5,1,0.4,0.3,0.4,1],"risk_free_rate":0.05,"time_to_maturity":1.0})"},
 
         // stochastic/gbm
         {"stochastic/gbm/simulate", R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n_paths":3})"},
@@ -745,33 +762,42 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"stochastic/wiener/simulate", R"({"T":1.0,"n_steps":52,"n_paths":3})"},
         {"stochastic/poisson/simulate", R"({"lam":2.0,"T":1.0,"n_paths":3})"},
         {"stochastic/variance-gamma/simulate",
-         R"({"S0":100,"mu":0.05,"sigma":0.2,"nu":0.2,"theta_vg":0.1,"r":0.02,"T":1.0,"n_steps":52,"n_paths":3})"},
-        {"stochastic/brownian-bridge/simulate", R"({"x0":0.0,"x_end":1.0,"T":1.0,"n_steps":52,"n_paths":3})"},
+         R"({"S0":100,"r":0.02,"sigma":0.2,"theta_vg":0.1,"nu":0.2,"T":1.0,"n_steps":52,"n_paths":3})"},
+        // One bridge path from a (t=0) to b (t=T).
+        {"stochastic/brownian-bridge/simulate", R"({"T":1.0,"a":0.0,"b":1.0,"n_steps":52,"seed":42})"},
         {"stochastic/correlated-bm/simulate",
          R"({"n_assets":2,"correlation_matrix":[[1,0.7],[0.7,1]],"T":1.0,"n_steps":52,"n_paths":3})"},
         // stochastic/exact
         {"stochastic/exact/gbm", R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_paths":100})"},
         {"stochastic/exact/ou", R"({"X0":0.0,"kappa":2.0,"theta":0.05,"sigma":0.1,"T":1.0,"n_paths":100})"},
         {"stochastic/exact/cir", R"({"r0":0.05,"kappa":1.5,"theta":0.04,"sigma":0.1,"T":1.0,"n_paths":100})"},
+        // xi = volatility of variance (sigma_v elsewhere); v0/theta are VARIANCES (0.04 = 20% vol).
         {"stochastic/exact/heston",
-         R"({"S0":100,"v0":0.04,"r":0.05,"kappa":1.5,"theta":0.04,"sigma_v":0.3,"rho":-0.7,"T":1.0,"n_paths":100})"},
+         R"({"S0":100,"v0":0.04,"r":0.05,"kappa":1.5,"theta":0.04,"xi":0.3,"rho":-0.7,"T":1.0,"n_steps":252,"n_paths":100})"},
         // stochastic/simulation
         {"stochastic/simulation/euler-maruyama",
          R"({"x0":1.0,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n_paths":3})"},
         {"stochastic/simulation/milstein", R"({"x0":1.0,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n_paths":3})"},
+        // One path per call (the server simulates a single path for the nd schemes).
         {"stochastic/simulation/euler-maruyama-nd",
-         R"({"x0":[1.0,1.0],"mu":[0.05,0.03],"sigma":[[0.2,0.05],[0.05,0.15]],"T":1.0,"n_steps":52,"n_paths":3})"},
+         R"({"x0":[1.0,1.0],"mu":[0.05,0.03],"sigma":[[0.2,0.05],[0.05,0.15]],"T":1.0,"n_steps":52})"},
         {"stochastic/simulation/milstein-nd",
-         R"({"x0":[1.0,1.0],"mu":[0.05,0.03],"sigma":[[0.2,0.05],[0.05,0.15]],"T":1.0,"n_steps":52,"n_paths":3})"},
-        {"stochastic/simulation/multilevel-mc", R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"levels":4})"},
+         R"({"x0":[1.0,1.0],"mu":[0.05,0.03],"sigma":[[0.2,0.05],[0.05,0.15]],"T":1.0,"n_steps":52})"},
+        // Estimates E[S_T] of a GBM started at x0.
+        {"stochastic/simulation/multilevel-mc",
+         R"({"x0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_levels":4,"n_samples_per_level":1000})"},
         // stochastic/sampling
         {"stochastic/sampling/sobol", R"({"n":100,"dim":3})"},
-        {"stochastic/sampling/antithetic", R"({"S0":100,"mu":0.05,"sigma":0.2,"T":1.0,"n_steps":52,"n":50})"},
+        {"stochastic/sampling/antithetic", R"({"n":50,"seed":42})"},
         {"stochastic/sampling/correlated-normals", R"({"rho":0.7,"n":100})"},
-        {"stochastic/sampling/multivariate-normal", R"({"mean":[0,0],"cov":[[1,0.5],[0.5,1]],"n_samples":100})"},
+        // Draws ONE sample vector.
+        {"stochastic/sampling/multivariate-normal", R"({"mean":[0,0],"cov":[[1,0.5],[0.5,1]]})"},
+        // distribution: exponential (params.rate) | gamma (params.shape, params.scale) | poisson (params.lam)
         {"stochastic/sampling/distribution",
-         R"({"distribution":"gamma","params":{"shape":2.0,"scale":1.0},"n_samples":100})"},
-        {"stochastic/sampling/jump", R"({"lam":0.5,"mu_j":0.0,"sigma_j":0.1,"T":1.0,"n_paths":100})"},
+         R"({"distribution":"gamma","params":{"shape":2.0,"scale":1.0},"n":100})"},
+        // distribution: normal | double_exp | uniform
+        {"stochastic/sampling/jump",
+         R"({"n":100,"intensity":0.5,"jump_mean":0.0,"jump_std":0.1,"distribution":"normal"})"},
         // stochastic/theory
         {"stochastic/theory/ito-lemma", R"({"path":[100,101,99,102,103],"times":[0,0.25,0.5,0.75,1.0]})"},
         {"stochastic/theory/ito-product-rule",
@@ -780,9 +806,10 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
         {"stochastic/theory/covariation",
          R"({"path_X":[100,101,99,102],"path_Y":[50,51,49,52],"times":[0,0.33,0.67,1.0]})"},
         {"stochastic/theory/martingale-test",
-         R"({"paths":[[100,102,101,103],[100,99,101,100]],"times":[0,0.33,0.67,1.0],"drift":0.0})"},
+         R"({"paths":[[100,102,101,103],[100,99,101,100]],"times":[0,0.33,0.67,1.0],"confidence":0.95})"},
+        // Re-simulates under Q with market price of risk (mu - r) / sigma; paths/times set X0, T and the grid.
         {"stochastic/theory/girsanov/measure-change",
-         R"({"paths":[[100,102,101,103],[100,99,101,100]],"times":[0,0.33,0.67,1.0],"theta":0.5,"T":1.0})"},
+         R"({"paths":[[100,102,101,103],[100,99,101,100]],"times":[0,0.33,0.67,1.0],"mu":0.05,"r":0.02,"sigma":0.2})"},
         {"stochastic/theory/girsanov/risk-neutral-drift", R"({"mu":0.05,"r":0.02,"sigma":0.2})"},
         // ── Generated from the live OpenAPI spec (api.fincept.in/openapi.json) ───────────
         // Every body below validates against its request schema (required fields, types,
@@ -1074,9 +1101,12 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"(-0.0003,0.0034,0.008,0.0125,0.0027,-0.0193,0.0081,-0.0152,-0.0015,-0.0158,0.0004,-0.0082,0.0028,)"
          R"(0.0367,-0.0001,0.0097,-0.0142,-0.0028,0.0077,-0.0006,0.0045,0.0015,-0.0107,0.0066,-0.0085,0.021,)"
          R"(-0.0052,0.0079,0.0004,0.0109,-0.0062,0.0114,-0.001,0.0143,0.0073,0.002,-0.0082]})"},
+        // returns: one row per ASSET (assets x periods). The request model requires returns +
+        // weights; covariance_matrix is what the computation itself reads.
         {"portfolio/risk/comprehensive",
-         R"({"weights":[0.4,0.3,0.3],"covariance_matrix":[[0.04,0.006,0.004],[0.006,0.09,0.012],[0.004,)"
-         R"(0.012,0.0625]]})"},
+         R"({"weights":[0.4,0.3,0.3],"returns":[[0.010,-0.020,0.015,0.005],[0.020,0.010,-0.005,0.015],)"
+         R"([-0.010,0.005,0.010,-0.010]],"covariance_matrix":[[0.04,0.006,0.004],[0.006,0.09,0.012],[0.004,)"
+         R"(0.012,0.0625]],"confidence":0.95,"risk_free_rate":0.0})"},
         {"portfolio/risk/portfolio-comprehensive",
          R"({"returns":[[0.0088,0.0055,0.0185],[-0.0037,0.0065,0.006],[0.0035,0.0027,0.0024],[-0.0062,)"
          R"(-0.0108,-0.004],[0.0069,0.017,0.0111],[0.012,0.009,0.0081],[0.0024,0.0089,0.0199],[-0.0032,)"
@@ -2059,6 +2089,59 @@ const QHash<QString, QString>& QuantLibScreen::endpoint_examples() {
          R"({"total_revenue":120000,"operating_expenses":800000,"depreciation":50000,"net_income":150000,)"
          R"("interest_expense":20000,"total_assets":2000000,"total_equity":1000000,"total_debt":600000,)"
          R"("ebitda":250000,"capital_expenditures":60000})"},
+
+        // ── Endpoints that had no example (the body field started empty) ─────
+        {"analysis/valuation/segment/sotp",
+         R"({"segments":[{"name":"Cloud","revenue":500,"ebitda":150,"comparable_ev_ebitda":15},)"
+         R"({"name":"Hardware","revenue":800,"ebitda":120,"comparable_ev_ebitda":8}],"total_debt":400,)"
+         R"("cash":150,"shares_outstanding":100,"wacc":0.10,"terminal_growth":0.02})"},
+        // Berkus: each factor is a DOLLAR value, max 500,000.
+        {"analysis/valuation/startup/berkus",
+         R"({"sound_idea":400000,"prototype":300000,"management":500000,"strategic_relationships":200000,)"
+         R"("product_rollout":100000})"},
+        // game_name: prisoners_dilemma | battle_of_sexes | chicken | stag_hunt | matching_pennies
+        {"economics/games/classic", R"({"game_name":"prisoners_dilemma"})"},
+        // CDFs as [x, F(x)] pairs; order 1 or 2.
+        {"economics/utility/stochastic-dominance",
+         R"({"cdf_a":[[0,0.1],[1,0.4],[2,1.0]],"cdf_b":[[0,0.2],[1,0.6],[2,1.0]],"order":1})"},
+        {"instruments/futures/bond/ctd",
+         R"({"futures_price":112.5,"delivery_date":"2025-03-31","reference_date":"2025-01-15","deliverables":)"
+         R"([{"coupon":0.04,"maturity_date":"2033-02-15","price":105.2,"conversion_factor":0.93},)"
+         R"({"coupon":0.045,"maturity_date":"2034-05-15","price":108.4,"conversion_factor":0.96}]})"},
+        // ois_rates: [tenor in years, rate] pairs.
+        {"instruments/ois/build-curve",
+         R"({"reference_date":"2025-01-15","ois_rates":[[0.25,0.052],[0.5,0.051],[1.0,0.049],[2.0,0.046],)"
+         R"([5.0,0.043]]})"},
+        // model: exponential_fit (a*exp(b*x)+c, x0 = [a,b,c]) | polynomial_fit (x0 = coefficients)
+        {"numerical/least-squares/fit",
+         R"({"model":"exponential_fit","x_data":[0,1,2,3,4],"y_data":[1.0,2.7,7.4,20.1,54.6],"x0":[1.0,1.0,0.0]})"},
+        // system: exponential_decay | harmonic | lotka_volterra | van_der_pol
+        {"numerical/ode/solve",
+         R"({"system":"lotka_volterra","t_span":[0,10],"y0":[10,5],"method":"rk45","h":0.01,"params":[1.5,1.0,3.0,1.0]})"},
+        // system: linear_2x2 | nonlinear_2x2
+        {"numerical/roots/find-nd", R"({"system":"nonlinear_2x2","x0":[1.5,0.5],"method":"newton","tol":1e-10})"},
+        {"physics/max-entropy", R"({"n_states":4,"constraint_values":[0.1,0.2,0.3,0.4]})"},
+        {"physics/thermodynamics/maxwell-relations", R"({})"},
+        // asset_class: SOVEREIGN | BANK | CORPORATE | RETAIL | RESIDENTIAL_MORTGAGE | COMMERCIAL_REAL_ESTATE |
+        // EQUITY | OTHER; method: standardized (uses rating) | irb (uses pd, lgd, maturity)
+        {"regulatory/basel/credit-rwa",
+         R"({"exposures":[{"amount":1000000,"asset_class":"CORPORATE","rating":"A"},)"
+         R"({"amount":500000,"asset_class":"RETAIL"}],"method":"standardized"})"},
+        // positions: zero-curve pillars with the cash flow paid at each tenor (years).
+        {"risk/sensitivities/bucket-delta",
+         R"({"positions":[{"tenor":1.0,"rate":0.045,"cashflow":50},{"tenor":2.0,"rate":0.046,"cashflow":50},)"
+         R"({"tenor":5.0,"rate":0.047,"cashflow":1050}],"bump_size":0.0001})"},
+        {"risk/tail-risk/tail-dependence",
+         R"({"returns1":[-0.031,0.012,-0.008,0.021,-0.045,0.007,0.015,-0.012,0.004,-0.027,0.018,-0.002,)"
+         R"(0.009,-0.019,0.025,-0.006,0.011,-0.038,0.003,0.014],"returns2":[-0.027,0.009,-0.011,0.018,)"
+         R"(-0.039,0.004,0.012,-0.009,0.006,-0.022,0.015,-0.004,0.007,-0.016,0.021,-0.003,0.008,-0.033,)"
+         R"(0.001,0.012],"threshold_quantile":0.9})"},
+        // instrument_type: deposit | swap (tenor) | fra | future (start, end); rates as decimals.
+        {"solver/bootstrap/curve",
+         R"({"reference_date":"2025-01-15","instruments":[{"instrument_type":"deposit","tenor":0.25,"rate":0.052},)"
+         R"({"instrument_type":"deposit","tenor":0.5,"rate":0.051},{"instrument_type":"swap","tenor":2.0,)"
+         R"("rate":0.046},{"instrument_type":"swap","tenor":5.0,"rate":0.043},{"instrument_type":"swap",)"
+         R"("tenor":10.0,"rate":0.042}],"interpolation":"log_linear"})"},
     };
     return map;
 }

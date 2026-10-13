@@ -84,15 +84,29 @@ class PortfolioSummaryWidget : public BaseWidget {
     /// Owner of `list_layout_` — carries the single stylesheet that styles
     /// every holdings row via object-name selectors (P7).
     QWidget* list_widget_ = nullptr;
+    /// "No portfolios / no holdings" message; lives in the list for the
+    /// widget's lifetime and is only shown by render_empty().
+    QLabel* empty_lbl_ = nullptr;
+
+    /// Holding rows, created on first use and refilled in place on every
+    /// render (extra rows are hidden). A delivery burst used to delete and
+    /// re-create every row widget (~6 per holding).
+    struct PsRow {
+        QWidget* row = nullptr;
+        QLabel* sym = nullptr;
+        QLabel* shares = nullptr;
+        QLabel* price = nullptr;
+        QLabel* value = nullptr;
+        QLabel* pnl = nullptr;
+    };
+    QVector<PsRow> rows_;
+    PsRow make_row(int index);
 
     // ── Theme-tracked widgets ──────────────────────────────────────────────
     QWidget* summary_card_ = nullptr;
     QWidget* header_row_ = nullptr;
     QScrollArea* scroll_area_ = nullptr;
     QLabel* portfolio_name_lbl_ = nullptr;
-    QVector<QLabel*> metric_labels_;
-    QVector<QLabel*> metric_values_;
-    QVector<QLabel*> header_labels_;
 
     // ── Cached for theme-change re-render ──────────────────────────────────
     QVector<Holding> last_holdings_;

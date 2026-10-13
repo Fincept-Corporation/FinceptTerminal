@@ -15,8 +15,9 @@ namespace fincept {
 ///   logs/    — Application log files
 ///   files/   — User-managed file attachments
 ///   cache/   — Tile caches and other transient network data
-///   models/  — ML model files
-///   runtime/ — Python interpreter, UV, virtual environments
+///
+/// The Python runtime lives directly under root() (uv/, python/, uv-cache/,
+/// venv-numpy1/, venv-numpy2/) and is owned by PythonSetupManager.
 ///
 /// Call AppPaths::ensure_all() once at startup to create every sub-directory.
 class AppPaths {
@@ -35,12 +36,6 @@ class AppPaths {
 
     /// root/cache — tile caches and transient network data
     static QString cache();
-
-    /// root/models — ML model files
-    static QString models();
-
-    /// root/runtime — Python interpreter, UV, virtual environments
-    static QString runtime();
 
     /// root/workspaces — saved workspace files (.fwsp)
     static QString workspaces();

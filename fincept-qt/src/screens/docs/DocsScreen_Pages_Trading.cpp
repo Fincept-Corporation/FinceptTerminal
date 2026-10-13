@@ -479,24 +479,21 @@ QWidget* DocsScreen::page_agent_config() {
 
 QWidget* DocsScreen::page_alpha_arena() {
     return make_page(
-        tr("ALPHA ARENA"), tr("Competitive alpha research and strategy ranking"),
+        tr("ALPHA ARENA"), tr("AI models compete as traders on the same market"),
         {
-            {tr("OVERVIEW"), tr("Alpha Arena is a competitive environment where trading strategies are ranked "
-                                "by performance. Submit strategies, compare against peers, and discover new "
-                                "alpha sources through community insights.")},
-            {tr("KEY FEATURES"), tr("■  Strategy leaderboard with real-time rankings\n"
-                                    "■  Performance metrics comparison (Sharpe, returns, drawdown)\n"
-                                    "■  Strategy submission and backtesting\n"
-                                    "■  Community insights and discussion\n"
-                                    "■  Historical performance tracking")},
-            {tr("REAL-WORLD USAGE"), tr("■  Benchmark your strategies against others\n"
-                                        "■  Discover new trading ideas from top performers\n"
-                                        "■  Competitive motivation to improve strategy quality\n"
-                                        "■  Community learning through shared insights")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Browse the leaderboard, study top strategies\n"
-                                    "INTERMEDIATE: Submit your first strategy, analyze performance metrics\n"
-                                    "ADVANCED: Optimize strategies for ranking, study factor exposures\n"
-                                    "PRO: Multi-strategy submission, alpha decay analysis, ensemble approaches")},
+            {tr("OVERVIEW"), tr("Alpha Arena runs a trading competition between AI models: each model receives the "
+                                "same market data on a fixed cadence, decides its own trades and is scored on the "
+                                "results. Competitions run on a paper exchange by default; live trading on "
+                                "Hyperliquid is an explicit opt-in.")},
+            {tr("KEY FEATURES"), tr("■  NEW COMPETITION wizard — pick models, symbols, starting capital and cadence\n"
+                                    "■  Leaderboard — equity, return %, max drawdown, Sharpe, unrealised P&L, "
+                                    "positions and tokens used per model\n"
+                                    "■  Equity curves for every model\n"
+                                    "■  Per-model MODEL CHAT (its reasoning), POSITIONS, TRADES, RISK and AUDIT tabs\n"
+                                    "■  Keeps running while the screen is closed; a PAPER / LIVE badge shows the venue")},
+            {tr("REAL-WORLD USAGE"), tr("■  Compare how different models trade the same conditions\n"
+                                        "■  Study model reasoning next to the trades it produced\n"
+                                        "■  Stress-test an AI trading idea on paper before any capital is at risk")},
         });
 }
 

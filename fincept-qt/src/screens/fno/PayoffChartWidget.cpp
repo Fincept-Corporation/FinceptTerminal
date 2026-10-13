@@ -133,13 +133,12 @@ void PayoffChartWidget::set_payoff(const QVector<PayoffPoint>& curve, double cur
     current_spot_ = current_spot;
     breakevens_ = breakevens;
 
-    expiry_series_->clear();
-    target_series_->clear();
-    profit_curve_->clear();
-    loss_curve_->clear();
-    zero_baseline_->clear();
-
     if (curve.isEmpty()) {
+        expiry_series_->clear();
+        target_series_->clear();
+        profit_curve_->clear();
+        loss_curve_->clear();
+        zero_baseline_->clear();
         spot_marker_->setVisible(false);
         for (auto* m : breakeven_markers_)
             delete m;
@@ -147,20 +146,31 @@ void PayoffChartWidget::set_payoff(const QVector<PayoffPoint>& curve, double cur
         return;
     }
 
+    // Build every line first and hand each over with ONE replace(). This runs
+    // on each option-chain publish; clear() + a per-point append() re-laid-out
+    // the lines (and the two area fills built on them) for every curve point.
+    QList<QPointF> expiry_pts, target_pts, profit_pts, loss_pts;
+    expiry_pts.reserve(curve.size());
+    target_pts.reserve(curve.size());
+    profit_pts.reserve(curve.size());
+    loss_pts.reserve(curve.size());
     double y_min = std::numeric_limits<double>::infinity();
     double y_max = -std::numeric_limits<double>::infinity();
     for (const auto& p : curve) {
-        expiry_series_->append(p.spot, p.pnl_expiry);
-        target_series_->append(p.spot, p.pnl_target);
-        profit_curve_->append(p.spot, std::max(0.0, p.pnl_expiry));
-        loss_curve_->append(p.spot, std::min(0.0, p.pnl_expiry));
+        expiry_pts.append(QPointF(p.spot, p.pnl_expiry));
+        target_pts.append(QPointF(p.spot, p.pnl_target));
+        profit_pts.append(QPointF(p.spot, std::max(0.0, p.pnl_expiry)));
+        loss_pts.append(QPointF(p.spot, std::min(0.0, p.pnl_expiry)));
         y_min = std::min({y_min, p.pnl_expiry, p.pnl_target});
         y_max = std::max({y_max, p.pnl_expiry, p.pnl_target});
     }
     const double x_min = curve.first().spot;
     const double x_max = curve.last().spot;
-    zero_baseline_->append(x_min, 0);
-    zero_baseline_->append(x_max, 0);
+    expiry_series_->replace(expiry_pts);
+    target_series_->replace(target_pts);
+    profit_curve_->replace(profit_pts);
+    loss_curve_->replace(loss_pts);
+    zero_baseline_->replace(QList<QPointF>{QPointF(x_min, 0), QPointF(x_max, 0)});
 
     // Pad y-range by 8% so the curve isn't clipped at the edges.
     const double y_pad = std::max((y_max - y_min) * 0.08, 1.0);

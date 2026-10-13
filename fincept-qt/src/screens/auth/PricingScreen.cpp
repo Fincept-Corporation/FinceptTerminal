@@ -4,530 +4,779 @@
 #include "auth/AuthManager.h"
 #include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
+#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
+#include "ui/widgets/ConfettiOverlay.h"
 #include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHideEvent>
-#include <QJsonArray>
+#include <QJsonDocument>
+#include <QLabel>
+#include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
+#include <QShortcut>
+#include <QStyle>
+#include <QTimer>
 #include <QUrl>
+#include <QVBoxLayout>
 
 #include <algorithm>
-#include <memory>
+#include <cmath>
+#include <utility>
 
 namespace fincept::screens {
 
-// ── Obsidian Design System constants ─────────────────────────────────────────
+namespace {
 
-static const char* MF = "font-family:'Consolas','Courier New',monospace;";
+constexpr const char* kPricingTag = "Pricing";
+/// Last plan list the backend returned. Rendered instantly on the next visit
+/// and kept on screen when the network is down.
+constexpr const char* kPricingPlansCacheKey = "billing.plans_cache";
+constexpr int kPricingCardMinWidth = 230;
+constexpr int kPricingCardMaxWidth = 380;
 
-static QString card_normal() {
-    return QString("QWidget#plan_card { background: %1; border: 1px solid %2; }"
-                   "QLabel { border: none; background: transparent; }"
-                   "QFrame { border: none; background: transparent; }")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM());
+QString pricing_bullet() {
+    return QString::fromUtf8("\xe2\x96\xb8  "); // U+25B8 + two spaces
 }
 
-static QString card_popular() {
-    return QString("QWidget#plan_card { background: %1; border: 1px solid %2; }"
-                   "QLabel { border: none; background: transparent; }"
-                   "QFrame { border: none; background: transparent; }")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::AMBER_DIM());
+/// "$10", "$9.99", or "10 EUR" when the plan is not priced in USD.
+QString pricing_format_price(double amount, const QString& currency) {
+    const bool whole = std::fabs(amount - std::round(amount)) < 0.005;
+    const QString number = QString::number(amount, 'f', whole ? 0 : 2);
+    const QString code = currency.trimmed().toUpper();
+    if (code.isEmpty() || code == QLatin1String("USD"))
+        return cur::symbol_for(QStringLiteral("USD")) + number;
+    return number + QLatin1Char(' ') + code;
 }
 
-static QString card_active() {
-    return QString("QWidget#plan_card { background: %1; border: 1px solid %2; }"
-                   "QLabel { border: none; background: transparent; }"
-                   "QFrame { border: none; background: transparent; }")
-        .arg(ui::colors::BG_SURFACE(), ui::colors::POSITIVE());
+void pricing_repolish(QWidget* w) {
+    w->style()->unpolish(w);
+    w->style()->polish(w);
 }
 
-// ── Constructor ──────────────────────────────────────────────────────────────
+QJsonArray pricing_extract_plans(const QJsonObject& payload) {
+    if (payload.value("data").isArray())
+        return payload.value("data").toArray();
+    if (payload.value("data").isObject()) {
+        const QJsonObject inner = payload.value("data").toObject();
+        if (inner.value("data").isArray())
+            return inner.value("data").toArray();
+    }
+    return {};
+}
+
+/// The whole screen is styled by this one sheet on the root widget — cards,
+/// badges and buttons select on objectName + dynamic properties (variant,
+/// tone, planAction), so rendering a card costs no stylesheet parse.
+QString pricing_qss() {
+    QString ss = QStringLiteral(
+        "#pricingRoot{background:{BG_BASE};}"
+        "QScrollArea#pricingScroll{background:transparent;border:none;}"
+        "#pricingContent{background:transparent;}"
+        "QScrollBar:vertical{background:transparent;width:6px;}"
+        "QScrollBar::handle:vertical{background:{BORDER_MED};}"
+        "QScrollBar::handle:vertical:hover{background:{BORDER_BRIGHT};}"
+        "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+        "QLabel{background:transparent;border:none;}"
+        "#pricingTitle{color:{AMBER};font-size:20px;font-weight:700;letter-spacing:2px;}"
+        "#pricingSubtitle{color:{TEXT_SECONDARY};font-size:13px;}"
+        "#pricingAccount{color:{TEXT_TERTIARY};font-size:12px;}"
+        "#pricingStatus{color:{TEXT_SECONDARY};font-size:12px;}"
+        "#pricingStatus[tone=\"error\"]{color:{NEGATIVE};}"
+        "#pricingStatus[tone=\"success\"]{color:{POSITIVE};}"
+        "QPushButton#pricingRetry{background:transparent;color:{AMBER};border:1px solid {AMBER_DIM};"
+        "  padding:3px 12px;font-weight:700;}"
+        "QPushButton#pricingRetry:hover{color:{TEXT_PRIMARY};border-color:{AMBER};}"
+        "QFrame#planCard{background:{BG_SURFACE};border:1px solid {BORDER_DIM};}"
+        "QFrame#planCard[variant=\"recommended\"]{border:1px solid {AMBER_DIM};border-top:2px solid {AMBER};}"
+        "QFrame#planCard[variant=\"current\"]{border-top:2px solid {POSITIVE};}"
+        "QFrame#planCard[variant=\"enterprise\"]{background:{BG_RAISED};border:1px solid {BORDER_MED};"
+        "  border-top:2px solid {AMBER_DIM};}"
+        "#planBadge{font-size:10px;font-weight:700;letter-spacing:1px;padding:0 8px;}"
+        "#planBadge[tone=\"recommended\"]{color:{AMBER};border:1px solid {AMBER_DIM};}"
+        "#planBadge[tone=\"current\"]{color:{POSITIVE};border:1px solid {POSITIVE};}"
+        "#planBadge[tone=\"enterprise\"]{color:{TEXT_SECONDARY};border:1px solid {BORDER_MED};}"
+        "#planName{color:{TEXT_PRIMARY};font-size:15px;font-weight:700;letter-spacing:1.5px;}"
+        "#planName[accent=\"true\"]{color:{AMBER};}"
+        "#planDesc{color:{TEXT_TERTIARY};font-size:12px;}"
+        "#planPrice{color:{TEXT_PRIMARY};font-size:30px;font-weight:700;}"
+        "#planPrice[accent=\"true\"]{color:{AMBER};}"
+        "#planPeriod{color:{TEXT_DIM};font-size:12px;}"
+        "QFrame#planRule{background:{BORDER_DIM};border:none;}"
+        "#planFeature{color:{TEXT_SECONDARY};font-size:12px;}"
+        "#planNote{color:{TEXT_DIM};font-size:11px;}"
+        "QPushButton#planPriceLink{background:transparent;border:none;padding:0;color:{AMBER};font-size:16px;"
+        "  font-weight:700;text-align:left;}"
+        "QPushButton#planPriceLink:hover{color:{TEXT_PRIMARY};}"
+        "QPushButton#planBtn{min-height:34px;padding:0 14px;font-weight:700;letter-spacing:0.5px;"
+        "  background:transparent;color:{TEXT_SECONDARY};border:1px solid {BORDER_MED};}"
+        "QPushButton#planBtn:hover{color:{TEXT_PRIMARY};border-color:{TEXT_SECONDARY};}"
+        "QPushButton#planBtn[planAction=\"select\"]{background:{AMBER};color:{BG_BASE};border-color:{AMBER};}"
+        "QPushButton#planBtn[planAction=\"select\"]:hover{border-color:{TEXT_PRIMARY};}"
+        "QPushButton#planBtn[planAction=\"select\"]:pressed{background:{AMBER_DIM};color:{TEXT_PRIMARY};"
+        "  border-color:{AMBER_DIM};}"
+        "QPushButton#planBtn[planAction=\"current\"]:disabled{color:{POSITIVE};border-color:{POSITIVE};}"
+        "QPushButton#planBtn[planAction=\"included\"]:disabled{color:{TEXT_DIM};border-color:{BORDER_DIM};}"
+        "QPushButton#planBtn[planAction=\"processing\"]:disabled{color:{TEXT_DIM};border-color:{BORDER_DIM};"
+        "  background:{BG_RAISED};}"
+        "QPushButton#planEntPrimary{min-height:34px;padding:0 14px;font-weight:700;letter-spacing:0.5px;"
+        "  background:transparent;color:{AMBER};border:1px solid {AMBER};}"
+        "QPushButton#planEntPrimary:hover{background:{AMBER};color:{BG_BASE};}"
+        "QPushButton#planEntSecondary{min-height:30px;padding:0 14px;font-weight:700;letter-spacing:0.5px;"
+        "  background:transparent;color:{TEXT_SECONDARY};border:1px solid {BORDER_MED};}"
+        "QPushButton#planEntSecondary:hover{color:{AMBER};border-color:{AMBER};}"
+        "#pricingFootnote{color:{TEXT_DIM};font-size:11px;}"
+        "QPushButton#pricingBack{background:transparent;border:none;color:{TEXT_SECONDARY};font-size:12px;"
+        "  font-weight:700;letter-spacing:0.5px;padding:6px 10px;}"
+        "QPushButton#pricingBack:hover{color:{AMBER};}");
+    const std::pair<const char*, const char*> tokens[] = {
+        {"{BG_BASE}", ui::colors::BG_BASE()},
+        {"{BG_SURFACE}", ui::colors::BG_SURFACE()},
+        {"{BG_RAISED}", ui::colors::BG_RAISED()},
+        {"{BORDER_DIM}", ui::colors::BORDER_DIM()},
+        {"{BORDER_MED}", ui::colors::BORDER_MED()},
+        {"{BORDER_BRIGHT}", ui::colors::BORDER_BRIGHT()},
+        {"{TEXT_PRIMARY}", ui::colors::TEXT_PRIMARY()},
+        {"{TEXT_SECONDARY}", ui::colors::TEXT_SECONDARY()},
+        {"{TEXT_TERTIARY}", ui::colors::TEXT_TERTIARY()},
+        {"{TEXT_DIM}", ui::colors::TEXT_DIM()},
+        {"{AMBER}", ui::colors::AMBER()},
+        {"{AMBER_DIM}", ui::colors::AMBER_DIM()},
+        {"{POSITIVE}", ui::colors::POSITIVE()},
+        {"{NEGATIVE}", ui::colors::NEGATIVE()},
+    };
+    for (const auto& [token, value] : tokens)
+        ss.replace(QLatin1String(token), QLatin1String(value));
+    return ss;
+}
+
+} // namespace
+
+// ── Construction ─────────────────────────────────────────────────────────────
 
 PricingScreen::PricingScreen(QWidget* parent) : QWidget(parent) {
     build_ui();
     confetti_ = new ui::ConfettiOverlay(this);
+
+    // Plan state and credits arrive through the session. The cards are rebuilt
+    // only when the plan actually changes (see render_cards()).
+    connect(&auth::AuthManager::instance(), &auth::AuthManager::auth_state_changed, this,
+            &PricingScreen::on_session_changed);
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { refresh_theme(); });
+
+    payment_poll_timer_ = new QTimer(this);
+    payment_poll_timer_->setInterval(kPaymentPollIntervalMs);
+    connect(payment_poll_timer_, &QTimer::timeout, this, &PricingScreen::poll_payment_status);
 }
 
 void PricingScreen::build_ui() {
-    setStyleSheet(QString("background: %1;").arg(ui::colors::BG_BASE()));
+    setObjectName("pricingRoot");
+    setAttribute(Qt::WA_StyledBackground, true);
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    auto* scroll = new QScrollArea;
+    auto* scroll = new QScrollArea(this);
+    scroll->setObjectName("pricingScroll");
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet(QString("QScrollArea { background: transparent; border: none; }"
-                                  "QScrollBar:vertical { background: transparent; width: 6px; }"
-                                  "QScrollBar::handle:vertical { background: %1; }"
-                                  "QScrollBar::handle:vertical:hover { background: %2; }"
-                                  "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-                              .arg(ui::colors::BORDER_MED(), ui::colors::BORDER_BRIGHT()));
 
-    auto* content = new QWidget(this);
-    content->setStyleSheet("background: transparent;");
+    auto* content = new QWidget;
+    content->setObjectName("pricingContent");
     auto* vl = new QVBoxLayout(content);
-    vl->setContentsMargins(14, 14, 14, 14);
-    vl->setSpacing(10);
+    vl->setContentsMargins(32, 30, 32, 26);
+    vl->setSpacing(0);
 
     // ── Header ───────────────────────────────────────────────────────────────
-    title_label_ = new QLabel;
+    title_label_ = new QLabel(content);
+    title_label_->setObjectName("pricingTitle");
     title_label_->setAlignment(Qt::AlignCenter);
-    title_label_->setStyleSheet(QString("color: %1; font-size: 20px; font-weight: 700; "
-                                        "letter-spacing: 1px; background: transparent; %2")
-                                    .arg(ui::colors::AMBER())
-                                    .arg(MF));
     vl->addWidget(title_label_);
+    vl->addSpacing(8);
 
-    subtitle_label_ = new QLabel;
+    subtitle_label_ = new QLabel(content);
+    subtitle_label_->setObjectName("pricingSubtitle");
     subtitle_label_->setAlignment(Qt::AlignCenter);
-    // Wraps — the subtitle now carries the "Enterprise is separate" caveat and
-    // would otherwise force a wide minimum width on the scroll content.
     subtitle_label_->setWordWrap(true);
-    subtitle_label_->setStyleSheet(
-        QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY()).arg(MF));
     vl->addWidget(subtitle_label_);
+    vl->addSpacing(6);
 
-    user_info_label_ = new QLabel;
-    user_info_label_->setAlignment(Qt::AlignCenter);
-    user_info_label_->setStyleSheet(
-        QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_SECONDARY()).arg(MF));
-    vl->addWidget(user_info_label_);
+    account_label_ = new QLabel(content);
+    account_label_->setObjectName("pricingAccount");
+    account_label_->setAlignment(Qt::AlignCenter);
+    account_label_->hide();
+    vl->addWidget(account_label_);
+    vl->addSpacing(14);
 
-    // ── Enterprise banner ────────────────────────────────────────────────────
-    // The cards below are the open-source build's own credit tiers. Enterprise
-    // is a separate product on a separate backend, so it never appears in the
-    // fetched plan list — surface it here rather than leave the pricing screen
-    // as the one place that omits it.
-    vl->addSpacing(4);
-    vl->addWidget(ui::make_enterprise_banner(content));
-    vl->addSpacing(4);
+    // ── Status (loading / offline / error / checkout progress) ──────────────
+    status_row_ = new QWidget(content);
+    auto* status_hl = new QHBoxLayout(status_row_);
+    status_hl->setContentsMargins(0, 0, 0, 0);
+    status_hl->setSpacing(10);
+    status_hl->addStretch();
+    status_label_ = new QLabel(status_row_);
+    status_label_->setObjectName("pricingStatus");
+    status_label_->setWordWrap(true);
+    status_label_->setAlignment(Qt::AlignCenter);
+    status_hl->addWidget(status_label_);
+    retry_btn_ = new QPushButton(status_row_);
+    retry_btn_->setObjectName("pricingRetry");
+    retry_btn_->setCursor(Qt::PointingHandCursor);
+    retry_btn_->hide();
+    connect(retry_btn_, &QPushButton::clicked, this, &PricingScreen::fetch_plans);
+    status_hl->addWidget(retry_btn_);
+    status_hl->addStretch();
+    status_row_->hide();
+    vl->addWidget(status_row_);
+    vl->addSpacing(14);
 
-    // ── Loading ──────────────────────────────────────────────────────────────
-    loading_label_ = new QLabel;
-    loading_label_->setAlignment(Qt::AlignCenter);
-    loading_label_->setStyleSheet(
-        QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_DIM()).arg(MF));
-    loading_label_->hide();
-    vl->addWidget(loading_label_);
-
-    // ── Error ────────────────────────────────────────────────────────────────
-    error_label_ = new QLabel;
-    error_label_->setWordWrap(true);
-    error_label_->setAlignment(Qt::AlignCenter);
-    error_label_->setStyleSheet(QString("color: %1; font-size: 12px; background: rgba(220,38,38,0.1); "
-                                        "border: 1px solid #7f1d1d; padding: 6px 12px; %2")
-                                    .arg(ui::colors::NEGATIVE())
-                                    .arg(MF));
-    error_label_->hide();
-    vl->addWidget(error_label_);
-
-    // ── Cards container ──────────────────────────────────────────────────────
-    cards_container_ = new QWidget(this);
-    cards_container_->setStyleSheet("background: transparent;");
-    cards_layout_ = new QVBoxLayout(cards_container_);
+    // ── Cards: FREE | PRO | ENTERPRISE, equal width, centred ────────────────
+    auto* cards_row = new QHBoxLayout;
+    cards_row->setContentsMargins(0, 0, 0, 0);
+    cards_row->setSpacing(0);
+    cards_row->addStretch(1);
+    cards_host_ = new QWidget(content);
+    cards_host_->setObjectName("pricingCards");
+    cards_layout_ = new QHBoxLayout(cards_host_);
     cards_layout_->setContentsMargins(0, 0, 0, 0);
-    vl->addWidget(cards_container_);
+    cards_layout_->setSpacing(14);
+    cards_row->addWidget(cards_host_, 100);
+    cards_row->addStretch(1);
+    vl->addLayout(cards_row);
+    vl->addSpacing(20);
 
     // ── Footer ───────────────────────────────────────────────────────────────
-    footer_widget_ = new QWidget(this);
-    footer_widget_->setStyleSheet("background: transparent;");
-    auto* footer_vl = new QVBoxLayout(footer_widget_);
-    footer_vl->setContentsMargins(0, 10, 0, 0);
-    footer_vl->setSpacing(6);
+    footnote_label_ = new QLabel(content);
+    footnote_label_->setObjectName("pricingFootnote");
+    footnote_label_->setAlignment(Qt::AlignCenter);
+    footnote_label_->setWordWrap(true);
+    vl->addWidget(footnote_label_);
+    vl->addSpacing(12);
 
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1; border: none;").arg(ui::colors::BORDER_DIM()));
-    footer_vl->addWidget(sep);
-
-    footer_vl->addSpacing(4);
-    vl->addWidget(footer_widget_);
-
+    back_btn_ = new QPushButton(content);
+    back_btn_->setObjectName("pricingBack");
+    back_btn_->setCursor(Qt::PointingHandCursor);
+    connect(back_btn_, &QPushButton::clicked, this, &PricingScreen::back_requested);
+    vl->addWidget(back_btn_, 0, Qt::AlignHCenter);
     vl->addStretch();
+
     scroll->setWidget(content);
     root->addWidget(scroll);
 
+    auto* esc = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    esc->setContext(Qt::WidgetWithChildrenShortcut);
+    connect(esc, &QShortcut::activated, this, &PricingScreen::back_requested);
+
+    refresh_theme();
     retranslateUi();
+}
+
+void PricingScreen::refresh_theme() {
+    setStyleSheet(pricing_qss());
 }
 
 void PricingScreen::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange) {
         retranslateUi();
-        // Per-card buttons + footer carry state-dependent labels — easier to
-        // rebuild than to thread retranslation through every dynamic widget.
-        if (!plans_.empty())
-            render_plan_cards();
-        update_footer();
+        update_account_line();
+        rendered_for_.clear(); // card labels carry translated text — rebuild them
+        render_cards();
     }
     QWidget::changeEvent(event);
 }
 
 void PricingScreen::retranslateUi() {
-    // Scope the heading explicitly. These are the open-source terminal's own
-    // credit tiers; Fincept Terminal Enterprise is a separate product on a
-    // separate backend, and a subscription bought here unlocks nothing there.
-    if (title_label_)
-        title_label_->setText(tr("PLANS & PRICING — OPEN-SOURCE EDITION"));
-    if (subtitle_label_)
-        subtitle_label_->setText(tr("Credits and limits for this open-source terminal. "
-                                    "Fincept Terminal Enterprise is a separate product, billed separately."));
-    if (loading_label_)
-        loading_label_->setText(loading_is_refresh_ ? tr("Updating plan status...") : tr("Loading plans..."));
+    title_label_->setText(tr("PLANS & PRICING"));
+    subtitle_label_->setText(tr("Credits power cloud analytics, AI and data in this terminal. Start free — "
+                                "move to Pro when you need more."));
+    footnote_label_->setText(tr("Checkout runs securely on fincept.in and your plan updates here automatically. "
+                                "Fincept Terminal Enterprise is a separate product with its own accounts and "
+                                "billing."));
+    back_btn_->setText(tr("← BACK TO TERMINAL"));
+    retry_btn_->setText(tr("RETRY"));
 }
+
+void PricingScreen::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    if (confetti_)
+        confetti_->setGeometry(rect());
+}
+
+// ── Show / hide ──────────────────────────────────────────────────────────────
 
 void PricingScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-
+    load_cached_plans(); // first visit: last-known-good plans render instantly
+    update_account_line();
+    fetch_plans(); // refresh in the background; cached cards stay up meanwhile
+    render_cards();
+    // Fresh plan + credits for the account line and the cards' current-plan
+    // state; the reply lands in on_session_changed().
     auto& auth = auth::AuthManager::instance();
-    if (auth.is_authenticated()) {
-        // Show loading while we fetch fresh data
-        loading_is_refresh_ = true;
-        loading_label_->setText(tr("Updating plan status..."));
-        loading_label_->show();
-        user_info_label_->hide();
-
-        // Fetch fresh user data from API, then render once with accurate data
-        auto conn = std::make_shared<QMetaObject::Connection>();
-        *conn = connect(&auth, &auth::AuthManager::auth_state_changed, this, [this, conn]() {
-            disconnect(*conn);
-
-            loading_label_->hide();
-
-            auto& mgr = auth::AuthManager::instance();
-            if (mgr.is_authenticated()) {
-                auto& s = mgr.session();
-                QString info = (s.user_info.email.isEmpty() ? s.user_info.username : s.user_info.email);
-                info += QString("  |  %1 CR").arg(s.user_info.credit_balance, 0, 'f', 0);
-                user_info_label_->setText(info);
-                user_info_label_->show();
-            }
-
-            // Render cards once with fresh data
-            fetched_ = false;
-            fetch_plans();
-            update_footer();
-        });
-        // Connect first, then fire — a cached/synchronous reply would otherwise
-        // emit auth_state_changed before we were listening and leave the screen
-        // stuck on "Updating plan status...".
+    if (auth.is_authenticated())
         auth.refresh_user_data();
-    } else {
-        user_info_label_->hide();
-        fetched_ = false;
-        fetch_plans();
-        update_footer();
+}
+
+void PricingScreen::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    // §P3: the poll timer must not outlive the screen leaving the stack. A
+    // minimise (spontaneous hide) keeps polling — the user is paying in the
+    // browser and will come back.
+    if (event && event->spontaneous())
+        return;
+    if (awaiting_payment_) {
+        LOG_INFO(kPricingTag, "Pricing screen hidden — stopping payment polling");
+        stop_payment_polling();
     }
 }
 
-// ── Fetch plans ──────────────────────────────────────────────────────────────
+// ── Status line ──────────────────────────────────────────────────────────────
+
+void PricingScreen::set_status(StatusTone tone, const QString& text, bool show_retry) {
+    const char* tone_name = tone == StatusTone::Error ? "error" : (tone == StatusTone::Success ? "success" : "info");
+    if (status_label_->property("tone").toString() != QLatin1String(tone_name)) {
+        status_label_->setProperty("tone", QString::fromLatin1(tone_name));
+        pricing_repolish(status_label_);
+    }
+    status_label_->setText(text);
+    retry_btn_->setVisible(show_retry);
+    status_row_->show();
+}
+
+void PricingScreen::clear_status() {
+    status_row_->hide();
+    retry_btn_->hide();
+}
+
+void PricingScreen::update_account_line() {
+    auto& mgr = auth::AuthManager::instance();
+    if (!mgr.is_authenticated()) {
+        account_label_->hide();
+        return;
+    }
+    const auto& s = mgr.session();
+    const QString who = s.user_info.email.isEmpty() ? s.user_info.username : s.user_info.email;
+    account_label_->setText(tr("%1  ·  %2 plan  ·  %3 credits")
+                                .arg(who, s.plan_label(), auth::format_credits(s.user_info.credit_balance)));
+    account_label_->show();
+}
+
+// ── Plans ────────────────────────────────────────────────────────────────────
+
+void PricingScreen::load_cached_plans() {
+    if (cache_checked_)
+        return;
+    cache_checked_ = true;
+    if (!plans_.empty())
+        return;
+    auto r = SettingsRepository::instance().get(kPricingPlansCacheKey);
+    if (r.is_err() || r.value().isEmpty())
+        return;
+    const QJsonDocument doc = QJsonDocument::fromJson(r.value().toUtf8());
+    if (doc.isArray())
+        apply_plans_json(doc.array());
+}
+
+bool PricingScreen::apply_plans_json(const QJsonArray& plans) {
+    std::vector<auth::SubscriptionPlan> parsed;
+    for (const auto& v : plans) {
+        if (!v.isObject())
+            continue;
+        auto plan = auth::SubscriptionPlan::from_json(v.toObject());
+        if (!plan.plan_id.isEmpty())
+            parsed.push_back(std::move(plan));
+    }
+    if (parsed.empty())
+        return false;
+    std::stable_sort(parsed.begin(), parsed.end(),
+                     [](const auth::SubscriptionPlan& a, const auth::SubscriptionPlan& b) {
+                         return a.display_order < b.display_order;
+                     });
+    plans_ = std::move(parsed);
+    rendered_for_.clear();
+    render_cards();
+    return true;
+}
 
 void PricingScreen::fetch_plans() {
     if (loading_)
         return;
     loading_ = true;
-    fetched_ = true;
-    loading_is_refresh_ = false;
-    loading_label_->setText(tr("Loading plans..."));
-    loading_label_->show();
-    error_label_->hide();
+    if (plans_.empty())
+        set_status(StatusTone::Info, tr("Loading plans…"));
 
-    auth::AuthApi::instance().get_subscription_plans([this](auth::ApiResponse r) {
-        loading_ = false;
-        loading_label_->hide();
-
-        if (!r.success) {
-            error_label_->setText(r.error.isEmpty() ? tr("Failed to load plans") : r.error);
-            error_label_->show();
-            return;
-        }
-
-        QJsonObject payload = r.data;
-        QJsonArray plans_array;
-        if (payload.contains("data") && payload["data"].isArray()) {
-            plans_array = payload["data"].toArray();
-        } else if (payload.contains("data") && payload["data"].isObject()) {
-            auto inner = payload["data"].toObject();
-            if (inner.contains("data") && inner["data"].isArray()) {
-                plans_array = inner["data"].toArray();
-            }
-        }
-
-        plans_.clear();
-        for (const auto& p : plans_array) {
-            if (p.isObject())
-                plans_.push_back(auth::SubscriptionPlan::from_json(p.toObject()));
-        }
-
-        std::sort(plans_.begin(), plans_.end(), [](const auth::SubscriptionPlan& a, const auth::SubscriptionPlan& b) {
-            return a.display_order < b.display_order;
-        });
-
-        render_plan_cards();
-    }, this); // context: the reply handler is dropped if the screen is destroyed first
-}
-
-void PricingScreen::refresh_plans() {
-    fetched_ = false;
-    fetch_plans();
-}
-
-// ── Render plan cards ────────────────────────────────────────────────────────
-
-void PricingScreen::render_plan_cards() {
-    if (cards_layout_) {
-        QLayoutItem* item;
-        while ((item = cards_layout_->takeAt(0)) != nullptr) {
-            if (item->widget())
-                item->widget()->deleteLater();
-            if (item->layout()) {
-                QLayoutItem* sub;
-                while ((sub = item->layout()->takeAt(0)) != nullptr) {
-                    if (sub->widget())
-                        sub->widget()->deleteLater();
-                    delete sub;
+    auth::AuthApi::instance().get_subscription_plans(
+        [this](auth::ApiResponse r) {
+            loading_ = false;
+            if (!r.success) {
+                const bool offline = r.status_code == 0;
+                LOG_WARN(kPricingTag, QString("Plan fetch failed (HTTP %1)").arg(r.status_code));
+                if (!plans_.empty()) {
+                    if (!awaiting_payment_)
+                        set_status(StatusTone::Info,
+                                   offline ? tr("Offline — showing the plans from your last visit.")
+                                           : tr("Couldn't refresh plans — showing the last known list."),
+                                   true);
+                } else {
+                    set_status(StatusTone::Error,
+                               offline ? tr("Can't reach Fincept right now. Check your connection and retry.")
+                                       : (r.error.isEmpty() ? tr("Plans could not be loaded.") : r.error),
+                               true);
+                    rendered_for_.clear();
+                    render_cards(); // the Enterprise card still renders without the backend
                 }
+                return;
             }
-            delete item;
-        }
-        delete cards_layout_;
-    }
 
-    auto* hbox = new QHBoxLayout;
-    hbox->setSpacing(10);
-    hbox->setContentsMargins(0, 0, 0, 0);
-    hbox->addStretch();
-
-    for (int i = 0; i < (int)plans_.size(); ++i) {
-        hbox->addWidget(create_plan_card(plans_[i], i));
-    }
-
-    hbox->addStretch();
-
-    cards_layout_ = new QVBoxLayout;
-    cards_layout_->setContentsMargins(0, 0, 0, 0);
-    cards_layout_->addLayout(hbox);
-    cards_container_->setLayout(cards_layout_);
-
-    if (plans_.empty()) {
-        auto* empty = new QLabel(tr("No plans available."));
-        empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet(
-            QString("color: %1; font-size: 13px; background: transparent; %2").arg(ui::colors::TEXT_DIM()).arg(MF));
-        cards_layout_->addWidget(empty);
-    }
-
-    update_footer();
+            const QJsonArray arr = pricing_extract_plans(r.data);
+            if (!apply_plans_json(arr)) {
+                if (plans_.empty()) {
+                    set_status(StatusTone::Error, tr("No plans are available right now."), true);
+                    rendered_for_.clear();
+                    render_cards();
+                }
+                return;
+            }
+            if (!awaiting_payment_)
+                clear_status();
+            const auto saved = SettingsRepository::instance().set(
+                kPricingPlansCacheKey, QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)),
+                QStringLiteral("billing"));
+            if (saved.is_err())
+                LOG_DEBUG(kPricingTag, "Could not cache the plan list");
+        },
+        this); // context: the reply handler is dropped if the screen is destroyed first
 }
 
-QWidget* PricingScreen::create_plan_card(const auth::SubscriptionPlan& plan, int index) {
-    Q_UNUSED(index);
-    auto& auth_mgr = auth::AuthManager::instance();
+// ── Cards ────────────────────────────────────────────────────────────────────
 
-    bool is_popular = (plan.name == "Standard" || plan.name == "Pro");
-    bool is_current = false;
-    if (auth_mgr.is_authenticated()) {
-        const auto& s = auth_mgr.session();
-        QString user_plan = s.account_type().toLower();
-        is_current = (user_plan == plan.plan_id.toLower());
+void PricingScreen::render_cards() {
+    auto& mgr = auth::AuthManager::instance();
+    const bool signed_in = mgr.is_authenticated();
+    const QString state = plans_.empty() ? (loading_ ? QStringLiteral("loading") : QStringLiteral("failed"))
+                                         : QStringLiteral("ready");
+    const QString key = state + QLatin1Char('|') +
+                        (signed_in ? mgr.session().account_type().toLower() : QStringLiteral("-"));
+    if (key == rendered_for_)
+        return;
+    rendered_for_ = key;
+
+    while (QLayoutItem* item = cards_layout_->takeAt(0)) {
+        if (QWidget* w = item->widget())
+            w->deleteLater();
+        delete item;
     }
+    if (plans_.empty() && loading_)
+        return; // the status line says "Loading plans…"
 
-    auto* card = new QWidget(this);
-    card->setObjectName("plan_card");
-    card->setFixedWidth(260);
-    card->setMinimumHeight(400);
-    card->setStyleSheet(is_current ? card_active() : (is_popular ? card_popular() : card_normal()));
+    // Zero-stretch spacers soak up width only once every card is at its
+    // maximum — e.g. the Enterprise card alone after a failed first load —
+    // so the row stays centred instead of hugging the left edge.
+    cards_layout_->addStretch(0);
+    for (const auto& plan : plans_)
+        cards_layout_->addWidget(build_plan_card(plan), 1);
+    cards_layout_->addWidget(build_enterprise_card(), 1);
+    cards_layout_->addStretch(0);
+}
+
+void PricingScreen::set_plan_action(QPushButton* btn, PlanAction action) {
+    const char* name = "select";
+    switch (action) {
+        case PlanAction::Current:
+            name = "current";
+            break;
+        case PlanAction::Included:
+            name = "included";
+            break;
+        case PlanAction::ContinueFree:
+            name = "continue";
+            break;
+        case PlanAction::Select:
+            name = "select";
+            break;
+        case PlanAction::Processing:
+            name = "processing";
+            break;
+    }
+    btn->setEnabled(action == PlanAction::ContinueFree || action == PlanAction::Select);
+    if (btn->property("planAction").toString() != QLatin1String(name)) {
+        btn->setProperty("planAction", QString::fromLatin1(name));
+        pricing_repolish(btn);
+    }
+}
+
+QWidget* PricingScreen::build_plan_card(const auth::SubscriptionPlan& plan) {
+    auto& mgr = auth::AuthManager::instance();
+    const bool signed_in = mgr.is_authenticated();
+    const bool user_paid = signed_in && mgr.session().has_paid_plan();
+    const QString user_plan = signed_in ? mgr.session().account_type().trimmed().toLower() : QString();
+    // A free account is on the free plan even if its account_type is empty.
+    const bool is_current = signed_in && (plan.is_free ? !user_paid : user_plan == plan.plan_id.toLower());
+
+    auto* card = new QFrame(cards_host_);
+    card->setObjectName("planCard");
+    card->setProperty("variant", is_current ? "current" : (plan.is_recommended ? "recommended" : "standard"));
+    card->setMinimumWidth(kPricingCardMinWidth);
+    card->setMaximumWidth(kPricingCardMaxWidth);
+    card->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); // equal widths by stretch
 
     auto* vl = new QVBoxLayout(card);
-    vl->setContentsMargins(12, 12, 12, 12);
-    vl->setSpacing(4);
+    vl->setContentsMargins(22, 18, 22, 18);
+    vl->setSpacing(0);
 
-    // Popular badge
-    if (is_popular) {
-        auto* badge = new QLabel(tr("RECOMMENDED"));
-        badge->setAlignment(Qt::AlignCenter);
-        badge->setFixedHeight(20);
-        badge->setStyleSheet(QString("color: %1; background: rgba(217,119,6,0.1); "
-                                     "border: 1px solid %2; padding: 0 8px; "
-                                     "font-size: 11px; font-weight: 700; letter-spacing: 0.5px; %3")
-                                 .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
-                                 .arg(MF));
-        vl->addWidget(badge, 0, Qt::AlignCenter);
-        vl->addSpacing(2);
+    auto* badge_row = new QHBoxLayout;
+    badge_row->setContentsMargins(0, 0, 0, 0);
+    auto* badge = new QLabel(card);
+    badge->setObjectName("planBadge");
+    badge->setFixedHeight(20);
+    if (is_current) {
+        badge->setText(tr("CURRENT PLAN"));
+        badge->setProperty("tone", "current");
+    } else if (plan.is_recommended) {
+        badge->setText(tr("RECOMMENDED"));
+        badge->setProperty("tone", "recommended");
+    } else {
+        badge->setProperty("tone", "none"); // keeps the row height so cards line up
     }
+    badge_row->addWidget(badge);
+    badge_row->addStretch();
+    vl->addLayout(badge_row);
+    vl->addSpacing(14);
 
-    // Plan name
-    auto* name = new QLabel(plan.name.toUpper());
-    name->setAlignment(Qt::AlignCenter);
-    name->setStyleSheet(QString("color: %1; font-size: 16px; font-weight: 700; "
-                                "letter-spacing: 0.5px; background: transparent; %2")
-                            .arg(is_popular ? ui::colors::AMBER() : ui::colors::TEXT_PRIMARY())
-                            .arg(MF));
+    auto* name = new QLabel(plan.name.isEmpty() ? plan.plan_id.toUpper() : plan.name.toUpper(), card);
+    name->setObjectName("planName");
+    name->setProperty("accent", plan.is_recommended);
     vl->addWidget(name);
-
-    // Description
-    if (!plan.description.isEmpty()) {
-        auto* desc = new QLabel(plan.description);
-        desc->setWordWrap(true);
-        desc->setAlignment(Qt::AlignCenter);
-        desc->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                                .arg(ui::colors::TEXT_TERTIARY())
-                                .arg(MF));
-        vl->addWidget(desc);
-    }
-
     vl->addSpacing(6);
 
-    // Price
-    if (plan.is_free) {
-        auto* price = new QLabel(tr("FREE"));
-        price->setAlignment(Qt::AlignCenter);
-        price->setStyleSheet(QString("color: %1; font-size: 28px; font-weight: 700; "
-                                     "background: transparent; %2")
-                                 .arg(ui::colors::TEXT_PRIMARY())
-                                 .arg(MF));
-        vl->addWidget(price);
-    } else {
-        // Plan prices are intrinsically USD (not FX-converted), so pin the symbol
-        // to USD rather than following the global currency preference. Preserve the
-        // whole-number format used for plan prices.
-        auto* price = new QLabel(cur::symbol_for("USD") + QString::number(plan.price_usd, 'f', 0));
-        price->setAlignment(Qt::AlignCenter);
-        price->setStyleSheet(QString("color: %1; font-size: 28px; font-weight: 700; "
-                                     "background: transparent; %2")
-                                 .arg(ui::colors::AMBER())
-                                 .arg(MF));
-        vl->addWidget(price);
+    auto* desc = new QLabel(plan.description, card);
+    desc->setObjectName("planDesc");
+    desc->setWordWrap(true);
+    desc->setMinimumHeight(34); // two lines — keeps the price rows aligned across cards
+    desc->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    vl->addWidget(desc);
+    vl->addSpacing(12);
 
-        auto* period = new QLabel(tr("/ %1 days").arg(plan.validity_days));
-        period->setAlignment(Qt::AlignCenter);
-        period->setStyleSheet(
-            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_DIM()).arg(MF));
-        vl->addWidget(period);
+    auto* price_row = new QHBoxLayout;
+    price_row->setContentsMargins(0, 0, 0, 0);
+    price_row->setSpacing(8);
+    auto* price = new QLabel(plan.is_free ? pricing_format_price(0.0, plan.currency)
+                                          : pricing_format_price(plan.price_usd, plan.currency),
+                             card);
+    price->setObjectName("planPrice");
+    price->setProperty("accent", plan.is_recommended && !plan.is_free);
+    price_row->addWidget(price, 0, Qt::AlignBottom);
+    QString period;
+    if (plan.is_free)
+        period = tr("no card required");
+    else if (plan.validity_days == 30)
+        period = tr("/ month");
+    else if (plan.validity_days > 0)
+        period = tr("/ %1 days").arg(plan.validity_days);
+    auto* period_lbl = new QLabel(period, card);
+    period_lbl->setObjectName("planPeriod");
+    price_row->addWidget(period_lbl, 0, Qt::AlignBottom);
+    price_row->addStretch();
+    vl->addLayout(price_row);
+    vl->addSpacing(16);
+
+    auto* rule = new QFrame(card);
+    rule->setObjectName("planRule");
+    rule->setFixedHeight(1);
+    vl->addWidget(rule);
+    vl->addSpacing(14);
+
+    // Features are backend-owned copy. Older payloads without a list fall back
+    // to the structured fields.
+    QStringList features = plan.features;
+    if (features.isEmpty()) {
+        if (plan.credits > 0)
+            features << tr("%1 credits").arg(auth::format_credits(plan.credits));
+        if (!plan.support_type.isEmpty())
+            features << tr("%1 support").arg(plan.support_type);
     }
-
-    vl->addSpacing(2);
-
-    // Credits
-    auto* credits = new QLabel(tr("%1 credits").arg(plan.credits));
-    credits->setAlignment(Qt::AlignCenter);
-    credits->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; "
-                                   "background: transparent; %2")
-                               .arg(ui::colors::CYAN())
-                               .arg(MF));
-    vl->addWidget(credits);
-
-    // Support — keep the support_type token (e.g. "Standard", "Priority") as
-    // returned by the API; localise only the surrounding word.
-    auto* support = new QLabel(tr("%1 support").arg(plan.support_type));
-    support->setAlignment(Qt::AlignCenter);
-    support->setStyleSheet(
-        QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_TERTIARY()).arg(MF));
-    vl->addWidget(support);
-
-    // Separator
-    auto* sep = new QFrame;
-    sep->setFixedHeight(1);
-    sep->setStyleSheet(QString("background: %1;").arg(ui::colors::BORDER_DIM()));
-    vl->addWidget(sep);
-
-    vl->addSpacing(2);
-
-    // Features
-    for (const auto& feature : plan.features) {
-        auto* feat = new QLabel(QString("  %1").arg(feature));
+    for (const QString& f : features) {
+        auto* feat = new QLabel(pricing_bullet() + f, card);
+        feat->setObjectName("planFeature");
         feat->setWordWrap(true);
-        feat->setStyleSheet(QString("color: %1; font-size: 12px; background: transparent; %2")
-                                .arg(ui::colors::TEXT_SECONDARY())
-                                .arg(MF));
         vl->addWidget(feat);
+        vl->addSpacing(8);
     }
+    vl->addStretch(1);
+    vl->addSpacing(12);
 
-    vl->addStretch();
-
-    // ── Action button ────────────────────────────────────────────────────────
-    auto* btn = new QPushButton;
-    btn->setFixedHeight(26);
+    auto* btn = new QPushButton(card);
+    btn->setObjectName("planBtn");
     btn->setCursor(Qt::PointingHandCursor);
-
-    if (is_current) {
-        btn->setText(tr("ACTIVE"));
-        btn->setEnabled(false);
-        btn->setStyleSheet(QString("QPushButton { background: rgba(22,163,74,0.1); color: %1; "
-                                   "border: 1px solid %1; font-size: 11px; font-weight: 700; %2 }"
-                                   "QPushButton:disabled { color: %1; }")
-                               .arg(ui::colors::POSITIVE())
-                               .arg(MF));
-    } else if (plan.is_free) {
-        bool user_has_paid = auth_mgr.is_authenticated() && auth_mgr.session().has_paid_plan();
-        if (user_has_paid) {
+    QString note;
+    const QString plan_name = plan.name.isEmpty() ? plan.plan_id.toUpper() : plan.name.toUpper();
+    if (plan.is_free) {
+        if (user_paid) {
             btn->setText(tr("FREE TIER"));
-            btn->setEnabled(false);
-            btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; "
-                                       "border: 1px solid %3; font-size: 11px; font-weight: 700; %4 }")
-                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM())
-                                   .arg(MF));
+            set_plan_action(btn, PlanAction::Included);
         } else {
-            btn->setText(tr("CONTINUE FREE"));
-            btn->setStyleSheet(QString("QPushButton { background: %1; color: %2; "
-                                       "border: 1px solid %3; font-size: 11px; font-weight: 700; %4 }"
-                                       "QPushButton:hover { color: %5; background: %6; }")
-                                   .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM())
-                                   .arg(MF)
-                                   .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_HOVER()));
-            connect(btn, &QPushButton::clicked, this, &PricingScreen::navigate_dashboard);
+            btn->setText(tr("CONTINUE WITH FREE"));
+            set_plan_action(btn, PlanAction::ContinueFree);
+            connect(btn, &QPushButton::clicked, this, &PricingScreen::back_requested);
         }
+    } else if (is_current) {
+        btn->setText(tr("CURRENT PLAN"));
+        set_plan_action(btn, PlanAction::Current);
+        const QString expires = mgr.session().user_info.credits_expire_at.left(10);
+        if (!expires.isEmpty())
+            note = tr("Credits valid until %1").arg(expires);
     } else {
-        btn->setText(tr("SELECT PLAN"));
-        btn->setStyleSheet(
-            QString("QPushButton { background: rgba(217,119,6,0.1); color: %1; "
-                    "border: 1px solid %2; font-size: 11px; font-weight: 700; %3 }"
-                    "QPushButton:hover { background: %1; color: %4; }"
-                    "QPushButton:disabled { background: %5; color: %6; border-color: %7; }")
-                .arg(ui::colors::AMBER(), ui::colors::AMBER_DIM())
-                .arg(MF)
-                .arg(ui::colors::BG_BASE(), ui::colors::BG_RAISED(), ui::colors::TEXT_DIM(), ui::colors::BORDER_DIM()));
-        QString pid = plan.plan_id;
+        btn->setText(user_paid ? tr("SWITCH TO %1").arg(plan_name) : tr("UPGRADE TO %1").arg(plan_name));
+        set_plan_action(btn, PlanAction::Select);
+        note = tr("Secure checkout on fincept.in — opens in your browser");
+        const QString pid = plan.plan_id;
         connect(btn, &QPushButton::clicked, this, [this, pid]() { on_select_plan(pid); });
     }
-
+    btn->setProperty("idleText", btn->text());
     vl->addWidget(btn);
-
+    if (!note.isEmpty()) {
+        vl->addSpacing(8);
+        auto* note_lbl = new QLabel(note, card);
+        note_lbl->setObjectName("planNote");
+        note_lbl->setWordWrap(true);
+        vl->addWidget(note_lbl);
+    }
     return card;
 }
 
-// ── Payment ──────────────────────────────────────────────────────────────────
+QWidget* PricingScreen::build_enterprise_card() {
+    namespace ent = ui::enterprise;
+
+    auto* card = new QFrame(cards_host_);
+    card->setObjectName("planCard");
+    card->setProperty("variant", "enterprise");
+    card->setMinimumWidth(kPricingCardMinWidth);
+    card->setMaximumWidth(kPricingCardMaxWidth);
+    card->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+
+    auto* vl = new QVBoxLayout(card);
+    vl->setContentsMargins(22, 18, 22, 18);
+    vl->setSpacing(0);
+
+    auto* badge_row = new QHBoxLayout;
+    badge_row->setContentsMargins(0, 0, 0, 0);
+    auto* badge = new QLabel(tr("PRIVATE EDITION"), card);
+    badge->setObjectName("planBadge");
+    badge->setProperty("tone", "enterprise");
+    badge->setFixedHeight(20);
+    badge_row->addWidget(badge);
+    badge_row->addStretch();
+    vl->addLayout(badge_row);
+    vl->addSpacing(14);
+
+    auto* name = new QLabel(tr("ENTERPRISE"), card);
+    name->setObjectName("planName");
+    vl->addWidget(name);
+    vl->addSpacing(6);
+
+    auto* desc = new QLabel(tr("Fincept Terminal Enterprise — the private edition for funds, family offices and "
+                               "research desks."),
+                            card);
+    desc->setObjectName("planDesc");
+    desc->setWordWrap(true);
+    desc->setMinimumHeight(34);
+    desc->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    vl->addWidget(desc);
+    vl->addSpacing(12);
+
+    // No price on purpose: Enterprise prices live on the website, and this
+    // build ships monthly. The price slot links there instead.
+    auto* price_link = new QPushButton(tr("See plans & pricing ↗"), card);
+    price_link->setObjectName("planPriceLink");
+    price_link->setCursor(Qt::PointingHandCursor);
+    price_link->setMinimumHeight(36);
+    connect(price_link, &QPushButton::clicked, this,
+            []() { ui::enterprise::open_url(ui::enterprise::url_with_ref(ui::enterprise::pricing_url(), "pricing")); });
+    vl->addWidget(price_link, 0, Qt::AlignLeft);
+    vl->addSpacing(16);
+
+    auto* rule = new QFrame(card);
+    rule->setObjectName("planRule");
+    rule->setFixedHeight(1);
+    vl->addWidget(rule);
+    vl->addSpacing(14);
+
+    const QStringList features = {
+        tr("Proprietary and private datasets with deeper point-in-time history"),
+        tr("Multi-agent AI research — AI credits included, private dataroom"),
+        tr("41 modules across six research desks"),
+        tr("SSO/SAML, audit logs and role-based access"),
+        tr("SLA-backed priority support"),
+    };
+    for (const QString& f : features) {
+        auto* feat = new QLabel(pricing_bullet() + f, card);
+        feat->setObjectName("planFeature");
+        feat->setWordWrap(true);
+        vl->addWidget(feat);
+        vl->addSpacing(8);
+    }
+    vl->addStretch(1);
+    vl->addSpacing(12);
+
+    auto* primary = new QPushButton(tr("SEE ENTERPRISE ↗"), card);
+    primary->setObjectName("planEntPrimary");
+    primary->setCursor(Qt::PointingHandCursor);
+    primary->setToolTip(ent::site_url());
+    connect(primary, &QPushButton::clicked, this,
+            []() { ui::enterprise::open_url(ui::enterprise::url_with_ref(ui::enterprise::site_url(), "pricing")); });
+    vl->addWidget(primary);
+    vl->addSpacing(6);
+
+    auto* demo = new QPushButton(tr("BOOK A DEMO"), card);
+    demo->setObjectName("planEntSecondary");
+    demo->setCursor(Qt::PointingHandCursor);
+    demo->setToolTip(ent::demo_url());
+    connect(demo, &QPushButton::clicked, this, []() { ui::enterprise::open_url(ui::enterprise::demo_url()); });
+    vl->addWidget(demo);
+    vl->addSpacing(8);
+
+    auto* note = new QLabel(tr("Separate product · separate account"), card);
+    note->setObjectName("planNote");
+    note->setWordWrap(true);
+    vl->addWidget(note);
+    return card;
+}
+
+// ── Checkout ─────────────────────────────────────────────────────────────────
 
 void PricingScreen::on_select_plan(const QString& plan_id) {
-    const QString select_text = tr("SELECT PLAN");
-    const QString processing_text = tr("PROCESSING...");
-    for (auto* btn : cards_container_->findChildren<QPushButton*>()) {
-        if (btn->text() == select_text) {
-            btn->setEnabled(false);
-            btn->setText(processing_text);
+    const auto buttons = cards_host_->findChildren<QPushButton*>(QStringLiteral("planBtn"));
+    for (auto* btn : buttons) {
+        if (btn->property("planAction").toString() == QLatin1String("select")) {
+            set_plan_action(btn, PlanAction::Processing);
+            btn->setText(tr("OPENING CHECKOUT…"));
         }
     }
-    error_label_->hide();
+    clear_status();
 
     auth::AuthApi::instance().generate_checkout_token(
-        plan_id, [this, plan_id, processing_text, select_text](auth::ApiResponse r) {
-            for (auto* btn : cards_container_->findChildren<QPushButton*>()) {
-                if (btn->text() == processing_text) {
-                    btn->setEnabled(true);
-                    btn->setText(select_text);
+        plan_id,
+        [this, plan_id](auth::ApiResponse r) {
+            for (auto* btn : cards_host_->findChildren<QPushButton*>(QStringLiteral("planBtn"))) {
+                if (btn->property("planAction").toString() == QLatin1String("processing")) {
+                    set_plan_action(btn, PlanAction::Select);
+                    btn->setText(btn->property("idleText").toString());
                 }
             }
 
             if (!r.success) {
-                error_label_->setText(r.error.isEmpty() ? tr("Failed to generate checkout token") : r.error);
-                error_label_->show();
+                set_status(StatusTone::Error,
+                           r.error.isEmpty() ? tr("Could not start checkout. Please try again.") : r.error);
                 return;
             }
 
@@ -535,37 +784,27 @@ void PricingScreen::on_select_plan(const QString& plan_id) {
             if (payload.contains("data") && payload["data"].isObject())
                 payload = payload["data"].toObject();
 
-            QString token = payload["token"].toString();
+            const QString token = payload["token"].toString();
             if (token.isEmpty()) {
-                error_label_->setText(tr("No checkout token received from server"));
-                error_label_->show();
+                set_status(StatusTone::Error, tr("No checkout token received from the server. Please try again."));
                 return;
             }
 
-            QString url = QString("https://fincept.in/checkout?token=%1&plan=%2")
-                              .arg(QUrl::toPercentEncoding(token), QUrl::toPercentEncoding(plan_id));
+            // The website depends on this exact path and these parameters.
+            const QString url = QString("https://fincept.in/checkout?token=%1&plan=%2")
+                                    .arg(QUrl::toPercentEncoding(token), QUrl::toPercentEncoding(plan_id));
             QDesktopServices::openUrl(QUrl(url));
 
-            // Store plan before payment so we can detect changes
             awaiting_payment_ = true;
             awaiting_plan_id_ = plan_id;
             pre_payment_plan_ = auth::AuthManager::instance().session().account_type().toLower();
-
-            // Poll for the plan change. The interval used to be 1000ms despite
-            // the "every 5 seconds" intent, and each tick issued a fresh
-            // refresh_user_data() regardless of whether the previous one had
-            // come back — a request storm against the account endpoint.
             payment_poll_ticks_ = 0;
             payment_poll_in_flight_ = false;
-            if (!payment_poll_timer_) {
-                payment_poll_timer_ = new QTimer(this);
-                payment_poll_timer_->setInterval(kPaymentPollIntervalMs);
-                connect(payment_poll_timer_, &QTimer::timeout, this, &PricingScreen::poll_payment_status);
-            }
-            payment_poll_timer_->setInterval(kPaymentPollIntervalMs);
+            set_status(StatusTone::Info, tr("Checkout opened in your browser. Complete the payment there — this "
+                                            "screen updates automatically."));
             payment_poll_timer_->start();
 
-            // Also check on focus return for faster detection
+            // Also check the moment the user comes back from the browser.
             if (focus_connection_)
                 disconnect(focus_connection_);
             focus_connection_ =
@@ -592,130 +831,49 @@ void PricingScreen::stop_payment_polling() {
 void PricingScreen::poll_payment_status() {
     if (!awaiting_payment_)
         return;
-    // One request at a time — see payment_poll_in_flight_ in the header.
-    if (payment_poll_in_flight_)
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    // One request at a time; a reply that never arrives frees the slot after 30 s.
+    if (payment_poll_in_flight_ && now - payment_poll_issued_ms_ < 30000)
         return;
     if (++payment_poll_ticks_ > kMaxPaymentPolls) {
-        LOG_INFO("Pricing", "Payment polling gave up after the maximum window");
+        LOG_INFO(kPricingTag, "Payment polling gave up after the maximum window");
         stop_payment_polling();
+        set_status(StatusTone::Info, tr("Checkout not completed yet. Your plan updates as soon as the payment "
+                                        "clears — reopen Plans & Pricing any time to check."));
         return;
     }
-
     auto& auth = auth::AuthManager::instance();
-    // refresh_user_data() is a silent no-op for a logged-out session, so no
-    // auth_state_changed would ever clear payment_poll_in_flight_ and the poll
-    // would wedge. A logged-out user has nothing to poll for anyway.
+    // refresh_user_data() is a no-op for a signed-out session, so nothing
+    // would ever answer the poll — and there is nothing to poll for.
     if (!auth.is_authenticated()) {
         stop_payment_polling();
         return;
     }
     payment_poll_in_flight_ = true;
+    payment_poll_issued_ms_ = now;
+    auth.refresh_user_data(); // answered by on_session_changed()
+}
 
-    auto conn = std::make_shared<QMetaObject::Connection>();
-    *conn = connect(&auth, &auth::AuthManager::auth_state_changed, this, [this, conn]() {
-        disconnect(*conn);
-        payment_poll_in_flight_ = false;
+void PricingScreen::on_session_changed() {
+    payment_poll_in_flight_ = false;
+    if (!isVisible())
+        return;
+    update_account_line();
 
-        auto& mgr = auth::AuthManager::instance();
-
-        // Update user info label
-        if (mgr.is_authenticated()) {
-            auto& s = mgr.session();
-            QString info = (s.user_info.email.isEmpty() ? s.user_info.username : s.user_info.email);
-            info += QString("  |  %1 CR").arg(s.user_info.credit_balance, 0, 'f', 0);
-            user_info_label_->setText(info);
-        }
-
-        QString new_plan = mgr.session().account_type().toLower();
-
-        if (new_plan != pre_payment_plan_) {
-            // Plan changed — stop polling, re-render, show confetti
+    auto& mgr = auth::AuthManager::instance();
+    if (awaiting_payment_ && mgr.is_authenticated()) {
+        const QString plan = mgr.session().account_type().toLower();
+        if (plan != pre_payment_plan_) {
+            LOG_INFO(kPricingTag, QString("Plan changed after checkout (%1)").arg(awaiting_plan_id_));
             stop_payment_polling();
-
-            fetched_ = false;
-            fetch_plans();
-            update_footer();
-
-            confetti_->setGeometry(0, 0, width(), height());
+            set_status(StatusTone::Success,
+                       tr("Payment received — your %1 plan is active.").arg(mgr.session().plan_label()));
+            confetti_->setGeometry(rect());
+            confetti_->raise();
             confetti_->show_confetti();
         }
-    });
-
-    auth.refresh_user_data();
-}
-
-void PricingScreen::on_app_focus_returned() {
-    poll_payment_status();
-}
-
-void PricingScreen::hideEvent(QHideEvent* event) {
-    QWidget::hideEvent(event);
-    // P3: the poll timer must not survive the screen leaving the stack. It used
-    // to keep firing a network request every second for the rest of the session
-    // if the user navigated away from an abandoned checkout.
-    if (event && event->spontaneous())
-        return;
-    if (awaiting_payment_) {
-        LOG_INFO("Pricing", "Pricing screen hidden — stopping payment polling");
-        stop_payment_polling();
     }
-}
-
-// ── Footer ───────────────────────────────────────────────────────────────────
-
-void PricingScreen::update_footer() {
-    auto* fl = footer_widget_->layout();
-    if (!fl)
-        return;
-
-    while (fl->count() > 2) {
-        auto* item = fl->takeAt(2);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-
-    auto& auth_mgr = auth::AuthManager::instance();
-    bool user_has_paid = auth_mgr.is_authenticated() && auth_mgr.session().has_paid_plan();
-
-    if (user_has_paid) {
-        auto* back_btn = new QPushButton(tr("Back to Dashboard"));
-        back_btn->setCursor(Qt::PointingHandCursor);
-        back_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                        "font-size: 12px; %2 }"
-                                        "QPushButton:hover { color: %3; }")
-                                    .arg(ui::colors::TEXT_SECONDARY())
-                                    .arg(MF)
-                                    .arg(ui::colors::TEXT_PRIMARY()));
-        connect(back_btn, &QPushButton::clicked, this, &PricingScreen::navigate_dashboard);
-        fl->addWidget(back_btn);
-        static_cast<QVBoxLayout*>(fl)->setAlignment(back_btn, Qt::AlignCenter);
-    } else {
-        auto* row = new QWidget(this);
-        row->setStyleSheet("background: transparent;");
-        auto* hl = new QHBoxLayout(row);
-        hl->setContentsMargins(0, 0, 0, 0);
-        hl->setAlignment(Qt::AlignCenter);
-        hl->setSpacing(6);
-
-        auto* explore = new QLabel(tr("Want to explore first?"));
-        explore->setStyleSheet(
-            QString("color: %1; font-size: 12px; background: transparent; %2").arg(ui::colors::TEXT_DIM()).arg(MF));
-        hl->addWidget(explore);
-
-        auto* free_btn = new QPushButton(tr("Continue with Free Plan"));
-        free_btn->setCursor(Qt::PointingHandCursor);
-        free_btn->setStyleSheet(QString("QPushButton { color: %1; background: transparent; border: none; "
-                                        "font-size: 12px; %2 }"
-                                        "QPushButton:hover { color: %3; }")
-                                    .arg(ui::colors::TEXT_SECONDARY())
-                                    .arg(MF)
-                                    .arg(ui::colors::TEXT_PRIMARY()));
-        connect(free_btn, &QPushButton::clicked, this, &PricingScreen::navigate_dashboard);
-        hl->addWidget(free_btn);
-
-        fl->addWidget(row);
-    }
+    render_cards(); // no-op unless the plan changed
 }
 
 } // namespace fincept::screens

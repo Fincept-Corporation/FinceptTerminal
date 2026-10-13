@@ -6,6 +6,7 @@
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
+#include "trading/OrderValidator.h"
 
 #include <QDateTime>
 #include <QPointer>
@@ -231,6 +232,21 @@ void DataStreamManager::wire_stream_signals(AccountDataStream* stream) {
     connect(stream, &AccountDataStream::latest_trade_for_symbol, this, &DataStreamManager::latest_trade_for_symbol);
     connect(stream, &AccountDataStream::auctions_fetched, this, &DataStreamManager::auctions_fetched);
     connect(stream, &AccountDataStream::condition_codes_fetched, this, &DataStreamManager::condition_codes_fetched);
+
+    // Thread-safe mirror for the pre-trade risk gate. Orders are placed from executor
+    // threads, where these GUI-thread caches must not be read; OrderValidator keeps
+    // a mutex-guarded copy of funds / positions / last prices per account.
+    connect(stream, &AccountDataStream::funds_updated, this, [](const QString& account_id, const BrokerFunds& f) {
+        OrderValidator::note_funds(account_id, f.available_balance);
+    });
+    connect(stream, &AccountDataStream::positions_updated, this,
+            [](const QString& account_id, const QVector<BrokerPosition>& positions) {
+                OrderValidator::note_positions(account_id, positions);
+            });
+    connect(stream, &AccountDataStream::quote_updated, this,
+            [](const QString& account_id, const QString& symbol, const BrokerQuote& q) {
+                OrderValidator::note_quote(account_id, symbol, q.ltp);
+            });
 
     // Dual-fire: publish the same per-account data onto hub topics so
     // consumers subscribed to broker:<id>:<account>:<channel> see it.

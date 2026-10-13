@@ -41,12 +41,12 @@ namespace fincept::mcp::tools {
 
 namespace {
 
-static constexpr const char* TAG = "DashboardTools";
+static constexpr const char* kDashboardToolsTag = "DashboardTools";
 
 // Dashboard ops are fast (no I/O); 15s default covers worst-case template apply.
-static constexpr int kDefaultTimeoutMs = 15000;
+static constexpr int kDashboardToolsTimeoutMs = 15000;
 
-static constexpr const char* kTickerSymbolsKey = "ticker_bar_symbols";
+static constexpr const char* kDashboardTickerSymbolsKey = "ticker_bar_symbols";
 
 // ── Helpers: locate the live DashboardScreen / canvas / ticker ─────────
 
@@ -73,7 +73,14 @@ screens::DashboardScreen* find_dashboard_screen() {
 
 screens::DashboardCanvas* find_dashboard_canvas() {
     auto* ds = find_dashboard_screen();
-    return ds ? ds->findChild<screens::DashboardCanvas*>() : nullptr;
+    auto* canvas = ds ? ds->findChild<screens::DashboardCanvas*>() : nullptr;
+    // A restore / template switch builds tiles progressively (one per event
+    // loop turn). Tools inspect and address tiles by instance id, so finish
+    // any queued construction first — otherwise a just-restored tile reads as
+    // "not found".
+    if (canvas)
+        canvas->flush_pending_tiles();
+    return canvas;
 }
 
 screens::TickerBar* find_ticker_bar() {
@@ -178,7 +185,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "List every registered dashboard widget type with metadata (display name, category, "
                         "description, default size, min size).";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QJsonArray arr;
@@ -196,7 +203,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description =
             "List dashboard widgets in a single category (Markets, Research, Portfolio, Trading, Tools, Geopolitics).";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder().string("category", "Category name").required().length(1, 64).build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
@@ -214,7 +221,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.name = "get_dashboard_widget_meta";
         t.description = "Get a single widget's metadata by type_id.";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("type_id", "Widget type id (use list_dashboard_widgets)")
                              .required()
@@ -239,7 +246,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "List built-in dashboard templates (portfolio_manager, hedge_fund, crypto_trader, "
                         "equity_trader, macro_economist, geopolitics).";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QJsonArray arr;
@@ -260,7 +267,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.name = "get_current_dashboard_layout";
         t.description = "Get the live dashboard canvas layout (items + cols + row_h + margin).";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
@@ -281,7 +288,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("profile_name", "Profile name (default = 'default')")
                              .default_str("default")
@@ -300,9 +307,10 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
                 canvas->load_layout(r.value());
+                // Unknown widget types are dropped on load — report what is on screen.
                 resolve(ToolResult::ok("Layout loaded", QJsonObject{
                                                             {"profile_name", args["profile_name"].toString("default")},
-                                                            {"widget_count", static_cast<int>(r.value().items.size())},
+                                                            {"widget_count", canvas->tile_count()},
                                                         }));
             });
         };
@@ -315,7 +323,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Save the current live canvas layout under a profile name (upserts).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().string("profile_name", "Profile name").default_str("default").length(1, 64).build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
@@ -352,7 +360,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("template_id", "Template id (use list_dashboard_templates)")
                              .required()
@@ -397,7 +405,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.category = "dashboard";
         t.is_destructive = true;
         t.auth_required = AuthLevel::ExplicitConfirm;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().string("profile_name", "Profile name").default_str("default").length(1, 64).build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
@@ -421,7 +429,7 @@ std::vector<ToolDef> get_dashboard_tools() {
                         "{symbol: 'AAPL'} for stock_quote). Returns the new instance_id.";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("type_id", "Widget type id (use list_dashboard_widgets)")
                              .required()
@@ -454,61 +462,16 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
 
-                // Snapshot existing instance_ids so we can identify the new one.
-                QSet<QString> before;
-                for (const auto& it : canvas->current_layout().items)
-                    before.insert(it.instance_id);
-
-                canvas->add_widget(type_id);
-
-                // Diff to find the newly-added instance.
-                QString new_id;
-                auto after = canvas->current_layout();
-                for (const auto& it : after.items) {
-                    if (!before.contains(it.instance_id)) {
-                        new_id = it.instance_id;
-                        break;
-                    }
-                }
+                // Construct the widget with its config at the requested cell in
+                // one step. (This used to add a default tile, then load_layout()
+                // the whole dashboard — destroying and rebuilding every tile —
+                // just to apply one config / position.)
+                const QString new_id = canvas->add_widget_with(type_id, args["config"].toObject(), args["x"].toInt(-1),
+                                                               args["y"].toInt(-1), args["w"].toInt(0),
+                                                               args["h"].toInt(0));
                 if (new_id.isEmpty()) {
-                    resolve(ToolResult::fail("Widget add failed (no new instance detected)"));
+                    resolve(ToolResult::fail("Widget add failed — the widget could not be constructed"));
                     return;
-                }
-
-                // Apply optional cell overrides + config by mutating layout, then reload.
-                const QJsonObject cfg = args["config"].toObject();
-                const int x = args["x"].toInt(-1);
-                const int y = args["y"].toInt(-1);
-                const int w = args["w"].toInt(0);
-                const int h = args["h"].toInt(0);
-                const bool cell_override = (x >= 0 || y >= 0 || w > 0 || h > 0);
-
-                if (cell_override || !cfg.isEmpty()) {
-                    auto layout = canvas->current_layout();
-                    for (auto& it : layout.items) {
-                        if (it.instance_id != new_id)
-                            continue;
-                        if (x >= 0)
-                            it.cell.x = x;
-                        if (y >= 0)
-                            it.cell.y = y;
-                        if (w > 0)
-                            it.cell.w = std::max(w, it.cell.min_w);
-                        if (h > 0)
-                            it.cell.h = std::max(h, it.cell.min_h);
-                        if (!cfg.isEmpty())
-                            it.config = cfg;
-                        break;
-                    }
-                    canvas->load_layout(layout);
-
-                    // After load_layout, apply config to the live widget.
-                    if (!cfg.isEmpty()) {
-                        if (auto* tile = find_tile_by_instance_id(canvas, new_id)) {
-                            if (auto* w = tile->content_widget())
-                                w->apply_config(cfg);
-                        }
-                    }
                 }
 
                 resolve(ToolResult::ok("Widget added", QJsonObject{
@@ -526,7 +489,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Remove a widget from the live canvas by instance_id.";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("instance_id", "Widget instance UUID (from get_current_dashboard_layout)")
                              .required()
@@ -560,7 +523,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Move a widget to new grid coordinates (x, y).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("instance_id", "Widget instance UUID")
                              .required()
@@ -580,21 +543,11 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
                 const QString id = args["instance_id"].toString();
-                auto layout = canvas->current_layout();
-                bool found = false;
-                for (auto& it : layout.items) {
-                    if (it.instance_id != id)
-                        continue;
-                    it.cell.x = args["x"].toInt();
-                    it.cell.y = args["y"].toInt();
-                    found = true;
-                    break;
-                }
-                if (!found) {
+                // Moves only this tile (colliding tiles are pushed down) — no rebuild.
+                if (!canvas->set_item_cell(id, args["x"].toInt(), args["y"].toInt(), 0, 0)) {
                     resolve(ToolResult::fail("Widget instance not found"));
                     return;
                 }
-                canvas->load_layout(layout);
                 resolve(ToolResult::ok("Widget moved", QJsonObject{
                                                            {"instance_id", id},
                                                            {"x", args["x"].toInt()},
@@ -611,7 +564,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Resize a widget to new column-span (w) and row-span (h).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("instance_id", "Widget instance UUID")
                              .required()
@@ -631,21 +584,10 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
                 const QString id = args["instance_id"].toString();
-                auto layout = canvas->current_layout();
-                bool found = false;
-                for (auto& it : layout.items) {
-                    if (it.instance_id != id)
-                        continue;
-                    it.cell.w = std::max(args["w"].toInt(), it.cell.min_w);
-                    it.cell.h = std::max(args["h"].toInt(), it.cell.min_h);
-                    found = true;
-                    break;
-                }
-                if (!found) {
+                if (!canvas->set_item_cell(id, -1, -1, args["w"].toInt(), args["h"].toInt())) {
                     resolve(ToolResult::fail("Widget instance not found"));
                     return;
                 }
-                canvas->load_layout(layout);
                 resolve(ToolResult::ok("Widget resized", QJsonObject{
                                                              {"instance_id", id},
                                                              {"w", args["w"].toInt()},
@@ -665,7 +607,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.name = "get_dashboard_widget_config";
         t.description = "Read per-instance config of a widget (free-form JSON; shape is widget-type-specific).";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().string("instance_id", "Widget instance UUID").required().length(1, 64).build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
@@ -693,7 +635,7 @@ std::vector<ToolDef> get_dashboard_tools() {
                         "{category:'earnings'} for news_category, {broker:'zerodha'} for holdings).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema = ToolSchemaBuilder()
                              .string("instance_id", "Widget instance UUID")
                              .required()
@@ -715,17 +657,9 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
                 const QJsonObject cfg = args["config"].toObject();
-                tile->content_widget()->apply_config(cfg);
-
-                // Also persist into the layout's GridItem.config so save/load round-trips.
-                auto layout = canvas->current_layout();
-                for (auto& it : layout.items) {
-                    if (it.instance_id == id) {
-                        it.config = cfg;
-                        break;
-                    }
-                }
-                canvas->load_layout(layout);
+                // Applies to the live widget and stores it in the layout for the next
+                // save — without the full load_layout() rebuild this used to do.
+                canvas->set_item_config(id, cfg);
 
                 resolve(ToolResult::ok("Widget config applied", QJsonObject{
                                                                     {"instance_id", id},
@@ -742,7 +676,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Trigger one widget's refresh action (same as its title-bar refresh button).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().string("instance_id", "Widget instance UUID").required().length(1, 64).build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
@@ -771,7 +705,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Set the dashboard grid row height in pixels (compact mode uses 40, normal uses 60).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder().integer("row_height", "Row height in pixels").required().between(20, 200).build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
@@ -796,10 +730,11 @@ std::vector<ToolDef> get_dashboard_tools() {
     {
         ToolDef t;
         t.name = "refresh_all_dashboard_widgets";
-        t.description = "Trigger refresh on every widget in the live dashboard (the REFRESH ALL toolbar button).";
+        t.description = "Trigger refresh on every visible widget in the live dashboard (the REFRESH ALL toolbar "
+                        "button). Hidden tiles are skipped.";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
@@ -808,13 +743,19 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
                 int n = 0;
+                int skipped = 0;
                 for (auto* w : canvas->findChildren<screens::widgets::BaseWidget*>()) {
-                    if (w) {
-                        w->request_refresh();
-                        ++n;
+                    if (!w)
+                        continue;
+                    if (!w->isVisible()) {
+                        ++skipped;
+                        continue;
                     }
+                    w->request_refresh();
+                    ++n;
                 }
-                resolve(ToolResult::ok("Refresh dispatched", QJsonObject{{"widget_count", n}}));
+                resolve(ToolResult::ok("Refresh dispatched",
+                                       QJsonObject{{"widget_count", n}, {"skipped_hidden", skipped}}));
             });
         };
         tools.push_back(std::move(t));
@@ -826,7 +767,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Toggle the right-side market pulse panel's visibility.";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* ds = find_dashboard_screen();
@@ -853,7 +794,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Toggle compact mode (row height 40 vs 60 px).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* ds = find_dashboard_screen();
@@ -878,7 +819,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.name = "get_dashboard_stats";
         t.description = "Get dashboard runtime stats (widget count, grid cols/row_h, screen open).";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* canvas = find_dashboard_canvas();
@@ -908,7 +849,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.name = "get_dashboard_ticker_symbols";
         t.description = "Get the current ticker-bar symbol list.";
         t.category = "dashboard";
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 QStringList symbols;
@@ -916,7 +857,7 @@ std::vector<ToolDef> get_dashboard_tools() {
                     symbols = tb->symbols();
                 } else {
                     // Fall back to the persisted setting when dashboard not open.
-                    auto r = SettingsRepository::instance().get(kTickerSymbolsKey);
+                    auto r = SettingsRepository::instance().get(kDashboardTickerSymbolsKey);
                     if (r.is_ok())
                         symbols = r.value().split(',', Qt::SkipEmptyParts);
                 }
@@ -938,7 +879,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Replace the ticker-bar symbol list (comma-separated symbols, persisted across sessions).";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.input_schema =
             ToolSchemaBuilder()
                 .array("symbols", "Symbol list (e.g. ['SPY','QQQ','AAPL']); pass [] explicitly to clear the bar",
@@ -960,15 +901,16 @@ std::vector<ToolDef> get_dashboard_tools() {
                     return;
                 }
                 // Persist via the same SettingsRepository key the ticker bar uses.
-                auto r = SettingsRepository::instance().set(kTickerSymbolsKey, symbols.join(','), "dashboard");
+                auto r = SettingsRepository::instance().set(kDashboardTickerSymbolsKey, symbols.join(','), "dashboard");
                 if (r.is_err()) {
                     resolve(ToolResult::fail(QString::fromStdString(r.error())));
                     return;
                 }
 
-                // If the dashboard is open, push the change so it re-subscribes.
+                // If the dashboard is open, hand the bar its new list (it re-subscribes
+                // through symbols_changed). Already persisted above.
                 if (auto* tb = find_ticker_bar())
-                    emit tb->symbols_changed(symbols);
+                    tb->set_symbols(symbols, /*persist=*/false);
 
                 resolve(ToolResult::ok("Ticker symbols updated", QJsonObject{
                                                                      {"count", static_cast<int>(symbols.size())},
@@ -984,7 +926,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         t.description = "Force the ticker bar to re-fetch quotes for its current symbol list.";
         t.category = "dashboard";
         t.is_destructive = true;
-        t.default_timeout_ms = kDefaultTimeoutMs;
+        t.default_timeout_ms = kDashboardToolsTimeoutMs;
         t.async_handler = [](const QJsonObject&, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [](auto resolve) {
                 auto* tb = find_ticker_bar();
@@ -1001,7 +943,7 @@ std::vector<ToolDef> get_dashboard_tools() {
         tools.push_back(std::move(t));
     }
 
-    LOG_INFO(TAG, QString("Defined %1 dashboard tools").arg(tools.size()));
+    LOG_INFO(kDashboardToolsTag, QString("Defined %1 dashboard tools").arg(tools.size()));
     return tools;
 }
 

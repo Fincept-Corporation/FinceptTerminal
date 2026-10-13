@@ -60,7 +60,8 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
                          [key, on_change](const QString& text) { on_change(key, QJsonValue(text)); });
     } else if (param.type == "number") {
         auto* spin = new QDoubleSpinBox;
-        spin->setDecimals(4);
+        // 8 decimals: crypto quantities (0.00012 BTC) were rounded to 0.0001 / 0 at 4.
+        spin->setDecimals(8);
         spin->setRange(-1e12, 1e12);
         spin->setValue(current_value.toDouble(param.default_value.toDouble()));
         spin->setStyleSheet(QString("QDoubleSpinBox { %1 }"
@@ -92,7 +93,15 @@ QWidget* ParameterWidgetFactory::create(const ParamDef& param, const QJsonValue&
     } else if (param.type == "select") {
         auto* combo = new QComboBox;
         combo->addItems(param.options);
-        combo->setCurrentText(current_value.toString(param.default_value.toString()));
+        // A saved value that is not one of the options (an imported "LIVE", a broker
+        // that was renamed) used to leave the combo on its FIRST item while the node
+        // kept — and ran with — the hidden value. Show the real value instead.
+        const QString current_text = current_value.toVariant().toString().isEmpty()
+                                         ? param.default_value.toVariant().toString()
+                                         : current_value.toVariant().toString();
+        if (!current_text.isEmpty() && combo->findText(current_text) < 0)
+            combo->addItem(current_text);
+        combo->setCurrentText(current_text);
         combo->setStyleSheet(QString("QComboBox { %1 }"
                                      "QComboBox::drop-down {"
                                      "  background: %2; border: 1px solid %2; width: 18px;"

@@ -5,12 +5,25 @@
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
+#include <QStyle>
 
 #include <cmath>
 
 namespace {
 inline const QStringList kPerfSymbols = {"^GSPC", "^IXIC", "^DJI", "^RUT", "^VIX", "GC=F"};
+
+// A value label's colour is a "tone" property matched in the rows host's
+// stylesheet. populate() runs on every hub delivery burst and used to call
+// setStyleSheet() on every row (a CSS re-parse each); the colour only changes
+// when the tone does, so re-polish only then (CLAUDE.md P7).
+void perf_set_tone(QLabel* label, const char* tone) {
+    if (label->property("tone").toString() == QLatin1String(tone))
+        return;
+    label->setProperty("tone", QString::fromLatin1(tone));
+    label->style()->unpolish(label);
+    label->style()->polish(label);
 }
+} // namespace
 
 namespace fincept::screens::widgets {
 
@@ -18,31 +31,42 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
     : BaseWidget(tr("PERFORMANCE TRACKER"), parent, ui::colors::POSITIVE()) {
     auto* vl = content_layout();
 
+    // One host carries the stylesheet for every row — see apply_styles().
+    rows_host_ = new QWidget(this);
+    rows_host_->setObjectName("perfRows");
+    auto* host_layout = new QVBoxLayout(rows_host_);
+    host_layout->setContentsMargins(0, 0, 0, 0);
+    host_layout->setSpacing(vl->spacing());
+
     // We'll show metrics derived from real benchmark ETF data
     QStringList labels = {
         tr("S&P 500 Daily"),         tr("NASDAQ Daily"),         tr("DOW Daily"), tr("Russell 2000 Daily"),
         tr("S&P 500 vs DOW Spread"), tr("NASDAQ vs S&P Spread"), tr("VIX Level"), tr("Gold Daily")};
 
     for (const auto& label : labels) {
-        auto* row = new QWidget(this);
+        auto* row = new QWidget(rows_host_);
+        row->setObjectName("perfRow");
         auto* rl = new QHBoxLayout(row);
         rl->setContentsMargins(8, 4, 8, 4);
 
         MetricRow mr;
-        mr.row_widget = row;
         mr.label = new QLabel(label);
+        mr.label->setObjectName("perfMetric");
         rl->addWidget(mr.label);
         rl->addStretch();
 
         mr.period = new QLabel(tr("TODAY"));
+        mr.period->setObjectName("perfPeriod");
         rl->addWidget(mr.period);
 
         mr.value = new QLabel("--");
+        mr.value->setObjectName("perfValue");
         rl->addWidget(mr.value);
 
         rows_.append(mr);
-        vl->addWidget(row);
+        host_layout->addWidget(row);
     }
+    vl->addWidget(rows_host_);
     vl->addStretch();
 
     connect(this, &BaseWidget::refresh_requested, this, &PerformanceWidget::refresh_data);
@@ -52,15 +76,20 @@ PerformanceWidget::PerformanceWidget(QWidget* parent)
 }
 
 void PerformanceWidget::apply_styles() {
-    for (const auto& mr : rows_) {
-        mr.row_widget->setStyleSheet(QString("border-bottom: 1px solid %1;").arg(ui::colors::BORDER_DIM()));
-        mr.label->setStyleSheet(
-            QString("color: %1; font-size: 11px; background: transparent;").arg(ui::colors::TEXT_SECONDARY()));
-        mr.period->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-        mr.value->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;")
-                                    .arg(ui::colors::TEXT_PRIMARY()));
-    }
+    // Each row used to carry a selector-less "border-bottom" sheet, which Qt
+    // applies to the row AND every label inside it — the second selector keeps
+    // that look. A value label with no "tone" yet ("--") stays TEXT_PRIMARY.
+    rows_host_->setStyleSheet(
+        QString("QWidget#perfRow{border-bottom:1px solid %1;}"
+                "QWidget#perfRow QLabel{border-bottom:1px solid %1;}"
+                "QLabel#perfMetric{color:%2;font-size:11px;background:transparent;}"
+                "QLabel#perfPeriod{color:%3;font-size:9px;background:transparent;}"
+                "QLabel#perfValue{color:%4;font-size:11px;font-weight:bold;background:transparent;}"
+                "QLabel#perfValue[tone=\"pos\"]{color:%5;}"
+                "QLabel#perfValue[tone=\"neg\"]{color:%6;}"
+                "QLabel#perfValue[tone=\"warn\"]{color:%7;}")
+            .arg(ui::colors::BORDER_DIM(), ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_TERTIARY(),
+                 ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(), ui::colors::NEGATIVE(), ui::colors::WARNING()));
 }
 
 void PerformanceWidget::on_theme_changed() {
@@ -133,11 +162,7 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
         if (idx >= rows_.size())
             return;
         rows_[idx].value->setText(fmt_pct(val));
-        QString color = val > 0   ? ui::colors::POSITIVE()
-                        : val < 0 ? ui::colors::NEGATIVE()
-                                  : ui::colors::TEXT_PRIMARY();
-        rows_[idx].value->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(color));
+        perf_set_tone(rows_[idx].value, val > 0 ? "pos" : (val < 0 ? "neg" : "flat"));
     };
 
     // S&P 500 daily
@@ -164,11 +189,7 @@ void PerformanceWidget::populate(const QVector<services::QuoteData>& quotes) {
         double vix = map["^VIX"]->price;
         if (6 < rows_.size()) {
             rows_[6].value->setText(QString::number(vix, 'f', 2));
-            QString color = vix > 25   ? ui::colors::NEGATIVE()
-                            : vix > 18 ? ui::colors::WARNING()
-                                       : ui::colors::POSITIVE();
-            rows_[6].value->setStyleSheet(
-                QString("color: %1; font-size: 11px; font-weight: bold; background: transparent;").arg(color));
+            perf_set_tone(rows_[6].value, vix > 25 ? "neg" : (vix > 18 ? "warn" : "pos"));
         }
     }
 

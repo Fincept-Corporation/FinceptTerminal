@@ -1,16 +1,18 @@
 // src/screens/portfolio/views/PerformanceRiskView.cpp
 #include "screens/portfolio/views/PerformanceRiskView.h"
 
-#include "storage/secure/SecureStorage.h"
+#include "screens/portfolio/PortfolioCsv.h"
 #include "ui/theme/Theme.h"
 
 #include <QAreaSeries>
 #include <QChart>
+#include <QDate>
 #include <QDateTimeAxis>
 #include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLineSeries>
+#include <QMessageBox>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QValueAxis>
@@ -61,6 +63,21 @@ void PerformanceRiskView::build_ui() {
         period_btns_.append(btn);
     }
 
+    // Flow-adjusted (TWR) series → CSV: date, NAV, net flow, period and
+    // cumulative return.
+    export_btn_ = new QPushButton(tr("EXPORT CSV"));
+    export_btn_->setFixedHeight(20);
+    export_btn_->setCursor(Qt::PointingHandCursor);
+    export_btn_->setToolTip(tr("Export the time-weighted return series (date, NAV, net flow, period and "
+                               "cumulative return) as CSV"));
+    export_btn_->setStyleSheet(QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
+                                       "  font-size:9px; font-weight:700; padding:0 8px; }"
+                                       "QPushButton:hover { color:%3; border-color:%3; }")
+                                   .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::AMBER()));
+    connect(export_btn_, &QPushButton::clicked, this, &PerformanceRiskView::export_csv);
+    period_bar->addSpacing(8);
+    period_bar->addWidget(export_btn_);
+
     layout->addLayout(period_bar);
 
     // ── Chart ─────────────────────────────────────────────────────────────────
@@ -89,13 +106,12 @@ void PerformanceRiskView::build_ui() {
                                        .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE()));
     layout->addWidget(metrics_header_);
 
-    // Shown only when no FRED API key is configured — Sharpe/Sortino then use a
-    // flat 4% risk-free rate instead of the live 10-year Treasury yield.
+    // What the numbers are: TWR window, risk-free rate and its source, and
+    // whether vol/beta/VaR are ex-ante (current weights) or realised.
     rf_hint_ = new QLabel;
     rf_hint_->setWordWrap(true);
     rf_hint_->setStyleSheet(
-        QString("color:%1; font-size:9px; padding:2px 12px; background:transparent;").arg(ui::colors::WARNING()));
-    rf_hint_->setVisible(false);
+        QString("color:%1; font-size:9px; padding:2px 12px; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(rf_hint_);
 
     auto* cards_layout = new QGridLayout;
@@ -107,12 +123,12 @@ void PerformanceRiskView::build_ui() {
     sortino_card_ =
         add_metric_card(cards_layout, tr("SORTINO RATIO"), tr("Downside risk-adjusted return"), ui::colors::CYAN);
     beta_card_ =
-        add_metric_card(cards_layout, tr("BETA"), tr("Sensitivity vs SPY (snapshot regression)"), ui::colors::WARNING);
+        add_metric_card(cards_layout, tr("BETA"), tr("Sensitivity vs the benchmark"), ui::colors::WARNING);
     alpha_card_ =
         add_metric_card(cards_layout, tr("ALPHA"), tr("Jensen's alpha vs benchmark (CAPM)"), ui::colors::POSITIVE);
     vol_card_ = add_metric_card(cards_layout, tr("VOLATILITY"), tr("Annualised from daily returns"), ui::colors::AMBER);
     drawdown_card_ =
-        add_metric_card(cards_layout, tr("MAX DRAWDOWN"), tr("Peak-to-trough from snapshots"), ui::colors::NEGATIVE);
+        add_metric_card(cards_layout, tr("MAX DRAWDOWN"), tr("Peak-to-trough, time-weighted"), ui::colors::NEGATIVE);
     var_card_ =
         add_metric_card(cards_layout, tr("VALUE AT RISK (95%)"), tr("1-day historical VaR"), ui::colors::NEGATIVE);
     cvar_card_ =
@@ -180,15 +196,41 @@ void PerformanceRiskView::set_metrics(const portfolio::ComputedMetrics& metrics)
 void PerformanceRiskView::update_rf_hint() {
     if (!rf_hint_)
         return;
-    // Sharpe/Sortino use the live 10-year Treasury yield from FRED when a key is
-    // configured; otherwise they fall back to a flat 4%. Surface that so the
-    // numbers aren't silently approximate.
-    const auto key = fincept::SecureStorage::instance().retrieve("FRED_API_KEY");
-    const bool have_key = key.is_ok() && !key.value().trimmed().isEmpty();
-    rf_hint_->setVisible(!have_key);
-    if (!have_key)
-        rf_hint_->setText(tr("⚠ Using a default 4% risk-free rate for Sharpe/Sortino. "
-                             "Add a free FRED API key in Settings → API Credentials for the live Treasury yield."));
+    QString text = tr("Sharpe / Sortino / alpha / max drawdown: realised time-weighted returns (buys and sells are "
+                      "treated as capital flows, not performance)");
+    if (metrics_.perf_observations > 0)
+        text += tr(", %1 periods %2 \u2192 %3").arg(metrics_.perf_observations).arg(metrics_.perf_start, metrics_.perf_end);
+    if (metrics_.perf_excluded > 0)
+        text += tr(" (%1 implausible period(s) excluded \u2014 likely unrecorded deposits/withdrawals)")
+                    .arg(metrics_.perf_excluded);
+    text += tr(". Risk-free %1% \u2014 %2.")
+                .arg(QString::number(metrics_.risk_free_rate * 100.0, 'f', 2), metrics_.risk_free_source);
+    text += metrics_.risk_ex_ante
+                ? tr(" Volatility / beta / VaR: ex-ante, current weights \u00d7 %1 trailing daily returns.")
+                      .arg(metrics_.risk_observations)
+                : tr(" Volatility / VaR: realised series (price history not loaded yet).");
+    rf_hint_->setText(text);
+}
+
+void PerformanceRiskView::export_csv() {
+    if (metrics_.twr_series.isEmpty()) {
+        QMessageBox::information(this, tr("Export CSV"), tr("No performance history to export yet."));
+        return;
+    }
+    QVector<QStringList> rows;
+    rows.reserve(metrics_.twr_series.size());
+    for (const auto& p : metrics_.twr_series) {
+        rows.append({p.date, portfolio_csv::num(p.nav, 2), portfolio_csv::num(p.net_flow, 2),
+                     p.valid ? portfolio_csv::num(p.period_return * 100.0, 4) : QString(),
+                     portfolio_csv::num(p.cumulative * 100.0, 4), p.valid ? QStringLiteral("1") : QStringLiteral("0")});
+    }
+    const QString name = QStringLiteral("%1_performance_%2.csv")
+                             .arg(summary_.portfolio.name.isEmpty() ? QStringLiteral("portfolio") : summary_.portfolio.name,
+                                  QDate::currentDate().toString(Qt::ISODate));
+    portfolio_csv::save(this, name,
+                        {"date", "nav_" + currency_, "net_flow_" + currency_, "period_return_pct",
+                         "cumulative_twr_pct", "included"},
+                        rows);
 }
 
 void PerformanceRiskView::changeEvent(QEvent* event) {
@@ -198,6 +240,8 @@ void PerformanceRiskView::changeEvent(QEvent* event) {
 }
 
 void PerformanceRiskView::retranslateUi() {
+    if (export_btn_)
+        export_btn_->setText(tr("EXPORT CSV"));
     if (chart_title_)
         chart_title_->setText(tr("NAV PERFORMANCE (FROM SNAPSHOTS)"));
     if (metrics_header_)
@@ -216,7 +260,7 @@ void PerformanceRiskView::retranslateUi() {
     if (beta_card_.title)
         beta_card_.title->setText(tr("BETA"));
     if (beta_card_.desc)
-        beta_card_.desc->setText(tr("Sensitivity vs SPY (snapshot regression)"));
+        beta_card_.desc->setText(tr("Sensitivity vs the benchmark"));
     if (alpha_card_.title)
         alpha_card_.title->setText(tr("ALPHA"));
     if (alpha_card_.desc)
@@ -228,7 +272,7 @@ void PerformanceRiskView::retranslateUi() {
     if (drawdown_card_.title)
         drawdown_card_.title->setText(tr("MAX DRAWDOWN"));
     if (drawdown_card_.desc)
-        drawdown_card_.desc->setText(tr("Peak-to-trough from snapshots"));
+        drawdown_card_.desc->setText(tr("Peak-to-trough, time-weighted"));
     if (var_card_.title)
         var_card_.title->setText(tr("VALUE AT RISK (95%)"));
     if (var_card_.desc)
@@ -310,22 +354,19 @@ void PerformanceRiskView::update_chart() {
         min_val = std::min(min_val, last_val);
         max_val = std::max(max_val, last_val);
     } else {
-        // Insufficient snapshot history (backfill not yet complete): draw an
-        // honest straight segment connecting the two real values we do know —
-        // cost basis at acquisition and current market value today. No
-        // fabricated intermediate movement.
-        QDateTime now = QDateTime::currentDateTime();
-        qint64 start_ms = now.addDays(-30).toMSecsSinceEpoch();
-        qint64 now_ms = now.toMSecsSinceEpoch();
-        line->append(start_ms, first_val);
-        upper->append(start_ms, first_val);
-        lower->append(start_ms, first_val);
-        line->append(now_ms, last_val);
-        upper->append(now_ms, last_val);
-        lower->append(now_ms, first_val);
-        min_val = std::min({min_val, first_val, last_val});
-        max_val = std::max({max_val, first_val, last_val});
+        // Not enough history in this window. The old fallback drew a straight
+        // line from cost basis "30 days ago" to today's value — a made-up date
+        // and a made-up path. Say so instead.
+        delete line;
+        delete upper;
+        delete lower;
+        chart->setTitle(tr("Not enough NAV history for %1 yet \u2014 history is rebuilt from your transactions "
+                           "in the background.")
+                            .arg(current_period_));
+        chart->setTitleBrush(QColor(ui::colors::TEXT_TERTIARY()));
+        return;
     }
+    chart->setTitle(QString());
 
     bool up = last_val >= first_val;
     QColor lc = up ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE());
@@ -410,6 +451,15 @@ void PerformanceRiskView::update_metrics() {
     } else {
         set_na(sortino_card_);
     }
+
+    // Descriptions carry the actual benchmark and basis.
+    if (beta_card_.desc)
+        beta_card_.desc->setText(metrics_.risk_ex_ante ? tr("vs %1, ex-ante (current weights)").arg(metrics_.benchmark_symbol)
+                                                       : tr("vs %1, realised").arg(metrics_.benchmark_symbol));
+    if (alpha_card_.desc)
+        alpha_card_.desc->setText(tr("Jensen's alpha vs %1, annualised").arg(metrics_.benchmark_symbol));
+    if (vol_card_.desc)
+        vol_card_.desc->setText(metrics_.risk_ex_ante ? tr("Annualised, ex-ante") : tr("Annualised, realised TWR"));
 
     // ── Beta (real OLS vs benchmark) ──────────────────────────────────────────
     if (metrics_.beta) {

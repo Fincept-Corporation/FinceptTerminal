@@ -46,10 +46,16 @@ class DBnomicsService : public QObject, public fincept::datahub::Producer {
 
   signals:
     void providers_loaded(QVector<DbnProvider> providers);
-    void datasets_loaded(QVector<DbnDataset> datasets, DbnPagination page, bool append);
-    void series_loaded(QVector<DbnSeriesInfo> series, DbnPagination page, bool append);
+    /// `provider_code` / `dataset_code` / `query` identify the request: these signals are broadcast,
+    /// and a slow answer for a previous selection must not be shown under the current one.
+    void datasets_loaded(const QString& provider_code, QVector<DbnDataset> datasets, DbnPagination page, bool append);
+    void series_loaded(const QString& provider_code, const QString& dataset_code, const QString& query,
+                       QVector<DbnSeriesInfo> series, DbnPagination page, bool append);
     void observations_loaded(DbnDataPoint data);
-    void search_results_loaded(QVector<DbnSearchResult> results, DbnPagination page, bool append);
+    /// A failed observation fetch, with the series it was for ("PROV/DS/CODE").
+    void observations_failed(const QString& series_id, const QString& message);
+    void search_results_loaded(const QString& query, QVector<DbnSearchResult> results, DbnPagination page,
+                               bool append);
     void error_occurred(const QString& context, const QString& message);
 
   private:

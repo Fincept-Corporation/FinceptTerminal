@@ -12,8 +12,8 @@ namespace fincept::ui {
 
 class PushpinBar;
 
-/// Combined toolbar: File/Navigate/View/Help menus + branding + clock + user info + logout.
-/// Replaces both ToolBar and NavigationBar in a single row.
+/// Combined toolbar: File/Navigate/View/Help menus + branding + clock + user
+/// info (credits, plan badge → Plans & Pricing) + ENTERPRISE + chat + logout.
 ///
 /// Internationalised: all menus and labels flow through tr(). Menus are
 /// rebuilt on QEvent::LanguageChange so action labels pick up the new
@@ -55,8 +55,10 @@ class ToolBar : public QWidget {
     QLabel* branding_label_ = nullptr;
     QLabel* live_dot_ = nullptr;
     QLabel* live_label_ = nullptr;
+    /// Plan badge ("FREE" / "PRO" / legacy tier) → Plans & Pricing. Carries a
+    /// "tier" property (free / paid) that the stylesheet outlines for free accounts.
     QPushButton* plan_btn_ = nullptr;
-    /// Always-visible CTA for Fincept Terminal Enterprise (the private edition).
+    /// Always-visible ENTERPRISE CTA for Fincept Terminal Enterprise (the private edition).
     QPushButton* upgrade_btn_ = nullptr;
     QPushButton* chat_mode_btn_ = nullptr;
     QPushButton* logout_btn_ = nullptr;

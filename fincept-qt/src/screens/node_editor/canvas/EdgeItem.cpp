@@ -123,10 +123,4 @@ void EdgeItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     event->accept();
 }
 
-QVariant EdgeItem::itemChange(GraphicsItemChange change, const QVariant& value) {
-    if (change == ItemSelectedHasChanged && value.toBool())
-        emit edge_selected(id_);
-    return QGraphicsPathItem::itemChange(change, value);
-}
-
 } // namespace fincept::workflow

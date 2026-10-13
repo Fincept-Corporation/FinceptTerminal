@@ -2,7 +2,8 @@
 //
 // Two entry points:
 //   - do_tool_loop: structured OpenAI-compatible tool-call follow-up loop
-//     (handles up to 15 reasoning rounds with parallel tool execution).
+//     (bounded by detail::ToolLoopBudget — rounds AND wall-clock — with
+//     parallel tool execution; emits a completion record per call).
 //   - try_extract_and_execute_text_tool_calls: detects XML/text tool calls
 //     emitted by models that don't support structured tool_calls (minimax,
 //     some OpenRouter models). Executes them and asks the LLM to summarise.
@@ -15,7 +16,9 @@
 #include "services/llm/LlmContentExtractors.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "services/llm/LlmService.h"
+#include "services/llm/LlmToolActivity.h"
 
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -29,11 +32,29 @@ namespace fincept::ai_chat {
 
 namespace {
 constexpr const char* kLlmToolLoopTag = "LlmService";
+
+// Every round of a tool loop is billed: the whole transcript is re-posted each
+// time. Reporting only the final round's usage (the old behaviour) under-counted
+// a 10-round turn by roughly 10x in the chat's token counter.
+void llm_tool_loop_add_usage(LlmResponse& total, const LlmResponse& round) {
+    total.prompt_tokens += round.prompt_tokens;
+    total.completion_tokens += round.completion_tokens;
+    total.total_tokens += round.total_tokens > 0 ? round.total_tokens : round.prompt_tokens + round.completion_tokens;
+}
 } // namespace
+
+void emit_tool_done(const QString& display, const QJsonObject& args, const mcp::ToolResult& tr, qint64 elapsed_ms,
+                    bool parallel) {
+    detail::emit_progress(tool_stream_prefix() +
+                          encode_tool_done(make_tool_done(detail::tool_progress_label(display, args), tr, elapsed_ms,
+                                                          parallel)) +
+                          QStringLiteral("\n"));
+}
 
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
                                      const QMap<QString, QString>& headers, QSet<QString> activated_tools) {
     LlmResponse resp;
+    LlmResponse usage; // summed over every round of this loop
     // Bounded, LRU-evicting view over the discovered-tool set — see
     // ActivationTracker for why an unbounded set defeats Tier-0.
     detail::ActivationTracker activated(activated_tools);
@@ -82,6 +103,11 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
             return resp;
         }
         QJsonObject rj = doc.object();
+        {
+            LlmResponse round_usage;
+            parse_usage(round_usage, rj, provider_);
+            llm_tool_loop_add_usage(usage, round_usage);
+        }
 
         QJsonArray choices = rj["choices"].toArray();
         if (choices.isEmpty()) {
@@ -130,7 +156,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
             // allow_defer is set inside execute_tool_calls: this is the one call
             // site that knows about the job_* tools, so it is the one allowed to
             // receive a receipt instead of a result for a long-running tool.
+            QElapsedTimer round_clock;
+            round_clock.start();
             const auto results = detail::execute_tool_calls(calls);
+            const qint64 round_ms = round_clock.elapsed();
             for (std::size_t k = 0; k < calls.size(); ++k) {
                 const auto& c = calls[k];
                 const auto& tr = results[k];
@@ -138,6 +167,9 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                          QString("TOOL LOOP r%1: %2 -> %3 (msg=%4 err=%5)")
                              .arg(round)
                              .arg(c.wire_name, tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
+                // Completion record, in the model's order like the start lines.
+                // A multi-call round reports its wall time (calls overlap).
+                emit_tool_done(c.display, c.args, tr, round_ms, calls.size() > 1);
                 // If this was a discovery call (tool_list / tool_describe), declare
                 // what it surfaced so the model can actually call it next round.
                 // Applied in the model's order so the activation LRU evicts the
@@ -152,7 +184,9 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
 
         // Final text response
         resp.content = strip_think_blocks(extract_openai_message_text(msg));
-        parse_usage(resp, rj, provider_);
+        resp.prompt_tokens = usage.prompt_tokens;
+        resp.completion_tokens = usage.completion_tokens;
+        resp.total_tokens = usage.total_tokens;
         resp.success = !resp.content.isEmpty();
         // An empty final turn used to come back as a failure with NO message, which
         // the Quick Chat bubble rendered as a bare "Error: ".
@@ -182,8 +216,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 }
             }
             auto text_result = try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
-            if (text_result.has_value() && (text_result->success || text_result->cancelled))
+            if (text_result.has_value() && (text_result->success || text_result->cancelled)) {
+                llm_tool_loop_add_usage(*text_result, usage);
                 return text_result.value();
+            }
         }
         return resp;
     }
@@ -224,7 +260,12 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 if (!choices.isEmpty()) {
                     QJsonObject msg = choices[0].toObject()["message"].toObject();
                     resp.content = strip_think_blocks(extract_openai_message_text(msg));
-                    parse_usage(resp, rj, provider_);
+                    LlmResponse round_usage;
+                    parse_usage(round_usage, rj, provider_);
+                    llm_tool_loop_add_usage(usage, round_usage);
+                    resp.prompt_tokens = usage.prompt_tokens;
+                    resp.completion_tokens = usage.completion_tokens;
+                    resp.total_tokens = usage.total_tokens;
                     resp.success = !resp.content.isEmpty();
                     LOG_INFO(kLlmToolLoopTag,
                              QString("TOOL LOOP: summary fallback produced %1 chars").arg(resp.content.length()));
@@ -247,8 +288,10 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                         }
                         auto text_result =
                             try_extract_and_execute_text_tool_calls(resp.content, user_msg, url, headers);
-                        if (text_result.has_value() && (text_result->success || text_result->cancelled))
+                        if (text_result.has_value() && (text_result->success || text_result->cancelled)) {
+                            llm_tool_loop_add_usage(*text_result, usage);
                             return text_result.value();
+                        }
                     }
                     if (resp.success)
                         return resp;
@@ -330,7 +373,10 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         QString display = (sep_disp >= 0) ? tc.name.mid(sep_disp + 2) : tc.name;
         display.replace(QStringLiteral("-dot-"), QStringLiteral("."));
         detail::emit_tool_progress(display, tc.args);
+        QElapsedTimer call_clock;
+        call_clock.start();
         auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
+        emit_tool_done(display, tc.args, tr, call_clock.elapsed());
 
         // Shaped rather than clipped at a byte offset. Two reasons: `.left(4000)`
         // cut the JSON mid-token, leaving the model to interpret a malformed
@@ -401,17 +447,9 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         follow_body["generationConfig"] = QJsonObject{{"maxOutputTokens", resolved_max_tokens()}};
         if (!system_prompt_.isEmpty())
             follow_body["systemInstruction"] = QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
-    } else if (provider_ == "fincept") {
-        // /research/chat uses messages array
-        QJsonArray msgs;
-        if (!system_prompt_.isEmpty())
-            msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
-        msgs.append(QJsonObject{{"role", "user"}, {"content", follow_prompt}});
-        follow_body["messages"] = msgs;
-        if (!model_.isEmpty() && model_ != "fincept-llm")
-            follow_body["model"] = model_;
     } else {
-        // OpenAI-compatible
+        // OpenAI-compatible. (Fincept never reaches this function: do_request
+        // hands it to fincept_async_request, which runs its own text-tool loop.)
         QJsonArray msgs;
         if (!system_prompt_.isEmpty())
             msgs.append(QJsonObject{{"role", "system"}, {"content", system_prompt_}});
@@ -450,12 +488,6 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         const QJsonArray cands = fu_rj["candidates"].toArray();
         if (!cands.isEmpty())
             resp.content = extract_gemini_parts_text(cands[0].toObject()["content"].toObject()["parts"].toArray());
-    } else if (provider_ == "fincept") {
-        // /research/chat: {"success":true,"data":{"choices":[{"message":{"content":"..."}}]}}
-        QJsonObject data = fu_rj.contains("data") ? fu_rj["data"].toObject() : fu_rj;
-        QJsonArray fu_choices = data["choices"].toArray();
-        if (!fu_choices.isEmpty())
-            resp.content = extract_openai_message_text(fu_choices[0].toObject()["message"].toObject());
     } else {
         QJsonArray choices = fu_rj["choices"].toArray();
         if (!choices.isEmpty())

@@ -30,6 +30,8 @@ class PortfolioBlotter : public QWidget {
     /// Show only rows whose symbol is in @p symbols. Empty list = show all.
     void set_sector_filter(const QStringList& symbols);
     void refresh_theme();
+    /// Save every position in the current (filtered, sorted) view as CSV.
+    void export_csv();
     /// Tell the blotter which broker account (if any) backs the portfolio so it
     /// can overlay live broker ticks. Safe to call repeatedly and with an empty
     /// id (= unlinked portfolio); the id is remembered across re-subscriptions.

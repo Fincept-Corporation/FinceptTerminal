@@ -27,10 +27,7 @@ NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def) {
 
     // Wire signals
     connect(item, &NodeItem::node_selected, this, &NodeScene::node_selection_changed);
-    connect(item, &NodeItem::node_moved, this, [this](const QString& id, double x, double y) {
-        adjust_edges_for_node(id);
-        emit node_position_changed(id, x, y);
-    });
+    connect(item, &NodeItem::node_moved, this, [this](const QString& id) { adjust_edges_for_node(id); });
     // Deletes/moves are announced, not applied: NodeEditorScreen wraps them in
     // QUndoCommands so Ctrl+Z can put the node (and its wiring) back.
     connect(item, &NodeItem::delete_requested, this, &NodeScene::node_delete_requested);
@@ -47,7 +44,6 @@ NodeItem* NodeScene::add_node(const NodeDef& def, const NodeTypeDef& type_def) {
         connect(port, &PortItem::connection_started, this, &NodeScene::start_temp_edge);
     }
 
-    emit node_added(def.id);
     LOG_INFO("NodeEditor", QString("Added node: %1 (%2)").arg(def.name, def.type));
     return item;
 }
@@ -67,10 +63,7 @@ EdgeItem* NodeScene::add_edge(const EdgeDef& def) {
     addItem(edge);
     edges_.insert(def.id, edge);
 
-    connect(edge, &EdgeItem::edge_selected, this, [](const QString& id) { Q_UNUSED(id); });
     connect(edge, &EdgeItem::delete_requested, this, &NodeScene::edge_delete_requested);
-
-    emit edge_added(def.id);
     return edge;
 }
 
@@ -94,8 +87,6 @@ void NodeScene::remove_node(const QString& node_id) {
     nodes_.remove(node_id);
     removeItem(item);
     delete item;
-
-    emit node_removed(node_id);
     LOG_INFO("NodeEditor", QString("Removed node: %1").arg(node_id));
 }
 
@@ -108,8 +99,6 @@ void NodeScene::remove_edge(const QString& edge_id) {
     edges_.erase(it);
     removeItem(edge);
     delete edge;
-
-    emit edge_removed(edge_id);
 }
 
 void NodeScene::clear_all() {

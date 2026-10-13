@@ -23,7 +23,6 @@
 #include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -36,6 +35,31 @@ namespace fincept::screens {
 // Treat them as unparsable (0), which the existing checks already reject.
 static double dlg_finite_or_zero(double v) {
     return std::isfinite(v) ? v : 0.0;
+}
+
+// Parse a user-typed number. "1234.5" (C locale) first, then the system locale
+// ("1.234,5" in de_DE), then with thousands separators stripped ("1,234.50").
+// Plain QString::toDouble() rejected "1,234.50" as 0 and the dialog then
+// claimed the price was not greater than 0.
+static double dlg_parse_number(const QString& text) {
+    const QString t = text.trimmed().remove(QLatin1Char(' '));
+    bool ok = false;
+    double v = t.toDouble(&ok);
+    if (!ok)
+        v = QLocale().toDouble(t, &ok);
+    if (!ok)
+        v = QString(t).remove(QLatin1Char(',')).toDouble(&ok);
+    return ok ? dlg_finite_or_zero(v) : 0.0;
+}
+
+// Trade-date picker shared by the BUY / SELL dialogs: defaults to today and
+// cannot be set in the future.
+static QDateEdit* dlg_make_trade_date_edit() {
+    auto* d = new QDateEdit(QDate::currentDate());
+    d->setCalendarPopup(true);
+    d->setDisplayFormat("yyyy-MM-dd");
+    d->setMaximumDate(QDate::currentDate());
+    return d;
 }
 
 // Pre-fill text for an editable number: at least 2 decimals (reads like money) but
@@ -285,7 +309,7 @@ static constexpr int kAssetSearchLimit = 10;
 
 AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle(tr("Add Asset"));
-    setFixedSize(400, 260);
+    setFixedSize(400, 296);
     setStyleSheet(QString("QDialog { background:%1; color:%2; }"
                           "QLabel { color:%3; font-size:11px; }"
                           "QLineEdit { background:%4; color:%2; border:1px solid %5;"
@@ -326,6 +350,12 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
     price_edit_->setPlaceholderText(tr("e.g. 150.00"));
     price_row_label_ = new QLabel(tr("Price:"));
     form->addRow(price_row_label_, price_edit_);
+
+    // Trade date: every BUY used to be stamped "now", so back-entered trades
+    // rebuilt a NAV history that started on the day they were typed in.
+    date_edit_ = dlg_make_trade_date_edit();
+    date_row_label_ = new QLabel(tr("Trade date:"));
+    form->addRow(date_row_label_, date_edit_);
 
     layout->addLayout(form);
     layout->addStretch();
@@ -427,7 +457,8 @@ AddAssetDialog::AddAssetDialog(QWidget* parent) : QDialog(parent) {
 
     setTabOrder(symbol_edit_, quantity_edit_);
     setTabOrder(quantity_edit_, price_edit_);
-    setTabOrder(price_edit_, add_btn_);
+    setTabOrder(price_edit_, date_edit_);
+    setTabOrder(date_edit_, add_btn_);
     setTabOrder(add_btn_, cancel_btn_);
     symbol_edit_->setAccessibleName(tr("Ticker symbol"));
     quantity_edit_->setAccessibleName(tr("Quantity to buy"));
@@ -660,6 +691,8 @@ void AddAssetDialog::retranslateUi() {
         quantity_row_label_->setText(tr("Quantity:"));
     if (price_row_label_)
         price_row_label_->setText(tr("Price:"));
+    if (date_row_label_)
+        date_row_label_->setText(tr("Trade date:"));
     if (symbol_edit_)
         symbol_edit_->setPlaceholderText(tr("e.g. AAPL, Apple, Reliance…"));
     if (quantity_edit_)
@@ -676,10 +709,13 @@ QString AddAssetDialog::symbol() const {
     return symbol_edit_->text().trimmed().toUpper();
 }
 double AddAssetDialog::quantity() const {
-    return dlg_finite_or_zero(quantity_edit_->text().toDouble());
+    return dlg_parse_number(quantity_edit_->text());
 }
 double AddAssetDialog::price() const {
-    return dlg_finite_or_zero(price_edit_->text().toDouble());
+    return dlg_parse_number(price_edit_->text());
+}
+QString AddAssetDialog::date() const {
+    return date_edit_->date().toString(Qt::ISODate);
 }
 
 // ── SellAssetDialog ──────────────────────────────────────────────────────────
@@ -687,7 +723,7 @@ double AddAssetDialog::price() const {
 SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget* parent)
     : QDialog(parent), symbol_(symbol), held_qty_(held_qty) {
     setWindowTitle(tr("Sell Asset"));
-    setFixedSize(340, 220);
+    setFixedSize(340, 256);
     setStyleSheet(QString("QDialog { background:%1; color:%2; }"
                           "QLabel { color:%3; font-size:11px; }"
                           "QLineEdit { background:%4; color:%2; border:1px solid %5;"
@@ -721,6 +757,10 @@ SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget
     price_edit_->setPlaceholderText(tr("Sell price"));
     price_row_label_ = new QLabel(tr("Price:"));
     form->addRow(price_row_label_, price_edit_);
+
+    date_edit_ = dlg_make_trade_date_edit();
+    date_row_label_ = new QLabel(tr("Trade date:"));
+    form->addRow(date_row_label_, date_edit_);
 
     layout->addLayout(form);
     layout->addStretch();
@@ -776,7 +816,8 @@ SellAssetDialog::SellAssetDialog(const QString& symbol, double held_qty, QWidget
     layout->addLayout(btn_layout);
 
     setTabOrder(quantity_edit_, price_edit_);
-    setTabOrder(price_edit_, sell_btn_);
+    setTabOrder(price_edit_, date_edit_);
+    setTabOrder(date_edit_, sell_btn_);
     setTabOrder(sell_btn_, cancel_btn_);
     quantity_edit_->setAccessibleName(tr("Quantity to sell"));
     price_edit_->setAccessibleName(tr("Sale price per share"));
@@ -810,6 +851,8 @@ void SellAssetDialog::retranslateUi() {
         quantity_edit_->setPlaceholderText(tr("Max %1").arg(QLocale().toString(held_qty_, 'f', 2)));
     if (price_edit_)
         price_edit_->setPlaceholderText(tr("Sell price"));
+    if (date_row_label_)
+        date_row_label_->setText(tr("Trade date:"));
     if (cancel_btn_)
         cancel_btn_->setText(tr("CANCEL"));
     if (sell_btn_)
@@ -817,10 +860,17 @@ void SellAssetDialog::retranslateUi() {
 }
 
 double SellAssetDialog::quantity() const {
-    return dlg_finite_or_zero(quantity_edit_->text().toDouble());
+    return dlg_parse_number(quantity_edit_->text());
 }
 double SellAssetDialog::price() const {
-    return dlg_finite_or_zero(price_edit_->text().toDouble());
+    return dlg_parse_number(price_edit_->text());
+}
+QString SellAssetDialog::date() const {
+    return date_edit_->date().toString(Qt::ISODate);
+}
+void SellAssetDialog::preset_price(double price) {
+    if (price > 0.0)
+        price_edit_->setText(QString::number(price, 'f', 2));
 }
 
 // ── ImportPortfolioDialog ────────────────────────────────────────────────────
@@ -1117,8 +1167,12 @@ EditTransactionDialog::EditTransactionDialog(const portfolio::Transaction& txn, 
     date_edit_->setCalendarPopup(true);
     date_edit_->setDisplayFormat("yyyy-MM-dd");
     {
-        QDate d = QDate::fromString(txn.transaction_date, "yyyy-MM-dd");
+        // Rows written by add_asset() carry a full ISO date-time; parsing the
+        // whole string as yyyy-MM-dd failed and silently reset the date to today,
+        // so editing only the notes moved the trade to today.
+        QDate d = QDate::fromString(txn.transaction_date.left(10), "yyyy-MM-dd");
         date_edit_->setDate(d.isValid() ? d : QDate::currentDate());
+        date_edit_->setMaximumDate(QDate::currentDate());
     }
     date_edit_->setStyleSheet(
         QString("QDateEdit { background:%1; color:%2; border:1px solid %3;"
@@ -1221,135 +1275,16 @@ void EditTransactionDialog::retranslateUi() {
 }
 
 double EditTransactionDialog::quantity() const {
-    return dlg_finite_or_zero(quantity_edit_->text().toDouble());
+    return dlg_parse_number(quantity_edit_->text());
 }
 double EditTransactionDialog::price() const {
-    return dlg_finite_or_zero(price_edit_->text().toDouble());
+    return dlg_parse_number(price_edit_->text());
 }
 QString EditTransactionDialog::date() const {
     return date_edit_->date().toString("yyyy-MM-dd");
 }
 QString EditTransactionDialog::notes() const {
     return notes_edit_->text().trimmed();
-}
-
-// ── SectorMappingDialog ──────────────────────────────────────────────────────
-
-static const QStringList kSectors = {
-    "Technology",  "Healthcare",    "Financial Services", "Energy",    "Consumer Cyclical", "Consumer Defensive",
-    "Industrials", "Communication", "Real Estate",        "Utilities", "Basic Materials",   "Cryptocurrency",
-    "US Equity",   "Bonds",         "Commodities",        "Other",
-};
-
-SectorMappingDialog::SectorMappingDialog(const QVector<portfolio::HoldingWithQuote>& holdings, QWidget* parent)
-    : QDialog(parent) {
-    setWindowTitle(tr("Sector Mapping"));
-    setFixedSize(440, std::min(500, 120 + static_cast<int>(holdings.size()) * 34));
-    setStyleSheet(QString("QDialog { background:%1; color:%2; }"
-                          "QLabel { color:%3; font-size:11px; }"
-                          "QComboBox { background:%4; color:%2; border:1px solid %5;"
-                          "  padding:4px 8px; font-size:11px; }"
-                          "QComboBox::drop-down { border:none; }"
-                          "QComboBox QAbstractItemView { background:%4; color:%2; }")
-                      .arg(ui::colors::BG_SURFACE(), ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_SECONDARY(),
-                           ui::colors::BG_BASE(), ui::colors::BORDER_MED()));
-
-    auto* layout = new QVBoxLayout(this);
-    layout->setSpacing(8);
-    layout->setContentsMargins(20, 16, 20, 16);
-
-    title_label_ = new QLabel(tr("MAP HOLDINGS TO SECTORS"));
-    title_label_->setStyleSheet(
-        QString("color:%1; font-size:13px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
-    layout->addWidget(title_label_);
-
-    desc_label_ = new QLabel(tr("Assign each holding to a sector for allocation analysis."));
-    desc_label_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
-    layout->addWidget(desc_label_);
-
-    // Scrollable grid
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet(QString("QScrollArea { border:none; }"
-                                  "QScrollBar:vertical { width:4px; background:transparent; }"
-                                  "QScrollBar::handle:vertical { background:%1; }")
-                              .arg(ui::colors::BORDER_BRIGHT()));
-
-    auto* grid_w = new QWidget(this);
-    auto* grid = new QFormLayout(grid_w);
-    grid->setSpacing(6);
-
-    for (const auto& h : holdings) {
-        auto* cb = new QComboBox;
-        cb->addItems(kSectors);
-        // Pre-select the sector we already know for this holding (from the
-        // import payload or SectorResolver). The comment here used to promise
-        // a "simple heuristic" while the code unconditionally reset every row
-        // to "Other", so opening the dialog and pressing SAVE would have wiped
-        // the existing classification of every position.
-        const int known = h.sector.isEmpty() ? -1 : cb->findText(h.sector, Qt::MatchFixedString);
-        cb->setCurrentIndex(known >= 0 ? known : cb->findText(QStringLiteral("Other")));
-        cb->setAccessibleName(tr("Sector for %1").arg(h.symbol));
-        combos_[h.symbol] = cb;
-
-        auto* sym_label = new QLabel(h.symbol);
-        sym_label->setStyleSheet(QString("color:%1; font-weight:600;").arg(ui::colors::CYAN()));
-        grid->addRow(sym_label, cb);
-    }
-
-    scroll->setWidget(grid_w);
-    layout->addWidget(scroll, 1);
-
-    auto* btn_layout = new QHBoxLayout;
-    btn_layout->addStretch();
-
-    cancel_btn_ = new QPushButton(tr("CANCEL"));
-    cancel_btn_->setFixedSize(80, 28);
-    cancel_btn_->setCursor(Qt::PointingHandCursor);
-    cancel_btn_->setStyleSheet(
-        QString("QPushButton { background:transparent; color:%1; border:1px solid %2;"
-                "  font-size:10px; font-weight:700; }"
-                "QPushButton:hover { background:%3; }")
-            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(), ui::colors::BG_HOVER()));
-    connect(cancel_btn_, &QPushButton::clicked, this, &QDialog::reject);
-    btn_layout->addWidget(cancel_btn_);
-
-    save_btn_ = new QPushButton(tr("SAVE"));
-    save_btn_->setFixedSize(80, 28);
-    save_btn_->setCursor(Qt::PointingHandCursor);
-    save_btn_->setStyleSheet(QString("QPushButton { background:%1; color:%3; border:none;"
-                                     "  font-size:10px; font-weight:700; }"
-                                     "QPushButton:hover { background:%2; }")
-                                 .arg(ui::colors::AMBER(), ui::colors::WARNING(), ui::colors::BG_BASE()));
-    connect(save_btn_, &QPushButton::clicked, this, &QDialog::accept);
-    btn_layout->addWidget(save_btn_);
-
-    layout->addLayout(btn_layout);
-}
-
-void SectorMappingDialog::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::LanguageChange)
-        retranslateUi();
-    QDialog::changeEvent(event);
-}
-
-void SectorMappingDialog::retranslateUi() {
-    setWindowTitle(tr("Sector Mapping"));
-    if (title_label_)
-        title_label_->setText(tr("MAP HOLDINGS TO SECTORS"));
-    if (desc_label_)
-        desc_label_->setText(tr("Assign each holding to a sector for allocation analysis."));
-    if (cancel_btn_)
-        cancel_btn_->setText(tr("CANCEL"));
-    if (save_btn_)
-        save_btn_->setText(tr("SAVE"));
-}
-
-QHash<QString, QString> SectorMappingDialog::sector_map() const {
-    QHash<QString, QString> result;
-    for (auto it = combos_.begin(); it != combos_.end(); ++it)
-        result[it.key()] = it.value()->currentText();
-    return result;
 }
 
 // ── AddDividendDialog ─────────────────────────────────────────────────────────
@@ -1494,7 +1429,7 @@ QString AddDividendDialog::symbol() const {
 }
 
 double AddDividendDialog::amount_per_share() const {
-    return dlg_finite_or_zero(amount_edit_->text().trimmed().toDouble());
+    return dlg_parse_number(amount_edit_->text());
 }
 
 QString AddDividendDialog::date() const {

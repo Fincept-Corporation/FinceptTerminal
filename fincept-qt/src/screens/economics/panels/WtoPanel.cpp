@@ -68,7 +68,7 @@ void WtoPanel::activate() {
 void WtoPanel::build_controls(QHBoxLayout* thl) {
     auto make_lbl = [](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 

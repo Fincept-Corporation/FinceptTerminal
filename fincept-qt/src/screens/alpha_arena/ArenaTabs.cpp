@@ -226,15 +226,19 @@ void ArenaPanelGrid::refresh_positions() {
         positions_hdr_->setText(tr("POSITIONS"));
         return;
     }
+    // Live uPnL exists only for the competition the engine has loaded (it marks
+    // the venue). For any other one, "0.00" in green read as "flat" — show "—".
+    const bool live = ArenaEngine::instance().active_competition_id() == competition_id_;
     for (const auto& p : r.value()) {
-        const auto acct = ArenaEngine::instance().account_view(p.agent_id);
+        const auto acct = live ? ArenaEngine::instance().account_view(p.agent_id) : fincept::arena::AccountView{};
+        const double upnl = acct.upnl.value(p.coin);
         const int row = positions_->rowCount();
         positions_->insertRow(row);
         fill_row(positions_, row,
                  {names.value(p.agent_id), p.coin, p.side.toUpper(), QString::number(p.qty, 'g', 8),
                   QString::number(p.entry_price, 'g', 8), QString::number(p.leverage, 'f', 1),
-                  QString::number(acct.upnl.value(p.coin), 'f', 2)},
-                 acct.upnl.value(p.coin) >= 0 ? QColor("#26A65B") : QColor("#E0245E"));
+                  live ? QString::number(upnl, 'f', 2) : QStringLiteral("—")},
+                 !live ? QColor("#999") : upnl >= 0 ? QColor("#26A65B") : QColor("#E0245E"));
     }
     positions_hdr_->setText(tr("POSITIONS · %1").arg(r.value().size()));
 }

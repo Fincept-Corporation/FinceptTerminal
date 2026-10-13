@@ -2,6 +2,7 @@
 
 #include "core/events/EventBus.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QDesktopServices>
 #include <QEvent>
@@ -36,7 +37,9 @@ static QLabel* make_header(const QString& icon, const QString& title, const QStr
     return lbl;
 }
 
-static QWidget* make_contact_card(const QString& title, const QString& value, const QString& detail) {
+/// `url` (optional) turns the value into a link that opens in the browser.
+static QWidget* make_contact_card(const QString& title, const QString& value, const QString& detail,
+                                  const QString& url = {}) {
     auto* card = new QWidget(nullptr);
     card->setStyleSheet(PANEL());
     auto* vl = new QVBoxLayout(card);
@@ -49,7 +52,18 @@ static QWidget* make_contact_card(const QString& title, const QString& value, co
                          .arg(colors::TEXT_SECONDARY(), MF));
     vl->addWidget(t);
 
-    auto* v = new QLabel(value);
+    auto* v = new QLabel;
+    if (url.isEmpty()) {
+        v->setText(value);
+    } else {
+        v->setTextFormat(Qt::RichText);
+        v->setText(QStringLiteral("<a href=\"%1\" style=\"color:%2;text-decoration:none;\">%3</a>")
+                       .arg(url.toHtmlEscaped(), QString(colors::AMBER()), value.toHtmlEscaped()));
+        v->setTextInteractionFlags(Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);
+        v->setCursor(Qt::PointingHandCursor);
+        v->setToolTip(url);
+        QObject::connect(v, &QLabel::linkActivated, v, [](const QString& link) { enterprise::open_url(link); });
+    }
     v->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 600; background: transparent; %2")
                          .arg(colors::TEXT_PRIMARY(), MF));
     vl->addWidget(v);
@@ -177,6 +191,11 @@ QWidget* ContactScreen::build_page() {
         grid->addWidget(make_contact_card(tr("IN-APP TICKETS"), tr("Support tab"),
                                           tr("Open a tracked ticket from inside the terminal")),
                         1, 1);
+        grid->addWidget(make_contact_card(tr("ENTERPRISE DEMO"), tr("Book a walkthrough ↗"),
+                                          tr("Fincept Terminal Enterprise — the private edition for funds, family "
+                                             "offices and research desks. Separate product, separate account."),
+                                          enterprise::demo_url()),
+                        2, 0, 1, 2);
 
         pvl->addWidget(body);
         vl->addWidget(panel);

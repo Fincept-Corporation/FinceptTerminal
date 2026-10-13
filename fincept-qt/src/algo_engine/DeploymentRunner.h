@@ -28,6 +28,15 @@ class DeploymentRunner : public QObject {
     bool is_running() const { return running_.load(); }
     bool is_paused() const { return paused_.load(); }
     QString deployment_id() const { return deployment_.id; }
+    /// Immutable after construction - safe to read from any thread.
+    const fincept::services::algo::AlgoDeployment& deployment() const { return deployment_; }
+
+    /// Kill switch, callable from ANY thread: from this moment the runner emits no
+    /// further order signal (entries, exits, stop-loss/take-profit), even if the
+    /// engine thread has not yet processed the queued stop(). AlgoEngine sets it
+    /// first on every stop so a busy or hung engine thread cannot keep trading.
+    void request_stop() { stop_requested_.store(true); }
+    bool stop_requested() const { return stop_requested_.load(); }
 
     // Set the GUI-thread FnoDataBridge so F&O runners can request chain snapshots
     // and pin their legs. Called from AlgoEngine::start_deployment on the calling
@@ -116,6 +125,7 @@ class DeploymentRunner : public QObject {
 
     std::atomic<bool> running_{false};
     std::atomic<bool> paused_{false};
+    std::atomic<bool> stop_requested_{false};
     QTimer* heartbeat_timer_ = nullptr;
     int64_t last_heartbeat_ms_ = 0;
     bool first_tick_logged_ = false; // log the first live quote once, for trackability

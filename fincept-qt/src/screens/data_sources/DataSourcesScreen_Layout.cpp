@@ -9,6 +9,7 @@
 #include "core/session/ScreenStateManager.h"
 #include "screens/data_sources/ConnectionConfigDialog.h"
 #include "screens/data_sources/ConnectionTester.h"
+#include "screens/data_sources/ConnectorCatalogPanel.h"
 #include "screens/data_sources/ConnectorRegistry.h"
 #include "screens/data_sources/DataSourcesHelpers.h"
 #include "screens/data_sources/DataSourcesScreen.h"
@@ -85,10 +86,14 @@ void DataSourcesScreen::setup_ui() {
     // 3. Tab bar
     root->addWidget(build_tab_bar());
 
-    // 4. Page stack (Browse | Connections)
+    // 4. Page stack (Browse | Connections | Catalog)
     page_stack_ = new QStackedWidget;
     page_stack_->addWidget(build_browse_page());      // index 0
     page_stack_->addWidget(build_connections_page()); // index 1
+    // index 2 — the Python data connectors. Cheap to construct: it loads the catalogue and
+    // checks stored keys only when first shown.
+    catalog_panel_ = new ConnectorCatalogPanel(this);
+    page_stack_->addWidget(catalog_panel_);
     root->addWidget(page_stack_, 1);
 
     // Timers
@@ -262,28 +267,18 @@ QWidget* DataSourcesScreen::build_tab_bar() {
         btn->setFixedHeight(32);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setObjectName(page_idx == 0 ? "dsTabActive" : "dsTab");
-        connect(btn, &QPushButton::clicked, this, [this, btn, page_idx]() {
-            // Update tab styles
-            for (auto* sibling : btn->parentWidget()->findChildren<QPushButton*>()) {
-                sibling->setObjectName("dsTab");
-                sibling->style()->unpolish(sibling);
-                sibling->style()->polish(sibling);
-            }
-            btn->setObjectName("dsTabActive");
-            btn->style()->unpolish(btn);
-            btn->style()->polish(btn);
-
-            page_stack_->setCurrentIndex(page_idx);
-            view_mode_ = (page_idx == 0) ? ViewMode::Gallery : ViewMode::Connections;
-        });
+        connect(btn, &QPushButton::clicked, this, [this, page_idx]() { select_page(page_idx); });
         return btn;
     };
 
     browse_tab_ = make_tab(tr("BROWSE"), 0);
     conns_tab_ = make_tab(tr("CONNECTIONS"), 1);
+    catalog_tab_ = make_tab(tr("CATALOG"), 2);
+    catalog_tab_->setToolTip(tr("Every Python data connector — browse, add API keys, run and export"));
 
     hl->addWidget(browse_tab_);
     hl->addWidget(conns_tab_);
+    hl->addWidget(catalog_tab_);
     hl->addStretch();
 
     // NOTE: count_label_ deliberately lives in build_connector_panel(), not
@@ -292,6 +287,21 @@ QWidget* DataSourcesScreen::build_tab_bar() {
     // permanently-blank label in the tab bar.
 
     return bar;
+}
+
+void DataSourcesScreen::select_page(int page_idx) {
+    if (!page_stack_ || page_idx < 0 || page_idx >= page_stack_->count())
+        return;
+    QPushButton* const tabs[] = {browse_tab_, conns_tab_, catalog_tab_};
+    for (int i = 0; i < 3; ++i) {
+        QPushButton* btn = tabs[i];
+        if (!btn)
+            continue;
+        btn->setObjectName(i == page_idx ? "dsTabActive" : "dsTab");
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
+    }
+    page_stack_->setCurrentIndex(page_idx);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

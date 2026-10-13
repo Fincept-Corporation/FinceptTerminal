@@ -115,8 +115,4 @@ struct ConnectorConfig {
 
 enum class ConnStatus { Connected, Disconnected, Error, Testing };
 
-// ── UI view modes ──────────────────────────────────────────────────────────
-
-enum class ViewMode { Gallery, Connections };
-
 } // namespace fincept::screens::datasources

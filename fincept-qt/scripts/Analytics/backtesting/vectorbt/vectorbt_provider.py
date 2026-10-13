@@ -32,7 +32,12 @@ from base.base_provider import (
     EquityPoint,
     BacktestStatistics,
     json_response,
-    parse_json_input
+    parse_json_input,
+    build_assumptions,
+    check_cancelled,
+    describe_annualization,
+    refuse_synthetic,
+    synthetic_allowed,
 )
 
 
@@ -46,6 +51,8 @@ class VectorBTProvider(BacktestingProviderBase):
 
     def __init__(self):
         super().__init__()
+        self._ohlc = {}  # canonical symbol -> OHLCV DataFrame from the last data load
+        self._allow_synthetic = False
 
     @property
     def name(self) -> str:
@@ -153,6 +160,7 @@ class VectorBTProvider(BacktestingProviderBase):
             close_data, using_synthetic = self._load_market_data(
                 symbols, start_date, end_date, interval=interval, multi_asset=multi_asset
             )
+            have_open = False
 
             import pandas as pd
 
@@ -190,8 +198,14 @@ class VectorBTProvider(BacktestingProviderBase):
                     if strategy_type == 'code':
                         sym_portfolio = self._run_custom_code(vbt, strategy, sym_series, sym_capital)
                     else:
-                        entries, exits = strat.build_strategy_signals(vbt, strategy_type, sym_series, parameters)
-                        sym_portfolio = pf.build_portfolio(vbt, sym_series, entries, exits, sym_capital, request)
+                        o_s, h_s, l_s, v_s = self._ohlc_for(sym_col, sym_series.index)
+                        if o_s is not None:
+                            have_open = True
+                        entries, exits = strat.build_strategy_signals(
+                            vbt, strategy_type, sym_series, parameters,
+                            high_series=h_s, low_series=l_s, volume_series=v_s)
+                        sym_portfolio = pf.build_portfolio(vbt, sym_series, entries, exits, sym_capital, request,
+                                                           open_series=o_s)
 
                     sym_equity = sym_portfolio.value()
                     per_symbol_equity[sym_col] = sym_equity
@@ -251,8 +265,11 @@ class VectorBTProvider(BacktestingProviderBase):
                 else:
                     logs.append(f'{self._current_timestamp()}: Building signals for strategy: {strategy_type}, params: {parameters}')
 
+                    o_s, h_s, l_s, v_s = self._ohlc_for(symbols[0], close_series.index)
+                    have_open = o_s is not None
                     entries, exits = strat.build_strategy_signals(
-                        vbt, strategy_type, close_series, parameters
+                        vbt, strategy_type, close_series, parameters,
+                        high_series=h_s, low_series=l_s, volume_series=v_s,
                     )
 
                     n_entries = int(entries.sum()) if hasattr(entries, 'sum') else 0
@@ -261,7 +278,7 @@ class VectorBTProvider(BacktestingProviderBase):
 
                     portfolio = pf.build_portfolio(
                         vbt, close_series, entries, exits,
-                        initial_capital, request
+                        initial_capital, request, open_series=o_s,
                     )
 
                 trades_list = self._parse_trades(portfolio, symbols)
@@ -348,6 +365,8 @@ class VectorBTProvider(BacktestingProviderBase):
             result_dict = result.to_dict()
             result_dict['using_synthetic_data'] = using_synthetic
             result_dict['dataSource'] = getattr(self, '_broker_data_source', '') or 'yahoo'
+            result_dict['assumptions'] = self._assumptions(request, portfolio, using_synthetic, have_open,
+                                                           strategy_type == 'code')
             result_dict['extended_stats'] = extended
 
             if using_synthetic:
@@ -421,7 +440,10 @@ class VectorBTProvider(BacktestingProviderBase):
             symbols = request.get('symbols') or [a.get('symbol') for a in request.get('assets', []) if a.get('symbol')]
             if not symbols:
                 return {'success': False, 'error': 'No symbols provided'}
-            close_series, using_synthetic = self._load_market_data(self._normalize_symbols(symbols), start_date, end_date)
+            close_series, using_synthetic = self._load_market_data(
+                self._normalize_symbols(symbols), start_date, end_date, interval=request.get('interval', '1d'))
+            request = dict(request)
+            request['_ohlc_frame'] = self._ohlc.get(self._canon_symbol(symbols[0]))
 
             result = opt.optimize(
                 vbt, close_series, strategy_type, parameters,
@@ -468,7 +490,10 @@ class VectorBTProvider(BacktestingProviderBase):
             symbols = request.get('symbols') or [a.get('symbol') for a in request.get('assets', []) if a.get('symbol')]
             if not symbols:
                 return {'success': False, 'error': 'No symbols provided'}
-            close_series, using_synthetic = self._load_market_data(self._normalize_symbols(symbols), start_date, end_date)
+            close_series, using_synthetic = self._load_market_data(
+                self._normalize_symbols(symbols), start_date, end_date, interval=request.get('interval', '1d'))
+            request = dict(request)
+            request['_ohlc_frame'] = self._ohlc.get(self._canon_symbol(symbols[0]))
 
             result = opt.walk_forward_optimize(
                 vbt, close_series, strategy_type, parameters,
@@ -1317,7 +1342,9 @@ class VectorBTProvider(BacktestingProviderBase):
                     volume_series = raw_data['Volume'].iloc[:, 0].values
 
             except Exception as e:
-                print(f"[INDICATOR_SWEEP] Data load failed: {e}, using synthetic")
+                if not self._allow_synthetic:
+                    refuse_synthetic(symbols, str(e) or type(e).__name__)
+                print(f"[INDICATOR_SWEEP] Data load failed: {e}, using synthetic (user opted in)", file=sys.stderr)
                 using_synthetic = True
                 # Generate synthetic OHLCV
                 close_series = self._generate_synthetic_data(symbols, start_date, end_date).values
@@ -1645,6 +1672,50 @@ class VectorBTProvider(BacktestingProviderBase):
     # Private Helpers
     # ========================================================================
 
+    def _assumptions(self, request, portfolio, using_synthetic: bool, have_open: bool, custom_code: bool):
+        """The result's `assumptions` block (see base_provider.build_assumptions)."""
+        import vbt_portfolio as pf
+        nxt = str(request.get('execution', 'next_open')) != 'same_close'
+        if custom_code:
+            execution = 'Custom code builds its own portfolio; fill timing is whatever that code does.'
+        elif not nxt:
+            execution = ('SAME-BAR CLOSE (look-ahead): orders fill at the close that generated the signal. '
+                         'Requested explicitly via execution=same_close.')
+        elif have_open:
+            execution = ('Signals on bar close; orders fill at the NEXT bar open. Stops are checked on '
+                         'closes against the actual fill and exit at the next open.')
+        else:
+            execution = ('Signals on bar close; orders fill at the NEXT bar close (no open prices '
+                         'available). Stops are checked on closes and exit at the next close.')
+        try:
+            sizing = pf.describe_sizing(pf.resolve_sizing(request, float(request.get('stopLoss') or 0) or None))
+        except Exception as e:
+            sizing = str(e)
+        broker = getattr(self, '_broker_data_source', '')
+        if using_synthetic:
+            source = 'SYNTHETIC random-walk prices (user opted in) - results have NO market meaning'
+        elif broker:
+            source = f'Broker candles ({broker})'
+        else:
+            source = 'Yahoo Finance (split/dividend-adjusted prices)'
+        ignored = []
+        if bool(request.get('allowShort', False)):
+            ignored.append('short selling (long-only simulator)')
+        if float(request.get('leverage', 1) or 1) != 1.0:
+            ignored.append('leverage (positions are capped at available cash)')
+        try:
+            ppy = float(portfolio.periods_per_year())
+        except Exception:
+            ppy = 252.0
+        return build_assumptions(
+            'Fincept vectorbt-compatible simulator (pure numpy, one position per symbol)',
+            execution, request,
+            position_sizing=sizing,
+            annualization=describe_annualization(ppy) + '; Sharpe = (CAGR - rf) / annualised volatility',
+            data_source=source,
+            ignored=ignored,
+        )
+
     def _import_vbt(self):
         """Import VectorBT or return a stub (indicators/portfolio are now pure numpy/pandas)."""
         try:
@@ -1693,10 +1764,18 @@ class VectorBTProvider(BacktestingProviderBase):
             if not rows:
                 return None
             idx = pd.to_datetime([int(r["t"]) for r in rows], unit="s")
-            closes = [float(r["c"]) for r in rows]
-            s = pd.Series(closes, index=idx, name="Close").sort_index()
-            s = s[~s.index.duplicated(keep="last")]
-            return s if len(s) >= 5 else None
+            frame = pd.DataFrame({
+                "Open": [float(r.get("o", r["c"])) for r in rows],
+                "High": [float(r.get("h", r["c"])) for r in rows],
+                "Low": [float(r.get("l", r["c"])) for r in rows],
+                "Close": [float(r["c"]) for r in rows],
+                "Volume": [float(r.get("v", 0) or 0) for r in rows],
+            }, index=idx).sort_index()
+            frame = frame[~frame.index.duplicated(keep="last")]
+            if len(frame) < 5:
+                return None
+            self._ohlc[self._canon_symbol(sym)] = frame
+            return frame["Close"].rename("Close")
 
         if multi_asset and len(symbols) > 1:
             cols = {}
@@ -1765,6 +1844,7 @@ class VectorBTProvider(BacktestingProviderBase):
 
             if interval == '4h':
                 close_data = close_data.resample('4h').last().dropna(how='all')
+            self._remember_ohlc(raw_data, normalized_symbols, interval)
 
             if isinstance(close_data, pd.DataFrame):
                 if multi_asset and close_data.shape[1] > 1:
@@ -1788,19 +1868,64 @@ class VectorBTProvider(BacktestingProviderBase):
             close_series = close_series.round(4)
 
         except ImportError:
-            print('[VBT] WARNING: yfinance not installed - using SYNTHETIC data. '
-                  'Results will NOT reflect real market conditions. '
-                  'Install yfinance: pip install yfinance', file=sys.stderr)
+            if not getattr(self, '_allow_synthetic', False):
+                refuse_synthetic(symbols, 'yfinance is not installed')
+            print('[VBT] WARNING: yfinance not installed - using SYNTHETIC data (user opted in).',
+                  file=sys.stderr)
             using_synthetic = True
             close_series = self._generate_synthetic_data(symbols, start_date, end_date)
         except Exception as e:
+            if not getattr(self, '_allow_synthetic', False):
+                refuse_synthetic(symbols, str(e) or type(e).__name__)
             print(f'[VBT] WARNING: Data download failed for {normalized_symbols}: {e} - '
-                  f'using SYNTHETIC data. Results will NOT reflect real market conditions.',
-                  file=sys.stderr)
+                  f'using SYNTHETIC data (user opted in).', file=sys.stderr)
             using_synthetic = True
             close_series = self._generate_synthetic_data(symbols, start_date, end_date)
 
         return close_series, using_synthetic
+
+    def _remember_ohlc(self, raw_data, symbols: list, interval: str) -> None:
+        """Keep the Open/High/Low/Volume columns yfinance already returned.
+
+        The simulator fills orders at the NEXT bar's open, and H/L-based
+        strategies (stochastic, ATR, ADX, Keltner, Williams %R, CCI) need real
+        highs/lows - they used to run on close*1.005 / close*0.995.
+        """
+        import pandas as pd
+        try:
+            cols = raw_data.columns
+            for sym in symbols:
+                frame = {}
+                for field in ('Open', 'High', 'Low', 'Close', 'Volume'):
+                    if isinstance(cols, pd.MultiIndex):
+                        if (field, sym) in cols:
+                            frame[field] = raw_data[(field, sym)]
+                        elif (sym, field) in cols:
+                            frame[field] = raw_data[(sym, field)]
+                    elif field in cols:
+                        frame[field] = raw_data[field]
+                if 'Close' not in frame:
+                    continue
+                df = pd.DataFrame(frame).dropna(subset=['Close'])
+                if interval == '4h':
+                    df = df.resample('4h').agg({'Open': 'first', 'High': 'max', 'Low': 'min',
+                                                'Close': 'last', 'Volume': 'sum'}).dropna(subset=['Close'])
+                self._ohlc[self._canon_symbol(sym)] = df.astype(float).round(4)
+        except Exception as e:  # OHLC is an enhancement; close-only still works
+            print(f'[VBT] could not keep OHLC columns: {e}', file=sys.stderr)
+
+    def _ohlc_for(self, symbol: str, index):
+        """(open, high, low, volume) series aligned to `index`, or Nones when unknown."""
+        frame = self._ohlc.get(self._canon_symbol(symbol)) if symbol else None
+        if frame is None or len(frame) == 0:
+            return None, None, None, None
+        frame = frame.reindex(index)
+        if frame['Close'].isna().all():
+            return None, None, None, None
+        out = []
+        for col in ('Open', 'High', 'Low', 'Volume'):
+            out.append(frame[col].astype(float) if col in frame.columns and frame[col].notna().any() else None)
+        return tuple(out)
 
     @staticmethod
     def _normalize_symbols(symbols: list) -> list:
@@ -2065,7 +2190,7 @@ class VectorBTProvider(BacktestingProviderBase):
             benchmark_normalized = None
             if benchmark_symbol:
                 benchmark_normalized = self._load_benchmark(
-                    benchmark_symbol, start_date, end_date, len(equity_values)
+                    benchmark_symbol, start_date, end_date, portfolio.value().index
                 )
                 # Add benchmark to equity curve
                 if benchmark_normalized is not None and 'equity' in result_dict:
@@ -2110,11 +2235,13 @@ class VectorBTProvider(BacktestingProviderBase):
                             vbt, close_series, initial_capital, n_trials=100
                         )
                         strategy_return = float(portfolio.total_return())
-                        # P-value: % of random strategies that beat this one
+                        # Empirical p-value: share of random-signal runs that did at least as
+                        # well. (It compared only the random MEAN with the strategy, so the
+                        # "p-value" could only ever be exactly 0 or 1.)
+                        rand_rets = np.asarray(rand_stats.pop('_returns', []), dtype=float)
                         rand_stats['strategyReturn'] = strategy_return
-                        rand_stats['pValue'] = float(
-                            np.mean(np.array([rand_stats['mean']]) > strategy_return)
-                        )
+                        rand_stats['pValue'] = (float(np.mean(rand_rets >= strategy_return))
+                                                if len(rand_rets) else None)
                         result_dict['random_benchmark'] = rand_stats
                 except Exception:
                     pass
@@ -2122,26 +2249,37 @@ class VectorBTProvider(BacktestingProviderBase):
         except Exception as adv_err:
             self._error('Advanced metrics failed (non-fatal)', adv_err)
 
-    def _load_benchmark(self, symbol: str, start_date: str, end_date: str, target_len: int):
-        """Load benchmark equity series normalized to start at 1.0."""
+    def _load_benchmark(self, symbol: str, start_date: str, end_date: str, target_index):
+        """Benchmark closes aligned BY DATE to the strategy's equity index, normalised to 1.0.
+
+        It used to resample the benchmark by position (linspace over indices) whenever
+        the bar counts differed - e.g. an NSE strategy against SPY, whose holidays
+        differ - so alpha/beta were computed on series shifted against each other.
+        Dates the benchmark did not trade carry its last close forward.
+        """
         import numpy as np
         import pandas as pd
         try:
             import yfinance as yf
-            # Normalize benchmark symbol too
             norm_sym = self._normalize_symbols([symbol])
             bench_symbol = norm_sym[0] if norm_sym else symbol
             raw = yf.download(bench_symbol, start=start_date, end=end_date, progress=False)
             bench_data = self._extract_close_column(raw, [bench_symbol])
             if isinstance(bench_data, pd.DataFrame):
                 bench_data = bench_data.iloc[:, 0]
-            if bench_data is not None and len(bench_data) > 0:
-                values = np.round(bench_data.values.astype(float).flatten(), 4)
-                normalized = values / values[0]
-                if len(normalized) != target_len:
-                    indices = np.linspace(0, len(normalized) - 1, target_len).astype(int)
-                    normalized = normalized[indices]
-                return normalized
+            if bench_data is None or len(bench_data) == 0:
+                return None
+            bench = pd.Series(bench_data.values.astype(float).flatten(),
+                              index=pd.DatetimeIndex(bench_data.index).tz_localize(None).normalize())
+            bench = bench[~bench.index.duplicated(keep='last')]
+            target = pd.DatetimeIndex(target_index)
+            if target.tz is not None:
+                target = target.tz_localize(None)
+            aligned = bench.reindex(target.normalize(), method='ffill').bfill()
+            values = np.round(aligned.values.astype(float), 4)
+            if len(values) == 0 or not np.isfinite(values[0]) or values[0] <= 0:
+                return None
+            return values / values[0]
         except Exception as e:
             self._error(f'Benchmark load failed for {symbol}', e)
         return None
@@ -2191,6 +2329,8 @@ def main():
         provider = VectorBTProvider()
         provider._broker_candles = args.get("brokerCandles") or {}
         provider._broker_data_source = args.get("brokerDataSource", "")
+        provider._allow_synthetic = synthetic_allowed(args)
+        provider._request = args
 
         if command == 'test_import':
             vbt = provider._import_vbt()

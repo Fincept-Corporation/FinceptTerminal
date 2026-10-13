@@ -1,10 +1,14 @@
 #include "screens/chat_mode/ChatMessagePanel.h"
 
+#include "auth/AuthTypes.h"
+
 #include "screens/chat_mode/ChatModeService.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QEvent>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QKeySequence>
@@ -144,7 +148,20 @@ QWidget* ChatMessagePanel::build_messages_area() {
                                     .arg(ui::colors::BG_BASE(), ui::colors::BORDER_MED(), ui::colors::BORDER_BRIGHT()));
 
     messages_container_ = new QWidget(this);
-    messages_container_->setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    // `*` keeps the old blanket background; the #chatCreditsCta rules style the
+    // out-of-credits card (on_insufficient_credits) without per-widget sheets.
+    messages_container_->setStyleSheet(
+        QString("*{background:%1;}"
+                "QFrame#chatCreditsCta{background:%2;border:1px solid %3;border-left:2px solid %4;}"
+                "QLabel#chatCreditsCtaTitle{background:transparent;color:%4;font-size:11px;font-weight:700;"
+                "  letter-spacing:1px;font-family:%7;}"
+                "QLabel#chatCreditsCtaBody{background:transparent;color:%5;font-size:13px;font-family:%7;}"
+                "QPushButton#chatCreditsCtaBtn{background:%4;color:%1;border:1px solid %4;padding:6px 14px;"
+                "  font-size:12px;font-weight:700;font-family:%7;}"
+                "QPushButton#chatCreditsCtaBtn:hover{border-color:%6;}"
+                "QPushButton#chatCreditsCtaBtn:pressed{background:%8;border-color:%8;color:%6;}")
+            .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
+                 ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY(), FONT, ui::colors::AMBER_DIM()));
     messages_layout_ = new QVBoxLayout(messages_container_);
     messages_layout_->setContentsMargins(14, 10, 14, 10);
     messages_layout_->setSpacing(10);
@@ -702,7 +719,50 @@ void ChatMessagePanel::on_stream_error(const QString& message) {
 void ChatMessagePanel::on_stream_heartbeat() {}
 
 void ChatMessagePanel::on_insufficient_credits() {
-    on_stream_error(tr("Insufficient credits. Top up to continue."));
+    on_stream_error(tr("Insufficient credits — this request was not run."));
+
+    // Upgrade card under the error. One per streak of 402s: if the row just
+    // above the new error is already a card, don't stack another.
+    const int stretch_pos = messages_layout_->count() - 1; // trailing stretch
+    if (stretch_pos >= 2) {
+        if (QLayoutItem* prev = messages_layout_->itemAt(stretch_pos - 2);
+            prev && prev->widget() && prev->widget()->objectName() == QLatin1String("chatCreditsCta"))
+            return;
+    }
+
+    auto* card = new QFrame(messages_container_);
+    card->setObjectName("chatCreditsCta");
+    auto* vl = new QVBoxLayout(card);
+    vl->setContentsMargins(14, 12, 14, 12);
+    vl->setSpacing(8);
+
+    auto* title = new QLabel(tr("OUT OF CREDITS"), card);
+    title->setObjectName("chatCreditsCtaTitle");
+    vl->addWidget(title);
+
+    auto* body = new QLabel(tr("Pro adds a monthly credit allowance, higher limits and priority support."), card);
+    body->setObjectName("chatCreditsCtaBody");
+    body->setWordWrap(true);
+    vl->addWidget(body);
+
+    auto* row = new QHBoxLayout;
+    row->setContentsMargins(0, 2, 0, 0);
+    auto* get_pro = new QPushButton(tr("GET PRO — $10/MO"), card);
+    get_pro->setObjectName("chatCreditsCtaBtn");
+    get_pro->setCursor(Qt::PointingHandCursor);
+    connect(get_pro, &QPushButton::clicked, this, [this]() { ui::billing::open_plans(this); });
+    row->addWidget(get_pro);
+    row->addStretch();
+    vl->addLayout(row);
+
+    auto* ent = ui::enterprise::make_mention_label(card);
+    ui::enterprise::set_mention_text(
+        ent, tr("Teams and firms: Fincept Terminal Enterprise includes AI credits."), tr("See Enterprise ↗"),
+        ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("chat")));
+    vl->addWidget(ent);
+
+    messages_layout_->insertWidget(messages_layout_->count() - 1, card);
+    scroll_to_bottom();
 }
 
 void ChatMessagePanel::on_tools_registered(int count) {
@@ -710,12 +770,9 @@ void ChatMessagePanel::on_tools_registered(int count) {
     hdr_tools_lbl_->setText(count > 0 ? tr("%1 tools").arg(count) : QString());
 }
 
-void ChatMessagePanel::set_credits(int credits) {
+void ChatMessagePanel::set_credits(double credits) {
     last_credits_ = credits;
-    if (credits > 0)
-        hdr_credits_lbl_->setText(tr("%1 credits").arg(QLocale(QLocale::English).toString(credits)));
-    else
-        hdr_credits_lbl_->setText(tr("0 credits"));
+    hdr_credits_lbl_->setText(tr("%1 credits").arg(auth::format_credits(credits)));
 }
 
 // ── Send / Optimize ──────────────────────────────────────────────────────────
@@ -786,9 +843,7 @@ void ChatMessagePanel::retranslateUi() {
     if (hdr_tools_lbl_)
         hdr_tools_lbl_->setText(last_tools_ > 0 ? tr("%1 tools").arg(last_tools_) : QString());
     if (hdr_credits_lbl_)
-        hdr_credits_lbl_->setText(last_credits_ > 0
-                                      ? tr("%1 credits").arg(QLocale(QLocale::English).toString(last_credits_))
-                                      : tr("0 credits"));
+        hdr_credits_lbl_->setText(tr("%1 credits").arg(auth::format_credits(last_credits_)));
 
     // Welcome panel
     if (welcome_logo_lbl_)

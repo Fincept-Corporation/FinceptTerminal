@@ -66,7 +66,7 @@ Result<void> ChatRepository::add_message(const QString& session_id, const QStrin
 
 Result<QVector<ChatMessage>> ChatRepository::get_messages(const QString& session_id) {
     auto r = db().execute("SELECT id, session_id, role, content, provider, model, tokens_used, timestamp "
-                          "FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC",
+                          "FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC, rowid ASC",
                           {session_id});
     if (r.is_err())
         return Result<QVector<ChatMessage>>::err(r.error());

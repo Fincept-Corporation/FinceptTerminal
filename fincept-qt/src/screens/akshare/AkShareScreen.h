@@ -1,4 +1,5 @@
 #pragma once
+#include "core/symbol/IGroupLinked.h"
 #include "screens/common/IStatefulScreen.h"
 
 #include <QComboBox>
@@ -29,11 +30,16 @@ struct AkShareSource {
 };
 
 /// AkShare Data Explorer screen.
-/// Provides access to 26+ AkShare data sources with 1000+ endpoints.
+/// Provides access to 25 AkShare data sources with 1000+ endpoints.
 /// Users select a source, pick an endpoint, optionally set parameters,
 /// and view results in a table or raw JSON.
-class AkShareScreen : public QWidget, public IStatefulScreen {
+///
+/// Symbol-group linked whenever a result carries a security-code column (see AsiaSymbolLinks.h):
+/// selecting a row publishes its yfinance symbol, a linked A-share/HK symbol fills the SYMBOL
+/// parameter and is highlighted when listed, and rows offer "Open in…".
+class AkShareScreen : public QWidget, public IStatefulScreen, public fincept::IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit AkShareScreen(QWidget* parent = nullptr);
 
@@ -42,6 +48,12 @@ class AkShareScreen : public QWidget, public IStatefulScreen {
     QVariantMap save_state() const override;
     void restore_state(const QVariantMap& state) override;
     QString state_key() const override { return "akshare"; }
+
+    // IGroupLinked
+    void set_group(fincept::SymbolGroup g) override { link_group_ = g; }
+    fincept::SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const fincept::SymbolRef& ref) override;
+    fincept::SymbolRef current_symbol() const override;
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -78,6 +90,15 @@ class AkShareScreen : public QWidget, public IStatefulScreen {
     void run_query(bool force = false);
     /// Select (without executing) the endpoint remembered by restore_state(), once the list exists.
     void apply_pending_endpoint();
+
+    // Symbol linking (see class comment)
+    QString yf_symbol_at_row(int row) const; // "" when the row has no recognisable security code
+    QString name_at_row(int row) const;
+    void publish_selection_to_group();
+    void show_row_menu(const QPoint& pos);
+    int symbol_col_ = -1; // security-code column of the current result, -1 if none
+    int name_col_ = -1;
+    fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;
 
     // Data sources
     QList<AkShareSource> sources_;

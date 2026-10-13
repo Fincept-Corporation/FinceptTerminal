@@ -18,25 +18,28 @@ using namespace fincept::services::geo;
 static QVector<RelationshipNode> build_nodes() {
     QVector<RelationshipNode> nodes;
 
+    // Illustrative structure only (SAMPLE DATA badge + banner). There are no
+    // per-node figures: the invented "N datasets" counts read like live HDX
+    // numbers. A card's click menu browses the real HDX datasets instead.
     // Primary conflicts
-    nodes.append({"ukraine", "Ukraine", "conflict", "critical", 89, {"displacement", "humanitarian", "food_security"}});
-    nodes.append({"gaza", "Gaza", "conflict", "critical", 67, {"displacement", "humanitarian", "health"}});
-    nodes.append({"sudan", "Sudan", "conflict", "critical", 45, {"displacement", "food_security", "humanitarian"}});
-    nodes.append({"yemen", "Yemen", "conflict", "high", 56, {"food_security", "humanitarian", "health"}});
-    nodes.append({"syria", "Syria", "conflict", "high", 78, {"displacement", "humanitarian"}});
-    nodes.append({"myanmar", "Myanmar", "conflict", "high", 29, {"displacement", "humanitarian"}});
+    nodes.append({"ukraine", "Ukraine", "conflict", "critical", {"displacement", "humanitarian", "food_security"}});
+    nodes.append({"gaza", "Gaza", "conflict", "critical", {"displacement", "humanitarian", "health"}});
+    nodes.append({"sudan", "Sudan", "conflict", "critical", {"displacement", "food_security", "humanitarian"}});
+    nodes.append({"yemen", "Yemen", "conflict", "high", {"food_security", "humanitarian", "health"}});
+    nodes.append({"syria", "Syria", "conflict", "high", {"displacement", "humanitarian"}});
+    nodes.append({"myanmar", "Myanmar", "conflict", "high", {"displacement", "humanitarian"}});
 
     // Crisis types
-    nodes.append({"displacement", "Displacement", "crisis", "high", 234, {"unhcr"}});
-    nodes.append({"food_security", "Food Security", "crisis", "high", 189, {"wfp", "fao"}});
-    nodes.append({"humanitarian", "Humanitarian", "crisis", "critical", 312, {"unhcr", "wfp", "who"}});
-    nodes.append({"health", "Health Crisis", "crisis", "medium", 145, {"who"}});
+    nodes.append({"displacement", "Displacement", "crisis", "high", {"unhcr"}});
+    nodes.append({"food_security", "Food Security", "crisis", "high", {"wfp", "fao"}});
+    nodes.append({"humanitarian", "Humanitarian", "crisis", "critical", {"unhcr", "wfp", "who"}});
+    nodes.append({"health", "Health Crisis", "crisis", "medium", {"who"}});
 
     // Organizations
-    nodes.append({"unhcr", "UNHCR", "organization", "", 234, {"displacement", "humanitarian"}});
-    nodes.append({"wfp", "WFP", "organization", "", 189, {"food_security", "humanitarian"}});
-    nodes.append({"who", "WHO", "organization", "", 156, {"health", "humanitarian"}});
-    nodes.append({"fao", "FAO", "organization", "", 123, {"food_security"}});
+    nodes.append({"unhcr", "UNHCR", "organization", "", {"displacement", "humanitarian"}});
+    nodes.append({"wfp", "WFP", "organization", "", {"food_security", "humanitarian"}});
+    nodes.append({"who", "WHO", "organization", "", {"health", "humanitarian"}});
+    nodes.append({"fao", "FAO", "organization", "", {"food_security"}});
 
     return nodes;
 }
@@ -136,7 +139,8 @@ void RelationshipPanel::build_ui() {
         const QString warn_rgb = QString("%1,%2,%3").arg(warnc.red()).arg(warnc.green()).arg(warnc.blue());
         sample_note_ =
             new QLabel(tr("Sample data — this relationship network is illustrative and is not sourced from a live "
-                          "feed. Node counts and connections are placeholders, not real-time conflict metrics."),
+                          "feed. Severities and connections are placeholders, not real-time conflict metrics. "
+                          "Click a conflict or crisis card for its live events and HDX datasets."),
                        content);
         sample_note_->setWordWrap(true);
         sample_note_->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3; padding:8px 10px;"
@@ -261,28 +265,6 @@ QWidget* RelationshipPanel::build_node_card(const RelationshipNode& node, QWidge
                                 .arg(ui::fonts::DATA_FAMILY));
     vl->addWidget(type_lbl);
 
-    // Dataset count row
-    auto* ds_row = new QWidget(card);
-    auto* ds_hl = new QHBoxLayout(ds_row);
-    ds_hl->setContentsMargins(0, 0, 0, 0);
-    ds_hl->setSpacing(4);
-
-    auto* ds_num = new QLabel(QString::number(node.dataset_count), ds_row);
-    ds_num->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                              .arg(ui::colors::TEXT_PRIMARY())
-                              .arg(ui::fonts::SMALL)
-                              .arg(ui::fonts::DATA_FAMILY));
-    ds_hl->addWidget(ds_num);
-
-    auto* ds_lbl = new QLabel(tr("datasets"), ds_row);
-    ds_lbl->setStyleSheet(QString("color:%1; font-size:%2px; font-family:%3;")
-                              .arg(ui::colors::TEXT_TERTIARY())
-                              .arg(ui::fonts::SMALL)
-                              .arg(ui::fonts::DATA_FAMILY));
-    ds_hl->addWidget(ds_lbl);
-    ds_hl->addStretch();
-    vl->addWidget(ds_row);
-
     // Connection pills (max 3)
     if (!node.connections.isEmpty()) {
         auto* pills_row = new QWidget(card);
@@ -374,7 +356,8 @@ void RelationshipPanel::retranslateUi() {
     if (sample_note_)
         sample_note_->setText(
             tr("Sample data — this relationship network is illustrative and is not sourced from a live "
-               "feed. Node counts and connections are placeholders, not real-time conflict metrics."));
+               "feed. Severities and connections are placeholders, not real-time conflict metrics. "
+               "Click a conflict or crisis card for its live events and HDX datasets."));
     if (stats_lbl_)
         stats_lbl_->setText(tr("NODES: %1  |  CONFLICTS: %2  |  ORGANIZATIONS: %3")
                                 .arg(node_count_)
@@ -386,8 +369,7 @@ void RelationshipPanel::retranslateUi() {
         sec_crisis_->setText(tr("CRISIS TYPES"));
     if (sec_orgs_)
         sec_orgs_->setText(tr("ORGANIZATIONS"));
-    // Node-card entity names/types/connections are fixed data values (not
-    // translated); their "datasets" caption is set per-card at build time.
+    // Node-card entity names/types/connections are fixed data values (not translated).
 }
 
 } // namespace fincept::screens

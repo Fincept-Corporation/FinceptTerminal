@@ -364,12 +364,21 @@ bool RelationshipMapService::parse_result(const QString& json_output) {
         peer.price_to_book = p["price_to_book"].toDouble();
         peer.week52_change = p["week52_change"].toDouble();
         peer.recommendation = p["recommendation"].toString();
+        peer.currency = p["currency"].toString();
         if (!peer.ticker.isEmpty())
             data_.peers.append(peer);
     }
 
     // ── Valuation Signal ──────────────────────────────────────────────────
-    data_.valuation = compute_valuation(data_.company, data_.peers);
+    data_.peer_source = root["peer_source"].toString();
+    if (data_.peer_source == QLatin1String("generic_fallback")) {
+        // The script found no industry peer list and fell back to mega-cap tech:
+        // a P/E comparison against that set says nothing about this company.
+        data_.valuation.status = QStringLiteral("N/A — no comparable peer set");
+        data_.valuation.action = QStringLiteral("HOLD");
+    } else {
+        data_.valuation = compute_valuation(data_.company, data_.peers);
+    }
 
     data_.data_quality = root["data_quality"].toInt();
     data_.timestamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
@@ -400,10 +409,14 @@ ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co,
         return sig;
     }
 
-    // Compute peer median PE
+    // Peer median P/E — only peers quoted in the company's currency: the curated peer
+    // lists are US listings, and a P/E across markets/currencies (an INR-listed name vs
+    // US utilities) is not a like-for-like comparison.
+    const QString co_ccy = co.currency.trimmed().toUpper();
     QVector<double> peer_pes;
     for (const auto& p : peers) {
-        if (p.pe_ratio > 0)
+        const QString p_ccy = p.currency.trimmed().toUpper();
+        if (p.pe_ratio > 0 && (p_ccy.isEmpty() || co_ccy.isEmpty() || p_ccy == co_ccy))
             peer_pes.append(p.pe_ratio);
     }
     if (peer_pes.isEmpty()) {
@@ -414,11 +427,15 @@ ValuationSignal RelationshipMapService::compute_valuation(const CompanyInfo& co,
     }
 
     std::sort(peer_pes.begin(), peer_pes.end());
-    double median_pe = peer_pes[peer_pes.size() / 2];
-    double pe_ratio_vs_peers = co.pe_ratio / median_pe;
+    // True median (the upper-middle element was used for even counts).
+    const qsizetype n = peer_pes.size();
+    const double median_pe = (n % 2 == 1) ? peer_pes[n / 2] : (peer_pes[n / 2 - 1] + peer_pes[n / 2]) / 2.0;
+    const double pe_ratio_vs_peers = co.pe_ratio / median_pe;
+    sig.pe_vs_peers = pe_ratio_vs_peers;
+    sig.peer_count = static_cast<int>(n);
 
     double score = 0;
-    // PE undervalued if < 0.8x peers
+    // P/E vs peer median: cheap below 0.85x (0.7x strongly), rich above 1.15x (1.3x strongly)
     if (pe_ratio_vs_peers < 0.7)
         score += 2;
     else if (pe_ratio_vs_peers < 0.85)

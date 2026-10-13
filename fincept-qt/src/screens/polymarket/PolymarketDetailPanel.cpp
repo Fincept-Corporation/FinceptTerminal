@@ -1,5 +1,6 @@
 #include "screens/polymarket/PolymarketDetailPanel.h"
 
+#include "core/events/EventBus.h"
 #include "screens/polymarket/PolymarketActivityFeed.h"
 #include "screens/polymarket/PolymarketOrderBook.h"
 #include "screens/polymarket/PolymarketPriceChart.h"
@@ -15,6 +16,7 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QScrollArea>
+#include <QSet>
 #include <QSignalBlocker>
 #include <QTimeZone>
 #include <QVBoxLayout>
@@ -28,6 +30,61 @@ namespace pmx = fincept::services::polymarket;
 using namespace fincept::services::prediction;
 
 static const char* OUTCOME_COLORS[] = {"#00D66F", "#FF3B3B", "#FF8800", "#4F8EF7", "#A855F7"};
+
+/// Subject of a prediction market for the News screen's text search: the longest run of
+/// capitalised words in the question, minus question words, articles, months and weekdays
+/// ("Will the Fed cut rates in December?" -> "Fed", "Will Donald Trump win ...?" -> "Donald Trump").
+/// Falls back to the first tag; empty when nothing usable is found.
+static QString polymarket_news_query(const PredictionMarket& market) {
+    static const QSet<QString> kStop = {
+        "will", "who", "what", "which", "when", "where", "how", "why", "is", "are", "was", "were", "does", "do",
+        "did", "can", "could", "should", "would", "the", "a", "an", "in", "on", "at", "by", "before", "after",
+        "of", "for", "to", "and", "or", "yes", "no", "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december", "jan", "feb", "mar", "apr", "jun",
+        "jul", "aug", "sep", "sept", "oct", "nov", "dec", "monday", "tuesday", "wednesday", "thursday",
+        "friday", "saturday", "sunday", "q1", "q2", "q3", "q4", "end", "next", "this"};
+    auto clean = [](QString w) {
+        while (!w.isEmpty() && !w.front().isLetterOrNumber() && w.front() != QLatin1Char('$'))
+            w.remove(0, 1);
+        while (!w.isEmpty() && !w.back().isLetterOrNumber())
+            w.chop(1);
+        if (w.endsWith(QLatin1String("'s")) || w.endsWith(QStringLiteral("’s")))
+            w.chop(2);
+        return w;
+    };
+    // Lower-case words that may sit inside a name ("Bank of Japan", "Bank of the West").
+    static const QSet<QString> kConnectors = {"of", "the", "and", "de", "&"};
+    QStringList best;
+    QStringList run;
+    QStringList pending; // connectors seen since the last capitalised word
+    auto close_run = [&]() {
+        pending.clear();
+        while (!run.isEmpty() && kStop.contains(run.front().toLower()))
+            run.removeFirst();
+        while (!run.isEmpty() && kStop.contains(run.back().toLower()))
+            run.removeLast();
+        if (run.size() > best.size())
+            best = run;
+        run.clear();
+    };
+    for (const QString& raw : market.question.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+        const QString w = clean(raw);
+        if (!w.isEmpty() && w.front().isUpper()) {
+            run << pending << w;
+            pending.clear();
+            if (raw.endsWith(QLatin1Char(',')) || raw.endsWith(QLatin1Char('?')) || raw.endsWith(QLatin1Char('.')))
+                close_run(); // punctuation ends a name
+        } else if (!run.isEmpty() && kConnectors.contains(w) && pending.size() < 2) {
+            pending << w; // kept only if another capitalised word follows
+        } else {
+            close_run();
+        }
+    }
+    close_run();
+    if (!best.isEmpty())
+        return best.join(QLatin1Char(' '));
+    return market.tags.isEmpty() ? QString() : market.tags.first().trimmed();
+}
 
 PolymarketDetailPanel::PolymarketDetailPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("polyDetailPanel");
@@ -125,7 +182,12 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
 
     // ── Status row (badge + outcome labels) ───────────────────────────────
     auto* status_row = new QWidget;
-    status_row->setStyleSheet("background: transparent;");
+    status_row->setStyleSheet(QString("QWidget { background: transparent; }"
+                                      "QPushButton#pmNewsBtn { color: %1; border: 1px solid %2; padding: 2px 8px;"
+                                      "  font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }"
+                                      "QPushButton#pmNewsBtn:hover { border-color: %1; }"
+                                      "QPushButton#pmNewsBtn:disabled { color: %3; }")
+                                  .arg(colors::AMBER(), colors::BORDER_DIM(), colors::TEXT_DIM()));
     auto* srl = new QHBoxLayout(status_row);
     srl->setContentsMargins(0, 0, 0, 0);
     srl->setSpacing(6);
@@ -133,6 +195,20 @@ QWidget* PolymarketDetailPanel::create_overview_page() {
     status_label_ = new QLabel;
     srl->addWidget(status_label_);
     srl->addStretch(1);
+    // Hand the market's subject to the News screen (a text search, see polymarket_news_query).
+    news_btn_ = new QPushButton(tr("NEWS ↗"));
+    news_btn_->setObjectName("pmNewsBtn");
+    news_btn_->setCursor(Qt::PointingHandCursor);
+    news_btn_->setEnabled(false);
+    news_btn_->setAccessibleName(tr("Open related news"));
+    connect(news_btn_, &QPushButton::clicked, this, [this]() {
+        if (news_query_.isEmpty())
+            return;
+        EventBus::instance().publish(QStringLiteral("nav.open_symbol"),
+                                     {{QStringLiteral("screen_id"), QStringLiteral("news")},
+                                      {QStringLiteral("symbol"), news_query_}});
+    });
+    srl->addWidget(news_btn_);
     vl->addWidget(status_row);
 
     vl->addSpacing(12);
@@ -831,6 +907,12 @@ void PolymarketDetailPanel::set_market(const PredictionMarket& market) {
     has_last_market_ = true;
 
     question_label_->setText(market.question);
+    news_query_ = polymarket_news_query(market);
+    if (news_btn_) {
+        news_btn_->setEnabled(!news_query_.isEmpty());
+        news_btn_->setToolTip(news_query_.isEmpty() ? tr("No subject found in this market's question")
+                                                    : tr("Search News for \"%1\"").arg(news_query_));
+    }
     volume_label_->setText(presentation_.format_volume(market.volume));
     liquidity_label_->setText(presentation_.format_liquidity(market.liquidity));
     end_date_label_->setText(market.end_date_iso.left(10));
@@ -1159,6 +1241,11 @@ void PolymarketDetailPanel::set_polymarket_extras_enabled(bool enabled) {
 void PolymarketDetailPanel::clear() {
     has_last_market_ = false;
     last_market_ = {};
+    news_query_.clear();
+    if (news_btn_) {
+        news_btn_->setEnabled(false);
+        news_btn_->setToolTip(QString());
+    }
     submit_in_flight_ = false;
     book_tick_size_ = 0.0;
     book_min_size_ = 0.0;

@@ -49,6 +49,14 @@ NewsCategoryWidget::NewsCategoryWidget(const QJsonObject& cfg, QWidget* parent)
             QDesktopServices::openUrl(url);
     });
 
+    // The title-bar refresh button was not connected here at all (the
+    // watchdog's "click refresh to retry" pointed at a dead button).
+    connect(this, &BaseWidget::refresh_requested, this, [this]() {
+        if (is_showing_error())
+            set_loading(true);
+        datahub::DataHub::instance().request(QStringLiteral("news:category:") + category_, /*force=*/true);
+    });
+
     set_configurable(true);
     apply_styles();
     apply_config(cfg);
@@ -82,6 +90,10 @@ void NewsCategoryWidget::hub_resubscribe() {
     hub.unsubscribe(this);
     const QString topic = QStringLiteral("news:category:") + category_;
     hub.subscribe(this, topic, [this](const QVariant& v) { on_articles(v); });
+    hub.subscribe_errors(this, topic, [this](const QString& error) {
+        if (is_waiting_for_first_data())
+            set_error(tr("News feed failed: %1 — click refresh to retry").arg(error));
+    });
     const QVariant snap = hub.peek(topic);
     if (snap.isValid())
         on_articles(snap);

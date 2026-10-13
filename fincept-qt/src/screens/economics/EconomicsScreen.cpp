@@ -317,6 +317,10 @@ EconPanelBase* EconomicsScreen::get_or_create_panel(SourceEntry& entry) {
 
     entry.panel = panel;
     stack_->addWidget(panel);
+    // Persist the panel's inputs whenever the user runs a query, not only when the screen hides —
+    // a crash or kill after a long session otherwise loses every query typed since it opened.
+    connect(panel, &EconPanelBase::query_started, this,
+            [this]() { ScreenStateManager::instance().notify_changed(this); });
     LOG_INFO("EconomicsScreen", "Created panel for: " + entry.id);
 
     // Apply the state saved for this panel (restore_state() ran before the panel existed).

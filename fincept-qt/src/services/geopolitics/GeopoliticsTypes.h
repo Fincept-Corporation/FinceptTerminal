@@ -125,7 +125,8 @@ struct EventsPage {
     bool has_next = false;
     bool has_prev = false;
     double credits_used = 0.0;
-    int remaining_credits = -1; // -1 = unknown / not reported
+    /// Fractional (the balance is NUMERIC: one call can cost 0.35); < 0 = not reported.
+    double remaining_credits = -1;
     /// events_request_key() of the request that produced this page. events_loaded
     /// is a shared signal (hub refresh, MCP tools and the Geopolitics screen all
     /// trigger it), so a consumer compares this against its own request to tell
@@ -149,7 +150,6 @@ struct RelationshipNode {
     QString label;
     QString type;     // country, conflict, organization, crisis
     QString severity; // low, medium, high, critical
-    int dataset_count = 0;
     QStringList connections;
 };
 

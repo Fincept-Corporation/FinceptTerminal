@@ -42,14 +42,15 @@ struct TradeRoute {
     double end_lat = 0, end_lng = 0;
 };
 
+// Obsidian palette: negative / warning / positive / secondary text.
 inline QColor route_status_color(const QString& status) {
     if (status == QStringLiteral("critical"))
-        return QColor("#FF0000");
+        return QColor(0xdc, 0x26, 0x26);
     if (status == QStringLiteral("delayed"))
-        return QColor("#FFD700");
+        return QColor(0xca, 0x8a, 0x04);
     if (status == QStringLiteral("active"))
-        return QColor("#00FF00");
-    return QColor("#888888");
+        return QColor(0x16, 0xa3, 0x4a);
+    return QColor(0x80, 0x80, 0x80);
 }
 
 // ── Page envelope for area-search / multi-vessel responses ──────────────────
@@ -64,7 +65,9 @@ struct VesselsPage {
     int found_count = 0;   // multi-vessel only
     QStringList not_found; // multi-vessel only — IMOs missing from DB
     double credits_used = 0.0;
-    int remaining_credits = -1; // -1 = unknown / not reported
+    /// Fractional balance after the call; < 0 = not reported (also for cache hits,
+    /// whose stored balance would be stale).
+    double remaining_credits = -1;
 };
 
 struct VesselHistoryPage {
@@ -72,7 +75,7 @@ struct VesselHistoryPage {
     QVector<VesselData> history; // sorted newest-first
     int total_records = 0;
     double credits_used = 0.0;
-    int remaining_credits = -1;
+    double remaining_credits = -1; // see VesselsPage
 };
 
 // ── Area search params ──────────────────────────────────────────────────────

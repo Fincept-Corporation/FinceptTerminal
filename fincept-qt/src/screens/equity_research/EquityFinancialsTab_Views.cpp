@@ -41,6 +41,13 @@ namespace fincept::screens {
 
 using namespace financials_internal;
 
+namespace {
+// metric_card() builds the subtitle line only for a NON-null initial text. The cards below used
+// to pass the default `{}` (null), so their "x% YoY" / "x% margin" lines were never created and
+// every computed growth/margin subtitle was silently dropped.
+const QString kFinViewsWithSubtitle = QString("");
+} // namespace
+
 void EquityFinancialsTab::build_ui() {
     setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
     loading_overlay_ = new ui::LoadingOverlay(this);
@@ -78,6 +85,13 @@ void EquityFinancialsTab::build_ui() {
     make_btn(tr("Cash Flow"), btn_cashflow_);
     btn_income_->setChecked(true);
     btn_hl->addStretch();
+
+    // Which statements these are: yfinance's ANNUAL statements (fiscal years) in the
+    // company's reporting currency — the tab said none of this, and "YoY" read as TTM.
+    period_note_ = new QLabel(btn_bar);
+    period_note_->setStyleSheet(
+        QString("color:%1; font-size:10px; border:0; background:transparent;").arg(ui::colors::TEXT_TERTIARY()));
+    btn_hl->addWidget(period_note_);
 
     btn_export_csv_ = new QPushButton(tr("EXPORT CSV"));
     btn_export_csv_->setStyleSheet(QString(R"(
@@ -206,16 +220,16 @@ QWidget* EquityFinancialsTab::build_income_view() {
         // Row 1: 4 large cards
         auto* r1 = new QHBoxLayout;
         r1->setSpacing(8);
-        r1->addWidget(metric_card(tr("TOTAL REVENUE"), inc_revenue_val_, inc_revenue_sub_, kGreen));
-        r1->addWidget(metric_card(tr("GROSS PROFIT"), inc_gross_val_, inc_gross_sub_, kCyan));
-        r1->addWidget(metric_card(tr("OPERATING INCOME"), inc_opincome_val_, inc_opincome_sub_, kBlue));
-        r1->addWidget(metric_card(tr("NET INCOME"), inc_netincome_val_, inc_netincome_sub_, kGreen));
+        r1->addWidget(metric_card(tr("TOTAL REVENUE"), inc_revenue_val_, inc_revenue_sub_, kGreen, QStringLiteral("—"), kFinViewsWithSubtitle));
+        r1->addWidget(metric_card(tr("GROSS PROFIT"), inc_gross_val_, inc_gross_sub_, kCyan, QStringLiteral("—"), kFinViewsWithSubtitle));
+        r1->addWidget(metric_card(tr("OPERATING INCOME"), inc_opincome_val_, inc_opincome_sub_, kBlue, QStringLiteral("—"), kFinViewsWithSubtitle));
+        r1->addWidget(metric_card(tr("NET INCOME"), inc_netincome_val_, inc_netincome_sub_, kGreen, QStringLiteral("—"), kFinViewsWithSubtitle));
         svl->addLayout(r1);
 
         // Row 2: EBITDA + margins
         auto* r2 = new QHBoxLayout;
         r2->setSpacing(8);
-        r2->addWidget(metric_card(tr("EBITDA"), inc_ebitda_val_, inc_ebitda_sub_, kPurple));
+        r2->addWidget(metric_card(tr("EBITDA"), inc_ebitda_val_, inc_ebitda_sub_, kPurple, QStringLiteral("—"), kFinViewsWithSubtitle));
 
         // Margin cards (no subtitle needed)
         QLabel* dummy = nullptr;
@@ -467,7 +481,7 @@ QWidget* EquityFinancialsTab::build_cashflow_view() {
         r1->addWidget(metric_card(tr("OPERATING CF"), cf_operating_val_, dummy1, kGreen));
         r1->addWidget(metric_card(tr("INVESTING CF"), cf_investing_val_, dummy1, kOrange));
         r1->addWidget(metric_card(tr("FINANCING CF"), cf_financing_val_, dummy1, kPurple));
-        r1->addWidget(metric_card(tr("FREE CASH FLOW"), cf_fcf_val_, cf_fcf_sub_, kCyan));
+        r1->addWidget(metric_card(tr("FREE CASH FLOW"), cf_fcf_val_, cf_fcf_sub_, kCyan, QStringLiteral("—"), kFinViewsWithSubtitle));
         svl->addLayout(r1);
 
         auto* r2 = new QHBoxLayout;
@@ -486,7 +500,7 @@ QWidget* EquityFinancialsTab::build_cashflow_view() {
 
     // ── Cash Flow Trend Chart ─────────────────────────────────────────────────
     {
-        auto* sec = section_frame(tr("CASH FLOW TREND (BILLIONS $)"), kGreen);
+        auto* sec = section_frame(tr("CASH FLOW TREND (REPORTING CURRENCY)"), kGreen);
         cf_chart_ = make_chart_view(200);
         static_cast<QVBoxLayout*>(sec->layout())->addWidget(cf_chart_);
         vl->addWidget(sec);

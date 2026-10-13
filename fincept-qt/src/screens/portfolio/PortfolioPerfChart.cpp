@@ -282,8 +282,9 @@ void PortfolioPerfChart::set_currency(const QString& currency) {
     update_chart();
 }
 
-void PortfolioPerfChart::set_spy_history(const QStringList& dates, const QVector<double>& closes) {
-    set_benchmark_history(QStringLiteral("SPY"), dates, closes);
+void PortfolioPerfChart::set_twr_series(const QVector<portfolio::TwrPoint>& series) {
+    twr_series_ = series;
+    update_chart();
 }
 
 void PortfolioPerfChart::set_benchmark_history(const QString& symbol, const QStringList& dates,
@@ -426,9 +427,30 @@ void PortfolioPerfChart::update_chart() {
         nav_pts.append(QPointF(static_cast<double>(now_ms), live_nav));
     }
 
-    // ── Period P&L is *always* relative to the period baseline ───────────────
-    const double period_pnl = live_nav - period_baseline;
-    const double period_pnl_pct = period_baseline > 0 ? (period_pnl / period_baseline) * 100.0 : 0.0;
+    // ── Period return ─────────────────────────────────────────────────────────
+    // NAV change over the window counts every BUY as a gain and every SELL as
+    // a loss. Use the time-weighted series when the service has supplied one.
+    double period_pnl = live_nav - period_baseline;
+    double period_pnl_pct = period_baseline > 0 ? (period_pnl / period_baseline) * 100.0 : 0.0;
+    bool period_is_twr = false;
+    QString twr_since; // set when the TWR series starts after the period cutoff
+    {
+        const QString cutoff_iso = cutoff.toString(Qt::ISODate);
+        const portfolio::TwrPoint* base = nullptr;
+        for (const auto& p : twr_series_) {
+            if (p.date >= cutoff_iso) {
+                base = &p;
+                break;
+            }
+        }
+        if (base && !twr_series_.isEmpty() && &twr_series_.last() != base) {
+            period_pnl_pct = ((1.0 + twr_series_.last().cumulative) / (1.0 + base->cumulative) - 1.0) * 100.0;
+            period_pnl = period_pnl_pct; // only the sign is used below
+            period_is_twr = true;
+            if (base == &twr_series_.first() && base->date > cutoff_iso)
+                twr_since = base->date; // e.g. ALL/5Y: the series only covers its own window
+        }
+    }
 
     // ── Convert series to display space (currency value vs. base-100 indexed) ─
     auto to_display = [&](double v) -> double {
@@ -624,16 +646,24 @@ void PortfolioPerfChart::update_chart() {
 
     // ── Info labels ───────────────────────────────────────────────────────────
     const char* pnl_color = period_pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-    period_change_label_->setText(QString("%1  %2%3%")
+    period_change_label_->setText(QString("%1  %2%3%  %4")
                                       .arg(current_period_)
                                       .arg(period_pnl_pct >= 0 ? "+" : "")
-                                      .arg(QString::number(period_pnl_pct, 'f', 2)));
+                                      .arg(QString::number(period_pnl_pct, 'f', 2))
+                                      .arg(!period_is_twr        ? tr("NAV Δ")
+                                           : twr_since.isEmpty() ? tr("TWR")
+                                                                 : tr("TWR since %1").arg(twr_since)));
+    period_change_label_->setToolTip(period_is_twr ? tr("Time-weighted return over the period: buys and sells are "
+                                                        "capital flows, not performance.")
+                                                   : tr("Change in NAV over the period — includes money added or "
+                                                        "withdrawn (time-weighted history not available yet)."));
     period_change_label_->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600;").arg(pnl_color));
 
     const double total_pnl_pct = summary_.total_unrealized_pnl_percent;
     const char* total_color = total_pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
     total_return_label_->setText(
-        tr("TOTAL  %1%2%").arg(total_pnl_pct >= 0 ? "+" : "").arg(QString::number(total_pnl_pct, 'f', 2)));
+        tr("UNREAL.  %1%2%").arg(total_pnl_pct >= 0 ? "+" : "").arg(QString::number(total_pnl_pct, 'f', 2)));
+    total_return_label_->setToolTip(tr("Unrealized P&L of the open positions versus their average cost."));
     total_return_label_->setStyleSheet(QString("color:%1; font-size:14px; font-weight:700;").arg(total_color));
 
     nav_label_->setText(tr("NAV %1 %2").arg(currency_).arg(QString::number(live_nav, 'f', 2)) + benchmark_note);

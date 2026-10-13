@@ -681,6 +681,14 @@ void apply_template_to_service(ReportBuilderService* svc, const QString& name) {
         add("quote", "Prepared in accordance with applicable accounting standards.");
     }
 
+    // Every chart above carries made-up placeholder numbers. Flag them so the canvas
+    // (and the PDF/HTML export) labels them SAMPLE DATA until the user replaces the
+    // data — they used to print as if they were the company's real figures.
+    for (auto& c : doc.components) {
+        if (c.type == QLatin1String("chart") && !c.config.value("data").isEmpty())
+            c.config["sample"] = "1";
+    }
+
     svc->replace_document(doc);
 }
 

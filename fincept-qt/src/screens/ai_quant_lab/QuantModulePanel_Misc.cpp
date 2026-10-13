@@ -338,17 +338,39 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
         tvl->addWidget(build_input_row(tr("Assets"), assets_in, t));
 
         auto* cov_in = new QLineEdit(t);
-        cov_in->setPlaceholderText(tr("Covariance matrix JSON: [[0.04,0.01],[0.01,0.09]]"));
+        cov_in->setPlaceholderText(tr("Annualised covariance matrix (decimals), JSON: [[0.04,0.01],[0.01,0.09]]"));
         cov_in->setStyleSheet(input_ss());
         text_inputs_[method_id + "_cov"] = cov_in;
         tvl->addWidget(build_input_row(tr("Covariance Matrix"), cov_in, t));
 
         if (needs_returns) {
             auto* ret_in = new QLineEdit(t);
-            ret_in->setPlaceholderText(tr("Expected returns (comma-separated, e.g. 0.10,0.15,0.12)"));
+            ret_in->setPlaceholderText(tr("Annual expected returns as decimals (e.g. 0.10,0.15,0.12)"));
             ret_in->setStyleSheet(input_ss());
             text_inputs_[method_id + "_returns"] = ret_in;
             tvl->addWidget(build_input_row(tr("Expected Returns"), ret_in, t));
+        }
+
+        // One synthetic 3-asset case (names, annualised covariance, expected
+        // returns) so the optimiser can be tried without hand-typing a matrix.
+        {
+            QLineEdit* ret_edit = needs_returns ? text_inputs_.value(method_id + "_returns") : nullptr;
+            auto* sb = make_sample_button(
+                cov_in, t, tr("3 synthetic assets: annualised vols 20% / 15% / 8%, mild correlations."),
+                []() { return QStringLiteral("[[0.04,0.006,-0.002],[0.006,0.0225,0.001],[-0.002,0.001,0.0064]]"); });
+            QPointer<QLineEdit> assets_guard(assets_in);
+            QPointer<QLineEdit> ret_guard(ret_edit);
+            connect(sb, &QPushButton::clicked, this, [assets_guard, ret_guard]() {
+                const auto fill = [](QLineEdit* e, const QString& text) {
+                    e->setText(text);
+                    e->setProperty("quantSampleText", text);
+                };
+                if (assets_guard)
+                    fill(assets_guard, QStringLiteral("ASSET_A,ASSET_B,ASSET_C"));
+                if (ret_guard)
+                    fill(ret_guard, QStringLiteral("0.08,0.10,0.04"));
+            });
+            tvl->addWidget(sb);
         }
 
         auto* rf_spin = make_double_spin(0, 20, 2.0, 2, "%", t);
@@ -377,6 +399,10 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
                 display_error(tr("Covariance matrix has %1 row(s) but you listed %2 assets - they must match.")
                                   .arg(cov.size())
                                   .arg(assets_arr.size()));
+                return;
+            }
+            if (const QString err = check_numeric_matrix(cov, static_cast<int>(assets_arr.size())); !err.isEmpty()) {
+                display_error(tr("Covariance Matrix must be square (N×N for N assets): %1").arg(err));
                 return;
             }
             QJsonObject params;
@@ -425,6 +451,7 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
     bl_caps->setPlaceholderText(tr("Market caps (comma-separated, e.g. 2000,1500,800)"));
     bl_caps->setStyleSheet(input_ss());
     text_inputs_["bl_caps"] = bl_caps;
+    bl_caps->setToolTip(tr("Only relative size matters — they set the equilibrium (market) weights."));
     blvl->addWidget(build_input_row(tr("Market Caps ($B)"), bl_caps, bl));
     auto* bl_cov = new QLineEdit(bl);
     bl_cov->setPlaceholderText(tr("Covariance matrix JSON: [[0.04,0.01],[0.01,0.09]]"));
@@ -432,12 +459,12 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
     text_inputs_["bl_cov"] = bl_cov;
     blvl->addWidget(build_input_row(tr("Covariance Matrix"), bl_cov, bl));
     auto* bl_views = new QLineEdit(bl);
-    bl_views->setPlaceholderText(tr("Expected return per asset, in the order listed (e.g. 0.05,0.10)"));
+    bl_views->setPlaceholderText(tr("Annual expected return per asset as decimals, in the order listed (e.g. 0.05,0.10)"));
     bl_views->setStyleSheet(input_ss());
     text_inputs_["bl_views"] = bl_views;
     blvl->addWidget(build_input_row(tr("Views"), bl_views, bl));
     auto* bl_conf = new QLineEdit(bl);
-    bl_conf->setPlaceholderText(tr("View confidences (e.g. 0.8,0.6)"));
+    bl_conf->setPlaceholderText(tr("Confidence per view, 0–1 (e.g. 0.8,0.6)"));
     bl_conf->setStyleSheet(input_ss());
     text_inputs_["bl_conf"] = bl_conf;
     blvl->addWidget(build_input_row(tr("View Confidences"), bl_conf, bl));
@@ -484,6 +511,17 @@ QWidget* QuantModulePanel::build_portfolio_opt_panel() {
         const auto cov_doc = QJsonDocument::fromJson(text_inputs_["bl_cov"]->text().toUtf8(), &perr);
         if (perr.error != QJsonParseError::NoError || !cov_doc.isArray()) {
             display_error(tr("Covariance Matrix must be a JSON 2-D array — %1").arg(perr.errorString()));
+            return;
+        }
+        if (cov_doc.array().size() != assets.size()) {
+            display_error(tr("Covariance matrix has %1 row(s) but you listed %2 assets - they must match.")
+                              .arg(cov_doc.array().size())
+                              .arg(assets.size()));
+            return;
+        }
+        if (const QString err = check_numeric_matrix(cov_doc.array(), static_cast<int>(assets.size()));
+            !err.isEmpty()) {
+            display_error(tr("Covariance Matrix must be square (N×N for N assets): %1").arg(err));
             return;
         }
         QJsonObject params;
@@ -533,6 +571,11 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     ic_rets->setStyleSheet(input_ss());
     text_inputs_["ev_returns"] = ic_rets;
     icvl->addWidget(build_input_row(tr("Returns"), ic_rets, ic));
+    icvl->addWidget(make_sample_button(ic_preds, ic, tr("252 synthetic predictions"),
+                                       []() { return sample_returns(311); }));
+    icvl->addWidget(make_sample_button(ic_rets, ic, tr("252 synthetic realised returns (independent of the "
+                                                       "predictions, so IC ≈ 0)"),
+                                       []() { return sample_returns(312); }));
     auto* ic_method = new QComboBox(ic);
     ic_method->addItems({"pearson", "spearman"});
     ic_method->setStyleSheet(combo_ss());
@@ -594,6 +637,10 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     rep_rets->setStyleSheet(input_ss());
     text_inputs_["ev_rep_returns"] = rep_rets;
     repvl->addWidget(build_input_row(tr("Returns"), rep_rets, rep));
+    repvl->addWidget(make_sample_button(rep_preds, rep, tr("252 synthetic predictions"),
+                                        []() { return sample_returns(321); }));
+    repvl->addWidget(make_sample_button(rep_rets, rep, tr("252 synthetic realised returns"),
+                                        []() { return sample_returns(322); }));
     auto* rep_run = make_run_button(tr("GENERATE EVALUATION REPORT"), rep);
     connect(rep_run, &QPushButton::clicked, this, [this]() {
         QJsonArray preds, rets;
@@ -639,6 +686,8 @@ QWidget* QuantModulePanel::build_factor_evaluation_panel() {
     risk_rets->setStyleSheet(input_ss());
     text_inputs_["ev_risk_returns"] = risk_rets;
     riskvl->addWidget(build_input_row(tr("Returns"), risk_rets, risk));
+    riskvl->addWidget(make_sample_button(risk_rets, risk, tr("252 synthetic daily returns (mu=0.05%, sigma=1.2%)"),
+                                         []() { return sample_returns(331); }));
     auto* risk_bench = new QLineEdit(risk);
     risk_bench->setPlaceholderText(tr("Benchmark returns (optional, comma-separated)"));
     risk_bench->setStyleSheet(input_ss());
@@ -769,13 +818,17 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     rpvl->setContentsMargins(12, 12, 12, 12);
     rpvl->setSpacing(8);
     auto* rp_returns = new QLineEdit(rp);
-    rp_returns->setPlaceholderText(tr("Asset returns matrix JSON: [[0.01,-0.02,...],[...]]"));
+    rp_returns->setPlaceholderText(
+        tr("DAILY returns as decimals, one row per day, one column per asset: [[0.01,-0.02],[0.00,0.01]]"));
     rp_returns->setStyleSheet(input_ss());
     text_inputs_["st_rp_returns"] = rp_returns;
     rpvl->addWidget(build_input_row(tr("Returns Matrix"), rp_returns, rp));
-    auto* rp_target = make_double_spin(0.01, 1.0, 0.10, 2, "", rp);
+    // Annualised target volatility. Entered in percent (10 = 10 %/yr); the
+    // script takes a fraction. The bare 0.10 spin gave no hint of either unit.
+    auto* rp_target = make_double_spin(1.0, 100.0, 10.0, 1, "%", rp);
+    rp_target->setToolTip(tr("Annualised portfolio volatility the risk-parity weights are scaled to."));
     double_inputs_["st_rp_target"] = rp_target;
-    rpvl->addWidget(build_input_row(tr("Target Risk"), rp_target, rp));
+    rpvl->addWidget(build_input_row(tr("Target Vol (ann.)"), rp_target, rp));
     auto* rp_freq = new QComboBox(rp);
     rp_freq->addItems({"monthly", "weekly", "daily", "quarterly"});
     rp_freq->setStyleSheet(combo_ss());
@@ -795,10 +848,22 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
             display_error(tr("Returns Matrix must contain at least one row of per-asset returns."));
             return;
         }
+        if (const QString err = check_numeric_matrix(rows); !err.isEmpty()) {
+            display_error(tr("Returns Matrix: %1 Every row needs one return per asset.").arg(err));
+            return;
+        }
+        // A covariance needs at least two assets and more periods than one. The
+        // script annualises with sqrt(252), so rows must be DAILY returns.
+        if (rows.first().toArray().size() < 2 || rows.size() < 3) {
+            display_error(tr("Risk parity needs at least 2 assets (columns) and 3 periods (rows); got %1 × %2.")
+                              .arg(rows.size())
+                              .arg(rows.first().toArray().size()));
+            return;
+        }
         show_loading(tr("Solving risk parity over %1 period(s)...").arg(rows.size()));
         QJsonObject params;
         params["returns"] = rows;
-        params["target_risk"] = double_inputs_["st_rp_target"]->value();
+        params["target_risk"] = double_inputs_["st_rp_target"]->value() / 100.0;
         params["rebalance_frequency"] = combo_inputs_["st_rp_freq"]->currentText();
         AIQuantLabService::instance().strategy_create("create_risk_parity", params);
     });
@@ -816,6 +881,8 @@ QWidget* QuantModulePanel::build_strategy_builder_panel() {
     pm_rets->setStyleSheet(input_ss());
     text_inputs_["st_pm_returns"] = pm_rets;
     pmvl->addWidget(build_input_row(tr("Returns"), pm_rets, pm));
+    pmvl->addWidget(make_sample_button(pm_rets, pm, tr("252 synthetic daily portfolio returns"),
+                                       []() { return sample_returns(341); }));
     auto* pm_bench = new QLineEdit(pm);
     pm_bench->setPlaceholderText(tr("Benchmark returns (optional)"));
     pm_bench->setStyleSheet(input_ss());

@@ -6,6 +6,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QElapsedTimer>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPalette>
@@ -82,6 +83,7 @@ DashboardCanvas::DashboardCanvas(QWidget* parent) : QWidget(parent) {
 }
 
 DashboardCanvas::~DashboardCanvas() {
+    cancel_pending_build();
     for (auto* t : tiles_)
         t->deleteLater();
     tiles_.clear();
@@ -110,7 +112,11 @@ GridLayout DashboardCanvas::current_layout() const {
     return out;
 }
 
-void DashboardCanvas::load_layout(const GridLayout& layout) {
+void DashboardCanvas::load_layout(const GridLayout& layout, TileBuild mode) {
+    QElapsedTimer timer;
+    timer.start();
+
+    cancel_pending_build();
     for (auto* t : tiles_)
         t->deleteLater();
     tiles_.clear();
@@ -125,33 +131,23 @@ void DashboardCanvas::load_layout(const GridLayout& layout) {
     if (width() > 0)
         layout_.cols = responsive_cols(width());
 
-    // Unknown widget types used to be skipped while the GridItem stayed in
-    // layout_.items — leaving a permanent invisible hole in the grid, a
-    // widget_count that disagreed with the layout, and the dead entry being
-    // re-serialised on every save. Drop them instead.
+    // Unknown widget types are dropped up front (a registry lookup is cheap),
+    // so the grid is compacted once, before any tile is placed: tiles that a
+    // progressive build has already put on screen never shift afterwards.
+    // (They used to be skipped while the GridItem stayed in layout_.items —
+    // a permanent invisible hole re-serialised on every save.)
     QVector<GridItem> kept;
     kept.reserve(layout_.items.size());
     for (const auto& item : layout_.items) {
-        const WidgetMeta* meta = WidgetRegistry::instance().find(item.id);
-        if (!meta) {
+        if (!WidgetRegistry::instance().find(item.id)) {
             LOG_WARN("Canvas", QString("Dropping tile with unknown widget type: %1").arg(item.id));
             continue;
         }
-        auto* widget = meta->factory(item.config);
-        if (!widget) {
-            LOG_WARN("Canvas", QString("Factory returned null for widget type: %1").arg(item.id));
-            continue;
-        }
-        auto* tile = new WidgetTile(item.instance_id, widget, this);
-        connect_tile(tile);
-        tiles_.append(tile);
-        tile->show();
         kept.append(item);
     }
-    if (kept.size() != layout_.items.size()) {
+    const bool dropped_unknown = kept.size() != layout_.items.size();
+    if (dropped_unknown)
         layout_.items = compact_vertical(kept);
-        emit layout_changed(layout_);
-    }
 
     // Remember the layout exactly as designed, then fold it into the grid this
     // width affords. A layout built for more columns than the panel has (a
@@ -165,13 +161,141 @@ void DashboardCanvas::load_layout(const GridLayout& layout) {
     if (layout_.cols < canonical_cols_)
         fit_items_to_cols();
 
-    reflow_tiles();
+    // Final geometry is known now — size the canvas before any tile exists.
     update_canvas_height();
-    emit widget_count_changed(tiles_.size());
-    LOG_INFO("Canvas", QString("Loaded layout with %1 tiles, %2 cols").arg(tiles_.size()).arg(layout_.cols));
+
+    // Build order: tiles intersecting the visible part of the canvas first,
+    // then the rest, each group top-to-bottom / left-to-right.
+    QRect visible = visibleRegion().boundingRect();
+    if (visible.isEmpty())
+        visible = QRect(0, 0, std::max(width(), 1), 900);
+    const int container_w = std::max(width(), 1);
+    QVector<const GridItem*> order;
+    order.reserve(layout_.items.size());
+    for (const auto& item : layout_.items)
+        order.append(&item);
+    std::stable_sort(order.begin(), order.end(), [&](const GridItem* a, const GridItem* b) {
+        const bool va =
+            grid_to_rect(a->cell, layout_.cols, container_w, layout_.row_h, layout_.margin).intersects(visible);
+        const bool vb =
+            grid_to_rect(b->cell, layout_.cols, container_w, layout_.row_h, layout_.margin).intersects(visible);
+        if (va != vb)
+            return va;
+        if (a->cell.y != b->cell.y)
+            return a->cell.y < b->cell.y;
+        return a->cell.x < b->cell.x;
+    });
+    QStringList build_order;
+    build_order.reserve(order.size());
+    for (const auto* item : order)
+        build_order.append(item->instance_id);
+
+    if (mode == TileBuild::Immediate) {
+        for (const QString& id : build_order) {
+            const GridItem* item = item_for_id(id);
+            if (item && !build_tile(*item))
+                drop_unbuildable_item(id);
+        }
+        reflow_tiles();
+        update_canvas_height();
+        emit widget_count_changed(tiles_.size());
+        LOG_INFO("Canvas", QString("Loaded layout with %1 tiles, %2 cols in %3 ms")
+                               .arg(tiles_.size())
+                               .arg(layout_.cols)
+                               .arg(timer.elapsed()));
+    } else {
+        pending_build_ = build_order;
+        pending_ids_ = QSet<QString>(build_order.cbegin(), build_order.cend());
+        // Report the planned count now so the toolbar / status bar don't read
+        // EMPTY while the tiles stream in; corrected at the end if any fail.
+        emit widget_count_changed(static_cast<int>(pending_build_.size()));
+        update(); // paint the skeleton frames for the queued cells
+        const quint64 gen = build_generation_;
+        QTimer::singleShot(0, this, [this, gen]() { build_next_pending_tile(gen); });
+        LOG_INFO("Canvas", QString("Loading layout with %1 tiles, %2 cols (progressive)")
+                               .arg(pending_build_.size())
+                               .arg(layout_.cols));
+    }
+
+    if (dropped_unknown)
+        emit layout_changed(layout_);
 }
 
-void DashboardCanvas::apply_template(const QString& template_id) {
+bool DashboardCanvas::build_tile(const GridItem& item) {
+    const WidgetMeta* meta = WidgetRegistry::instance().find(item.id);
+    if (!meta)
+        return false;
+    auto* widget = meta->factory(item.config);
+    if (!widget) {
+        LOG_WARN("Canvas", QString("Factory returned null for widget type: %1").arg(item.id));
+        return false;
+    }
+    auto* tile = new WidgetTile(item.instance_id, widget, this);
+    connect_tile(tile);
+    tiles_.append(tile);
+    if (width() > 0)
+        tile->setGeometry(grid_to_rect(item.cell, layout_.cols, width(), layout_.row_h, layout_.margin));
+    tile->show();
+    return true;
+}
+
+void DashboardCanvas::build_next_pending_tile(quint64 generation) {
+    if (generation != build_generation_ || pending_build_.isEmpty())
+        return;
+
+    const QString id = pending_build_.takeFirst();
+    pending_ids_.remove(id);
+    // The item can be gone (removed meanwhile) or already built (add path).
+    if (const GridItem* item = item_for_id(id); item && !tile_for_id(id)) {
+        if (!build_tile(*item))
+            drop_unbuildable_item(id);
+    }
+    update(); // the skeleton this tile replaced
+
+    if (!pending_build_.isEmpty()) {
+        QTimer::singleShot(0, this, [this, generation]() { build_next_pending_tile(generation); });
+        return;
+    }
+    emit widget_count_changed(tiles_.size());
+    LOG_INFO("Canvas", QString("Progressive layout build finished: %1 tiles").arg(tiles_.size()));
+}
+
+void DashboardCanvas::flush_pending_tiles() {
+    if (pending_build_.isEmpty())
+        return;
+    const QStringList ids = pending_build_;
+    cancel_pending_build();
+    for (const QString& id : ids) {
+        const GridItem* item = item_for_id(id);
+        if (item && !tile_for_id(id) && !build_tile(*item))
+            drop_unbuildable_item(id);
+    }
+    reflow_tiles();
+    update_canvas_height();
+    update();
+    emit widget_count_changed(tiles_.size());
+}
+
+void DashboardCanvas::cancel_pending_build() {
+    ++build_generation_;
+    pending_build_.clear();
+    pending_ids_.clear();
+}
+
+void DashboardCanvas::drop_unbuildable_item(const QString& instance_id) {
+    auto it = std::find_if(layout_.items.begin(), layout_.items.end(),
+                           [&](const GridItem& i) { return i.instance_id == instance_id; });
+    if (it == layout_.items.end())
+        return;
+    layout_.items.erase(it);
+    layout_.items = compact_vertical(layout_.items);
+    canonical_valid_ = false;
+    reflow_tiles();
+    update_canvas_height();
+    emit layout_changed(layout_);
+}
+
+void DashboardCanvas::apply_template(const QString& template_id, TileBuild mode) {
     const auto tmpls = all_dashboard_templates();
     for (const auto& t : tmpls) {
         if (t.id == template_id) {
@@ -191,7 +315,7 @@ void DashboardCanvas::apply_template(const QString& template_id) {
                 layout.items.append(item);
             }
             layout.items = compact_vertical(layout.items);
-            load_layout(layout);
+            load_layout(layout, mode);
             emit layout_changed(layout_);
             return;
         }
@@ -200,40 +324,51 @@ void DashboardCanvas::apply_template(const QString& template_id) {
 }
 
 void DashboardCanvas::add_widget(const QString& widget_type_id) {
+    add_widget_with(widget_type_id, QJsonObject{});
+}
+
+QString DashboardCanvas::add_widget_with(const QString& widget_type_id, const QJsonObject& config, int x, int y,
+                                         int w, int h) {
     const WidgetMeta* meta = WidgetRegistry::instance().find(widget_type_id);
     if (!meta)
-        return;
+        return {};
 
     GridItem item;
     item.id = widget_type_id;
     item.instance_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    int w = std::min(meta->default_w, layout_.cols);
-    int h = meta->default_h;
-    item.cell = find_first_fit(layout_.items, w, h, layout_.cols);
-    item.cell.min_w = meta->min_w;
+    item.config = config;
+    const int cols = std::max(1, layout_.cols);
+    const int iw = std::clamp(w > 0 ? std::max(w, meta->min_w) : meta->default_w, 1, cols);
+    const int ih = std::max(1, h > 0 ? std::max(h, meta->min_h) : meta->default_h);
+    if (x < 0 && y < 0) {
+        item.cell = find_first_fit(layout_.items, iw, ih, cols);
+    } else {
+        item.cell.w = iw;
+        item.cell.h = ih;
+        item.cell.x = std::clamp(x < 0 ? 0 : x, 0, cols - iw);
+        item.cell.y = std::max(0, y < 0 ? max_row(layout_.items) : y);
+    }
+    item.cell.min_w = std::min(meta->min_w, cols);
     item.cell.min_h = meta->min_h;
 
-    auto* widget = meta->factory(item.config);
-    if (!widget) {
-        // Never leave a GridItem behind for a widget that failed to construct —
-        // that produced an invisible tile that still reserved grid space.
-        LOG_WARN("Canvas", QString("Factory returned null for widget type: %1").arg(widget_type_id));
-        return;
-    }
+    // Construct first: never leave a GridItem behind for a widget that failed
+    // to construct — that produced an invisible tile that still reserved space.
+    if (!build_tile(item))
+        return {};
 
     layout_.items.append(item);
+    // An explicit position pushes whatever it lands on down; auto-placement
+    // already found a free spot.
+    if (x >= 0 || y >= 0)
+        layout_.items = resolve_collisions(layout_.items, item);
     layout_.items = compact_vertical(layout_.items);
     canonical_valid_ = false; // layout edited at the current column count
-
-    auto* tile = new WidgetTile(item.instance_id, widget, this);
-    connect_tile(tile);
-    tiles_.append(tile);
-    tile->show();
 
     reflow_tiles();
     update_canvas_height();
     emit widget_count_changed(tiles_.size());
     emit layout_changed(layout_);
+    return item.instance_id;
 }
 
 void DashboardCanvas::remove_widget(const QString& instance_id) {
@@ -241,6 +376,8 @@ void DashboardCanvas::remove_widget(const QString& instance_id) {
                            [&](const GridItem& i) { return i.instance_id == instance_id; });
     if (it != layout_.items.end())
         layout_.items.erase(it);
+    pending_build_.removeAll(instance_id);
+    pending_ids_.remove(instance_id);
 
     auto* tile = tile_for_id(instance_id);
     if (tile) {
@@ -261,6 +398,54 @@ void DashboardCanvas::set_row_height(int px) {
     reflow_tiles(true);
     update_canvas_height();
     emit layout_changed(layout_);
+}
+
+bool DashboardCanvas::set_item_cell(const QString& instance_id, int x, int y, int w, int h) {
+    GridItem* item = item_for_id(instance_id);
+    if (!item)
+        return false;
+    const int cols = std::max(1, layout_.cols);
+    GridCell cell = item->cell;
+    if (w > 0)
+        cell.w = std::clamp(std::max(w, cell.min_w), 1, cols);
+    if (h > 0)
+        cell.h = std::max(h, cell.min_h);
+    if (x >= 0)
+        cell.x = x;
+    if (y >= 0)
+        cell.y = y;
+    cell.x = std::clamp(cell.x, 0, cols - cell.w);
+    item->cell = cell;
+
+    GridItem moving;
+    moving.instance_id = instance_id;
+    moving.cell = cell;
+    layout_.items = resolve_collisions(layout_.items, moving);
+    layout_.items = compact_vertical(layout_.items);
+    canonical_valid_ = false; // layout edited at the current column count
+
+    reflow_tiles(true);
+    update_canvas_height();
+    emit layout_changed(layout_);
+    return true;
+}
+
+bool DashboardCanvas::set_item_config(const QString& instance_id, const QJsonObject& config) {
+    GridItem* item = item_for_id(instance_id);
+    if (!item)
+        return false;
+    item->config = config;
+    for (auto& ci : canonical_items_) {
+        if (ci.instance_id == instance_id) {
+            ci.config = config;
+            break;
+        }
+    }
+    if (auto* tile = tile_for_id(instance_id); tile && tile->content_widget())
+        tile->content_widget()->apply_config(config);
+    // A still-queued tile is built from item->config, which is already updated.
+    emit layout_changed(layout_);
+    return true;
 }
 
 // ── Drag handling (swap on collision) ─────────────────────────────────────────
@@ -562,6 +747,22 @@ void DashboardCanvas::paintEvent(QPaintEvent* event) {
                 p.drawLine(clip.left(), y, clip.right(), y);
         }
     }
+
+    // Skeleton frames for tiles a progressive build has not constructed yet,
+    // so the grid reads as "loading", not as holes.
+    if (!pending_ids_.isEmpty()) {
+        p.setPen(QPen(QColor(tokens_.border_dim), 1));
+        const QColor fill(tokens_.bg_surface);
+        for (const auto& item : layout_.items) {
+            if (!pending_ids_.contains(item.instance_id))
+                continue;
+            const QRect r = grid_to_rect(item.cell, layout_.cols, width(), layout_.row_h, layout_.margin);
+            if (!r.intersects(clip))
+                continue;
+            p.fillRect(r, fill);
+            p.drawRect(r.adjusted(0, 0, -1, -1));
+        }
+    }
 }
 
 // ── Private helpers ───────────────────────────────────────────────────────────
@@ -569,6 +770,8 @@ void DashboardCanvas::paintEvent(QPaintEvent* event) {
 void DashboardCanvas::reflow_tiles(bool animate) {
     if (width() <= 0)
         return;
+    if (!pending_ids_.isEmpty())
+        update(); // skeleton frames follow their (possibly moved) cells
 
     for (const auto& item : layout_.items) {
         auto* tile = tile_for_id(item.instance_id);
@@ -614,13 +817,6 @@ void DashboardCanvas::update_placeholder(const GridCell& cell) {
 
 void DashboardCanvas::hide_placeholder() {
     placeholder_->hide();
-}
-
-void DashboardCanvas::rebuild_grid_cache() {
-    // Grid lines are now painted directly in paintEvent using the clip rect.
-    // This avoids allocating a full-height pixmap that caused scroll jitter.
-    // Method kept for API compatibility; just triggers a repaint.
-    update();
 }
 
 void DashboardCanvas::connect_tile(WidgetTile* tile) {

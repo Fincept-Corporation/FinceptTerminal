@@ -26,9 +26,49 @@ from finagent_core.agentic.budget import BudgetGuard
 from finagent_core.agentic.reflector import Reflector, ReflectorDecision
 from finagent_core.agentic.reflexion_store import ReflexionStore
 from finagent_core.agentic.skill_library import SkillLibrary
-from finagent_core.task_state import ResumableTaskRunner, _DEFAULT_DB
+from finagent_core.task_state import ResumableTaskRunner
 
 EventEmitter = Callable[[str, Dict[str, Any]], None]
+
+# Config keys minted fresh by the terminal for every run: the bridge endpoint,
+# the run-scoped bridge token (dead once that run's process exits), the
+# destructive capability token and the tool catalogue built for that run. They
+# must never be persisted — a stored token is a credential at rest and is
+# useless on resume anyway — and on resume the live values replace them.
+_RUNTIME_CONFIG_KEYS = (
+    "terminal_mcp_endpoint",
+    "terminal_mcp_token",
+    "terminal_mcp_destructive_token",
+    "terminal_tools",
+)
+
+
+def persistable_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """The agent config as it may be stored in agent_tasks.config_json: per-run
+    bridge wiring removed, and no credential (the model block keeps provider /
+    model id but loses api_key; main.py injects a live key on every run)."""
+    out = {k: v for k, v in (config or {}).items() if k not in _RUNTIME_CONFIG_KEYS}
+    model = out.get("model")
+    if isinstance(model, dict) and "api_key" in model:
+        out["model"] = {k: v for k, v in model.items() if k != "api_key"}
+    return out
+
+
+def overlay_runtime_config(stored: Dict[str, Any], live: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Stored task config + this run's live wiring and credentials. Used on
+    resume: the stored config is the task's policy, the live payload carries the
+    fresh bridge token / catalogue and the resolved model (with its key)."""
+    merged = dict(stored or {})
+    live = live or {}
+    for key in _RUNTIME_CONFIG_KEYS:
+        if key in live:
+            merged[key] = live[key]
+        else:
+            merged.pop(key, None)
+    live_model = live.get("model")
+    if isinstance(live_model, dict) and live_model.get("provider"):
+        merged["model"] = live_model
+    return merged
 
 
 class AgenticRunner(ResumableTaskRunner):
@@ -37,7 +77,7 @@ class AgenticRunner(ResumableTaskRunner):
     def __init__(
         self,
         api_keys: Dict[str, str],
-        db_path: str = _DEFAULT_DB,
+        db_path: Optional[str] = None,
         emit: Optional[EventEmitter] = None,
     ):
         super().__init__(api_keys=api_keys, db_path=db_path)
@@ -73,12 +113,17 @@ class AgenticRunner(ResumableTaskRunner):
     # ── Public lifecycle ─────────────────────────────────────────────────────
 
     def start_task(self, query: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        task_id = self.state_mgr.create_task(query, config)
+        # Persist the policy, not the per-run secrets (see persistable_config);
+        # this run keeps using the full in-memory config.
+        task_id = self.state_mgr.create_task(query, persistable_config(config))
         self.state_mgr.update_status(task_id, "running")
         self._emit("task_started", {"task_id": task_id, "query": query})
         return self._run_loop(task_id, query, config, completed_steps=[], saved_plan=None)
 
-    def resume_task(self, task_id: str) -> Dict[str, Any]:
+    def resume_task(self, task_id: str, live_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Resume from the last checkpoint. `live_config` is this run's payload
+        config: its fresh bridge wiring and resolved model replace whatever the
+        stored config holds (tokens die with the run that minted them)."""
         task = self.state_mgr.get_task(task_id)
         if not task:
             return {"success": False, "error": f"Task {task_id} not found"}
@@ -112,7 +157,8 @@ class AgenticRunner(ResumableTaskRunner):
              "with_user_input": bool(pending_answer)},
         )
         return self._run_loop(
-            task_id, task["query"], task["config"], task["steps"], task.get("plan"),
+            task_id, task["query"], overlay_runtime_config(task["config"], live_config),
+            task["steps"], task.get("plan"),
             pending_answer=pending_answer,
         )
 

@@ -217,10 +217,14 @@ void SurfaceTableWidget::show_yield(const YieldCurveData& d) {
     float mn = 0.0f, mx = 1.0f;
     surface_table_minmax(d.z, mn, mx);
     std::vector<std::string> r_labels, c_labels;
-    for (int t : d.time_points) {
-        std::string s = "D";
-        s += std::to_string(t);
-        r_labels.push_back(std::move(s));
+    if (d.time_labels.size() == d.z.size()) {
+        r_labels = d.time_labels; // fetched data: settlement dates
+    } else {
+        for (int t : d.time_points) {
+            std::string s = "D";
+            s += std::to_string(t);
+            r_labels.push_back(std::move(s));
+        }
     }
     for (int m : d.maturities) {
         std::string s = std::to_string(m);

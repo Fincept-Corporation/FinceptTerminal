@@ -1,11 +1,14 @@
 #include "services/workflow/nodes/AnalyticsNodes.h"
 
 #include "python/PythonRunner.h"
+#include "services/backtesting/BacktestingService.h"
 #include "services/workflow/NodeRegistry.h"
 
+#include <QDate>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRandomGenerator>
+#include <QTimer>
 
 #include <QJsonObject>
 #include <QSet>
@@ -328,6 +331,195 @@ bool an_pair_stats(const QVector<double>& a, const QVector<double>& b, int lookb
     return true;
 }
 
+// ── Backtest Engine node ────────────────────────────────────────────────────
+
+constexpr int kAnBacktestMaxTrades = 200;               // trades echoed into the node output
+constexpr int kAnBacktestTimeoutMs = 6 * 60 * 1000;     // vectorbt import + data download + run
+
+// Symbols from a node parameter / upstream payload: "AAPL", "AAPL, MSFT" or a JSON array.
+QJsonArray an_backtest_symbols(const QJsonValue& v) {
+    QJsonArray out;
+    if (v.isArray()) {
+        for (const QJsonValue& s : v.toArray()) {
+            const QString t = s.toString().trimmed().toUpper();
+            if (!t.isEmpty())
+                out.append(t);
+        }
+    } else if (v.isString()) {
+        for (const QString& s : v.toString().split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+            const QString t = s.trimmed().toUpper();
+            if (!t.isEmpty())
+                out.append(t);
+        }
+    }
+    return out;
+}
+
+// Runs one backtest through BacktestingService (the same vectorbt path the Backtesting screen
+// and Portfolio use, including broker-candle injection) and reports a summary + trades.
+void an_run_backtest(const QJsonObject& params, const QVector<QJsonValue>& inputs,
+                     std::function<void(bool, QJsonValue, QString)> cb) {
+    using fincept::services::backtest::BacktestingService;
+
+    // Parameters, optionally overridden by the upstream "Strategy" payload.
+    QJsonArray symbols = an_backtest_symbols(params.value("symbols"));
+    QString strategy = params.value("strategy").toString(QStringLiteral("sma_crossover")).trimmed();
+    QJsonObject strategy_params = params.value("strategy_params").toObject();
+    if (!inputs.isEmpty() && inputs[0].isObject()) {
+        const QJsonObject in = inputs[0].toObject();
+        const QJsonArray in_syms =
+            an_backtest_symbols(in.contains("symbols") ? in.value("symbols") : in.value("symbol"));
+        if (!in_syms.isEmpty())
+            symbols = in_syms;
+        const QJsonValue s = in.value("strategy");
+        if (s.isString() && !s.toString().trimmed().isEmpty()) {
+            strategy = s.toString().trimmed();
+        } else if (s.isObject()) {
+            const QJsonObject so = s.toObject();
+            if (!so.value("type").toString().isEmpty())
+                strategy = so.value("type").toString();
+            if (so.value("params").isObject())
+                strategy_params = so.value("params").toObject();
+        }
+        if (in.value("strategy_params").isObject())
+            strategy_params = in.value("strategy_params").toObject();
+    }
+    if (symbols.isEmpty()) {
+        cb(false, {}, "Backtest Engine needs at least one symbol (parameter 'Symbols' or an upstream 'symbol')");
+        return;
+    }
+    if (strategy.isEmpty())
+        strategy = QStringLiteral("sma_crossover");
+
+    const QDate today = QDate::currentDate();
+    QDate start = QDate::fromString(params.value("start_date").toString().trimmed(), Qt::ISODate);
+    QDate end = QDate::fromString(params.value("end_date").toString().trimmed(), Qt::ISODate);
+    if (!end.isValid() || end > today)
+        end = today;
+    if (!start.isValid())
+        start = end.addYears(-1);
+    if (start >= end) {
+        cb(false, {},
+           QString("Start date %1 must be before end date %2").arg(start.toString(Qt::ISODate), end.toString(Qt::ISODate)));
+        return;
+    }
+    const double capital = params.value("initial_capital").toDouble(100000);
+    if (capital <= 0) {
+        cb(false, {}, "Initial capital must be greater than zero");
+        return;
+    }
+    const double commission_pct = std::max(0.0, params.value("commission").toDouble(0.1));
+
+    QJsonObject args;
+    args["symbols"] = symbols;
+    args["startDate"] = start.toString(Qt::ISODate);
+    args["endDate"] = end.toString(Qt::ISODate);
+    args["interval"] = QStringLiteral("1d");
+    args["initialCapital"] = capital;
+    args["commission"] = commission_pct / 100.0;
+    QJsonObject strat;
+    strat["type"] = strategy;
+    strat["params"] = strategy_params;
+    args["strategy"] = strat;
+
+    // Correlate on the run id execute() hands back, so a concurrent run from the Backtesting
+    // screen or Portfolio can never be mistaken for this node's. The id is 0 only while
+    // execute() itself is on the stack (a synchronous failure), when nothing else can be
+    // in flight on this thread. The context object owns the connections and the timeout.
+    auto& svc = BacktestingService::instance();
+    auto* ctx = new QObject(&svc);
+    auto finished = std::make_shared<bool>(false);
+    auto run_id = std::make_shared<quint64>(0);
+    auto is_mine = [run_id](quint64 id) { return *run_id == 0 || id == *run_id; };
+    auto finish = [ctx, finished, cb](bool ok, QJsonValue out, QString err) {
+        if (*finished)
+            return;
+        *finished = true;
+        ctx->deleteLater();
+        cb(ok, std::move(out), std::move(err));
+    };
+
+    QObject::connect(
+        &svc, &BacktestingService::run_completed, ctx,
+        [finish, is_mine, capital, symbols, strategy, start, end](quint64 id, const QString&, const QString&,
+                                                                  const QJsonObject& data) {
+            if (!is_mine(id))
+                return;
+            const QJsonObject stats = data.value("statistics").toObject();
+
+            if (data.value("usingSyntheticData").toBool(false)) {
+                finish(false, {},
+                       "The backtest ran on synthetic data because market data for the symbols could not be "
+                       "loaded - the result has no financial meaning, so it is not passed on");
+                return;
+            }
+
+            const QJsonObject perf = data.value("performance").toObject();
+            QJsonObject metrics;
+            for (const char* k : {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio", "maxDrawdown",
+                                  "volatility", "calmarRatio", "winRate", "profitFactor", "totalTrades",
+                                  "winningTrades", "losingTrades", "averageTradeReturn", "expectancy"}) {
+                const QString key = QString::fromLatin1(k);
+                if (perf.contains(key))
+                    metrics[key] = perf.value(key);
+            }
+
+            const QJsonArray all_trades = data.value("trades").toArray();
+            QJsonArray trades;
+            for (int i = 0; i < all_trades.size() && i < kAnBacktestMaxTrades; ++i) {
+                const QJsonObject t = all_trades[i].toObject();
+                QJsonObject row;
+                for (const char* k : {"symbol", "side", "entryDate", "exitDate", "quantity", "entryPrice",
+                                      "exitPrice", "pnl", "pnlPercent", "holdingPeriod", "exitReason"}) {
+                    const QString key = QString::fromLatin1(k);
+                    if (t.contains(key))
+                        row[key] = t.value(key);
+                }
+                trades.append(row);
+            }
+
+            QJsonObject out;
+            out["provider"] = QStringLiteral("vectorbt");
+            out["strategy"] = strategy;
+            out["symbols"] = symbols;
+            out["start_date"] = stats.value("startDate").toString(start.toString(Qt::ISODate));
+            out["end_date"] = stats.value("endDate").toString(end.toString(Qt::ISODate));
+            out["initial_capital"] = capital;
+            if (stats.contains("finalCapital"))
+                out["final_capital"] = stats.value("finalCapital");
+            out["metrics"] = metrics;
+            out["trades"] = trades;
+            out["trades_total"] = all_trades.size();
+            out["trades_truncated"] = all_trades.size() > kAnBacktestMaxTrades;
+            out["data_source"] = data.value("dataSource").toString(QStringLiteral("yahoo"));
+            finish(true, out, {});
+        });
+
+    QObject::connect(&svc, &BacktestingService::run_failed, ctx,
+                     [finish, is_mine](quint64 id, const QString&, const QString& message) {
+                         if (!is_mine(id))
+                             return;
+                         finish(false, {}, message.isEmpty() ? QStringLiteral("Backtest failed") : message);
+                     });
+    QObject::connect(&svc, &BacktestingService::run_cancelled, ctx,
+                     [finish, is_mine](quint64 id, const QString&, const QString&) {
+                         if (is_mine(id))
+                             finish(false, {}, QStringLiteral("Backtest was cancelled"));
+                     });
+
+    QTimer::singleShot(kAnBacktestTimeoutMs, ctx, [finish, run_id]() {
+        // Report the timeout first (cancel() emits run_cancelled synchronously), then free
+        // the PythonRunner slot instead of leaving an orphaned run behind.
+        finish(false, {}, "Backtest did not finish within 6 minutes");
+        if (*run_id != 0)
+            BacktestingService::instance().cancel(*run_id);
+    });
+
+    const quint64 id = svc.execute(QStringLiteral("vectorbt"), QStringLiteral("backtest"), args);
+    if (!*finished)
+        *run_id = id;
+}
+
 } // anonymous namespace
 
 void register_analytics_nodes(NodeRegistry& registry) {
@@ -383,7 +575,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
         .type_id = "analytics.backtest",
         .display_name = "Backtest Engine",
         .category = "Analytics",
-        .description = "Run backtesting simulation on a trading strategy",
+        .description = "Backtest a strategy on daily data (VectorBT via the Backtesting service)",
         .icon_text = "A",
         .accent_color = "#7c3aed",
         .version = 1,
@@ -391,21 +583,25 @@ void register_analytics_nodes(NodeRegistry& registry) {
         .outputs = {{"output_main", "Results", PortDirection::Output, ConnectionType::BacktestData}},
         .parameters =
             {
+                {"symbols", "Symbols", "string", "SPY", {}, "SPY or AAPL,MSFT (upstream 'symbol' overrides)"},
+                {"strategy",
+                 "Strategy",
+                 "select",
+                 "sma_crossover",
+                 {"sma_crossover", "ema_crossover", "macd", "rsi", "bollinger_bands", "mean_reversion", "momentum",
+                  "breakout", "stochastic", "adx_trend", "keltner_breakout", "triple_ma", "volatility_breakout",
+                  "dual_momentum", "rsi_macd", "macd_adx", "bollinger_rsi", "williams_r", "cci", "obv_trend",
+                  "buy_and_hold"},
+                 ""},
+                {"strategy_params", "Strategy Params", "json", QJsonObject{}, {}, "{\"fastPeriod\":10,\"slowPeriod\":30}"},
                 {"start_date", "Start Date", "string", "2023-01-01", {}, "YYYY-MM-DD"},
                 {"end_date", "End Date", "string", "2024-01-01", {}, "YYYY-MM-DD"},
                 {"initial_capital", "Initial Capital", "number", 100000, {}, ""},
-                {"commission", "Commission %", "number", 0.001, {}, ""},
+                {"commission", "Commission % per trade", "number", 0.1, {}, "0.1 = 0.1%"},
             },
         .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&, std::function<void(bool, QJsonValue, QString)> cb) {
-                // This node used to call compute_technicals.py with --indicator BACKTEST. That
-                // script ignores --indicator and treats --data as an OHLCV history, so every run
-                // ended in a pandas error ("If using all scalar values, you must pass an index").
-                // Say what is true instead of surfacing that.
-                cb(false, {},
-                   "Backtest Engine is not available in the workflow runner — run the strategy from the "
-                   "Backtesting screen");
-            },
+            [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
+               std::function<void(bool, QJsonValue, QString)> cb) { an_run_backtest(params, inputs, std::move(cb)); },
     });
 
     registry.register_type({
@@ -1219,30 +1415,10 @@ void register_analytics_nodes(NodeRegistry& registry) {
     });
 
     // ── Tier 3: Advanced Analytics ─────────────────────────────────
-
-    registry.register_type({
-        .type_id = "analytics.factor_model",
-        .display_name = "Factor Model",
-        .category = "Analytics",
-        .description = "Fama-French factor decomposition (3/5 factor)",
-        .icon_text = "A",
-        .accent_color = "#7c3aed",
-        .version = 1,
-        .inputs = {{"input_0", "Returns", PortDirection::Input, ConnectionType::Main}},
-        .outputs = {{"output_main", "Main", PortDirection::Output, ConnectionType::Main}},
-        .parameters =
-            {
-                {"model", "Model", "select", "ff3", {"ff3", "ff5", "capm", "carhart4"}, ""},
-                {"period", "Period", "string", "3y", {}, ""},
-            },
-        .execute =
-            [](const QJsonObject&, const QVector<QJsonValue>&, std::function<void(bool, QJsonValue, QString)> cb) {
-                // Same dead end as the Backtest node: compute_technicals.py has no factor-model mode.
-                cb(false, {},
-                   "Factor Model is not available in the workflow runner — there is no factor-regression "
-                   "backend wired to this node yet");
-            },
-    });
+    // (A "Factor Model" node — analytics.factor_model, Fama-French 3/5 factor — used to be registered
+    // here although nothing could run it: no service exposes a factor regression, so every run failed.
+    // It was removed from the palette; a saved workflow that still holds one fails that node with
+    // "Unknown node type" instead of pretending to compute something.)
 
     registry.register_type({
         .type_id = "analytics.pairs_trading",

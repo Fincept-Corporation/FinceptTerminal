@@ -1,8 +1,11 @@
 #pragma once
 #include "services/news/NewsService.h"
 
+#include <QColor>
 #include <QFont>
 #include <QFontMetrics>
+#include <QGlyphRun>
+#include <QList>
 #include <QTimer>
 #include <QVector>
 #include <QWidget>
@@ -46,7 +49,16 @@ class NewsTickerStrip : public QWidget {
         int source_width = 0;
         int headline_width = 0;
         int total_width = 0;
+        // Shaped once per article set (positions relative to the baseline);
+        // paintEvent only draws glyphs.
+        QList<QGlyphRun> tag_runs;
+        QList<QGlyphRun> source_runs;
+        QList<QGlyphRun> headline_runs;
+        QColor tag_color;
     };
+
+    /// Re-reads the theme / priority colours paintEvent uses (once, not per frame).
+    void refresh_colors();
 
     QVector<TickerEntry> entries_;
     QTimer scroll_timer_;
@@ -56,6 +68,8 @@ class NewsTickerStrip : public QWidget {
 
     QFont ticker_font_;
     QFontMetrics ticker_fm_;
+    QColor source_color_;
+    QColor headline_color_;
     static constexpr int ITEM_SPACING = 50;
     static constexpr int SEGMENT_GAP = 8;
 };

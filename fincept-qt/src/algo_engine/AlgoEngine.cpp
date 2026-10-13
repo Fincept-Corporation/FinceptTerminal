@@ -7,9 +7,12 @@
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
 #include "trading/ActionCenter.h"
+#include "trading/DataStreamManager.h"
+#include "trading/OrderThreadPool.h"
 #include "trading/PaperTrading.h"
 #include "trading/UnifiedTrading.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -21,6 +24,10 @@
 #include <QtConcurrent>
 
 namespace fincept::algo {
+
+// How long the engine thread gets to acknowledge a stop before the GUI-thread
+// watchdog force-detaches the runner.
+static constexpr int kAlgoEngineStopConfirmMs = 10000;
 
 AlgoEngine& AlgoEngine::instance() {
     static AlgoEngine s;
@@ -52,7 +59,16 @@ AlgoEngine::AlgoEngine() {
 }
 
 AlgoEngine::~AlgoEngine() {
-    stop_all();
+    // Process exit: ask runners to stop but do NOT mark rows stopped in the DB -
+    // recover_orphaned() resumes deployments that were live at shutdown. (stop_all()
+    // marks rows stopped, which is the user's explicit STOP ALL.)
+    {
+        QMutexLocker lock(&mutex_);
+        for (auto* r : std::as_const(runners_)) {
+            r->request_stop();
+            QMetaObject::invokeMethod(r, &DeploymentRunner::stop, Qt::QueuedConnection);
+        }
+    }
     engine_thread_.quit();
     engine_thread_.wait(5000);
     delete fno_bridge_;
@@ -77,15 +93,19 @@ void AlgoEngine::start_deployment(const services::algo::AlgoDeployment& deployme
     connect(runner, &DeploymentRunner::error_occurred, this, &AlgoEngine::error_occurred);
     connect(runner, &DeploymentRunner::live_update, this, &AlgoEngine::live_update);
     connect(runner, &DeploymentRunner::order_requested, this, &AlgoEngine::on_order_requested);
-    connect(runner, &DeploymentRunner::status_changed, this, [this](const QString& id, const QString& status) {
+    connect(runner, &DeploymentRunner::status_changed, this, [this, runner](const QString& id, const QString& status) {
         if (status == "stopped" || status == "error") {
             QMutexLocker lock(&mutex_);
-            auto* r = runners_.take(id);
+            // Compare by identity: a runner force-detached by verify_stop() is no
+            // longer in the map, but it is still THIS object and must be deleted.
+            const bool registered = runners_.value(id, nullptr) == runner;
+            if (registered)
+                runners_.remove(id);
+            stopping_.remove(id);
             lock.unlock(); // never emit under the (non-recursive) lock — a direct slot would deadlock
-            if (r) {
-                r->deleteLater();
+            runner->deleteLater();
+            if (registered)
                 emit deployment_stopped(id);
-            }
         }
         auto& hub = datahub::DataHub::instance();
         hub.publish(QStringLiteral("algo:state:") + id, QVariant::fromValue(status));
@@ -114,13 +134,158 @@ void AlgoEngine::start_deployment(const services::algo::AlgoDeployment& deployme
         QString("Started deployment %1 for strategy '%2' on %3").arg(deployment.id, strategy.name, deployment.symbol));
 }
 
-void AlgoEngine::stop_deployment(const QString& deployment_id) {
-    QMutexLocker lock(&mutex_);
-    auto* runner = runners_.value(deployment_id, nullptr);
-    if (!runner)
-        return;
-    lock.unlock();
+AlgoStopResult AlgoEngine::stop_deployment(const QString& deployment_id) {
+    return stop_deployment_impl(deployment_id, QString());
+}
+
+AlgoStopResult AlgoEngine::stop_deployment_impl(const QString& deployment_id, const QString& note) {
+    AlgoStopResult res;
+    res.deployment_id = deployment_id;
+
+    DeploymentRunner* runner = nullptr;
+    bool already_stopping = false;
+    {
+        QMutexLocker lock(&mutex_);
+        runner = runners_.value(deployment_id, nullptr);
+        if (runner) {
+            already_stopping = stopping_.contains(deployment_id);
+            stopping_.insert(deployment_id);
+            // 1) Kill flag first - effective immediately on the engine thread.
+            runner->request_stop();
+            res.runner_found = true;
+            res.orders_blocked = true;
+            const auto& d = runner->deployment();
+            res.strategy_name = d.strategy_name;
+            res.symbol = d.symbol.isEmpty() ? d.underlying : d.symbol;
+            res.mode = d.mode;
+        }
+    }
+
+    // 2) Persist now, from this thread: whatever the engine thread does next, the
+    //    row will not be resumed by recover_orphaned() after a restart. (A STOP on a
+    //    row with no runner - stale, errored, or recovery not run yet - used to do
+    //    nothing at all, and that row resumed trading at the next launch.)
+    res.db_marked_stopped = mark_stopped_in_db(deployment_id, note);
+    if (res.strategy_name.isEmpty()) {
+        auto db = fincept::Database::instance().connection();
+        QSqlQuery q(db);
+        q.prepare(QStringLiteral("SELECT strategy_name, symbol, underlying, mode FROM algo_deployments WHERE id = ?"));
+        q.addBindValue(deployment_id);
+        if (q.exec() && q.next()) {
+            res.strategy_name = q.value(0).toString();
+            res.symbol = q.value(1).toString().isEmpty() ? q.value(2).toString() : q.value(1).toString();
+            res.mode = q.value(3).toString();
+        }
+    }
+
+    if (!runner) {
+        res.note = QStringLiteral("no runner in this session - row marked stopped");
+        LOG_INFO("AlgoEngine", QString("Stop %1: %2").arg(deployment_id, res.note));
+        emit deployment_stopped(deployment_id); // refresh the Dashboard
+        return res;
+    }
+
+    if (already_stopping) {
+        res.note = QStringLiteral("stop already in progress");
+        return res;
+    }
+
+    // 3) Orderly cleanup on the runner's own thread (unsubscribe, persist metrics).
     QMetaObject::invokeMethod(runner, &DeploymentRunner::stop, Qt::QueuedConnection);
+
+    // 4) Verify from the GUI thread - a timer on the engine thread would never fire
+    //    if that thread is the one that is stuck.
+    if (auto* app = QCoreApplication::instance()) {
+        QTimer::singleShot(kAlgoEngineStopConfirmMs, app, [this, deployment_id]() { verify_stop(deployment_id); });
+        res.note = QStringLiteral("orders blocked; stop confirmation pending");
+    } else {
+        res.note = QStringLiteral("orders blocked; application shutting down");
+    }
+    LOG_INFO("AlgoEngine", QString("Stop requested for %1 (%2)").arg(deployment_id, res.note));
+    return res;
+}
+
+bool AlgoEngine::mark_stopped_in_db(const QString& deployment_id, const QString& note) {
+    auto db = fincept::Database::instance().connection();
+    QSqlQuery q(db);
+    if (note.isEmpty()) {
+        q.prepare(QStringLiteral("UPDATE algo_deployments SET status='stopped', updated_at=datetime('now') WHERE id=?"));
+    } else {
+        q.prepare(QStringLiteral("UPDATE algo_deployments SET status='stopped', error_message=?, "
+                                 "updated_at=datetime('now') WHERE id=?"));
+        q.addBindValue(note);
+    }
+    q.addBindValue(deployment_id);
+    if (!q.exec()) {
+        LOG_ERROR("AlgoEngine", QString("Could not mark %1 stopped: %2").arg(deployment_id, q.lastError().text()));
+        return false;
+    }
+    return true;
+}
+
+void AlgoEngine::verify_stop(const QString& deployment_id) {
+    DeploymentRunner* runner = nullptr;
+    services::algo::AlgoDeployment d;
+    {
+        QMutexLocker lock(&mutex_);
+        if (!stopping_.contains(deployment_id))
+            return; // acknowledged: the status handler cleared it
+        runner = runners_.value(deployment_id, nullptr);
+        if (!runner) {
+            stopping_.remove(deployment_id);
+            return;
+        }
+        // Force-detach: the engine never processed the stop. The kill flag already
+        // blocks every order path; take the runner out of the active set so the
+        // Dashboard and active_count() stop reporting it as running. It is deleted
+        // when (if) its thread wakes up and finally runs stop().
+        d = runner->deployment(); // copied under the lock: the object may be deleted later
+        runners_.remove(deployment_id);
+        stopping_.remove(deployment_id);
+    }
+    // Cut its market data from this thread so no further ticks are queued to it.
+    trading::DataStreamManager::instance().close_quote_feed(QStringLiteral("algo:") + deployment_id,
+                                                            d.broker_account_id);
+    const QString msg =
+        QStringLiteral("The algo engine did not confirm the stop within %1 s. New orders are blocked and the "
+                       "runner was detached; %2")
+            .arg(kAlgoEngineStopConfirmMs / 1000)
+            .arg(d.mode == QLatin1String("live")
+                     ? QStringLiteral("this is a LIVE deployment - verify open orders and positions at the broker.")
+                     : QStringLiteral("no further paper fills will be recorded."));
+    mark_stopped_in_db(deployment_id, msg);
+    LOG_ERROR("AlgoEngine", QString("Deployment %1: %2").arg(deployment_id, msg));
+    emit error_occurred(deployment_id, msg);
+    emit deployment_stopped(deployment_id);
+}
+
+QVector<AlgoStopResult> AlgoEngine::stop_all_live(const QString& reason) {
+    QStringList ids;
+    {
+        QMutexLocker lock(&mutex_);
+        for (auto it = runners_.constBegin(); it != runners_.constEnd(); ++it)
+            if (it.value()->deployment().mode == QLatin1String("live"))
+                ids << it.key();
+    }
+    // Rows that could resume or are mid-start without a runner in this session.
+    {
+        auto db = fincept::Database::instance().connection();
+        QSqlQuery q(db);
+        if (q.exec(QStringLiteral("SELECT id FROM algo_deployments WHERE mode='live' "
+                                  "AND status IN ('running','starting','error','crashed')"))) {
+            while (q.next()) {
+                const QString id = q.value(0).toString();
+                if (!ids.contains(id))
+                    ids << id;
+            }
+        }
+    }
+    QVector<AlgoStopResult> out;
+    out.reserve(ids.size());
+    for (const auto& id : ids)
+        out.append(stop_deployment_impl(id, reason));
+    LOG_WARN("AlgoEngine", QString("stop_all_live (%1): %2 live deployment(s) stopped").arg(reason).arg(out.size()));
+    return out;
 }
 
 void AlgoEngine::pause_deployment(const QString& deployment_id) {
@@ -146,7 +311,7 @@ void AlgoEngine::stop_all() {
     auto ids = runners_.keys();
     lock.unlock();
     for (const auto& id : ids)
-        stop_deployment(id);
+        stop_deployment_impl(id, QString());
 }
 
 bool AlgoEngine::is_running(const QString& deployment_id) const {
@@ -204,6 +369,19 @@ void AlgoEngine::on_approval_rejected(const QString& pending_id, const QString& 
 }
 
 void AlgoEngine::execute_order(const AlgoOrderSignal& signal) {
+    // Last gate before any order leaves the engine: a deployment being stopped (or
+    // already gone) places nothing, even if its signal was emitted a moment before
+    // the kill flag was set.
+    {
+        QMutexLocker lock(&mutex_);
+        auto* r = runners_.value(signal.deployment_id, nullptr);
+        if (!r || r->stop_requested()) {
+            lock.unlock();
+            LOG_WARN("AlgoEngine", QString("Deployment %1: %2 order DROPPED - deployment is stopping/stopped")
+                                       .arg(signal.deployment_id, signal.reason));
+            return;
+        }
+    }
     // Multi-leg F&O basket → dedicated path (paper portfolio / live broker basket).
     if (!signal.legs.isEmpty()) {
         execute_basket(signal);
@@ -289,7 +467,8 @@ void AlgoEngine::execute_order(const AlgoOrderSignal& signal) {
         return;
     }
 
-    (void)QtConcurrent::run([self, dep_id, account_id, order, submitted_price]() {
+    // Dedicated order executor (never starved by sleeping jobs on the global pool).
+    (void)QtConcurrent::run(&fincept::trading::order_thread_pool(), [self, dep_id, account_id, order, submitted_price]() {
         auto response = fincept::trading::UnifiedTrading::instance().place_order(account_id, order);
 
         if (!self)
@@ -697,6 +876,7 @@ void AlgoEngine::remove_deployment(const QString& deployment_id) {
     {
         QMutexLocker lock(&mutex_);
         if (auto* r = runners_.value(deployment_id, nullptr)) {
+            r->request_stop(); // no order may leave it while the rows are deleted
             lock.unlock();
             QMetaObject::invokeMethod(r, &DeploymentRunner::stop, Qt::QueuedConnection);
         }

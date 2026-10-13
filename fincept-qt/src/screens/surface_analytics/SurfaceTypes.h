@@ -197,6 +197,8 @@ struct YieldCurveData {
     std::vector<int> time_points;
     std::vector<int> maturities;
     std::vector<std::vector<float>> z;
+    /// Optional row labels (e.g. settlement dates, newest first) — set for fetched data.
+    std::vector<std::string> time_labels;
 };
 
 struct SwaptionVolData {
@@ -246,6 +248,9 @@ struct FXForwardPointsData {
     std::vector<std::string> pairs;
     std::vector<int> tenors;
     std::vector<std::vector<float>> z;
+    /// Optional tenor labels. Fetched futures data counts deferred contracts ("C+1"), not months,
+    /// so its tenors must not be rendered as "1M".
+    std::vector<std::string> tenor_labels;
 };
 
 struct CrossCurrencyBasisData {
@@ -364,6 +369,9 @@ struct MonetaryPolicyData {
     std::vector<std::string> central_banks;
     std::vector<int> meetings_ahead;
     std::vector<std::vector<float>> z;
+    /// Optional column labels. Fetched futures data steps by contract month ("Oct 26"), not by
+    /// policy meeting — when set, columns are months.
+    std::vector<std::string> step_labels;
 };
 
 } // namespace fincept::surface

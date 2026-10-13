@@ -33,11 +33,9 @@ class EdgeItem : public QObject, public QGraphicsPathItem {
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
   signals:
-    void edge_selected(const QString& id);
     void delete_requested(const QString& id);
 
   protected:
-    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
     void keyPressEvent(QKeyEvent* event) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 

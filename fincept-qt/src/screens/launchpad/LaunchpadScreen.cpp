@@ -15,6 +15,7 @@
 #include "storage/workspace/WorkspaceDb.h"
 #include "storage/workspace/WorkspaceSnapshotRing.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
 #include <QCloseEvent>
@@ -246,6 +247,13 @@ LaunchpadScreen::LaunchpadScreen(QWidget* parent) : QMainWindow(parent) {
 
     vl->addWidget(template_picker_, /*stretch=*/1);
 
+    // Footer: muted pointer to the private edition (text in retranslateUi()).
+    auto* ent_link = ui::enterprise::make_cta_button(
+        QString(), ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("launchpad")),
+        ui::enterprise::CtaStyle::Quiet, central);
+    ent_link->setObjectName("launchpadEnterpriseLink");
+    vl->addWidget(ent_link, 0, Qt::AlignLeft);
+
     setCentralWidget(central);
 
     retranslateUi();
@@ -317,6 +325,8 @@ void LaunchpadScreen::retranslateUi() {
         filter_edit_->setPlaceholderText(tr("Type to filter layouts…"));
     if (template_picker_label_)
         template_picker_label_->setText(tr("Pick a starting template:"));
+    if (auto* ent_link = findChild<QPushButton*>(QStringLiteral("launchpadEnterpriseLink")))
+        ent_link->setText(tr("Fincept Terminal Enterprise — the private edition for firms ↗"));
 }
 
 void LaunchpadScreen::surface() {

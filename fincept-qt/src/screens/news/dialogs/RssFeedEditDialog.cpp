@@ -1,15 +1,14 @@
 #include "screens/news/dialogs/RssFeedEditDialog.h"
 
 #include "core/logging/Logger.h"
+#include "services/news/RssFeedProbeService.h"
+#include "ui/theme/Theme.h"
 
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QMessageBox>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPointer>
-#include <QRegularExpression>
+#include <QStyle>
 #include <QUrl>
 #include <QUuid>
 #include <QVBoxLayout>
@@ -19,11 +18,6 @@
 namespace fincept::screens {
 
 namespace {
-
-constexpr const char* kBrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-constexpr int kTestTimeoutMs = 6000;
 
 QStringList default_categories() {
     return {"MARKETS", "GEOPOLITICS", "REGULATORY", "ECONOMIC", "ENERGY", "CRYPTO", "TECH", "DEFENSE", "EARNINGS"};
@@ -85,21 +79,12 @@ void RssFeedEditDialog::retranslateUi() {
     // test_status_ reflects the last async test result — refreshed on next test.
 }
 
-QNetworkAccessManager* RssFeedEditDialog::nam() {
-    // P10 — one manager per dialog, not one per request. Parented to the
-    // dialog so it dies with it.
-    if (!nam_)
-        nam_ = new QNetworkAccessManager(this);
-    return nam_;
-}
-
-QNetworkRequest RssFeedEditDialog::probe_request(const QString& url) const {
-    QNetworkRequest req((QUrl(url)));
-    req.setHeader(QNetworkRequest::UserAgentHeader, kBrowserUserAgent);
-    req.setRawHeader("Accept", "application/rss+xml, application/xml, text/xml, */*");
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    req.setTransferTimeout(kTestTimeoutMs);
-    return req;
+void RssFeedEditDialog::set_status(const QString& text, const char* state) {
+    test_status_->setText(text);
+    test_status_->setProperty("probeState", QString::fromLatin1(state));
+    test_status_->style()->unpolish(test_status_);
+    test_status_->style()->polish(test_status_);
+    test_status_->show();
 }
 
 void RssFeedEditDialog::build_ui() {
@@ -185,11 +170,18 @@ void RssFeedEditDialog::build_ui() {
 
     root->addLayout(form);
 
-    // Test status line
+    // Test status line — one sheet colours it by state (was an inline sheet per update).
     test_status_ = new QLabel(this);
     test_status_->setObjectName("rssFeedEditTestStatus");
     test_status_->setWordWrap(true);
+    test_status_->setTextFormat(Qt::PlainText); // carries the feed's own title
     test_status_->hide();
+    setStyleSheet(QString("QLabel#rssFeedEditTestStatus[probeState=\"ok\"] { color: %1; }"
+                          "QLabel#rssFeedEditTestStatus[probeState=\"warn\"] { color: %2; }"
+                          "QLabel#rssFeedEditTestStatus[probeState=\"err\"] { color: %3; }"
+                          "QLabel#rssFeedEditTestStatus[probeState=\"busy\"] { color: %4; }")
+                      .arg(ui::colors::POSITIVE(), ui::colors::WARNING(), ui::colors::NEGATIVE(),
+                           ui::colors::TEXT_SECONDARY()));
     root->addWidget(test_status_);
 
     // Buttons
@@ -227,56 +219,23 @@ services::RSSFeed RssFeedEditDialog::feed() const {
 void RssFeedEditDialog::on_test() {
     const QString url = url_input_->text().trimmed();
     if (url.isEmpty() || !QUrl(url).isValid()) {
-        test_status_->setText(tr("✗ Enter a valid URL first."));
-        test_status_->setStyleSheet("color:#dc2626;");
-        test_status_->show();
+        set_status(tr("✗ Enter a valid URL first."), "err");
         return;
     }
     test_btn_->setEnabled(false);
     test_btn_->setText(tr("Testing..."));
-    test_status_->setText(tr("Fetching..."));
-    test_status_->setStyleSheet("color:#6b7280;");
-    test_status_->show();
+    set_status(tr("Fetching..."), "busy");
 
     QPointer<RssFeedEditDialog> self = this;
-    auto* reply = nam()->get(probe_request(url));
-    connect(reply, &QNetworkReply::finished, this, [self, reply]() {
-        reply->deleteLater();
+    services::RssFeedProbeService::instance().probe(url, this, [self](const services::RssProbeResult& r) {
         if (!self)
             return;
-
         self->test_btn_->setEnabled(true);
         self->test_btn_->setText(tr("Test URL"));
         self->test_run_ = true;
-
-        if (reply->error() != QNetworkReply::NoError) {
-            const int http = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            self->last_test_ok_ = false;
-            self->test_status_->setText(tr("✗ Request failed: HTTP %1 — %2").arg(http).arg(reply->errorString()));
-            self->test_status_->setStyleSheet("color:#dc2626;");
-            return;
-        }
-
-        const QByteArray data = reply->readAll();
-        const QByteArray trimmed = data.trimmed();
-        const QByteArray head = trimmed.left(256).toLower();
-        const bool is_xml =
-            head.startsWith("<?xml") || head.startsWith("<rss") || head.startsWith("<feed") || head.startsWith("<rdf");
-        const bool is_html = head.contains("<html") || head.contains("<!doctype html");
-
-        if (is_xml) {
-            self->last_test_ok_ = true;
-            self->test_status_->setText(tr("✓ Looks like a valid RSS/Atom feed (%1 bytes).").arg(data.size()));
-            self->test_status_->setStyleSheet("color:#16a34a;");
-        } else if (is_html) {
-            self->last_test_ok_ = false;
-            self->test_status_->setText(tr("✗ Server returned HTML — likely a login or block page, not RSS."));
-            self->test_status_->setStyleSheet("color:#dc2626;");
-        } else {
-            self->last_test_ok_ = false;
-            self->test_status_->setText(tr("⚠ Response doesn't look like RSS/Atom XML (%1 bytes).").arg(data.size()));
-            self->test_status_->setStyleSheet("color:#d97706;");
-        }
+        self->last_test_ok_ = r.ok() && r.item_count > 0;
+        const QString text = services::RssFeedProbeService::describe(r);
+        self->set_status(text, !r.ok() ? "err" : (text.startsWith(QStringLiteral("⚠")) ? "warn" : "ok"));
     });
 }
 
@@ -313,47 +272,26 @@ void RssFeedEditDialog::try_accept() {
     }
 
     if (!test_run_) {
-        // Run a quick blocking-feel test before save (still async — chain to
-        // accept on success).
+        // Validate before saving (async — chains to accept() on success).
         test_btn_->setEnabled(false);
         ok_btn_->setEnabled(false);
-        test_status_->setText(tr("Validating URL before save..."));
-        test_status_->setStyleSheet("color:#6b7280;");
-        test_status_->show();
+        set_status(tr("Validating URL before save..."), "busy");
 
         QPointer<RssFeedEditDialog> self = this;
-        auto* reply = nam()->get(probe_request(f.url));
-        connect(reply, &QNetworkReply::finished, this, [self, reply]() {
-            reply->deleteLater();
+        services::RssFeedProbeService::instance().probe(f.url, this, [self](const services::RssProbeResult& r) {
             if (!self)
                 return;
             self->test_btn_->setEnabled(true);
             self->ok_btn_->setEnabled(true);
             self->test_run_ = true;
-
-            bool ok = false;
-            QString msg;
-            if (reply->error() != QNetworkReply::NoError) {
-                msg = tr("Request failed: %1").arg(reply->errorString());
-            } else {
-                const QByteArray head = reply->readAll().trimmed().left(256).toLower();
-                if (head.startsWith("<?xml") || head.startsWith("<rss") || head.startsWith("<feed") ||
-                    head.startsWith("<rdf")) {
-                    ok = true;
-                } else if (head.contains("<html") || head.contains("<!doctype html")) {
-                    msg = tr("Server returned HTML, not RSS.");
-                } else {
-                    msg = tr("Response doesn't look like RSS/Atom XML.");
-                }
-            }
-            self->last_test_ok_ = ok;
-            if (ok) {
+            self->last_test_ok_ = r.ok() && r.item_count > 0;
+            if (self->last_test_ok_) {
                 self->accept();
                 return;
             }
-            self->test_status_->setText(tr("⚠ %1 Save anyway?").arg(msg));
-            self->test_status_->setStyleSheet("color:#d97706;");
-            auto choice =
+            const QString msg = services::RssFeedProbeService::describe(r);
+            self->set_status(msg, r.ok() ? "warn" : "err");
+            const auto choice =
                 QMessageBox::question(self, tr("URL didn't validate"), tr("%1\n\nSave the feed anyway?").arg(msg),
                                       QMessageBox::Save | QMessageBox::Cancel);
             if (choice == QMessageBox::Save)

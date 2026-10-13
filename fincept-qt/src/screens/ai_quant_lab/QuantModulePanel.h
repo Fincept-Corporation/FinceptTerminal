@@ -20,6 +20,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <functional>
+
 namespace fincept::screens {
 
 /// Dynamic panel for a single AI Quant Lab module.
@@ -82,6 +84,13 @@ class QuantModulePanel : public QWidget {
     QDoubleSpinBox* make_double_spin(double min, double max, double val, int decimals, const QString& suffix,
                                      QWidget* parent);
     QPushButton* make_run_button(const QString& text, QWidget* parent);
+    /// "LOAD SYNTHETIC SAMPLE" button that fills `edit` with `generator()`.
+    /// The filled text is remembered on the edit, so a run whose visible inputs
+    /// still hold the synthetic sample is flagged SAMPLE INPUT on its results.
+    QPushButton* make_sample_button(QLineEdit* edit, QWidget* parent, const QString& tip,
+                                    std::function<QString()> generator);
+    /// True when a visible input of the panel still holds unedited sample text.
+    bool visible_inputs_are_sample() const;
     QWidget* build_llm_picker(QWidget* parent, QComboBox** out_combo);
     QJsonObject llm_config_from_combo(QComboBox* combo) const;
     void display_result(const QJsonObject& data);
@@ -136,6 +145,10 @@ class QuantModulePanel : public QWidget {
     QLabel* rl_progress_stats_ = nullptr;
     class QPlainTextEdit* rl_log_console_ = nullptr;
     QPushButton* rl_train_button_ = nullptr;
+
+    /// Set by show_loading() when the run was fed LOAD SAMPLE data; on_result()
+    /// then puts a SAMPLE INPUT banner above the results.
+    bool sample_input_pending_ = false;
 
     QHash<QString, QDoubleSpinBox*> double_inputs_;
     QHash<QString, QLineEdit*> text_inputs_;

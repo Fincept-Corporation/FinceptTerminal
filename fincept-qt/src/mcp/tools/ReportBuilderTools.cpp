@@ -843,6 +843,7 @@ std::vector<ToolDef> get_report_builder_tools() {
 
             QString err;
             bool dispatched = false;
+            bool painted = false;
             QMetaObject::invokeMethod(
                 QCoreApplication::instance(),
                 [&]() {
@@ -851,7 +852,7 @@ std::vector<ToolDef> get_report_builder_tools() {
                         err = "Report Builder screen not loaded — navigate to it first";
                         return;
                     }
-                    scr->export_pdf_to(path);
+                    painted = scr->export_pdf_to(path);
                     dispatched = true;
                 },
                 Qt::BlockingQueuedConnection);
@@ -860,15 +861,59 @@ std::vector<ToolDef> get_report_builder_tools() {
                 return ToolResult::fail(err);
             if (!dispatched)
                 return ToolResult::fail("Failed to dispatch PDF export");
-            // export_pdf_to() returns void and reports nothing, so the only evidence the export
-            // worked is the file. A missing or zero-byte PDF (unwritable folder, empty report,
-            // printer backend failure) used to be reported as success.
+            // Both the painter's verdict and the file: an older PDF left in place by a
+            // failed export must not be reported as this export's result.
             const QFileInfo pdf_info(path);
-            if (!pdf_info.exists() || pdf_info.size() == 0)
+            if (!painted || !pdf_info.exists() || pdf_info.size() == 0)
                 return ToolResult::fail("PDF export failed: no file was written at " + path +
                                         " (check the folder is writable and the report has content)");
             return ToolResult::ok("Exported PDF to " + path,
                                   QJsonObject{{"path", path}, {"bytes", static_cast<double>(pdf_info.size())}});
+        };
+        tools.push_back(std::move(t));
+    }
+
+    // ── report_export_html ──────────────────────────────────────────────────
+    {
+        ToolDef t;
+        t.name = "report_export_html";
+        t.description = "Export the current report as a self-contained HTML page (charts and images embedded, page "
+                        "breaks kept for printing) inside the export directory. 'path' is a filename or relative "
+                        "path inside the export directory; absolute paths elsewhere are refused.";
+        t.category = "report-builder";
+        t.is_destructive = true; // writes a file to disk
+        t.input_schema.properties = QJsonObject{
+            {"path", QJsonObject{{"type", "string"},
+                                 {"description", "Output filename inside the export directory, e.g. 'TSLA.html'"}}},
+        };
+        t.input_schema.required = {"path"};
+        t.handler = [](const QJsonObject& args) -> ToolResult {
+            const auto dest = resolve_export_path(args.value("path").toString());
+            if (!dest.ok())
+                return ToolResult::fail(dest.error);
+            const QString path = dest.path;
+            maybe_request_navigation();
+
+            QString err;
+            bool written = false;
+            QMetaObject::invokeMethod(
+                QCoreApplication::instance(),
+                [&]() {
+                    auto* scr = ::fincept::screens::ReportBuilderScreen::current();
+                    if (!scr) {
+                        err = "Report Builder screen not loaded — navigate to it first";
+                        return;
+                    }
+                    written = scr->export_html_to(path);
+                },
+                Qt::BlockingQueuedConnection);
+            if (!err.isEmpty())
+                return ToolResult::fail(err);
+            const QFileInfo info(path);
+            if (!written || !info.exists() || info.size() == 0)
+                return ToolResult::fail("HTML export failed: nothing was written at " + path);
+            return ToolResult::ok("Exported HTML to " + path,
+                                  QJsonObject{{"path", path}, {"bytes", static_cast<double>(info.size())}});
         };
         tools.push_back(std::move(t));
     }

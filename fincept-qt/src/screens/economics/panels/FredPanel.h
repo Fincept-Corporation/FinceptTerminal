@@ -15,7 +15,7 @@ class FredPanel : public EconPanelBase {
   public:
     explicit FredPanel(QWidget* parent = nullptr);
     void activate() override;
-    QVariantMap save_panel_state() const override;
+    /// Generic input persistence (EconPanelBase) plus the pre-v4.5.1 {"series","preset"} format.
     void restore_panel_state(const QVariantMap& state) override;
 
   protected:

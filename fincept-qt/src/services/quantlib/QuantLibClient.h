@@ -9,6 +9,8 @@
 
 #include <functional>
 
+class QNetworkAccessManager;
+
 namespace fincept::services {
 
 /// Callback type: delivers unwrapped data payload or error string.
@@ -21,7 +23,8 @@ class QuantLibClient : public QObject {
   public:
     static QuantLibClient& instance();
 
-    /// Async call — callback posted on Qt event loop (use from UI thread).
+    /// Async call — callback posted on Qt event loop (use from UI thread). A call
+    /// from any other thread is re-posted to the client's thread first.
     void call(const QString& endpoint, const QJsonObject& body, QuantLibCallback callback);
 
     // call_sync() was removed: it had zero call sites and blocked on an unbounded
@@ -40,9 +43,16 @@ class QuantLibClient : public QObject {
   private:
     explicit QuantLibClient(QObject* parent = nullptr);
 
+    /// One long-lived QNAM for every call (created on first use, owned by this
+    /// object, lives on its thread): keep-alive TCP/TLS connections to the API
+    /// host are reused instead of a fresh handshake per QuantLib request.
+    QNetworkAccessManager* network();
+
     /// Parses raw HTTP response bytes into a ToolResult, unwrapping the
     /// {"success", "message", "data"} envelope and handling 422/4xx errors.
     static mcp::ToolResult parse_response(int http_status, const QByteArray& raw);
+
+    QNetworkAccessManager* nam_ = nullptr;
 };
 
 } // namespace fincept::services

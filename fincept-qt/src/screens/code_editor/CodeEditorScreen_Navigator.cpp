@@ -5,7 +5,6 @@
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "python/PythonRunner.h"
 #include "screens/code_editor/CodeEditorScreen.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"

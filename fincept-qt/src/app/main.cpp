@@ -32,6 +32,7 @@
 #include "mcp/McpInit.h"
 #include "mcp/ProviderToolFormatSelfTest.h"
 #include "mcp/ToolSelfTest.h"
+#include "mcp/server/McpServerSelfTest.h"
 #include "network/http/HttpClient.h"
 #include "python/OptionGreeksWorker.h"
 #include "python/PythonSetupManager.h"
@@ -40,6 +41,8 @@
 #include "screens/recovery/CrashRecoveryDialog.h"
 #include "screens/setup/SetupScreen.h"
 #include "services/agents/AgentService.h"
+#include "services/connectors/ConnectorService.h"
+#include "services/coding_agents/CodingAgentService.h"
 #include "services/alpha_arena/ArenaEngine.h"
 #include "services/alpha_arena/ArenaSelftest.h"
 #include "services/billing/FeeDiscountService.h"
@@ -60,7 +63,6 @@
 #include "services/economics/EconomicsService.h"
 #include "services/economics/MacroCalendarService.h"
 #include "services/feeds/FeedSelfTest.h"
-#include "services/forum/ForumService.h"
 #include "services/geopolitics/GeopoliticsService.h"
 #include "services/gov_data/GovDataService.h"
 #include "services/llm/LlmService.h"
@@ -108,7 +110,6 @@
 #include "ui/tables/LiveTableSelftest.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
-#include "ui/widgets/EnterprisePromo.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -374,6 +375,11 @@ int main(int argc, char* argv[]) {
         fincept::python::PythonWorker::instance().stop();
         fincept::python::OptionGreeksWorker::instance().stop();
 
+        // Kill any running uv / curl / tar child together with its own
+        // children (Job Object / process group) so nothing keeps installing —
+        // or holding cache locks — after the app is gone. No-op when idle.
+        fincept::python::PythonSetupManager::instance().cancel(/*wait_for_exit=*/true);
+
         fincept::TerminalShell::instance().shutdown();
     });
 
@@ -529,6 +535,8 @@ int main(int argc, char* argv[]) {
         fincept::services::GovDataService::instance().ensure_registered_with_hub();
         // Agents — `agent:*` push-only producer.
         fincept::services::AgentService::instance().ensure_registered_with_hub();
+        // Python data connectors catalogue — `connector:<name>:<command>:<args-hash>`.
+        fincept::services::connectors::ConnectorService::instance().ensure_registered_with_hub();
 
         // Algo Engine — `algo:metrics:*`, `algo:trade:*`, `algo:state:*`.
         fincept::algo::AlgoEngineProducer::instance().ensure_registered_with_hub();
@@ -573,7 +581,7 @@ int main(int argc, char* argv[]) {
         fincept::wallet::WalletService::instance().ensure_registered_with_hub();
         fincept::wallet::WalletService::instance().restore_from_storage();
 
-        // Fee-discount eligibility producer (paid screens only).
+        // Fee-discount eligibility producer (display only; the discount is planned and not applied anywhere).
         {
             static fincept::billing::FeeDiscountService discount_service;
             auto& hub = fincept::datahub::DataHub::instance();
@@ -832,6 +840,8 @@ int main(int argc, char* argv[]) {
     fincept::register_migration_v049();
     fincept::register_migration_v050();
     fincept::register_migration_v051();
+    fincept::register_migration_v052();
+    fincept::register_migration_v053();
 
     // Open main database
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
@@ -1023,15 +1033,6 @@ int main(int argc, char* argv[]) {
     // already exist with main-thread affinity.
     (void)fincept::services::ReportBuilderService::instance();
 
-    // Same reason for ForumService: ForumTools (MCP) and ForumScreen (GUI)
-    // share one singleton that owns a QNetworkAccessManager. Whichever caller
-    // hits instance() first dictates thread affinity. If a worker thread
-    // touches it before the GUI does, every subsequent fetch from the Forum
-    // tab queues its reply onto a thread with no live event loop and the
-    // callback never fires — the tab spins on "loading" forever. Forcing
-    // construction here pins it to the main thread up front.
-    (void)fincept::services::ForumService::instance();
-
     // Initialize MCP tool system — registers all internal tools and starts
     // external MCP servers in the background (non-blocking).
     //
@@ -1076,6 +1077,7 @@ int main(int argc, char* argv[]) {
     static constexpr SelftestSuite kSelftestSuites[] = {
         {"--selftest-tools", &fincept::mcp::run_tool_selftest},
         {"--selftest-llm-tools", &fincept::mcp::run_provider_tool_format_selftest},
+        {"--selftest-mcp-server", &fincept::mcp::run_mcp_server_selftest},
         {"--selftest-feeds", &fincept::feeds::run_feed_selftest},
         {"--selftest-dock-layout", &fincept::layout::run_dock_layout_selftest},
         {"--selftest-live-table", &fincept::ui::run_live_table_selftest},
@@ -1129,10 +1131,9 @@ int main(int argc, char* argv[]) {
     fincept::ui::DesktopNotifier::instance().init();
 
     // ── Python environment check ─────────────────────────────────────────────
-    // check_status() fast path (sentinel + markers present) is synchronous and
-    // cheap. The slow path (first run) can spawn processes — but at this point
-    // no window is visible yet so the brief block is acceptable. The SetupScreen
-    // itself offloads prefill_completed_steps() to a background thread (P1).
+    // check_status() is filesystem-only (no process is spawned), so it is safe
+    // on the GUI thread. Anything it cannot prove resolves to needs_setup /
+    // needs_package_sync and the async pipeline verifies it for real.
     auto setup_status = fincept::python::PythonSetupManager::instance().check_status();
 
     // --smoke-test: CI/clean-machine screen-construction walk. Force the normal
@@ -1153,24 +1154,45 @@ int main(int argc, char* argv[]) {
     if (setup_status.needs_setup) {
         LOG_INFO("App", "Python environment not ready — showing setup screen");
 
-        // Use QPointer so the setup_complete lambda is safe against double-fire
-        // (e.g. user somehow triggers it twice before the window is hidden).
+        // Use QPointer so the hand-off lambda is safe against double-fire.
+        // Closing this window before the hand-off quits the app (see
+        // SetupScreen::closeEvent) — quit-on-last-window is off app-wide.
         auto* setup_screen = new fincept::screens::SetupScreen;
         QPointer<fincept::screens::SetupScreen> screen_guard(setup_screen);
-        setup_screen->setWindowTitle("Fincept Terminal — First-Time Setup");
-        setup_screen->resize(800, 600);
+        setup_screen->resize(1040, 660);
         setup_screen->show();
 
-        // When setup completes, hide setup screen and launch main window.
-        // The connection uses Qt::SingleShotConnection (Qt 6.0+) so the lambda
-        // fires exactly once even if setup_complete is somehow emitted twice.
+        // Hand off to the main window. launch_requested fires on LAUNCH TERMINAL
+        // (available as soon as the analytics core is installed — the remaining
+        // libraries keep installing, owned by PythonSetupManager), on "Continue
+        // without Python", or automatically after a complete success.
+        // Qt::SingleShotConnection (Qt 6.0+) makes it fire exactly once.
         QObject::connect(
-            setup_screen, &fincept::screens::SetupScreen::setup_complete, setup_screen,
+            setup_screen, &fincept::screens::SetupScreen::launch_requested, setup_screen,
             [&app, &instance_lock, screen_guard]() {
                 if (!screen_guard)
                     return; // already cleaned up — ignore
                 screen_guard->hide();
                 screen_guard->deleteLater();
+
+                auto& setup = fincept::python::PythonSetupManager::instance();
+                if (setup.is_running()) {
+                    // Early launch: the status-bar chip now reports progress, one
+                    // notification marks the end, and agent discovery is re-warmed
+                    // once agno & co. are actually installed.
+                    setup.set_background_mode();
+                    QObject::connect(
+                        &setup, &fincept::python::PythonSetupManager::setup_complete, &app,
+                        [](bool success, const QString& error) {
+                            if (success) {
+                                LOG_INFO("App", "Background Python install finished after early launch");
+                                fincept::services::AgentService::instance().discover_agents();
+                            } else {
+                                LOG_WARN("App", "Background Python install failed (non-fatal): " + error);
+                            }
+                        },
+                        Qt::SingleShotConnection);
+                }
 
                 fincept::KeyConfigManager::instance(); // init before WindowFrame registers shortcuts
 
@@ -1197,14 +1219,6 @@ int main(int argc, char* argv[]) {
                     auto* window = new fincept::WindowFrame(primary_id);
                     window->setAttribute(Qt::WA_DeleteOnClose);
                     window->show();
-
-                    // Enterprise promo, once the frame has painted. Self-
-                    // suppresses when the user ticked "Don't show this again"
-                    // and when the platform has no window system.
-                    QPointer<fincept::WindowFrame> promo_target = window;
-                    QTimer::singleShot(1200, &app, [promo_target]() {
-                        fincept::ui::UpgradeDialog::maybe_show_at_startup(promo_target.data());
-                    });
                 }
 
                 // Wire new-window handler + Launchpad surface now that the
@@ -1266,15 +1280,6 @@ int main(int argc, char* argv[]) {
         // runtime (DLL, plugin, or data file like QtWebEngineProcess.exe) shows
         // up as a hard process abort or a non-constructing screen here — exactly
         // the class of failure the static dependency gate cannot detect.
-        // Enterprise promo, once the frame has painted. Never in --smoke-test:
-        // that run walks every screen headlessly and a modal would block it.
-        if (!smoke_mode) {
-            QPointer<fincept::WindowFrame> promo_target = primary;
-            QTimer::singleShot(1200, &app, [promo_target]() {
-                fincept::ui::UpgradeDialog::maybe_show_at_startup(promo_target.data());
-            });
-        }
-
         if (smoke_mode) {
             QPointer<fincept::WindowFrame> w = primary;
             QTimer::singleShot(2500, &app, [w]() {
@@ -1290,19 +1295,25 @@ int main(int argc, char* argv[]) {
     // at the top of this file for the contract.
     wire_app_lifecycle(app, instance_lock);
 
-    // If requirements files changed (app update), sync packages in background
-    // without blocking the user. Connect setup_complete so failures are logged
-    // (no SetupScreen in this path, so we only log — don't show UI).
-    if (setup_status.needs_package_sync) {
-        LOG_INFO("App", "Requirements changed — syncing packages in background");
+    // The terminal is usable but some Python libraries need installing or
+    // verifying (app update changed a requirements file, an early launch last
+    // session, or a pre-4.5.1 install). Same pipeline as first run — resolve
+    // against the installed versions, install only what changed — in the
+    // background; the PYTHON ENV status chip shows progress and a single
+    // notification marks the end. Never during --smoke-test.
+    if (setup_status.needs_package_sync && !smoke_mode) {
+        LOG_INFO("App", "Python libraries need a sync — running setup in the background");
         auto& mgr = fincept::python::PythonSetupManager::instance();
+        mgr.set_background_mode();
         QObject::connect(
-            &mgr, &fincept::python::PythonSetupManager::setup_complete, &mgr,
+            &mgr, &fincept::python::PythonSetupManager::setup_complete, &app,
             [](bool success, const QString& error) {
-                if (success)
+                if (success) {
                     LOG_INFO("App", "Background package sync completed successfully");
-                else
+                    fincept::services::AgentService::instance().discover_agents();
+                } else {
                     LOG_WARN("App", "Background package sync failed (non-fatal): " + error);
+                }
             },
             Qt::SingleShotConnection);
         mgr.run_setup();
@@ -1327,6 +1338,17 @@ int main(int argc, char* argv[]) {
     // full finagent_core set immediately instead of falling back to the
     // much smaller DB-only list. Run deferred so Python is fully ready.
     QTimer::singleShot(0, &app, []() { fincept::services::AgentService::instance().discover_agents(); });
+
+    // Agentic Mode: recover tasks the last session left "running" (they come
+    // back paused so RESUME works) and arm the schedule timer for the next due
+    // run. One Python process, deferred past the first paint.
+    QTimer::singleShot(0, &app, []() { fincept::services::AgentService::instance().initialize_deferred(); });
+
+    // Agent Workbench: prune old runs, mark crash-orphaned runs interrupted and
+    // arm recurring schedules (no-op when none are enabled).
+    QTimer::singleShot(0, &app, []() {
+        fincept::services::coding_agents::CodingAgentService::instance().initialize_deferred();
+    });
 
     LOG_INFO("App", "Application ready");
     return app.exec();

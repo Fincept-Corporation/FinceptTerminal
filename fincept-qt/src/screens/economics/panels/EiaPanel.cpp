@@ -21,6 +21,7 @@
 #include "services/economics/EconomicsService.h"
 #include "ui/theme/Theme.h"
 
+#include <QDate>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -78,7 +79,7 @@ void EiaPanel::activate() {
 void EiaPanel::build_controls(QHBoxLayout* thl) {
     auto make_lbl = [](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -182,7 +183,35 @@ void EiaPanel::on_result(const QString& request_id, const services::EconomicsRes
     // For WPSR, promote "symbol" as a useful column; for STEO "title" is descriptive.
     // The base display() auto-detects date→col0, value→col1, rest follows.
 
-    const QString title = "EIA: " + category_combo_->currentText();
+    SeriesMeta meta;
+    if (request_id.startsWith(QLatin1String("eia_steo_"))) {
+        // The Short-Term Energy Outlook is a forecast: months after the current one are EIA projections.
+        // Flag them per row so a projected price is never read as a reported one.
+        const QString this_month = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
+        QJsonArray flagged;
+        for (const auto& rv : std::as_const(rows)) {
+            QJsonObject r = rv.toObject();
+            r["status"] = r.value("date").toString().left(7) > this_month ? tr("EIA forecast") : tr("History");
+            flagged.append(r);
+        }
+        rows = flagged;
+        meta.note = tr("STEO: months after %1 are EIA forecasts").arg(this_month);
+        meta.source = tr("U.S. EIA — Short-Term Energy Outlook");
+    } else {
+        meta.source = tr("U.S. EIA — Weekly Petroleum Status Report");
+        meta.frequency = tr("Weekly");
+    }
+    set_series_meta(meta);
+    // Title from the request ("eia_<wpsr|steo>_<category>"), not the combo the user may have changed.
+    const QString category = request_id.section(QLatin1Char('_'), 2);
+    QString label = category;
+    for (const auto& c : kWpsrCategories)
+        if (c.second == category)
+            label = c.first;
+    for (const auto& t : kSteoTables)
+        if (t.second == category)
+            label = t.first;
+    const QString title = "EIA: " + label;
     display(rows, title);
 
     LOG_INFO("EiaPanel", QString("Displayed %1 rows — %2").arg(rows.size()).arg(request_id));

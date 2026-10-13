@@ -47,6 +47,19 @@ class ScreenerWidget : public BaseWidget {
     QWidget* list_widget_ = nullptr;
     QVector<services::QuoteData> all_quotes_;
 
+    /// Rank-indexed row widgets, created on first use and refilled in place on
+    /// every render (rows past the current count are hidden). Rendering used to
+    /// delete and re-create ~100 widgets per delivery burst.
+    struct ScreenerRow {
+        QWidget* row = nullptr;
+        QLabel* sym = nullptr;
+        QLabel* price = nullptr;
+        QLabel* chg = nullptr;
+        QLabel* vol = nullptr;
+    };
+    QVector<ScreenerRow> rows_;
+    ScreenerRow make_row(int rank);
+
     // Widgets needing theme-aware restyling
     QWidget* filter_bar_ = nullptr;
     QLabel* filter_lbl_ = nullptr;

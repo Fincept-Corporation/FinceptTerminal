@@ -95,7 +95,21 @@ void EquityNewsTab::set_provider_key(const QString& key) {
 }
 
 void EquityNewsTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    setObjectName(QStringLiteral("equityNewsTab"));
+    // QWidget{} keeps the original all-children background; the named rules style the article cards that
+    // populate() builds — they used to get six setStyleSheet() calls each, per refresh.
+    setStyleSheet(QString("QWidget { background:%1; }"
+                          "QFrame#newsCard { background:%2; border:1px solid %3; }"
+                          "QFrame#newsCard:hover { border-color:%4; background:%5; }"
+                          "QLabel#newsTitle { color:%6; font-size:12px; font-weight:700; background:transparent; border:0; }"
+                          "QLabel#newsPublisher { color:%7; font-size:10px; font-weight:700; background:transparent; border:0; }"
+                          "QLabel#newsDate { color:%8; font-size:10px; background:transparent; border:0; }"
+                          "QLabel#newsDesc { color:%9; font-size:10px; background:transparent; border:0; }"
+                          "QLabel#newsRead { color:%4; font-size:10px; font-weight:700; letter-spacing:1px;"
+                          " background:transparent; border:0; }")
+                      .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
+                           ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::CYAN(),
+                           ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_SECONDARY()));
     loading_overlay_ = new ui::LoadingOverlay(this);
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -205,10 +219,7 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
 
     for (const auto& art : articles) {
         auto* card = new QFrame;
-        card->setStyleSheet(
-            QString("QFrame { background:%1; border:1px solid %2; border-radius:4px; }"
-                    "QFrame:hover { border-color:%3; background:%4; }")
-                .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::BG_RAISED()));
+        card->setObjectName(QStringLiteral("newsCard"));
         card->setCursor(Qt::PointingHandCursor);
 
         auto* cl = new QVBoxLayout(card);
@@ -224,20 +235,16 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
 
         auto* title_lbl = new QLabel(art.title);
         title_lbl->setWordWrap(true);
-        title_lbl->setStyleSheet(QString("color:%1; font-size:12px; font-weight:700; line-height:1.4; "
-                                         "background:transparent; border:0;")
-                                     .arg(ui::colors::TEXT_PRIMARY()));
+        title_lbl->setObjectName(QStringLiteral("newsTitle"));
         text_col->addWidget(title_lbl);
 
         // Publisher + date
         auto* meta_hl = new QHBoxLayout;
         meta_hl->setSpacing(10);
         auto* pub_lbl = new QLabel(art.publisher.isEmpty() ? tr("Unknown Source") : art.publisher);
-        pub_lbl->setStyleSheet(
-            QString("color:%1; font-size:10px; font-weight:700; background:transparent; border:0;").arg("#22d3ee"));
-        auto* date_lbl = new QLabel(art.published_date.isEmpty() ? "" : art.published_date.left(10));
-        date_lbl->setStyleSheet(
-            QString("color:%1; font-size:10px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        pub_lbl->setObjectName(QStringLiteral("newsPublisher"));
+        auto* date_lbl = new QLabel(art.published_date.left(10));
+        date_lbl->setObjectName(QStringLiteral("newsDate"));
         meta_hl->addWidget(pub_lbl);
         meta_hl->addWidget(date_lbl);
         meta_hl->addStretch();
@@ -250,18 +257,18 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
         if (!art.description.isEmpty() && art.description != "N/A") {
             auto* desc_lbl = new QLabel(art.description);
             desc_lbl->setWordWrap(true);
-            desc_lbl->setStyleSheet(QString("color:%1; font-size:10px; line-height:1.5; "
-                                            "background:transparent; border:0;")
-                                        .arg(ui::colors::TEXT_SECONDARY()));
+            desc_lbl->setObjectName(QStringLiteral("newsDesc"));
             cl->addWidget(desc_lbl);
         }
 
         // ── Read full article ──────────────────────────────────────────────────
-        if (!art.url.isEmpty()) {
+        // Only web links: a feed-supplied file:/custom-scheme URL must never reach the OS.
+        const QUrl art_url(art.url);
+        const bool web_link = art_url.isValid() && (art_url.scheme() == QLatin1String("https") ||
+                                                    art_url.scheme() == QLatin1String("http"));
+        if (web_link) {
             auto* read_lbl = new QLabel(tr("READ FULL ARTICLE →"));
-            read_lbl->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px; "
-                                            "background:transparent; border:0;")
-                                        .arg(ui::colors::AMBER()));
+            read_lbl->setObjectName(QStringLiteral("newsRead"));
             cl->addWidget(read_lbl);
 
             // The whole card is the click target (it already shows a hand cursor).
@@ -288,9 +295,9 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
 
 bool EquityNewsTab::eventFilter(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::MouseButtonRelease) {
-        QString url = obj->property("url").toString();
-        if (!url.isEmpty()) {
-            QDesktopServices::openUrl(QUrl(url));
+        const QUrl url(obj->property("url").toString());
+        if (url.isValid() && (url.scheme() == QLatin1String("https") || url.scheme() == QLatin1String("http"))) {
+            QDesktopServices::openUrl(url);
             return true;
         }
     }

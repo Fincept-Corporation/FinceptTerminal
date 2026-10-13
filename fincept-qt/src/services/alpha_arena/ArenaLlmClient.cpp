@@ -2,6 +2,7 @@
 
 #include "auth/AuthManager.h"
 #include "core/config/AppConfig.h"
+#include "services/llm/LlmErrors.h"
 #include "services/llm/ModelCatalog.h"
 #include "services/llm/ProviderCatalog.h"
 
@@ -56,11 +57,25 @@ QByteArray ArenaLlmClient::build_body(const ArenaLlmRequest& req) {
 ArenaLlmResult ArenaLlmClient::parse_response(const QString& provider, const QByteArray& body) {
     ArenaLlmResult r;
     const QString p = provider.toLower();
-    const QJsonObject o = QJsonDocument::fromJson(body).object();
-    if (o.isEmpty()) {
+    const QJsonObject root = QJsonDocument::fromJson(body).object();
+    if (root.isEmpty()) {
         r.error = "non-JSON response";
         return r;
     }
+    // Fincept's /research/chat wraps the OpenAI payload in its API envelope:
+    //   {"success":true,"message":"Success","data":{"choices":[…],"usage":{…}}}
+    // and reports failures as {"success":false,"message":<string|object>}. Only
+    // the top level used to be read, so every Fincept agent decision came back as
+    // "empty completion" and the agent tripped its circuit breaker.
+    if (p == QLatin1String("fincept") && root.value("success").isBool() && !root.value("success").toBool()) {
+        const QJsonValue m = root.value("message");
+        r.error = m.isObject() ? m.toObject().value("message").toString() : m.toString();
+        if (r.error.isEmpty())
+            r.error = "Fincept request failed";
+        return r;
+    }
+    const QJsonObject o =
+        (p == QLatin1String("fincept") && root.value("data").isObject()) ? root.value("data").toObject() : root;
     if (o.contains("error")) {
         const auto e = o.value("error");
         r.error = e.isObject() ? e.toObject().value("message").toString() : e.toString();
@@ -150,6 +165,17 @@ void ArenaLlmClient::complete(const ArenaLlmRequest& req, std::function<void(Are
             r.error = "timeout";
             cb(r);
             return;
+        }
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (provider == QLatin1String("fincept")) {
+            // Out of credits / key rejected: the same readable sentence the AI
+            // Chat shows, recorded on the decision row instead of a JSON blob.
+            const auto kind = fincept::ai_chat::classify_fincept_failure(status, QString::fromUtf8(body));
+            if (status >= 400 && kind != fincept::ai_chat::LlmErrorKind::Other) {
+                r.error = fincept::ai_chat::make_fincept_error(kind, QString::fromUtf8(body));
+                cb(r);
+                return;
+            }
         }
         if (reply->error() != QNetworkReply::NoError && body.isEmpty()) {
             r.error = reply->errorString();

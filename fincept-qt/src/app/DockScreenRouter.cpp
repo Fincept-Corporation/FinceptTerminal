@@ -11,6 +11,7 @@
 #include "app/WindowFrame.h"
 #include "auth/InactivityGuard.h"
 #include "core/components/PopularityTracker.h"
+#include "core/config/ProfileManager.h"
 #include "core/keys/WindowCycler.h"
 #include "core/logging/Logger.h"
 #include "core/panel/PanelHandle.h"
@@ -36,6 +37,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QSet>
+#include <QSettings>
 #include <QVBoxLayout>
 
 #include <DockAreaWidget.h>
@@ -82,6 +85,7 @@ QString DockScreenRouter::title_for_id(const QString& id) {
         {"ai_quant_lab", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "AI Quant Lab")},
         {"alpha_arena", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Alpha Arena")},
         {"agent_config", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Agent Config")},
+        {"agent_workbench", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Agent Workbench")},
         {"mcp_servers", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "MCP Servers")},
         {"node_editor", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Node Editor")},
         {"code_editor", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Code Editor")},
@@ -92,7 +96,6 @@ QString DockScreenRouter::title_for_id(const QString& id) {
         {"data_mapping", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Data Mapping")},
         {"file_manager", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "File Manager")},
         {"notes", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Notes")},
-        {"forum", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Forum")},
         {"docs", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Docs")},
         {"support", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "Support")},
         {"about", QT_TRANSLATE_NOOP("fincept::DockScreenRouter", "About")},
@@ -137,6 +140,49 @@ void DockScreenRouter::on_group_symbol_changed_external(SymbolGroup g, const Sym
     }
 }
 
+// ── First-run default link group ─────────────────────────────────────────────
+// Symbol linking was invisible until the user discovered the tab badge: every panel started
+// unlinked. Until the user assigns a group themselves, the core symbol screens join group A so
+// picking a ticker in one (Watchlist, Markets, Research, Trading) moves the others. A per-profile
+// settings flag, set by the first manual badge change, ends the auto-assignment for good.
+namespace dock_router_link_defaults {
+
+bool joins_default_group(const QString& dock_id) {
+    QString type_id = dock_id;
+    const int dup = type_id.indexOf(QLatin1String("#dup"));
+    if (dup > 0)
+        type_id = type_id.left(dup);
+    static const QSet<QString> kTypes = {QStringLiteral("watchlist"), QStringLiteral("equity_research"),
+                                         QStringLiteral("equity_trading"), QStringLiteral("news"),
+                                         QStringLiteral("markets")};
+    return kTypes.contains(type_id);
+}
+
+QString user_configured_key() {
+    const QString profile_group = ProfileManager::instance().settings_group();
+    const QString tail = QStringLiteral("symbol_groups/user_configured_links");
+    return profile_group.isEmpty() ? tail : profile_group + QLatin1Char('/') + tail;
+}
+
+bool user_configured_links() {
+    return QSettings().value(user_configured_key(), false).toBool();
+}
+
+void mark_user_configured_links() {
+    QSettings s;
+    if (!s.value(user_configured_key(), false).toBool())
+        s.setValue(user_configured_key(), true);
+}
+
+} // namespace dock_router_link_defaults
+
+void DockScreenRouter::set_pending_link_group(const QString& id, SymbolGroup group) {
+    if (group == SymbolGroup::None)
+        pending_link_groups_.remove(id);
+    else
+        pending_link_groups_.insert(id, group);
+}
+
 QWidget* DockScreenRouter::wrap_with_group_badge(const QString& id, QWidget* screen) {
     // The badge now lives inside the ADS tab title (next to close/float),
     // not inside the screen content area. Wrapping happens in
@@ -145,8 +191,24 @@ QWidget* DockScreenRouter::wrap_with_group_badge(const QString& id, QWidget* scr
     // pointer if the screen opts in. Existing call sites are unchanged.
     if (!screen)
         return screen;
-    if (auto* linked = dynamic_cast<IGroupLinked*>(screen))
+    if (auto* linked = dynamic_cast<IGroupLinked*>(screen)) {
         group_linked_[id] = linked;
+        // A group saved with the restored layout wins over the default rule.
+        const auto pending = pending_link_groups_.constFind(id);
+        if (pending != pending_link_groups_.constEnd()) {
+            const SymbolGroup saved = pending.value();
+            pending_link_groups_.erase(pending);
+            if (linked->group() == SymbolGroup::None && SymbolGroupRegistry::instance().enabled(saved))
+                linked->set_group(saved);
+        }
+        // Before the badge is built, so it shows the group. Only a screen with no group of its own.
+        if (linked->group() == SymbolGroup::None && dock_router_link_defaults::joins_default_group(id) &&
+            SymbolGroupRegistry::instance().enabled(SymbolGroup::A) &&
+            !dock_router_link_defaults::user_configured_links()) {
+            linked->set_group(SymbolGroup::A);
+            LOG_DEBUG("DockRouter", QString("Default link group A for '%1'").arg(id));
+        }
+    }
     attach_group_badge_to_tab(id, screen);
     return screen;
 }
@@ -192,6 +254,8 @@ void DockScreenRouter::attach_group_badge_to_tab(const QString& id, QWidget* scr
     }
 
     connect(badge, &ui::GroupBadge::group_change_requested, this, [linked, badge](SymbolGroup g) {
+        // The user has chosen groups themselves: stop the first-run default assignment.
+        dock_router_link_defaults::mark_user_configured_links();
         linked->set_group(g);
         badge->set_group_silent(g);
         // If the new group already has an active symbol, push it

@@ -474,7 +474,10 @@ ApiResponse<QVector<BrokerPosition>> IBKRBroker::get_positions(const BrokerCrede
         pos.avg_price = o.value("avgCost").toDouble();
         pos.ltp = o.value("mktPrice").toDouble();
         pos.pnl = o.value("unrealizedPnl").toDouble();
-        pos.day_pnl = o.value("realizedPnl").toDouble();
+        // realizedPnl is booked P&L on closed quantity, not today's move; IBKR's
+        // portfolio endpoint carries no day P&L per position, so leave it unset
+        // (0 = not reported) rather than mislabel realized P&L as "day".
+        pos.day_pnl = 0.0;
         pos.side = qty > 0 ? "LONG" : "SHORT";
         // avgCost is per-contract cost INCLUDING the contract multiplier (e.g. ×100
         // for options) while mktPrice is the raw unit price — a price-based % mixes

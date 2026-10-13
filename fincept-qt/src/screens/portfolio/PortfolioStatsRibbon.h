@@ -74,6 +74,7 @@ class PortfolioStatsRibbon : public QWidget {
 
     // Cached state for re-rendering dynamic sub-line on language change.
     std::optional<portfolio::PortfolioSummary> last_summary_;
+    portfolio::ComputedMetrics last_metrics_; // drives the basis-aware tooltips
 };
 
 } // namespace fincept::screens

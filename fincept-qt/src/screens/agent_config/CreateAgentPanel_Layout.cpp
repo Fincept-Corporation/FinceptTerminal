@@ -296,7 +296,9 @@ QWidget* CreateAgentPanel::build_form_panel() {
     terminal_dry_run_check_->setStyleSheet(neutral_check_style);
     sub_vl->addWidget(terminal_dry_run_check_);
 
-    terminal_cat_lbl_ = new QLabel(tr("Category whitelist (none checked = all enabled categories except UI-only)"));
+    terminal_cat_lbl_ = new QLabel(tr("Category whitelist (none checked = essential research tools + tool search, "
+                                      "which reaches every non-UI tool)"));
+    terminal_cat_lbl_->setWordWrap(true);
     terminal_cat_lbl_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     sub_vl->addWidget(terminal_cat_lbl_);
 
@@ -307,7 +309,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
     // UI-only categories (navigation/system/settings) and recursive ones
     // (ai-chat/meta) — agents shouldn't drive the UI or call the chat LLM.
     for (const auto& cat : {"markets", "watchlist", "news", "portfolio", "notes", "crypto-trading", "paper-trading",
-                            "sec-edgar", "ma-analytics", "alt-investments", "data-sources", "forum", "profile",
+                            "sec-edgar", "ma-analytics", "alt-investments", "data-sources", "profile",
                             "file_manager", "report-builder", "python", "datahub", "analytics"}) {
         auto* item = new QListWidgetItem(cat);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
@@ -335,7 +337,7 @@ QWidget* CreateAgentPanel::build_form_panel() {
 
     auto* max_row = new QHBoxLayout;
     max_row->setSpacing(8);
-    terminal_max_lbl_ = field_lbl(tr("Max tools (0 = no cap)"));
+    terminal_max_lbl_ = field_lbl(tr("Max tools for a whitelist / regex selection (0 = no cap)"));
     max_row->addWidget(terminal_max_lbl_);
     terminal_max_tools_spin_ = new QSpinBox;
     terminal_max_tools_spin_->setRange(0, 500);

@@ -231,7 +231,8 @@ void ActivityTab::refresh_subscription() {
         return;
     current_topic_ = QStringLiteral("wallet:activity:%1").arg(current_pubkey_);
     hub.subscribe(this, current_topic_, [this](const QVariant& v) { on_activity_update(v); });
-    hub.request(current_topic_, /*force=*/true);
+    // force=false: a tab switch must not re-hit Helius/RPC while the cached feed is fresh.
+    hub.request(current_topic_, /*force=*/false);
 }
 
 void ActivityTab::on_activity_update(const QVariant& v) {

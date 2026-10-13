@@ -1,6 +1,7 @@
 #include "screens/report_builder/DocumentCanvas.h"
 
 #include "screens/report_builder/ReportBuilderScreen.h"
+#include "screens/report_builder/ReportTableCodec.h"
 #include "ui/theme/Theme.h"
 
 namespace { // forward-declare default theme for constructor use
@@ -530,24 +531,9 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
             //   2. config["data"] — JSON map {"r_c":"value"} (legacy).
             //   3. fallback to "Header N" placeholders so the table at least
             //      shows where data should go rather than empty cells.
-            QVector<QStringList> rows_data;
-            QString csv = comp.config.value("csv");
-            if (!csv.isEmpty()) {
-                // Normalise row separators: \r\n / \r / \n / | all mean "new row".
-                QString normalised = csv;
-                normalised.replace(QLatin1String("\r\n"), QLatin1String("|"));
-                normalised.replace('\r', '|');
-                normalised.replace('\n', '|');
-                for (const QString& row_str : normalised.split('|', Qt::SkipEmptyParts)) {
-                    const QString trimmed_row = row_str.trimmed();
-                    if (trimmed_row.isEmpty())
-                        continue;
-                    QStringList row;
-                    for (const QString& cell : trimmed_row.split(',')) // keep empty cells
-                        row << cell.trimmed();
-                    rows_data.append(row);
-                }
-            }
+            // Quote-aware: "1,234.5" is one cell (it used to split a financial table's
+            // thousands-separated numbers across columns). See ReportTableCodec.h.
+            QVector<QStringList> rows_data = report_table::parse(comp.config.value("csv"));
 
             QJsonObject cell_data;
             if (rows_data.isEmpty() && comp.config.contains("data")) {
@@ -772,6 +758,18 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                     img_fmt.setName(img_path);
                     img_fmt.setWidth(chart_w);
                     cursor.insertImage(img_fmt);
+                    // Template placeholder numbers must never pass for real data in an
+                    // exported report. The flag clears as soon as the data is edited.
+                    if (comp.config.value("sample") == QLatin1String("1")) {
+                        cursor.insertBlock();
+                        QTextCharFormat sample_fmt;
+                        sample_fmt.setFontWeight(QFont::Bold);
+                        sample_fmt.setFontPointSize(10);
+                        sample_fmt.setForeground(QColor("#dc2626"));
+                        cursor.insertText("SAMPLE DATA — placeholder values from the template, replace before "
+                                          "publishing",
+                                          sample_fmt);
+                    }
                 } else {
                     QTextCharFormat fmt;
                     fmt.setForeground(QColor(theme.meta_color));
@@ -855,6 +853,18 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                 fmt.setForeground(QColor(theme.meta_color));
                 fmt.setFontPointSize(11);
                 cursor.insertText(QString("[Fetching %1...]").arg(symbol.isEmpty() ? "market data" : symbol), fmt);
+            } else if (status == "error") {
+                QTextCharFormat fmt;
+                fmt.setForeground(QColor("#dc2626"));
+                fmt.setFontPointSize(11);
+                cursor.insertText(QString("[%1 — %2]").arg(symbol, comp.config.value("error", "quote unavailable")),
+                                  fmt);
+            } else if (!symbol.isEmpty() && price.isEmpty()) {
+                // Never fetched: say so rather than print a bare ticker that reads as data.
+                QTextCharFormat fmt;
+                fmt.setForeground(QColor(theme.meta_color));
+                fmt.setFontPointSize(11);
+                cursor.insertText(QString("[%1 — no quote yet: press Refresh Data]").arg(symbol), fmt);
             } else if (symbol.isEmpty()) {
                 QTextCharFormat fmt;
                 fmt.setForeground(QColor(theme.meta_color));
@@ -918,6 +928,17 @@ void DocumentCanvas::render(const QVector<ReportComponent>& components, const Re
                         detail += "Vol: " + vol_str;
                     }
                     cursor.insertText("    " + detail, detail_fmt);
+                }
+
+                // Live data in a document goes stale: print when it was taken.
+                const QString as_of = comp.config.value("as_of");
+                if (!as_of.isEmpty()) {
+                    cursor.insertBlock();
+                    cursor.setBlockFormat(bf);
+                    QTextCharFormat asof_fmt;
+                    asof_fmt.setFontPointSize(9);
+                    asof_fmt.setForeground(QColor(theme.meta_color));
+                    cursor.insertText("    as of " + as_of, asof_fmt);
                 }
             }
             cursor.insertText("\n");

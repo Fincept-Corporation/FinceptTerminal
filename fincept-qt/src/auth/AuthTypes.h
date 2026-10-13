@@ -2,11 +2,30 @@
 #include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QLocale>
 #include <QMap>
 #include <QRegularExpression>
 #include <QString>
 
 namespace fincept::auth {
+
+/// Credit balances are fractional — one AI call can cost 0.35 credits — so
+/// never truncate them to int (a 349.65 balance used to render as "0" because
+/// QJsonValue::toInt() rejects non-integers). Up to two decimals with trailing
+/// zeros trimmed and thousands grouped: 350 → "350", 1234.5 → "1,234.5",
+/// 0.35 → "0.35".
+inline QString format_credits(double credits) {
+    QString s = QLocale(QLocale::English).toString(credits, 'f', 2);
+    if (s.contains(QLatin1Char('.'))) {
+        while (s.endsWith(QLatin1Char('0')))
+            s.chop(1);
+        if (s.endsWith(QLatin1Char('.')))
+            s.chop(1);
+    }
+    if (s == QLatin1String("-0"))
+        s = QStringLiteral("0");
+    return s;
+}
 
 // ── Request types ────────────────────────────────────────────────────────────
 
@@ -171,6 +190,11 @@ struct UserSubscription {
 };
 
 // ── Subscription plan (from /cashfree/plans) ─────────────────────────────────
+//
+// Since 4.5.1 the catalogue is two plans: {"plan_id":"free", "is_free":true} and
+// {"plan_id":"pro", "price_usd":10, "validity_days":30, "is_recommended":true}.
+// Legacy basic/standard ids are no longer sold but stay valid account types
+// (see SessionData::has_paid_plan()).
 
 struct SubscriptionPlan {
     QString plan_id;
@@ -183,6 +207,9 @@ struct SubscriptionPlan {
     int validity_days = 0;
     QStringList features;
     bool is_free = false;
+    /// Highlighted plan on the pricing screen. Optional in the payload: older
+    /// backends omit it, in which case the "pro" plan is the recommended one.
+    bool is_recommended = false;
     int display_order = 0;
 
     static SubscriptionPlan from_json(const QJsonObject& obj) {
@@ -200,6 +227,9 @@ struct SubscriptionPlan {
                 p.features.append(f.toString());
         }
         p.is_free = obj["is_free"].toBool();
+        p.is_recommended = obj.contains("is_recommended")
+                               ? obj["is_recommended"].toBool()
+                               : p.plan_id.compare(QLatin1String("pro"), Qt::CaseInsensitive) == 0;
         p.display_order = obj["display_order"].toInt();
         return p;
     }
@@ -223,9 +253,20 @@ struct SessionData {
         return subscription.account_type.isEmpty() ? user_info.account_type : subscription.account_type;
     }
 
+    /// "pro" is the plan sold today. basic / standard / enterprise are legacy
+    /// paid tiers that existing subscribers — and cached offline sessions —
+    /// still carry until their credits expire, so they must stay paid here.
     bool has_paid_plan() const {
         const QString at = account_type().toLower();
         return at == "basic" || at == "standard" || at == "pro" || at == "enterprise";
+    }
+
+    /// Plan label for chrome (toolbar badge, profile): "FREE", "PRO", or a
+    /// legacy tier's own name ("BASIC", "STANDARD"). Plan names are product
+    /// names and are not translated.
+    QString plan_label() const {
+        const QString at = account_type().trimmed();
+        return at.isEmpty() ? QStringLiteral("FREE") : at.toUpper();
     }
 
     QJsonObject to_json() const {

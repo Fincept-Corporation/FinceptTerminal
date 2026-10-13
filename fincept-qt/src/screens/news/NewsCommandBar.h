@@ -59,6 +59,8 @@ class NewsCommandBar : public QWidget {
     /// Select the refresh-interval combo to match `minutes` (0 = manual).
     /// Used to restore persisted state without emitting refresh_interval_changed.
     void set_refresh_interval_minutes(int minutes);
+    /// Reflect the intel drawer's state on the INTEL toggle without emitting.
+    void set_drawer_checked(bool checked);
 
   protected:
     void changeEvent(QEvent* event) override;

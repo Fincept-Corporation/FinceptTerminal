@@ -74,42 +74,23 @@ PortfolioScreen::PortfolioScreen(QWidget* parent) : QWidget(parent) {
         if (txn_panel_)
             txn_panel_->set_transactions(txns);
     });
-    connect(&svc, &services::PortfolioService::correlation_computed, this, [this](QHash<QString, double> matrix) {
-        if (sector_panel_)
-            sector_panel_->set_correlation(matrix);
-        if (detail_wrapper_)
-            detail_wrapper_->update_correlation(matrix);
-    });
-    connect(&svc, &services::PortfolioService::spy_history_loaded, this,
-            [this](QStringList /*dates*/, QVector<double> closes) {
-                // Feed the FFN view's BENCHMARK (SPY) column — it computes
-                // total return / CAGR / vol / Sharpe / max-DD from the closes.
-                if (ffn_view_)
-                    ffn_view_->set_benchmark(closes);
-                // Recompute metrics now that SPY data is available for OLS beta.
-                // The chart consumes the per-symbol benchmark_history_loaded
-                // signal below — SPY there may differ from this Beta fetch.
-                if (summary_loaded_)
-                    services::PortfolioService::instance().compute_metrics(current_summary_);
+    // One analytics run per load delivers correlation, benchmark history,
+    // risk-free rate and ex-ante risk together (was four Python spawns).
+    connect(&svc, &services::PortfolioService::market_analytics_loaded, this,
+            [this](QString portfolio_id, bool ok, QString error) {
+                if (portfolio_id != selected_id_)
+                    return; // a late result for a portfolio the user has left
+                on_market_analytics(ok, error);
             });
-    connect(&svc, &services::PortfolioService::benchmark_history_loaded, this,
-            [this](QString symbol, QStringList dates, QVector<double> closes) {
-                // Hand the chart whichever benchmark was actually requested
-                // (SPY for USD, ^GSPTSE for CAD, etc.) so the overlay label and
-                // currency-normalisation are correct.
-                if (!perf_chart_ || !summary_loaded_)
+    connect(&svc, &services::PortfolioService::ledger_changed, this, &PortfolioScreen::on_asset_changed);
+    // Refused / failed writes (over-sell, DB error) used to be log-only, so the
+    // action simply looked ignored.
+    connect(&svc, &services::PortfolioService::operation_failed, this,
+            [this](QString portfolio_id, QString message) {
+                if (!isVisible() || (!portfolio_id.isEmpty() && portfolio_id != selected_id_))
                     return;
-                const QString want =
-                    services::PortfolioService::default_benchmark_for_currency(current_summary_.portfolio.currency);
-                if (symbol != want)
-                    return; // ignore the secondary SPY-for-Beta fetch
-                perf_chart_->set_benchmark_history(symbol, dates, closes);
+                QMessageBox::warning(this, tr("Portfolio"), message);
             });
-    connect(&svc, &services::PortfolioService::risk_free_rate_loaded, this, [this](double /*rate*/) {
-        // Recompute metrics with updated risk-free rate for Sharpe
-        if (summary_loaded_)
-            services::PortfolioService::instance().compute_metrics(current_summary_);
-    });
     // After yfinance backfill lands, refresh snapshots and metrics so Beta/MDD
     // populate without requiring a manual refresh.
     connect(&svc, &services::PortfolioService::history_backfilled, this, [this](QString portfolio_id, int point_count) {

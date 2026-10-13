@@ -39,7 +39,10 @@
 #include <QPrinter>
 #include <QPropertyAnimation>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QSaveFile>
 #include <QShowEvent>
+#include <QUrl>
 #include <QTextDocument>
 #include <QTextFrame>
 #include <QVBoxLayout>
@@ -484,12 +487,11 @@ void ReportBuilderScreen::on_export_pdf() {
         return;
     if (!path.endsWith(QLatin1String(".pdf"), Qt::CaseInsensitive))
         path += QLatin1String(".pdf");
-    export_pdf_to(path);
-    // export_pdf_to can fail without throwing (painter-begin failure, unwritable
-    // path, disk full) — verify a non-empty PDF actually landed before claiming
-    // success, instead of always reporting success.
+    // Trust the painter's result AND the file: checking the file alone reported success
+    // when an older PDF of the same name was left in place by a failed export.
+    const bool ok = export_pdf_to(path);
     const QFileInfo out(path);
-    if (out.exists() && out.size() > 0) {
+    if (ok && out.exists() && out.size() > 0) {
         QMessageBox::information(this, tr("Export PDF"), tr("Report exported successfully to:\n%1").arg(path));
     } else {
         QMessageBox::warning(this, tr("Export PDF"), tr("Failed to export the report to:\n%1").arg(path));
@@ -617,9 +619,9 @@ static bool rb_paint_report_pages(const QVector<QTextDocument*>& page_docs, QPri
     return true;
 }
 
-void ReportBuilderScreen::export_pdf_to(const QString& path) {
+bool ReportBuilderScreen::export_pdf_to(const QString& path) {
     if (path.isEmpty())
-        return;
+        return false;
     auto& svc = Service::instance();
 
     QPrinter printer(QPrinter::HighResolution);
@@ -639,10 +641,134 @@ void ReportBuilderScreen::export_pdf_to(const QString& path) {
     // file and reports failure itself.
     if (!painted) {
         LOG_ERROR("ReportBuilder", "PDF export failed: could not start painting to the output file");
-        return;
+        return false;
     }
 
     services::FileManagerService::instance().import_file(path, "report_builder");
+    return true;
+}
+
+// ── HTML export ──────────────────────────────────────────────────────────────
+
+namespace {
+
+QString rb_html_escape(const QString& s) {
+    return s.toHtmlEscaped();
+}
+
+// The <body> contents of a QTextDocument::toHtml() page, with every <img src="file">
+// replaced by an embedded data: URI so the page is self-contained.
+QString rb_page_body_with_embedded_images(const QString& html) {
+    int b0 = html.indexOf(QLatin1String("<body"));
+    b0 = b0 < 0 ? 0 : html.indexOf(QLatin1Char('>'), b0) + 1;
+    int b1 = html.lastIndexOf(QLatin1String("</body>"));
+    if (b1 < 0)
+        b1 = html.size();
+    QString body = html.mid(b0, b1 - b0);
+
+    static const QRegularExpression img_re(QStringLiteral("<img src=\"([^\"]+)\""));
+    QString out;
+    int last = 0;
+    auto it = img_re.globalMatch(body);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        out += body.mid(last, m.capturedStart() - last);
+        QString src = m.captured(1);
+        QString local = src.startsWith(QLatin1String("file:")) ? QUrl(src).toLocalFile() : src;
+        QFile f(local);
+        if (f.open(QIODevice::ReadOnly)) {
+            const QString mime = local.endsWith(QLatin1String(".jpg"), Qt::CaseInsensitive) ||
+                                         local.endsWith(QLatin1String(".jpeg"), Qt::CaseInsensitive)
+                                     ? QStringLiteral("image/jpeg")
+                                 : local.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive)
+                                     ? QStringLiteral("image/svg+xml")
+                                 : local.endsWith(QLatin1String(".gif"), Qt::CaseInsensitive)
+                                     ? QStringLiteral("image/gif")
+                                     : QStringLiteral("image/png");
+            out += QStringLiteral("<img src=\"data:%1;base64,%2\"")
+                       .arg(mime, QString::fromLatin1(f.readAll().toBase64()));
+        } else {
+            out += m.captured(0); // leave it; the browser shows a broken image rather than nothing
+        }
+        last = m.capturedEnd();
+    }
+    out += body.mid(last);
+    return out;
+}
+
+} // namespace
+
+bool ReportBuilderScreen::export_html_to(const QString& path) {
+    if (path.isEmpty())
+        return false;
+    auto& svc = Service::instance();
+    const auto meta = svc.metadata();
+    const auto theme = svc.theme();
+
+    canvas_->render(svc.components(), meta, theme, -1); // no selection highlight
+    QStringList pages;
+    for (QTextDocument* d : canvas_->page_documents())
+        pages << rb_page_body_with_embedded_images(d->toHtml());
+    refresh_canvas();
+
+    auto band = [](const QString& l, const QString& c, const QString& r) {
+        if (l.isEmpty() && c.isEmpty() && r.isEmpty())
+            return QString();
+        return QStringLiteral("<div class=\"band\"><span>%1</span><span>%2</span><span>%3</span></div>")
+            .arg(rb_html_escape(l), rb_html_escape(c), rb_html_escape(r));
+    };
+    // Running headers/footers have no page numbers in a web page — drop the tokens.
+    auto strip = [](QString s) {
+        s.remove(QStringLiteral("{page}"));
+        s.remove(QStringLiteral("{total}"));
+        return s.trimmed();
+    };
+
+    QString html;
+    html += QStringLiteral("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\">");
+    html += QStringLiteral("<title>%1</title>").arg(rb_html_escape(meta.title));
+    html += QStringLiteral("<style>body{background:%1;color:%2;max-width:820px;margin:24px auto;padding:0 24px;"
+                           "font-family:'Segoe UI',Arial,sans-serif;}"
+                           ".band{display:flex;justify-content:space-between;color:#888;font-size:9pt;"
+                           "border-bottom:1px solid #ccc;margin:8px 0;}"
+                           ".band.footer{border-top:1px solid #ccc;border-bottom:none;}"
+                           ".page-break{page-break-before:always;break-before:page;height:0;}"
+                           "img{max-width:100%;height:auto;}"
+                           "table{border-collapse:collapse;}</style></head><body>")
+                .arg(theme.page_bg, theme.text_color);
+    html += band(strip(meta.header_left), strip(meta.header_center), strip(meta.header_right));
+    html += pages.join(QStringLiteral("<div class=\"page-break\"></div>"));
+    QString footer = band(strip(meta.footer_left), strip(meta.footer_center), strip(meta.footer_right));
+    footer.replace(QStringLiteral("class=\"band\""), QStringLiteral("class=\"band footer\""));
+    html += footer;
+    html += QStringLiteral("</body></html>\n");
+
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        LOG_ERROR("ReportBuilder", "HTML export failed: cannot open " + path);
+        return false;
+    }
+    const QByteArray bytes = html.toUtf8();
+    if (f.write(bytes) != bytes.size() || !f.commit()) {
+        LOG_ERROR("ReportBuilder", "HTML export failed: could not write " + path);
+        return false;
+    }
+    services::FileManagerService::instance().import_file(path, "report_builder");
+    return true;
+}
+
+void ReportBuilderScreen::on_export_html() {
+    const auto m = Service::instance().metadata();
+    QString path = QFileDialog::getSaveFileName(this, tr("Export HTML"), m.title, tr("Web page (*.html)"));
+    if (path.isEmpty())
+        return;
+    if (!path.endsWith(QLatin1String(".html"), Qt::CaseInsensitive) &&
+        !path.endsWith(QLatin1String(".htm"), Qt::CaseInsensitive))
+        path += QLatin1String(".html");
+    if (export_html_to(path))
+        QMessageBox::information(this, tr("Export HTML"), tr("Report exported successfully to:\n%1").arg(path));
+    else
+        QMessageBox::warning(this, tr("Export HTML"), tr("Failed to export the report to:\n%1").arg(path));
 }
 
 void ReportBuilderScreen::on_preview() {

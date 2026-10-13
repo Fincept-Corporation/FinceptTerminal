@@ -11,10 +11,15 @@
 #include <QTimer>
 #include <QWidget>
 
+namespace fincept::symbol_dnd {
+class SymbolDragFilter;
+}
+
 namespace fincept::screens {
 
 class EquityOverviewTab;
 class EquityFinancialsTab;
+class EquityFilingsTab;
 class EquityAnalysisTab;
 class EquityTechnicalsTab;
 class EquityPeersTab;
@@ -32,7 +37,7 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     QVariantMap save_state() const override;
     QString state_key() const override { return "equity_research"; }
 
-    void set_group(SymbolGroup g) override { link_group_ = g; }
+    void set_group(SymbolGroup g) override;
     SymbolGroup group() const override { return link_group_; }
     void on_group_symbol_changed(const SymbolRef& ref) override;
     SymbolRef current_symbol() const override;
@@ -66,18 +71,29 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     /// form (see research_symbol_from_ref): echoing the yfinance form back would make e.g.
     /// Equity Trading select "RELIANCE.NS" as a broker symbol.
     void load_symbol(const QString& symbol, bool publish_to_group = true);
+    /// Lazy tabs: only the tab on screen is handed the symbol (and fetches); the others
+    /// load the first time they are shown. Each tab's set_symbol() is a no-op for the
+    /// symbol it already shows.
+    void activate_tab(QWidget* tab);
+    /// "OPEN IN ▾": the active symbol to Equity Trading / News / Backtesting / a watchlist.
+    void show_open_in_menu(QWidget* anchor);
     void retranslateUi();
     void hub_subscribe_broker_quote();
     void hub_unsubscribe_broker_quote();
-    // Show the BUY/SELL buttons only when a broker is connected (paper or live)
-    // AND the current symbol is tradable via those (Indian) brokers (.NS/.BO).
+    // Show the BUY/SELL buttons only when a usable broker (paper, or live + connected)
+    // trades the market the current symbol is listed on.
     void update_trade_buttons();
 
     QLabel* title_label_ = nullptr;
     QLabel* symbol_label_ = nullptr;
     QPushButton* buy_btn_ = nullptr;
     QPushButton* sell_btn_ = nullptr;
+    QPushButton* backtest_btn_ = nullptr;
+    QPushButton* csv_btn_ = nullptr;
+    QPushButton* watch_btn_ = nullptr;
+    QPushButton* open_in_btn_ = nullptr;
     QLabel* hint_label_ = nullptr;
+    symbol_dnd::SymbolDragFilter* drag_filter_ = nullptr;
 
     QLabel* sym_label_ = nullptr;
     QLabel* price_label_ = nullptr;
@@ -90,6 +106,7 @@ class EquityResearchScreen : public QWidget, public IStatefulScreen, public IGro
     QTabWidget* tab_widget_ = nullptr;
     EquityOverviewTab* overview_tab_ = nullptr;
     EquityFinancialsTab* financials_tab_ = nullptr;
+    EquityFilingsTab* filings_tab_ = nullptr;
     EquityAnalysisTab* analysis_tab_ = nullptr;
     EquityTechnicalsTab* technicals_tab_ = nullptr;
     EquityPeersTab* peers_tab_ = nullptr;

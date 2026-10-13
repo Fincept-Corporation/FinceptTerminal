@@ -1,6 +1,7 @@
 // src/screens/portfolio/views/AnalyticsSectorsView.cpp
 #include "screens/portfolio/views/AnalyticsSectorsView.h"
 
+#include "services/portfolio/PortfolioService.h"
 #include "ui/theme/Theme.h"
 
 #include <QChart>
@@ -346,7 +347,9 @@ QWidget* AnalyticsSectorsView::build_correlation_tab() {
     lay->addWidget(corr_title_);
 
     corr_note_ = new QLabel(tr("Top-10 holdings by weight. Pearson correlation of daily returns over "
-                               "the trailing 30 trading days (from real price history)."));
+                               "the trailing %1 trading days, dates aligned across markets. "
+                               "— = fewer than 20 shared observations.")
+                                .arg(services::PortfolioService::kCorrelationWindowDays));
     corr_note_->setWordWrap(true);
     corr_note_->setStyleSheet(
         QString("color:%1; font-size:%2px;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::font_px(-3)));
@@ -409,7 +412,9 @@ void AnalyticsSectorsView::retranslateUi() {
         corr_title_->setText(tr("HOLDINGS CORRELATION MATRIX"));
     if (corr_note_)
         corr_note_->setText(tr("Top-10 holdings by weight. Pearson correlation of daily returns over "
-                               "the trailing 30 trading days (from real price history)."));
+                               "the trailing %1 trading days, dates aligned across markets. "
+                               "— = fewer than 20 shared observations.")
+                                .arg(services::PortfolioService::kCorrelationWindowDays));
 
     if (sector_table_)
         sector_table_->setHorizontalHeaderLabels(
@@ -823,7 +828,7 @@ void AnalyticsSectorsView::update_correlation() {
     }
 
     // Real correlation matrix is fetched asynchronously (PortfolioService::
-    // fetch_correlation → correlation_computed). Until it arrives, show a
+    // fetch_market_analytics → market_analytics_loaded). Until it arrives, show a
     // loading state rather than fabricating values from day-change signs.
     if (correlation_matrix_.isEmpty()) {
         auto* msg = new QLabel(tr("Computing correlations from price history…"), corr_panel_);

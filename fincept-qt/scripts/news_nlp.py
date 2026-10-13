@@ -1,11 +1,13 @@
 """
-News NLP Pipeline — Entity extraction, semantic clustering, batch sentiment.
-Called by NewsNlpService via PythonRunner.
+News NLP Pipeline — entity extraction, geolocation, batch sentiment.
+Called by NewsNlpService / EquitySentimentService via PythonRunner.
 
 Commands:
+  enrich_batch <json_articles>             NER + geolocation per article, one process
   extract_entities <json_headlines>
-  cluster_semantic <json_headlines>
   analyze_sentiment_batch <json_headlines>
+
+<json_...> may be "@<path>" (PythonRunner spills large payloads to a temp file).
 """
 import sys
 import json
@@ -275,129 +277,39 @@ def extract_entities(headlines_json):
     }
 
 
-def cluster_semantic(headlines_json):
-    """Cluster headlines by TF-IDF cosine similarity."""
+def enrich_batch(articles_json):
+    """NER + geolocation for a batch of articles in ONE Python process.
+
+    Only per-article results are returned: the terminal caches them by article id
+    and sends just the articles it has not enriched yet, so batch aggregates (top
+    countries / organisations / people) are computed on the C++ side over whatever
+    subset is on screen. Articles without a recognisable place are simply absent
+    from ``geolocated_articles``.
+    """
     try:
-        articles = json.loads(headlines_json) if isinstance(headlines_json, str) else headlines_json
+        articles = json.loads(articles_json) if isinstance(articles_json, str) else articles_json
     except json.JSONDecodeError:
         return {"success": False, "error": "Invalid JSON"}
+    if not isinstance(articles, list):
+        return {"success": False, "error": "Expected a JSON array of articles"}
 
-    if len(articles) < 2:
-        return {"success": True, "clusters": [], "method": "too_few_articles"}
+    ner = extract_entities(articles)
+    if not ner.get("success"):
+        return ner
 
-    # Tokenize and build TF-IDF manually (no sklearn dependency required)
-    # Synonym map: normalize common abbreviations/variants to a canonical form
-    SYNONYMS = {
-        "fed": "federal_reserve", "federal": "federal_reserve", "reserve": "federal_reserve",
-        "ecb": "european_central_bank",
-        "boj": "bank_of_japan",
-        "boe": "bank_of_england",
-        "pboc": "peoples_bank_china",
-        "nato": "nato_alliance",
-        "gop": "republican",
-        "kyiv": "ukraine_capital", "kiev": "ukraine_capital",
-        "sanctioned": "sanction", "sanctions": "sanction",
-        "rates": "interest_rate", "rate": "interest_rate",
-        "inflation": "inflation_cpi",
-        "troops": "military_troops", "soldiers": "military_troops",
-        "missiles": "missile", "strikes": "strike", "attacked": "attack", "attacks": "attack",
-        "crashed": "crash", "crashes": "crash",
-        "rallied": "rally", "rallies": "rally",
-    }
-
-    def tokenize(text):
-        words = re.findall(r'[a-z]{3,}', text.lower())
-        stop = {"the", "and", "for", "are", "but", "not", "you", "all", "can",
-                "had", "her", "was", "one", "our", "out", "has", "its", "his",
-                "how", "who", "oil", "new", "now", "old", "see", "way", "may",
-                "day", "too", "any", "been", "have", "from", "with", "they",
-                "will", "each", "make", "like", "been", "than", "them", "then",
-                "what", "when", "that", "this", "said", "over", "into", "also",
-                "more", "some", "very", "after", "about", "which", "their", "there"}
-        return [SYNONYMS.get(w, w) for w in words if w not in stop]
-
-    docs = []
-    for a in articles:
-        tokens = tokenize(a.get("headline", "") + " " + a.get("summary", ""))
-        docs.append(tokens)
-
-    # Build vocabulary
-    vocab = {}
-    df = Counter()
-    for doc in docs:
-        seen = set()
-        for w in doc:
-            if w not in vocab:
-                vocab[w] = len(vocab)
-            if w not in seen:
-                df[w] += 1
-                seen.add(w)
-
-    n_docs = len(docs)
-    if not vocab:
-        return {"success": True, "clusters": [], "method": "empty_vocab"}
-
-    # TF-IDF vectors
-    def tfidf_vec(tokens):
-        tf = Counter(tokens)
-        vec = {}
-        for w, count in tf.items():
-            if w in vocab:
-                idf = math.log((n_docs + 1) / (df.get(w, 0) + 1)) + 1
-                vec[vocab[w]] = (count / max(len(tokens), 1)) * idf
-        return vec
-
-    vectors = [tfidf_vec(doc) for doc in docs]
-
-    # Cosine similarity
-    def cosine(a, b):
-        keys = set(a.keys()) & set(b.keys())
-        if not keys:
-            return 0.0
-        dot = sum(a[k] * b[k] for k in keys)
-        norm_a = math.sqrt(sum(v * v for v in a.values()))
-        norm_b = math.sqrt(sum(v * v for v in b.values()))
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-        return dot / (norm_a * norm_b)
-
-    # Single-pass clustering (threshold = 0.25 — catches more topically related articles)
-    THRESHOLD = 0.25
-    clusters = []
-    assigned = set()
-
-    for i in range(len(vectors)):
-        if i in assigned:
-            continue
-        cluster = [i]
-        assigned.add(i)
-        for j in range(i + 1, len(vectors)):
-            if j in assigned:
-                continue
-            if cosine(vectors[i], vectors[j]) >= THRESHOLD:
-                cluster.append(j)
-                assigned.add(j)
-        clusters.append(cluster)
-
-    result_clusters = []
-    for indices in clusters:
-        if len(indices) < 2:
-            continue
-        items = [{"id": articles[i].get("id", ""), "headline": articles[i].get("headline", "")} for i in indices]
-        result_clusters.append({
-            "primary": items[0],
-            "items": items,
-            "size": len(items),
-        })
-
-    result_clusters.sort(key=lambda c: c["size"], reverse=True)
+    try:
+        import news_geolocation  # sibling script in the same directory
+        geo = news_geolocation.extract_and_geocode(articles)
+    except Exception as exc:  # report, never traceback onto stdout
+        return {"success": False, "error": f"geolocation failed: {type(exc).__name__}: {exc}"}
+    if not geo.get("success"):
+        return {"success": False, "error": geo.get("error", "geolocation failed")}
 
     return {
         "success": True,
-        "clusters": result_clusters[:20],
-        "method": "tfidf_cosine",
-        "total_articles": len(articles),
-        "clustered_count": sum(c["size"] for c in result_clusters),
+        "entities": ner["entities"],
+        "geolocated_articles": geo["geolocated_articles"],
+        "count": len(articles),
     }
 
 
@@ -560,8 +472,8 @@ def main(args=None):
     try:
         if command == "extract_entities":
             result = extract_entities(data)
-        elif command == "cluster_semantic":
-            result = cluster_semantic(data)
+        elif command == "enrich_batch":
+            result = enrich_batch(data)
         elif command == "analyze_sentiment_batch":
             result = analyze_sentiment_batch(data)
         else:

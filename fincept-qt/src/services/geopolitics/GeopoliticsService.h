@@ -72,9 +72,11 @@ class GeopoliticsService : public QObject, public fincept::datahub::Producer {
     void run_python(const QString& script, const QStringList& args, const QString& context,
                     std::function<void(bool, const QString&)> cb);
 
-    // Cache TTLs (used as CacheManager ttl_seconds)
-    static constexpr int kEventsTtlSec = 120;
-    static constexpr int kRefDataTtlSec = 600;
+    // Every news-events call (events page or reference list) costs API credits.
+    /// Hub TTL for the shared `geopolitics:events` topic — the source updates ~every 30 min.
+    static constexpr int kEventsHubTtlSec = 30 * 60;
+    /// Countries / categories / cities lists (CacheManager + hub TTL).
+    static constexpr int kRefDataTtlSec = 6 * 60 * 60;
 
     void publish_hdx_result(const QString& context, const QVector<fincept::services::geo::HDXDataset>& datasets);
     bool hub_registered_ = false;

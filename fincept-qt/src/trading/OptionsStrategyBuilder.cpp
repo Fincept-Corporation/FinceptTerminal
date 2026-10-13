@@ -5,9 +5,11 @@
 #include "trading/instruments/InstrumentService.h"
 
 #include <QDate>
+#include <QStringList>
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 namespace fincept::trading {
 
@@ -61,19 +63,35 @@ OptionsLeg make_leg(const QString& underlying, const QString& expiry, double str
     return leg;
 }
 
-// Resolve a leg's real broker tradingsymbol from the instrument master.
-// Best-effort: returns the master's normalized symbol when it's loaded and the
-// exact (underlying, expiry, strike, CE/PE) contract is found; otherwise falls
-// back to the human-readable placeholder (leg.symbol) so behaviour never
-// regresses (a warning is logged). Runs at order-build time, so it also covers
-// strategies reloaded from storage.
-QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id) {
-    if (broker_id.isEmpty() || leg.underlying.isEmpty())
-        return leg.symbol;
+// Human description of a leg for error messages: "SELL NIFTY 2025-03-28 22500 CE".
+QString osb_leg_label(const OptionsLeg& leg) {
+    return QString("%1 %2 %3 %4 %5")
+        .arg(QString::fromLatin1(order_side_str(leg.side)).toUpper(), leg.underlying.toUpper(), leg.expiry,
+             strike_str(leg.strike), leg.option_type.toUpper());
+}
+
+// Resolve a leg's real broker tradingsymbol from the instrument master. Returns
+// nullopt (with `why` set) when it cannot — the caller must then REFUSE the whole
+// basket. The human-readable placeholder from build_option_symbol() is never a
+// tradable symbol and must never reach a broker: on a real exchange it is either
+// rejected (after earlier legs have already filled) or, worse, matches a
+// different contract than the one the trader selected.
+std::optional<QString> resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id, QString& why) {
+    if (broker_id.isEmpty()) {
+        why = QStringLiteral("no broker account is selected");
+        return std::nullopt;
+    }
+    if (leg.underlying.isEmpty()) {
+        why = QStringLiteral("the leg has no underlying");
+        return std::nullopt;
+    }
 
     auto& svc = InstrumentService::instance();
-    if (!svc.is_loaded(broker_id))
-        return leg.symbol;
+    if (!svc.is_loaded(broker_id)) {
+        why = QString("the %1 instrument master is not loaded yet — connect the account and wait for it to load")
+                  .arg(broker_id);
+        return std::nullopt;
+    }
 
     const InstrumentType want = (leg.option_type.compare(QLatin1String("PE"), Qt::CaseInsensitive) == 0)
                                     ? InstrumentType::PE
@@ -86,25 +104,22 @@ QString resolve_leg_symbol(const OptionsLeg& leg, const QString& broker_id) {
             return inst.symbol;
     }
 
-    LOG_WARN("OptionsStrategyBuilder",
-             QString("Could not resolve tradingsymbol for %1 %2 %3 %4 (broker=%5) — using placeholder '%6'")
-                 .arg(leg.underlying, leg.expiry)
-                 .arg(leg.strike)
-                 .arg(leg.option_type, broker_id, leg.symbol));
-    return leg.symbol;
+    why = QString("no %1 contract with that expiry and strike exists in the %2 instrument master")
+              .arg(leg.exchange, broker_id);
+    LOG_WARN("OptionsStrategyBuilder", QString("Could not resolve %1 (broker=%2): %3")
+                                           .arg(osb_leg_label(leg), broker_id, why));
+    return std::nullopt;
 }
 
 } // namespace
 
 QString OptionsStrategyBuilder::build_option_symbol(const QString& underlying, const QString& expiry, double strike,
                                                     const QString& opt_type) {
-    // Human-readable placeholder only (previews, saved-strategy labels, and the
-    // last-resort fallback). The tradable symbol is NOT derived here: the order path
-    // (to_basket_order -> resolve_leg_symbol) already looks every leg up in the
-    // InstrumentService master (underlying + expiry + strike + CE/PE) and uses this
-    // string only when the master isn't loaded or the contract can't be found, in
-    // which case it logs a warning. Real broker tradingsymbols / numeric security
-    // IDs therefore never come from this function.
+    // Human-readable placeholder only (previews, saved-strategy labels). The
+    // tradable symbol is NOT derived here: the order path (to_basket_order ->
+    // resolve_leg_symbol) looks every leg up in the InstrumentService master and
+    // REFUSES the basket when any leg cannot be resolved. This string never
+    // reaches a broker.
     return underlying.toUpper() + compact_expiry(expiry) + strike_str(strike) + opt_type.toUpper();
 }
 
@@ -196,8 +211,14 @@ OptionsStrategy OptionsStrategyBuilder::bear_put_spread(const QString& underlyin
     return s;
 }
 
-BasketOrderRequest OptionsStrategyBuilder::to_basket_order(const OptionsStrategy& strategy, ProductType product,
-                                                           const QString& broker_id) {
+bool OptionsStrategyBuilder::to_basket_order(const OptionsStrategy& strategy, ProductType product,
+                                             const QString& broker_id, BasketOrderRequest& out, QString& error) {
+    out = BasketOrderRequest{};
+    error.clear();
+    if (strategy.legs.isEmpty()) {
+        error = QStringLiteral("The strategy has no legs");
+        return false;
+    }
     BasketOrderRequest request;
     request.strategy_name = strategy.name;
 
@@ -208,9 +229,33 @@ BasketOrderRequest OptionsStrategyBuilder::to_basket_order(const OptionsStrategy
                           [](const OptionsLeg& leg) { return leg.side == OrderSide::Sell; });
 
     request.orders.reserve(sorted.size());
+    // Resolve EVERY leg before building anything: one unresolved leg refuses the
+    // whole basket, so no leg is ever sent without its hedge.
+    QStringList unresolved;
+    QVector<QString> symbols;
+    symbols.reserve(sorted.size());
     for (const OptionsLeg& leg : sorted) {
+        QString why;
+        const auto sym = resolve_leg_symbol(leg, broker_id, why);
+        if (!sym) {
+            unresolved << QString("%1 (%2)").arg(osb_leg_label(leg), why);
+            symbols.append(QString());
+        } else {
+            symbols.append(*sym);
+        }
+    }
+    if (!unresolved.isEmpty()) {
+        error = QString("Cannot place %1 — %2 leg(s) could not be resolved to a tradable contract, nothing was sent: %3")
+                    .arg(strategy.name.isEmpty() ? QStringLiteral("strategy") : strategy.name)
+                    .arg(unresolved.size())
+                    .arg(unresolved.join("; "));
+        return false;
+    }
+
+    for (int i = 0; i < sorted.size(); ++i) {
+        const OptionsLeg& leg = sorted.at(i);
         UnifiedOrder order;
-        order.symbol = resolve_leg_symbol(leg, broker_id);
+        order.symbol = symbols.at(i);
         order.exchange = leg.exchange;
         order.side = leg.side;
         order.quantity = leg.quantity;
@@ -219,7 +264,8 @@ BasketOrderRequest OptionsStrategyBuilder::to_basket_order(const OptionsStrategy
         request.orders.append(order);
     }
 
-    return request;
+    out = request;
+    return true;
 }
 
 } // namespace fincept::trading

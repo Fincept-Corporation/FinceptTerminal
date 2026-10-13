@@ -2,7 +2,6 @@
 
 #include <QEvent>
 #include <QGraphicsView>
-#include <QPixmap>
 
 namespace fincept::workflow {
 
@@ -41,10 +40,6 @@ class NodeCanvas : public QGraphicsView {
     bool panning_ = false;
     QPoint last_pan_pos_;
     bool connecting_ = false;
-
-    // Background cache (P9)
-    QPixmap bg_cache_;
-    qreal bg_cache_scale_ = -1.0;
 
     static constexpr qreal kMinZoom = 0.25;
     static constexpr qreal kMaxZoom = 3.0;

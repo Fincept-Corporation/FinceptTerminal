@@ -28,7 +28,10 @@
 #include <QString>
 #include <QVector>
 
+#include <atomic>
 #include <optional>
+
+class QTimer;
 
 namespace fincept::trading {
 
@@ -57,6 +60,13 @@ struct PendingOrder {
     QDateTime rejected_at;
     QString rejection_reason;
     QString broker_order_id; // set after execution on approval
+
+    // End of the approval window. Stamped into order_data["expires_at"] (UTC ISO)
+    // when the order is queued, so it needs no schema migration; rows queued
+    // before that existed derive it from created_at + the configured TTL.
+    // Invalid only when created_at is unreadable — is_expired() treats that as
+    // expired (fail closed).
+    QDateTime expires_at;
 
     // Parsed display fields (derived from order_data for the table view).
     QString symbol;
@@ -88,20 +98,97 @@ class ActionCenter : public QObject {
     // dialog would show the original details while the fill happens at the
     // current price.
     //
-    // Expiry is DERIVED from created_at rather than stored as a column. That is
-    // deliberate: a migration adding `expires_at` would default existing rows
-    // to NULL, so every order already sitting in the queue — precisely the
-    // stale ones this protects against — would never expire. Deriving applies
-    // the policy retroactively and cannot be set wrong by a caller.
-    static constexpr int kPendingOrderTtlMinutes = 15;
+    // Every queued order therefore has an approval window (default 5 minutes,
+    // user-configurable, setting "action_center.pending_ttl_minutes"). The end of
+    // the window is stamped into order_data["expires_at"] at queue time (no
+    // migration needed); legacy rows derive it from created_at + the TTL, so the
+    // policy also applies to orders already sitting in the queue. Expired orders
+    // are auto-rejected with a reason by a service-side sweep (runs only while
+    // something is pending) and approve_order() refuses them regardless, so the
+    // UI is never the only line of defence.
+    static constexpr int kDefaultPendingTtlMinutes = 5;
+    static constexpr int kMinPendingTtlMinutes = 1;
+    static constexpr int kMaxPendingTtlMinutes = 240;
 
-    /// True when this order is too old to be safely executed. Callers should
-    /// use this to grey out or annotate the row; approve_order() enforces it
-    /// regardless, so the UI cannot be the only line of defence.
+    /// PURE: end of a row's approval window — the stamped order_data["expires_at"]
+    /// (UTC ISO) when present and valid, else created_at + ttl_minutes, else invalid.
+    static QDateTime expiry_for(const QJsonObject& order_data, const QDateTime& created_at, int ttl_minutes) {
+        const QString stamped = order_data.value(QStringLiteral("expires_at")).toString();
+        if (!stamped.isEmpty()) {
+            const QDateTime dt = QDateTime::fromString(stamped, Qt::ISODateWithMs);
+            if (dt.isValid())
+                return dt;
+        }
+        if (!created_at.isValid())
+            return {};
+        return created_at.addSecs(static_cast<qint64>(ttl_minutes) * 60);
+    }
+
+    /// PURE: whether a row with this status/expiry is expired at `now`. Only
+    /// "pending" rows expire; an invalid expiry counts as expired (fail closed).
+    static bool expired_at(const QString& status, const QDateTime& expires_at, const QDateTime& now) {
+        if (status != QLatin1String("pending"))
+            return false;
+        if (!expires_at.isValid())
+            return true;
+        return now >= expires_at;
+    }
+
+    /// Configured approval window in minutes (clamped; default on read error).
+    static int pending_ttl_minutes();
+    void set_pending_ttl_minutes(int minutes);
+
+    /// True when a still-pending order's approval window has closed (or its
+    /// timestamps are unreadable — fail closed). Approved/rejected rows never expire.
     static bool is_expired(const PendingOrder& po);
 
     /// Seconds since the order was queued (-1 if created_at is invalid).
     static qint64 age_secs(const PendingOrder& po);
+
+    /// Seconds left in the approval window (<= 0 once expired / unreadable).
+    static qint64 secs_until_expiry(const PendingOrder& po);
+
+    /// Auto-reject every pending order whose window has closed. Returns how many
+    /// rows were rejected. Called by the internal sweep timer; safe to call any time.
+    int expire_stale_orders();
+
+    // ── One-click trading (per account, persisted, OFF by default) ───────────
+    // LIVE orders entered from the order ticket always go through the order
+    // confirmation dialog unless the user has explicitly opted this account into
+    // one-click trading (setting "action_center.one_click.<account_id>").
+    // Headless paths (MCP / workflow / algo / agents) are unaffected: they keep
+    // their own Semi-Auto approval queue. Read errors answer false (confirm).
+    bool one_click_enabled(const QString& account_id) const;
+    void set_one_click_enabled(const QString& account_id, bool enabled);
+
+    // ── Kill switch ─────────────────────────────────────────────────────────
+    // For every active LIVE account: reject its queued (unapproved) orders, then
+    // cancel all open broker orders, then square off all open positions, using
+    // the existing per-broker cancel_all_orders / close_all_positions paths.
+    // Holdings (delivery stock already in the demat) are not sold. Paper accounts
+    // are listed as skipped. Runs on the order executor; the per-account outcome
+    // arrives via kill_switch_finished on the GUI thread. Returns false (and does
+    // nothing) when a kill switch is already running.
+    struct KillSwitchAccountResult {
+        QString account_id;
+        QString display_name;
+        QString broker_id;
+        bool skipped = false;     // not a LIVE account — nothing sent
+        QString skip_reason;
+        int queued_rejected = 0;  // Action Center rows rejected
+        int orders_cancelled = 0;
+        int orders_cancel_failed = 0;
+        int positions_closed = 0;
+        int positions_close_failed = 0;
+        QStringList errors;
+        bool ok() const {
+            return skipped || (errors.isEmpty() && orders_cancel_failed == 0 && positions_close_failed == 0);
+        }
+    };
+    bool run_kill_switch();
+    bool kill_switch_running() const { return kill_switch_running_; }
+    /// Active accounts the kill switch would act on (LIVE mode). For the confirmation UI.
+    QStringList kill_switch_target_labels() const;
 
     // User actions.
     // approve_order refuses an expired order and emits order_rejected with an
@@ -149,9 +236,18 @@ class ActionCenter : public QObject {
     void order_approved(const QString& pending_id, const QString& broker_order_id);
     void order_rejected(const QString& pending_id, const QString& reason);
     void stats_updated(const QString& account_id);
+    void kill_switch_finished(const QVector<fincept::trading::ActionCenter::KillSwitchAccountResult>& results);
+    void one_click_changed(const QString& account_id, bool enabled);
 
   private:
-    ActionCenter() = default;
+    ActionCenter();
+
+    // Start the expiry sweep (GUI thread) if it is not already running.
+    void ensure_expiry_sweep();
+    void on_expiry_tick();
+
+    QTimer* expiry_timer_ = nullptr;
+    std::atomic<bool> kill_switch_running_{false};
 
     // Operations that always execute immediately (never queued).
     static const QSet<QString>& immediate_ops();
@@ -182,3 +278,4 @@ class ActionCenter : public QObject {
 
 #include <QMetaType>
 Q_DECLARE_METATYPE(fincept::trading::PendingOrder)
+Q_DECLARE_METATYPE(fincept::trading::ActionCenter::KillSwitchAccountResult)

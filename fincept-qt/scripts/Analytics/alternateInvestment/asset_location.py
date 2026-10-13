@@ -183,7 +183,7 @@ class AssetLocationAnalyzer:
 
         # Value added
         value_added = after_tax_optimal - suboptimal_value
-        value_added_pct = (value_added / suboptimal_value) * Decimal('100')
+        value_added_pct = value_added / suboptimal_value  # fraction, like every other rate here
 
         # Annual alpha
         annual_alpha = (((after_tax_optimal / suboptimal_value) ** (Decimal('1') / Decimal(str(years)))) - Decimal('1')) * Decimal('100')

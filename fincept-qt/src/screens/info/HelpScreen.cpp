@@ -3,6 +3,7 @@
 #include "core/events/EventBus.h"
 #include "screens/launchpad/OnboardingTour.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QDesktopServices>
 #include <QEvent>
@@ -223,6 +224,8 @@ QWidget* HelpScreen::build_page() {
         chips_vl->addWidget(
             make_chip("", "github.com/Fincept-Corporation/FinceptTerminal", colors::TEXT_TERTIARY,
                       "https://github.com/Fincept-Corporation/FinceptTerminal/issues"));
+        chips_vl->addWidget(make_chip("", tr("Fincept Terminal Enterprise ↗"), colors::AMBER,
+                                      enterprise::url_with_ref(enterprise::site_url(), QStringLiteral("help"))));
         hl->addLayout(chips_vl);
 
         vl->addWidget(hero);
@@ -372,14 +375,25 @@ QWidget* HelpScreen::build_page() {
 
             {"", tr("Do I need an account?"),
              tr("Yes. Register with your email (you'll confirm it with a verification code) or "
-                "sign in with Google, then pick a plan. The Free plan lets you continue straight "
-                "into the terminal; paid plans add more credits and higher limits.")},
+                "sign in with Google. Every account starts on the Free plan: signup credits and "
+                "community support. Pro ($10/month) adds a monthly credit allowance, higher limits, "
+                "every cloud analytics module and priority support — open Plans & Pricing from the "
+                "plan badge in the toolbar or from Profile → Billing.")},
 
             {"", tr("What is a Credit?"),
-             tr("Credits are the in-app currency used for premium features such as AI analysis, "
-                "advanced data feeds, and quantitative analytics. Free accounts receive a limited "
-                "number of credits on signup. Your current balance and payment history are under "
-                "Profile → Billing.")},
+             tr("Credits pay for cloud-backed features such as AI analysis, premium data calls and "
+                "the cloud quantitative analytics modules. Free accounts receive credits on signup; "
+                "Pro adds a fresh allowance every month. Your balance is shown in the toolbar and, "
+                "with your payment history, under Profile → Billing.")},
+
+            {"", tr("Is there an edition for firms and teams?"),
+             tr("Yes — Fincept Terminal Enterprise, the private, closed-source edition the team develops "
+                "daily for funds, family offices and research desks: proprietary and private datasets with "
+                "deeper point-in-time history, multi-agent AI research with AI credits included and a "
+                "private dataroom, 41 modules across six desks, and SSO/SAML, audit logs, role-based access "
+                "and SLA-backed support. It is a separate product with its own accounts — see "
+                "fincept.in/enterprise, or Help → Book an Enterprise Demo. This open-source edition stays "
+                "free under AGPL-3.0.")},
 
             {"", tr("How do I connect a broker?"),
              tr("Open Equity Trading and click ACCOUNTS to add a broker account, then enter your "

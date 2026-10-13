@@ -259,45 +259,59 @@ QWidget* DocsScreen::page_node_editor() {
 }
 
 QWidget* DocsScreen::page_code_editor() {
-    return make_page(tr("CODE EDITOR"), tr("Built-in code editor for trading strategies and scripts"),
-                     {
-                         {tr("OVERVIEW"), tr("The Code Editor provides a built-in development environment for writing "
-                                             "and testing Python trading strategies and analytics scripts.")},
-                         {tr("KEY FEATURES"), tr("■  Syntax highlighting for Python\n"
-                                                 "■  Script execution with output panel\n"
-                                                 "■  Access to terminal data via APIs\n"
-                                                 "■  Template library for common patterns\n"
-                                                 "■  Integration with backtesting engine")},
-                         {tr("REAL-WORLD USAGE"), tr("■  Strategy development: Write and test Python strategies\n"
-                                                     "■  Custom analytics: Build bespoke analysis scripts\n"
-                                                     "■  Data processing: Transform and analyze raw data\n"
-                                                     "■  Automation: Create scheduled data processing jobs")},
-                         {tr("SKILL LEVELS"), tr("BEGINNER: Run example scripts, modify parameters\n"
-                                                 "INTERMEDIATE: Write simple strategies from templates\n"
-                                                 "ADVANCED: Custom analytics with pandas, numpy, scipy\n"
-                                                 "PRO: Full strategy development with custom backtesting integration")},
-                     });
+    return make_page(
+        tr("CODE EDITOR"), tr("Fincept Notebook — Jupyter-style Python notebooks inside the terminal"),
+        {
+            {tr("OVERVIEW"), tr("The Code Editor is a notebook: code and markdown cells saved as standard .ipynb "
+                                "files. A LIBRARY of prebuilt finance, economics, trading, portfolio and quant "
+                                "notebooks opens as editable copies.")},
+            {tr("RUNNING CELLS"), tr("■  Ctrl+Enter runs a cell, Shift+Enter runs it and moves on, Ctrl+Shift+Enter "
+                                     "runs the whole notebook top to bottom and stops at the first error\n"
+                                     "■  Output streams into the cell while it runs; the value of the last line is "
+                                     "shown like in Jupyter; errors show a traceback\n"
+                                     "■  STOP (or Esc) interrupts running cells; a cell that passes the LIMIT is "
+                                     "stopped with TimeoutError\n"
+                                     "■  Each cell runs in its own process — variables do not carry over between "
+                                     "cells, so define what a cell needs inside it")},
+            {tr("ENVIRONMENTS"), tr("■  PY · NUMPY2 — the default analytics environment (pandas, numpy, scipy, "
+                                    "statsmodels, yfinance, …)\n"
+                                    "■  PY · NUMPY1 — vectorbt, backtesting.py, zipline, bt, ffn, PyPortfolioOpt, "
+                                    "financepy\n"
+                                    "■  The choice is saved with the notebook; relative file paths resolve against "
+                                    "the notebook's folder")},
+            {tr("FILES"), tr("■  NEW / OPEN / SAVE (Ctrl+N / Ctrl+O / Ctrl+S); outputs are saved in the .ipynb\n"
+                             "■  Saved notebooks appear in the File Manager")},
+        });
 }
 
 QWidget* DocsScreen::page_excel() {
-    return make_page(tr("EXCEL"), tr("Spreadsheet interface for financial analysis"),
-                     {
-                         {tr("OVERVIEW"), tr("The Excel screen provides a spreadsheet-style interface for financial "
-                                             "analysis with formula support, data import/export, and charting.")},
-                         {tr("KEY FEATURES"), tr("■  Spreadsheet grid with formula support\n"
-                                                 "■  Data import from terminal screens\n"
-                                                 "■  Financial functions (NPV, IRR, XIRR, etc.)\n"
-                                                 "■  Chart creation from spreadsheet data\n"
-                                                 "■  CSV import/export compatibility")},
-                         {tr("REAL-WORLD USAGE"), tr("■  Financial modeling: Build DCF models in a familiar interface\n"
-                                                     "■  Data analysis: Import market data for custom calculations\n"
-                                                     "■  Reporting: Create tabular reports with formulas\n"
-                                                     "■  Comparison: Side-by-side metric comparison tables")},
-                         {tr("SKILL LEVELS"), tr("BEGINNER: Enter data, use basic formulas (SUM, AVG)\n"
-                                                 "INTERMEDIATE: Financial functions, data import from terminal\n"
-                                                 "ADVANCED: Complex financial models with linked cells\n"
-                                                 "PRO: Automated model updates with live data feeds")},
-                     });
+    return make_page(
+        tr("EXCEL"), tr("Multi-sheet spreadsheet with an Excel-compatible formula engine"),
+        {
+            {tr("OVERVIEW"), tr("A workbook of sheets with formulas, imported from or saved to .xlsx and .csv. "
+                                "Formulas follow Excel's rules: operator precedence, error values (#DIV/0!, "
+                                "#VALUE!, #REF!, #NAME?, #N/A) that propagate instead of turning into 0, and "
+                                "references to other sheets (Sheet2!A1, 'My Sheet'!B2:C9).")},
+            {tr("FUNCTIONS"), tr("■  Aggregates: SUM, AVERAGE, MIN, MAX, COUNT, COUNTA, MEDIAN, STDEV, VAR, LARGE, "
+                                 "SMALL, PRODUCT, SUMPRODUCT, SUMIF, COUNTIF, AVERAGEIF, CORREL\n"
+                                 "■  Financial: NPV, IRR, XNPV, XIRR, PMT, PV, FV, NPER, RATE\n"
+                                 "■  Logic & lookup: IF, IFERROR, IFNA, AND, OR, NOT, VLOOKUP, HLOOKUP, INDEX, MATCH\n"
+                                 "■  Math & text: ROUND / ROUNDUP / ROUNDDOWN, INT, MOD, ABS, SQRT, POWER, LN, LOG, "
+                                 "EXP, CONCAT, LEFT, RIGHT, MID, LEN, TRIM, UPPER, LOWER, VALUE\n"
+                                 "Hover the formula bar for the complete list.")},
+            {tr("EDITING"), tr("■  Undo / redo (Ctrl+Z / Ctrl+Y) for edits, paste, clear and row/column changes\n"
+                               "■  Copy/paste with Excel and Google Sheets: values go out as text; pasted "
+                               "figures such as 1,234.50, $1,234, 12.5% or (1,200) count as numbers\n"
+                               "■  Pasting inside the terminal keeps formulas and shifts relative references; "
+                               "Ctrl+Shift+V pastes values only\n"
+                               "■  Inserting or deleting rows and columns updates formula references\n"
+                               "■  The status bar shows SUM / AVG / COUNT of the selection")},
+            {tr("FILES"), tr("■  .xlsx import keeps formulas, dates, percentages and number formats; a formula "
+                             "the engine cannot evaluate shows the value saved in the file (in italics)\n"
+                             "■  .xlsx export writes numbers, dates and formulas as real cells; Ctrl+S saves an "
+                             "open workbook in place\n"
+                             "■  CSV import detects comma / semicolon / tab; CSV export writes computed values")},
+        });
 }
 
 QWidget* DocsScreen::page_notes() {
@@ -346,23 +360,24 @@ QWidget* DocsScreen::page_mcp_servers() {
 
 QWidget* DocsScreen::page_data_mapping() {
     return make_page(
-        tr("DATA MAPPING"), tr("Map and configure external data source connections"),
+        tr("DATA MAPPING"), tr("Turn any JSON API into a standard record (OHLCV, QUOTE, POSITION, …)"),
         {
-            {tr("OVERVIEW"), tr("The Data Mapping screen lets you configure connections between external data "
-                                "sources and terminal screens, mapping fields and transforming data formats.")},
-            {tr("KEY FEATURES"), tr("■  Data source configuration\n"
-                                    "■  Field mapping and transformation\n"
-                                    "■  Schema validation\n"
-                                    "■  Connection testing\n"
-                                    "■  Scheduled refresh configuration")},
-            {tr("REAL-WORLD USAGE"), tr("■  Connect proprietary data feeds to terminal widgets\n"
-                                        "■  Map custom API responses to standard formats\n"
-                                        "■  Integrate internal databases with terminal screens\n"
-                                        "■  Configure automated data refresh schedules")},
-            {tr("SKILL LEVELS"), tr("BEGINNER: Browse configured data sources\n"
-                                    "INTERMEDIATE: Add new data source connections\n"
-                                    "ADVANCED: Custom field mapping and transformation logic\n"
-                                    "PRO: Complex multi-source data pipelines with validation")},
+            {tr("OVERVIEW"), tr("Data Mapping calls an HTTP API you describe, extracts fields with JSONPath and "
+                                "validates the result against a standard schema. Saved mappings can be run "
+                                "again from the MAPPINGS list; results are stored with a response cache.")},
+            {tr("WORKFLOW"), tr("■  API CONFIG — URL, method, auth, headers, JSON body; TEST API REQUEST fetches a "
+                                "sample response\n"
+                                "■  SCHEMA — OHLCV, QUOTE, TICK, ORDER, POSITION, PORTFOLIO or INSTRUMENT\n"
+                                "■  FIELD MAPPING — double-click a node of the sample response to use its path; "
+                                "optional transform (to_number, unix_to_iso, upper, …) and default\n"
+                                "■  CACHE — reuse a stored result for N seconds instead of calling the API\n"
+                                "■  TEST & SAVE — runs the real engine on the sample and lists what did not map")},
+            {tr("TEMPLATES"), tr("■  Ready-made mappings for CoinGecko, Binance, Kraken, Yahoo, Alpha Vantage, "
+                                 "Twelve Data, Finnhub, CoinMarketCap, Alpaca, Tradier and DBnomics\n"
+                                 "■  Put your API key in AUTH VALUE; {AUTH} in the URL, headers or body is "
+                                 "replaced by it when the request is sent")},
+            {tr("NOTES"), tr("■  The AUTH VALUE is stored unencrypted in the local database — use a scoped key\n"
+                             "■  Requests run only when you press TEST or RUN; there is no scheduler")},
         });
 }
 
@@ -373,7 +388,10 @@ QWidget* DocsScreen::page_data_sources() {
             {tr("OVERVIEW"), tr("Data Sources is where you browse, configure and test the connectors that feed "
                                 "the terminal: market data providers, databases, cloud storage, files, APIs and "
                                 "alternative-data feeds.")},
-            {tr("KEY FEATURES"), tr("■  CONNECTORS — searchable catalogue grouped by category, with the fields each "
+            {tr("KEY FEATURES"), tr("■  CATALOG — every built-in Python data connector: add a missing API key "
+                                    "inline, pick a command, run it and view the result as a table or JSON, export "
+                                    "CSV or copy the equivalent AI tool call\n"
+                                    "■  CONNECTORS — searchable catalogue grouped by category, with the fields each "
                                     "connector needs\n"
                                     "■  + ADD CONNECTION — configure a connector with your own credentials\n"
                                     "■  TEST — verify a saved connection before relying on it\n"
@@ -428,6 +446,23 @@ QWidget* DocsScreen::page_relationship_map() {
                                     "■  FILTERS and LEGEND panels to focus on the relationships you care about\n"
                                     "■  Layouts — FORCE, LAYERED and RADIAL; FIT (or Home) zooms to the whole graph\n"
                                     "■  A data-quality indicator shows how complete the result is")},
+        });
+}
+
+QWidget* DocsScreen::page_agent_workbench() {
+    return make_page(
+        tr("AGENT WORKBENCH"), tr("Run Claude Code and Codex agents locally, wired to the terminal's tools"),
+        {
+            {tr("OVERVIEW"), tr("The Agent Workbench runs Claude Code or OpenAI Codex CLI agents on this machine as "
+                                "background tasks that use the terminal's own tools over MCP. Runs keep going "
+                                "when the screen is closed.")},
+            {tr("TABS"), tr("■  RUN — write a task and follow the live transcript\n"
+                            "■  RUNS — history of every run, sortable and filterable\n"
+                            "■  SCHEDULES — recurring runs (e.g. a morning brief)\n"
+                            "■  CONNECT — the terminal's MCP server and setup for standalone agents (Claude Code, "
+                            "Codex, Cursor, Claude Desktop), with an activity log")},
+            {tr("SETUP"), tr("■  Install the Claude Code or Codex CLI; set its path and the workspace under SETTINGS\n"
+                             "■  Agents call the same tools AI Chat uses; actions that change data ask first")},
         });
 }
 
@@ -496,31 +531,18 @@ QWidget* DocsScreen::page_profile() {
                                     "■  Usage — 30-day summary, daily usage and your most-used endpoints\n"
                                     "■  Security — API key (show / copy / regenerate), verification status, "
                                     "login history\n"
-                                    "■  Billing — Current plan, credit balance and payment history\n"
+                                    "■  Billing — Current plan, credit balance and payment history, with UPGRADE "
+                                    "TO PRO (free accounts) or MANAGE PLAN (paid) opening Plans & Pricing\n"
                                     "■  Support — Contact details; open tickets from the Support screen\n"
                                     "■  Logout and delete account")},
-            {tr("REAL-WORLD USAGE"), tr("■  Monitor your subscription and credit usage\n"
-                                        "■  Upgrade or change your plan\n"
+            {tr("REAL-WORLD USAGE"), tr("■  Monitor your plan and credit balance\n"
+                                        "■  Move from Free to Pro ($10/month) when you need more credits\n"
                                         "■  Track API usage to stay within limits\n"
-                                        "■  Download billing records for expense tracking")},
+                                        "■  Review past payments in the payment history table")},
             {tr("SKILL LEVELS"), tr("BEGINNER: Check your account status and plan\n"
                                     "INTERMEDIATE: Monitor credit usage, plan API call budget\n"
                                     "ADVANCED: Optimize usage patterns for cost efficiency\n"
-                                    "PRO: Enterprise account management, team usage tracking")},
-        });
-}
-
-QWidget* DocsScreen::page_forum() {
-    return make_page(
-        tr("FORUM"), tr("Community discussions"),
-        {
-            {tr("OVERVIEW"), tr("The Forum is the in-app community: browse discussions, read threads, reply, and "
-                                "start your own posts without leaving the terminal.")},
-            {tr("KEY FEATURES"), tr("■  Feed with trending posts and channels\n"
-                                    "■  Search discussions and open a thread to read and reply\n"
-                                    "■  + NEW POST — give it a title and content, then PUBLISH POST\n"
-                                    "■  Leaderboard and reputation (REP) for active contributors\n"
-                                    "■  User profiles — display name, bio, signature and avatar colour (EDIT MY PROFILE)")},
+                                    "PRO: Budget credits across workflows using per-endpoint usage")},
         });
 }
 

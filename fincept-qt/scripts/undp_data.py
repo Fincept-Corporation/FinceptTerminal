@@ -10,75 +10,89 @@ import requests
 from typing import Dict, Any, Optional, List
 
 API_KEY = os.environ.get('UNDP_API_KEY', '')
-BASE_URL = "https://api.hdr.undp.org/v5/api"
+# api.hdr.undp.org no longer exists; the HDRO Data API is at hdrdata.org and needs a free key
+# (subscribe at https://hdrdata.org - see the HDRO data API manual).
+BASE_URL = "https://hdrdata.org/api/CompositeIndices"
+COMPOSITE_INDICATORS = {
+    "hdi": "Human Development Index", "le": "Life expectancy at birth", "eys": "Expected years of schooling",
+    "mys": "Mean years of schooling", "gnipc": "GNI per capita (2017 PPP $)", "gdi": "Gender Development Index",
+    "gii": "Gender Inequality Index", "ihdi": "Inequality-adjusted HDI", "phdi": "Planetary pressures-adjusted HDI",
+    "mpi_value": "Multidimensional Poverty Index", "co2_prod": "CO2 emissions per capita (production)",
+}
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
+session.headers.update({"User-Agent": "FinceptTerminal/4.5 (+https://fincept.in)"})
 
 
-def _make_request(endpoint: str, params: Dict = None) -> Any:
-    url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
+def _make_request(country: str = None, indicator: str = None, year: str = None) -> Any:
+    if not API_KEY:
+        return {"error": "The UNDP HDRO Data API requires a free API key: subscribe at https://hdrdata.org "
+                         "and save the emailed key as UNDP_API_KEY in Settings > Credentials"}
+    params = {"apikey": API_KEY}
+    if country:
+        params["countryOrAggregation"] = country.upper()
+    if indicator:
+        params["indicator"] = indicator
+    if year:
+        params["year"] = year
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(f"{BASE_URL}/query", params=params, timeout=60)
+        text = response.text.strip()
+        if response.status_code in (401, 403) or text.startswith("The API key is invalid"):
+            return {"error": "UNDP rejected the API key (UNDP_API_KEY) - check it in Settings > Credentials"}
         response.raise_for_status()
-        return response.json()
+        data = response.json()
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+    except (json.JSONDecodeError, ValueError):
+        return {"error": f"Unexpected response from hdrdata.org: {text[:200]}"}
+    return {"count": len(data) if isinstance(data, list) else None, "data": data, "source": "UNDP HDRO Data API"}
+
+
+def _years(start_year: str = None, end_year: str = None) -> str:
+    if start_year and end_year:
+        return ",".join(str(y) for y in range(int(start_year), int(end_year) + 1))
+    return start_year or end_year
 
 
 def get_hdi(country: str = None, start_year: str = None, end_year: str = None) -> Any:
-    params = {"indicator_id": "137906"}
-    if country:
-        params["country_code"] = country
-    if start_year:
-        params["year_from"] = start_year
-    if end_year:
-        params["year_to"] = end_year
-    return _make_request("indicator/data", params)
+    return _make_request(country, "hdi", _years(start_year, end_year))
 
 
 def get_gii(country: str = None, start_year: str = None, end_year: str = None) -> Any:
-    params = {"indicator_id": "68606"}
-    if country:
-        params["country_code"] = country
-    if start_year:
-        params["year_from"] = start_year
-    if end_year:
-        params["year_to"] = end_year
-    return _make_request("indicator/data", params)
+    return _make_request(country, "gii", _years(start_year, end_year))
 
 
 def get_mpi(country: str = None, year: str = None) -> Any:
-    params = {"indicator_id": "137931"}
-    if country:
-        params["country_code"] = country
-    if year:
-        params["year_from"] = year
-        params["year_to"] = year
-    return _make_request("indicator/data", params)
+    return _make_request(country, "mpi_value", year)
 
 
 def get_country_profile(country_code: str) -> Any:
-    return _make_request(f"country/{country_code}")
+    """All composite indices and components for one country."""
+    return _make_request(country_code, None, None)
 
 
 def get_indicators() -> Any:
-    return _make_request("indicator")
+    return {"indicators": COMPOSITE_INDICATORS}
 
 
 def get_rankings(indicator: str = None, year: str = None) -> Any:
-    params = {}
-    if indicator:
-        params["indicator_id"] = indicator
-    if year:
-        params["year"] = year
-    return _make_request("indicator/rankings", params)
+    """One indicator for every country in a year, sorted high to low."""
+    res = _make_request(None, indicator or "hdi", year or "2023")
+    rows = res.get("data") if isinstance(res, dict) else None
+    if isinstance(rows, list):
+        def val(r):
+            try:
+                return float(r.get("value"))
+            except (TypeError, ValueError):
+                return float("-inf")
+        res["data"] = sorted(rows, key=val, reverse=True)
+    return res
 
 
 def main(args=None):

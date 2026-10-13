@@ -41,11 +41,28 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     void build_ui();
     void wire_signals();
 
-    /// Ask before running a graph that contains LIVE (non-paper) trading nodes.
-    /// Returns true to proceed. Cancel is the default button so Enter cannot
-    /// fire real orders. Read-only trading.get_* nodes are deliberately ignored
-    /// — warning on those would make the prompt noise people click through.
-    bool confirm_live_order_nodes(const WorkflowDef& wf, const QString& action);
+    /// Ask before a run that can act for real. In LIVE mode, any node that would reach
+    /// a broker requires typing LIVE (skipped when `already_confirmed`, i.e. the user
+    /// just typed it in the Save & Run dialog). Destructive MCP tools get a plain
+    /// confirmation in either mode. Returns true to proceed.
+    bool confirm_run(const WorkflowDef& wf, const QString& action, bool already_confirmed);
+
+    /// Pre-run validation: highlights every offending node (red border + tooltip),
+    /// selects the first and explains. Returns true when the workflow may run.
+    bool validate_before_run(const WorkflowDef& wf);
+
+    /// The canvas as a WorkflowDef carrying this editor's id, name, description and
+    /// static_data (execution mode included).
+    WorkflowDef current_workflow() const;
+    /// Persist the canvas. `interactive` = report a failure in a dialog (otherwise only
+    /// on the status badge). Returns true on success.
+    bool persist(bool interactive);
+    /// Run (or partially run) the current canvas in its execution mode.
+    void start_run(const QString& from_node_id, bool already_confirmed);
+    /// Workflow-level execution mode (PAPER / LIVE), mirrored into static_data_.
+    void set_live_mode(bool live);
+    /// Something not on the undo stack changed (parameter, name, flags, rename).
+    void mark_dirty();
 
     // Actions
     void on_node_drop(const QString& type_id, const QPointF& scene_pos);
@@ -62,6 +79,7 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     void on_auto_save();
     void on_show_templates();
     void on_deploy();
+    void on_stop();
 
     // ── Undo plumbing ────────────────────────────────────────────────────────
     /// Push an AddNodesCommand for `nodes` (+ the edges among them).
@@ -89,6 +107,13 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     MiniMap* minimap_ = nullptr;
     ExecutionResultsPanel* results_panel_ = nullptr;
     QString current_workflow_id_;
+    QString current_description_;
+    QJsonObject static_data_; // persisted with the workflow (execution mode lives here)
+    bool live_mode_ = false;
+    bool dirty_ = false;      // edits outside the undo stack since the last save
+    QString pending_banner_;  // run-log banner for the run being started
+    bool pending_banner_live_ = false;
+    int paste_count_ = 0;     // successive pastes cascade instead of stacking
 
     // Clipboard for copy/paste
     QVector<NodeDef> clipboard_nodes_;

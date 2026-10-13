@@ -40,7 +40,12 @@ struct StockInfo {
     QString description;
     QString website;
     QString country;
-    QString currency;
+    QString currency; ///< trading currency of the quote
+    /// Currency the financial statements are reported in (yfinance `financialCurrency`). Differs
+    /// from `currency` for ADRs and many dual listings (TSM: price USD, statements TWD) — any
+    /// per-share value derived from statements must not be compared with the price then.
+    /// Empty when the source did not say.
+    QString financial_currency;
     QString exchange;
     int employees = 0;
 
@@ -116,10 +121,16 @@ struct Candle {
 // hundreds of heterogeneous line-item names that vary by company.
 struct FinancialsData {
     QString symbol;
-    // Each entry: (period_string, QJsonObject of line items)
+    // Each entry: (period_string, QJsonObject of line items) — ANNUAL statements (fiscal
+    // years), newest first.
     QVector<QPair<QString, QJsonObject>> income_statement;
     QVector<QPair<QString, QJsonObject>> balance_sheet;
     QVector<QPair<QString, QJsonObject>> cash_flow;
+    qint64 fetched_at = 0; ///< epoch seconds the statements were pulled from the source (0 = unknown)
+    /// True when this is the last-known-good copy replayed from cache while a refresh runs
+    /// (or after the refresh failed). Statements only change quarterly, so it is shown
+    /// immediately — labelled as such — instead of a blank tab.
+    bool stale = false;
 };
 
 // ── Technical indicator signal ────────────────────────────────────────────────
@@ -127,6 +138,7 @@ enum class TechSignal { StrongBuy, Buy, Neutral, Sell, StrongSell };
 
 struct TechIndicator {
     QString name;
+    QString key; ///< compute_technicals.py column ("rsi", "macd_diff", "bb_wband", …)
     double value = 0.0;
     TechSignal signal = TechSignal::Neutral;
     QString category; // "trend" | "momentum" | "volatility" | "volume"

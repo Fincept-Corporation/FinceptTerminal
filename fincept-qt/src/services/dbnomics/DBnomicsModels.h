@@ -1,6 +1,7 @@
 // src/services/dbnomics/DBnomicsModels.h
 #pragma once
 #include <QColor>
+#include <QDate>
 #include <QString>
 #include <QVector>
 
@@ -24,17 +25,24 @@ struct DbnSeriesInfo {
 };
 
 struct DbnObservation {
-    QString period;     // "2024-01", "2024-01-01"
+    QString period;     // "2024-01", "2024-Q1", "2024-01-01"
     double value = 0.0; // 3.5
     bool valid = true;  // false if the API returned NA/null
+    QDate start;        // first day of the period (DBnomics period_start_day) — the time axis / sort key
 };
 
 // A fully loaded series ready to plot
 struct DbnDataPoint {
     QString series_id; // "BLS/ln/LNS14000000"
     QString series_name;
-    QVector<DbnObservation> observations;
-    QColor color = QColor("#ea580c"); // default: orange; caller should override with chart_color(index)
+    QVector<DbnObservation> observations; // ascending by period start
+    QColor color = QColor("#ea580c");     // default: orange; caller should override with chart_color(index)
+    // What the numbers are, from the series' own metadata (empty when the provider does not say).
+    QString frequency;     // "monthly", "quarterly", … (DBnomics @frequency)
+    QString unit;          // label of the series' unit dimension, e.g. "Annual rate of change"
+    QString seasonal;      // label of its seasonal-adjustment dimension, e.g. "Seasonally Adjusted"
+    QString provider_name; // "U.S. Bureau of Labor Statistics"
+    QString indexed_at;    // when DBnomics last indexed the series (ISO timestamp) — its vintage
 };
 
 // ── Search ───────────────────────────────────────────────────────────────────

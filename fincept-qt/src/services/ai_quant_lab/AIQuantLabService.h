@@ -1,9 +1,13 @@
 // src/services/ai_quant_lab/AIQuantLabService.h
 #pragma once
+#include "python/PythonRunner.h"
 #include "services/ai_quant_lab/AIQuantLabTypes.h"
 
 #include <QHash>
+#include <QJsonArray>
 #include <QObject>
+#include <QPointer>
+#include <QProcess>
 
 #include <functional>
 
@@ -84,9 +88,15 @@ class AIQuantLabService : public QObject {
     void cfa_data_quality(const QJsonObject& params);
 
     // ── Deep Agent (LangGraph multi-agent) ──────────────────────────────────
+    /// `params`: task, agent_type, thread_id, config (LLM block). The payload —
+    /// LLM key included — goes to Python on stdin, never argv. Without a
+    /// `config` (MCP / LLM-originated calls) the ai_quant_lab LLM profile is used.
     void run_deep_agent(const QJsonObject& params);
 
     // ── RD-Agent (autonomous factor/model research) ──────────────────────────
+    // Long tasks (start_* / resume) run as one child process per task, owned by
+    // this service: progress streams back as JSON lines, status/results are
+    // served from memory, stop = kill. They live for this app session only.
     void rd_agent_check_status();
     void rd_agent_start_factor_mining(const QJsonObject& params);
     void rd_agent_start_model_optimization(const QJsonObject& params);
@@ -193,14 +203,59 @@ class AIQuantLabService : public QObject {
     explicit AIQuantLabService(QObject* parent = nullptr);
     Q_DISABLE_COPY(AIQuantLabService)
 
-    void run_python(const QString& script, const QStringList& args, const QString& module_id, const QString& command);
+    void run_python(const QString& script, const QStringList& args, const QString& module_id, const QString& command,
+                    const python::PythonRunner::RunOptions& opts = {});
     void run_python_cached(const QString& script, const QStringList& args, const QString& module_id,
                            const QString& command, int ttl_sec);
 
+    /// run_module() for module "deep_agent": the LangGraph deep agent
+    /// (execute_task) and every RD-Agent command, each to its implementation.
+    void run_deep_agent_command(const QString& command, const QJsonObject& params);
+
+    /// The LLM block for an agent run: the caller's `config` when it carries a
+    /// provider, else the ai_quant_lab profile resolved from LlmProfileRepository.
+    QJsonObject agent_llm_config(const QJsonObject& params) const;
+
+    // ── RD-Agent task registry ──────────────────────────────────────────────
+    struct RdTask {
+        QString id;
+        QString kind;       // factor_mining | model_optimization | quant_research
+        QString status;     // running | completed | failed | stopped
+        QJsonObject params; // task parameters WITHOUT the LLM credentials
+        QString workspace;
+        double progress = 0.0; // 0..1
+        int iterations_completed = 0;
+        int max_iterations = 0;
+        QString current_step;
+        QJsonValue best_ic;
+        QJsonValue best_sharpe;
+        QJsonArray factors;
+        QJsonArray models;
+        QString error;
+        qint64 started_ms = 0;
+        qint64 finished_ms = 0;
+        bool stop_requested = false;
+        QPointer<QProcess> proc;
+    };
+
+    void rd_start(const QString& command, const QString& kind, const QJsonObject& params);
+    /// Spawn `cli.py run_task` for `task_id`; `resume_from` = checkpoint path or empty.
+    bool rd_spawn(const QString& task_id, const QJsonObject& llm_config, const QString& resume_from,
+                  QString* error_out);
+    void rd_handle_line(const QString& task_id, const QByteArray& line);
+    QJsonObject rd_status_json(const RdTask& t) const;
+    int rd_running_count() const;
+    /// result_ready("deep_agent", command, data), queued so callers that connect
+    /// after calling (and screens that update their status text after calling)
+    /// see it.
+    void rd_emit(const QString& command, const QJsonObject& data);
+
     static constexpr int kListTtlSec = 5 * 60;
+    static constexpr int kMaxConcurrentRdTasks = 2;
 
     // Module ID → script mapping
     QHash<QString, QString> script_map_;
+    QHash<QString, RdTask> rd_tasks_;
 };
 
 } // namespace fincept::services::quant

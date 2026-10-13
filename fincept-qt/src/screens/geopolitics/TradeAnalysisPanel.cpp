@@ -502,8 +502,16 @@ void TradeAnalysisPanel::display_result(const QJsonObject& payload) {
                 flatten(it.value().toObject(), key);
             } else if (it.value().isArray()) {
                 QStringList items;
-                for (const auto& v : it.value().toArray())
-                    items << v.toString();
+                for (const auto& v : it.value().toArray()) {
+                    if (v.isDouble())
+                        items << QString::number(v.toDouble(), 'f', 2);
+                    else if (v.isBool())
+                        items << (v.toBool() ? tr("YES") : tr("NO"));
+                    else if (v.isObject() || v.isArray())
+                        items << QString::fromUtf8(QJsonDocument::fromVariant(v.toVariant()).toJson(QJsonDocument::Compact));
+                    else
+                        items << v.toString();
+                }
                 rows.append({key, items.join(", ")});
             } else {
                 QString val = it.value().isDouble() ? QString::number(it.value().toDouble(), 'f', 2)

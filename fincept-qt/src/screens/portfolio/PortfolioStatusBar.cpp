@@ -7,6 +7,7 @@
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QLocale>
+#include <QStyle>
 #include <QTimeZone>
 
 namespace fincept::screens {
@@ -14,8 +15,13 @@ namespace fincept::screens {
 PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(24);
     setObjectName("portfolioStatusBar");
-    setStyleSheet(QString("#portfolioStatusBar { background:%1; border-top:1px solid %2; }")
-                      .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
+    // The notes label is styled from here (property selector) rather than with
+    // a per-update setStyleSheet on the label itself.
+    setStyleSheet(QString("#portfolioStatusBar { background:%1; border-top:1px solid %2; }"
+                          "#pfStatusNotes { color:%3; font-size:10px; letter-spacing:0.3px; }"
+                          "#pfStatusNotes[warn=\"true\"] { color:%4; font-weight:700; }")
+                      .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM(), ui::colors::TEXT_TERTIARY(),
+                           ui::colors::WARNING()));
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(8, 0, 8, 0);
@@ -42,8 +48,10 @@ PortfolioStatusBar::PortfolioStatusBar(QWidget* parent) : QWidget(parent) {
 
     add_divider();
 
-    version_label_ = make_label(ui::colors::TEXT_TERTIARY);
-    version_label_->setText(tr("PORTFOLIO TERMINAL v4.0"));
+    // Was a hard-coded "PORTFOLIO TERMINAL v4.0" (stale version, no information).
+    notes_label_ = new QLabel;
+    notes_label_->setObjectName("pfStatusNotes");
+    layout->addWidget(notes_label_);
 
     add_divider();
 
@@ -132,10 +140,43 @@ void PortfolioStatusBar::set_summary(const portfolio::PortfolioSummary& s) {
 
     nav_label_->setText(tr("NAV %1 %2").arg(s.portfolio.currency, fmt(s.total_market_value)));
 
+    render_notes();
+
     double pnl = s.total_unrealized_pnl;
     pnl_label_->setText(tr("P&L %1%2").arg(pnl >= 0 ? "+" : "").arg(fmt(pnl)));
     pnl_label_->setStyleSheet(QString("color:%1; font-size:10px; font-weight:600;")
                                   .arg(pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+}
+
+void PortfolioStatusBar::set_analytics_note(const QString& text, const QString& tooltip, bool warn) {
+    analytics_note_ = text;
+    analytics_tip_ = tooltip;
+    analytics_warn_ = warn;
+    render_notes();
+}
+
+void PortfolioStatusBar::render_notes() {
+    if (!notes_label_)
+        return;
+    QString text = analytics_note_;
+    QString tip = analytics_tip_;
+    bool warn = analytics_warn_;
+    if (last_summary_.has_value() && !last_summary_->fx_unconverted.isEmpty()) {
+        const auto& fx = last_summary_->fx_unconverted;
+        text = tr("⚠ %n HOLDING(S) NOT FX-CONVERTED", "", static_cast<int>(fx.size()));
+        tip = tr("These holdings trade in a currency other than the portfolio's %1 and their prices are summed "
+                 "WITHOUT conversion, so NAV, P&L and weights are not in %1:\n%2")
+                  .arg(last_summary_->portfolio.currency, fx.join(QStringLiteral("\n"))) +
+              (analytics_tip_.isEmpty() ? QString() : QStringLiteral("\n\n") + analytics_tip_);
+        warn = true;
+    }
+    notes_label_->setText(text);
+    notes_label_->setToolTip(tip);
+    if (notes_label_->property("warn").toBool() != warn) {
+        notes_label_->setProperty("warn", warn);
+        notes_label_->style()->unpolish(notes_label_);
+        notes_label_->style()->polish(notes_label_);
+    }
 }
 
 void PortfolioStatusBar::changeEvent(QEvent* event) {
@@ -145,8 +186,6 @@ void PortfolioStatusBar::changeEvent(QEvent* event) {
 }
 
 void PortfolioStatusBar::retranslateUi() {
-    if (version_label_)
-        version_label_->setText(tr("PORTFOLIO TERMINAL v4.0"));
     set_feed_state(feed_live_); // re-renders LIVE/STALE + its tooltip
 
     if (last_summary_.has_value()) {

@@ -5,6 +5,7 @@ Unified command-line interface for alternative investment analytics.
 
 import sys
 import json
+import math
 import argparse
 from decimal import Decimal
 from typing import Dict, Any, List
@@ -12,7 +13,6 @@ from datetime import datetime, timedelta
 
 from config import AssetClass, HedgeFundStrategy, CommoditySector, RealEstateType, AssetParameters, MarketData
 from digital_assets import DigitalAssetAnalyzer
-from hedge_funds import HedgeFundAnalyzer
 from natural_resources import CommodityAnalyzer
 from private_capital import PrivateEquityAnalyzer
 from real_estate import RealEstateAnalyzer, InternationalREITAnalyzer
@@ -59,7 +59,7 @@ def main():
     # Hedge Funds
     hedge = subparsers.add_parser('hedge-funds', help='Hedge fund analytics')
     hedge.add_argument('--data', required=True, help='Fund data (JSON)')
-    hedge.add_argument('--method', default='metrics', help='Analysis method: metrics, performance, fees')
+    hedge.add_argument('--method', default='metrics', help='Analysis method: metrics (needs monthly_returns)')
 
     # Natural Resources
     natural = subparsers.add_parser('natural-resources', help='Natural resource analytics')
@@ -365,47 +365,112 @@ def analyze_digital_assets(data: Dict[str, Any], method: str = 'fundamental') ->
         return {'success': False, 'error': str(e)}
 
 
+def _monthly_return_stats(returns: List[float], rf_annual: float) -> Dict[str, Any]:
+    """Annualised statistics of a MONTHLY return series given as decimals.
+
+    Cumulative return and CAGR compound the series; volatility, Sharpe and Sortino
+    are annualised with sqrt(12); Sharpe/Sortino use the monthly equivalent of the
+    annual risk-free rate (Sortino's downside deviation is measured below it).
+    """
+    n = len(returns)
+    growth, peak, max_dd = 1.0, 1.0, 0.0
+    for r in returns:
+        growth *= (1.0 + r)
+        peak = max(peak, growth)
+        max_dd = max(max_dd, 1.0 - growth / peak)
+    years = n / 12.0
+    cagr = growth ** (1.0 / years) - 1.0 if growth > 0 and years > 0 else None
+    mean = sum(returns) / n
+    vol_m = math.sqrt(sum((r - mean) ** 2 for r in returns) / (n - 1)) if n > 1 else 0.0
+    rf_m = (1.0 + rf_annual) ** (1.0 / 12.0) - 1.0
+    mean_excess = sum(r - rf_m for r in returns) / n
+    downside = math.sqrt(sum(min(0.0, r - rf_m) ** 2 for r in returns) / n)
+    return {
+        'months': n,
+        'cumulative_return': growth - 1.0,
+        'cagr': cagr,
+        'annualized_volatility': vol_m * math.sqrt(12.0),
+        'sharpe_ratio': (mean_excess / vol_m) * math.sqrt(12.0) if vol_m > 0 else None,
+        'sortino_ratio': (mean_excess / downside) * math.sqrt(12.0) if downside > 0 else None,
+        'max_drawdown': max_dd,
+        'best_month_return': max(returns),
+        'worst_month_return': min(returns),
+        'positive_months_rate': sum(1 for r in returns if r > 0) / n,
+    }
+
+
+def _net_of_hedge_fund_fees(gross: List[float], mgmt_fee: float, perf_fee: float,
+                            hurdle: float) -> tuple:
+    """Monthly NET returns after a management fee accrued monthly on NAV and a
+    performance fee crystallised every 12 months (and at the end) on gains above
+    the high-water mark grown at the hurdle rate (hard hurdle). Returns
+    (net_returns, total_fees_per_1_invested)."""
+    nav, hwm, fees = 1.0, 1.0, 0.0
+    block_start_hwm = 1.0
+    net = []
+    for i, r in enumerate(gross):
+        prev = nav
+        nav *= (1.0 + r)
+        m = nav * mgmt_fee / 12.0
+        nav -= m
+        fees += m
+        if (i + 1) % 12 == 0 or i == len(gross) - 1:
+            months_in_block = (i % 12) + 1
+            threshold = block_start_hwm * (1.0 + hurdle) ** (months_in_block / 12.0)
+            if nav > threshold:
+                p = perf_fee * (nav - threshold)
+                nav -= p
+                fees += p
+            hwm = max(hwm, nav)
+            block_start_hwm = hwm
+        net.append(nav / prev - 1.0)
+    return net, fees
+
+
 def analyze_hedge_funds(data: Dict[str, Any], method: str = 'metrics') -> Dict[str, Any]:
-    """Analyze hedge funds"""
+    """Hedge fund performance from the fund's own MONTHLY GROSS returns.
+
+    data: monthly_returns (list of decimals, oldest first, >= 12 months),
+          management_fee, performance_fee, hurdle_rate, risk_free_rate (annual
+          decimals), strategy_type (label only).
+    Returns gross and net-of-fee statistics and the fee drag. Without a return
+    series there is nothing to measure, so the call fails instead of inventing data.
+    """
     try:
-        params = AssetParameters(
-            asset_class=AssetClass.HEDGE_FUND,
-            ticker=data.get('ticker'),
-            name=data.get('name'),
-            currency=data.get('currency', 'USD')
-        )
+        returns = [float(r) for r in data.get('monthly_returns', []) or []]
+        if len(returns) < 12:
+            return {'success': False,
+                    'error': 'Hedge fund metrics need at least 12 monthly returns (monthly_returns, '
+                             f'as decimals); got {len(returns)}'}
+        if any(r <= -1.0 for r in returns):
+            return {'success': False, 'error': 'A monthly return of -100% or worse is not a valid return'}
 
-        for key in ['strategy', 'gross_exposure', 'net_exposure', 'leverage',
-                    'high_water_mark', 'hurdle_rate', 'redemption_frequency', 'lock_up_period']:
-            if key in data:
-                setattr(params, key, data[key])
+        mgmt = float(data.get('management_fee', 0.02))
+        perf = float(data.get('performance_fee', 0.20))
+        hurdle = float(data.get('hurdle_rate', 0.0))
+        rf = float(data.get('risk_free_rate', 0.0))
 
-        analyzer = HedgeFundAnalyzer(params)
+        net, fees = _net_of_hedge_fund_fees(returns, mgmt, perf, hurdle)
+        gross_stats = _monthly_return_stats(returns, rf)
+        net_stats = _monthly_return_stats(net, rf)
+        drag = (gross_stats['cagr'] - net_stats['cagr']
+                if gross_stats['cagr'] is not None and net_stats['cagr'] is not None else None)
 
-        if 'market_data' in data:
-            handler = DataHandler()
-            market_data = handler.standardize_price_data(data['market_data'])
-            analyzer.add_market_data(market_data)
-
-        if method == 'metrics':
-            metrics = analyzer.calculate_strategy_metrics()
-        elif method == 'performance':
-            metrics = analyzer.calculate_performance()
-        elif method == 'fees':
-            metrics = analyzer.calculate_fee_impact(
-                data.get('months', 12),
-                data.get('management_fee', 0.02),
-                data.get('performance_fee', 0.20)
-            )
-        else:
-            metrics = analyzer.calculate_strategy_metrics()
-
-        return {
-            'success': True,
-            'asset_type': 'hedge_funds',
-            'method': method,
-            'metrics': metrics
+        metrics = {
+            'strategy': data.get('strategy_type', 'unspecified'),
+            'gross': gross_stats,
+            'net_of_fees': net_stats,
+            'fee_drag_annual': drag,
+            'total_fees_per_100_invested': fees * 100.0,
+            'fee_terms': {
+                'management_fee': mgmt,
+                'performance_fee': perf,
+                'hurdle_rate': hurdle,
+            },
+            'fee_model': 'Management fee accrued monthly on NAV; performance fee crystallised '
+                         'annually above the high-water mark grown at the hurdle (hard hurdle).',
         }
+        return {'success': True, 'asset_type': 'hedge_funds', 'method': 'metrics', 'metrics': metrics}
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
@@ -470,17 +535,34 @@ def analyze_private_capital(data: Dict[str, Any], method: str = 'metrics') -> Di
 
         analyzer = PrivateEquityAnalyzer(params)
 
-        # Add cash flows if provided
+        # Cash flows from the LP's side: negative = capital call (paid in),
+        # positive = distribution. Routed through the analyzer's call /
+        # distribution handlers so paid-in and distributed totals are tracked
+        # (add_cash_flows alone left both at 0 in the output).
         if 'cash_flows' in data:
-            handler = DataHandler()
-            cash_flows = handler.standardize_cash_flows(data['cash_flows'])
-            analyzer.add_cash_flows(cash_flows)
+            # (DataHandler.standardize_cash_flows rejects negative amounts, i.e. every call.)
+            flows = []
+            for item in data['cash_flows']:
+                date = str(item.get('date', ''))[:10]
+                datetime.strptime(date, '%Y-%m-%d')  # ValueError -> reported as the error
+                flows.append((date, Decimal(str(item.get('amount', 0)))))
+            for date, amount in sorted(flows):
+                if amount < 0:
+                    analyzer.process_capital_call(abs(amount), date)
+                elif amount > 0:
+                    analyzer.process_distribution(amount, date)
 
-        # Update NAV if provided
+        if data.get('commitment'):
+            vintage = data.get('vintage_year') or (int(analyzer.cash_flows[0].date[:4]) if analyzer.cash_flows else
+                                                   datetime.now().year)
+            analyzer.add_commitment(Decimal(str(data['commitment'])), int(vintage))
+
+        # NAV as of nav_date (default: today). It is the terminal value in IRR /
+        # TVPI, so its date matters - the old default was a fixed 2024-12-31.
         if 'current_nav' in data:
             analyzer.update_nav(
                 Decimal(str(data['current_nav'])),
-                data.get('nav_date', '2024-12-31')
+                data.get('nav_date') or datetime.now().strftime('%Y-%m-%d')
             )
 
         if method == 'metrics':
@@ -600,7 +682,9 @@ def analyze_performance(returns: List, benchmark: List = None, method: str = 'tw
                 market_data.append(ret)
             else:
                 market_data.append({
-                    'timestamp': f'2024-{i+1:02d}-01',
+                    # Plain values are MONTH-END PRICES, one per month (the old
+                    # f'2024-{i+1:02d}-01' stamp broke past 12 points: month 13).
+                    'timestamp': f'{2000 + i // 12:04d}-{i % 12 + 1:02d}-01',
                     'price': ret
                 })
 
@@ -636,19 +720,19 @@ def analyze_risk(returns: List, method: str = 'var', confidence_level: float = 0
         if method == 'var':
             metrics = analyzer.value_at_risk_analysis(
                 decimal_returns,
-                [Decimal(str(1 - confidence_level))]
+                [Decimal('1') - Decimal(str(confidence_level))]
             )
         elif method == 'cvar':
             metrics = analyzer.conditional_var_analysis(
                 decimal_returns,
-                [Decimal(str(1 - confidence_level))]
+                [Decimal('1') - Decimal(str(confidence_level))]
             )
         elif method == 'stress':
             metrics = analyzer.stress_testing(decimal_returns)
         else:
             metrics = analyzer.value_at_risk_analysis(
                 decimal_returns,
-                [Decimal(str(1 - confidence_level))]
+                [Decimal('1') - Decimal(str(confidence_level))]
             )
 
         return {
@@ -953,7 +1037,8 @@ def analyze_em_bonds(data: Dict[str, Any], method: str = 'yield_spread') -> Dict
         analyzer = EmergingMarketBondAnalyzer(params)
 
         if method == 'yield_spread':
-            metrics = analyzer.calculate_yield_metrics()
+            metrics = analyzer.calculate_yield_metrics(
+                Decimal(str(data['treasury_yield'])) if 'treasury_yield' in data else None)
         elif method == 'default_risk':
             metrics = analyzer.sovereign_default_risk_analysis(
                 Decimal(str(data.get('historical_default_rate', 0.03))),
@@ -1229,7 +1314,7 @@ def analyze_covered_calls(data: Dict[str, Any], method: str = 'tax') -> Dict[str
 
         for key in ['stock_price', 'shares_owned', 'strike_price', 'option_premium',
                     'days_to_expiration', 'option_commission', 'ordinary_tax_rate',
-                    'ltcg_rate', 'holding_period_days']:
+                    'ltcg_rate', 'holding_period_days', 'cost_basis']:
             if key in data:
                 value = data[key]
                 setattr(params, key, Decimal(str(value)) if isinstance(value, (int, float)) else value)
@@ -1301,9 +1386,14 @@ def analyze_leveraged_funds(data: Dict[str, Any], method: str = 'decay') -> Dict
             currency=data.get('currency', 'USD')
         )
 
-        for key in ['leverage_multiple', 'daily_volatility', 'expense_ratio']:
+        for key in ['daily_volatility', 'expense_ratio']:
             if key in data:
                 setattr(params, key, Decimal(str(data[key])))
+        # The analyzer reads `leverage_ratio`; this used to set `leverage_multiple`
+        # only, so every fund was analysed as 2x whatever the input said.
+        leverage = data.get('leverage_ratio', data.get('leverage_multiple'))
+        if leverage is not None:
+            params.leverage_ratio = Decimal(str(leverage))
 
         analyzer = LeveragedFundAnalyzer(params)
 

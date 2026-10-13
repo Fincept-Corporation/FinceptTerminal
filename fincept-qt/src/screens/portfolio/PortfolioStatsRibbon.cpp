@@ -140,17 +140,38 @@ void PortfolioStatsRibbon::apply_chip_tooltips() {
             c.value->setAccessibleDescription(text);
         }
     };
-    set(sharpe_, tr("Sharpe ratio — annualised excess return per unit of volatility, "
-                    "from daily portfolio snapshots against the live risk-free rate."));
+    // Say exactly what each figure is: window, basis, benchmark, risk-free.
+    const auto& m = last_metrics_;
+    const QString bench = m.benchmark_symbol.isEmpty() ? tr("the benchmark") : m.benchmark_symbol;
+    const QString window = m.perf_observations > 0 ? tr("%1 periods, %2 \u2192 %3")
+                                                         .arg(m.perf_observations)
+                                                         .arg(m.perf_start, m.perf_end)
+                                                   : tr("no history yet");
+    const QString rf = tr("risk-free %1% (%2)")
+                           .arg(QString::number(m.risk_free_rate * 100.0, 'f', 2), m.risk_free_source);
+    set(sharpe_, tr("Sharpe ratio — annualised excess return per unit of volatility, from the realised "
+                    "time-weighted return series (buys/sells treated as capital flows): %1; %2. "
+                    "Needs 20+ periods.")
+                     .arg(window, rf));
     set(conc_, tr("Concentration — combined weight of your three largest positions."));
-    set(beta_, tr("Beta — OLS regression of portfolio returns against the benchmark index. "
-                  "1.0 means it moves with the market."));
-    // Not a 30-day figure: PortfolioService derives it from every daily snapshot it
-    // holds (up to a year), so the label and tooltip must not promise 30 days.
-    set(vol_, tr("Volatility — annualised standard deviation of daily portfolio returns "
-                 "across the snapshot history (up to one year)."));
-    set(mdd_, tr("Maximum drawdown — worst peak-to-trough decline in the snapshot history."));
-    set(risk_, tr("Composite risk score, 0–100. Lower is calmer; above 60 is aggressive."));
+    set(beta_, m.risk_ex_ante ? tr("Beta vs %1 — current weights regressed on %2 trailing daily returns "
+                                   "(ex-ante). 1.0 moves with the market.")
+                                    .arg(bench)
+                                    .arg(m.risk_observations)
+                              : tr("Beta vs %1 — regression of the realised return series (%2). "
+                                   "1.0 moves with the market.")
+                                    .arg(bench, window));
+    set(vol_, m.risk_ex_ante ? tr("Volatility — annualised standard deviation of daily returns at CURRENT "
+                                  "weights over %1 trailing trading days (ex-ante).")
+                                   .arg(m.risk_observations)
+                             : tr("Volatility — annualised standard deviation of the realised time-weighted "
+                                  "returns (%1).")
+                                   .arg(window));
+    set(mdd_, tr("Maximum drawdown — worst peak-to-trough fall of the time-weighted return index (%1). "
+                 "Deposits and withdrawals do not count as drawdowns.")
+                  .arg(window));
+    set(risk_, tr("Composite risk score, 0–100, from volatility, concentration, drawdown and beta. "
+                  "Lower is calmer; above 60 is aggressive. Blank until volatility is known."));
 }
 
 PortfolioStatsRibbon::GridChip PortfolioStatsRibbon::add_grid_chip(QGridLayout* g, int row, int col,
@@ -204,11 +225,27 @@ void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
     pnl_cell_.value->setText(
         QString("%1%2").arg(s.total_unrealized_pnl >= 0 ? "+" : "").arg(fmt(s.total_unrealized_pnl)));
     apply_hero_value_color(pnl_cell_, color_tok(s.total_unrealized_pnl), 20);
-    pnl_cell_.sub->setText(QString("%1%2%   ▲ %3   ▼ %4")
-                               .arg(s.total_unrealized_pnl_percent >= 0 ? "+" : "")
-                               .arg(QString::number(s.total_unrealized_pnl_percent, 'f', 2))
-                               .arg(s.gainers)
-                               .arg(s.losers));
+    QString pnl_sub = QString("%1%2%   ▲ %3   ▼ %4")
+                          .arg(s.total_unrealized_pnl_percent >= 0 ? "+" : "")
+                          .arg(QString::number(s.total_unrealized_pnl_percent, 'f', 2))
+                          .arg(s.gainers)
+                          .arg(s.losers);
+    // Realised P&L and dividend income live in the ledger, not in the open
+    // positions — show them next to the unrealised figure instead of nowhere.
+    if (std::abs(s.total_realized_pnl) > 0.005 || s.total_dividends > 0.005)
+        pnl_sub += tr("   R %1%2   D +%3")
+                       .arg(s.total_realized_pnl >= 0 ? "+" : "")
+                       .arg(fmt(s.total_realized_pnl, 0))
+                       .arg(fmt(s.total_dividends, 0));
+    pnl_cell_.sub->setText(pnl_sub);
+    const QString pnl_tip = tr("Unrealized P&L: market value of open positions minus their average cost.\n"
+                               "Realized P&L (closed lots, average-cost method): %1 %2\n"
+                               "Dividends received: %1 %3\n"
+                               "Total return incl. realized and dividends: %1 %4")
+                                .arg(s.portfolio.currency, fmt(s.total_realized_pnl), fmt(s.total_dividends),
+                                     fmt(s.total_unrealized_pnl + s.total_realized_pnl + s.total_dividends));
+    pnl_cell_.value->setToolTip(pnl_tip);
+    pnl_cell_.sub->setToolTip(pnl_tip);
     pnl_cell_.sub->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; background:transparent;")
                                      .arg(color_tok(s.total_unrealized_pnl)));
 
@@ -239,6 +276,8 @@ void PortfolioStatsRibbon::set_summary(const portfolio::PortfolioSummary& s) {
 }
 
 void PortfolioStatsRibbon::set_metrics(const portfolio::ComputedMetrics& m) {
+    last_metrics_ = m;
+    apply_chip_tooltips();
     auto fmt_opt = [](std::optional<double> v, int dp = 2) -> QString {
         return v.has_value() ? QString::number(*v, 'f', dp) : "--";
     };

@@ -262,7 +262,7 @@ inline QStringList pct_metric_keys() {
     // bare 0.0304 in the DETAILS table instead of 3.04%. lossRate is 1 - winRate.
     return {"total_return", "annualized_return", "max_drawdown", "win_rate",  "volatility",
             "totalReturn",  "annualizedReturn",  "maxDrawdown",  "winRate",   "pnlPercent",
-            "pnl_percent",  "lossRate",          "loss_rate"};
+            "pnl_percent",  "lossRate",          "loss_rate",    "positiveDayRate"};
 }
 
 /// Keys whose values are counts (integers)

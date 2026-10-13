@@ -1,5 +1,6 @@
 #include "screens/dashboard/widgets/OrderBookMiniWidget.h"
 
+#include "trading/OrderThreadPool.h"
 #include "core/logging/Logger.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
@@ -154,50 +155,74 @@ void OrderBookMiniWidget::populate(const QVector<trading::BrokerOrderInfo>& rows
         if (is_working(o.status))
             working.append(o);
     }
+    // Cell items and cancel buttons are reused between pushes instead of being
+    // re-created for every row on every push. Switching between the empty-state
+    // message and order rows starts from clean cells (this also drops row 0's
+    // stale cells / cancel button that used to linger under the message span).
+    const bool want_empty = working.isEmpty();
+    if (want_empty != showing_empty_) {
+        table_->clearContents();
+        showing_empty_ = want_empty;
+    }
+    auto cell = [this](int row, int col) {
+        QTableWidgetItem* item = table_->item(row, col);
+        if (!item) {
+            item = new QTableWidgetItem;
+            table_->setItem(row, col, item);
+        }
+        return item;
+    };
+
     // Empty state — an account with nothing working used to render a blank
     // grid that is indistinguishable from "still loading" / "broken".
     table_->clearSpans();
-    if (working.isEmpty()) {
+    if (want_empty) {
         table_->setRowCount(1);
-        auto* msg = new QTableWidgetItem(tr("No working orders"));
+        auto* msg = cell(0, 0);
+        msg->setText(tr("No working orders"));
         msg->setTextAlignment(Qt::AlignCenter);
         msg->setForeground(QColor(ui::colors::TEXT_TERTIARY()));
-        table_->setItem(0, 0, msg);
         table_->setSpan(0, 0, 1, table_->columnCount());
         set_loading(false);
         return;
     }
 
     table_->setRowCount(static_cast<int>(working.size()));
+    const QColor buy_color(ui::colors::POSITIVE());
+    const QColor sell_color(ui::colors::NEGATIVE());
     for (int i = 0; i < working.size(); ++i) {
         const auto& o = working[i];
-        auto* sym = new QTableWidgetItem(o.symbol);
-        auto* side = new QTableWidgetItem(o.side);
-        side->setForeground(
-            QColor(o.side.compare("BUY", Qt::CaseInsensitive) == 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-        auto* qty = new QTableWidgetItem(QString::number(o.quantity, 'f', 0));
-        auto* price = new QTableWidgetItem(o.price > 0 ? QString::number(o.price, 'f', 2) : tr("MKT"));
-        auto* status = new QTableWidgetItem(o.status);
+        cell(i, 0)->setText(o.symbol);
+        auto* side = cell(i, 1);
+        side->setText(o.side);
+        side->setForeground(o.side.compare("BUY", Qt::CaseInsensitive) == 0 ? buy_color : sell_color);
+        auto* qty = cell(i, 2);
+        qty->setText(QString::number(o.quantity, 'f', 0));
         qty->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        auto* price = cell(i, 3);
+        price->setText(o.price > 0 ? QString::number(o.price, 'f', 2) : tr("MKT"));
         price->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        table_->setItem(i, 0, sym);
-        table_->setItem(i, 1, side);
-        table_->setItem(i, 2, qty);
-        table_->setItem(i, 3, price);
-        table_->setItem(i, 4, status);
+        cell(i, 4)->setText(o.status);
 
         // Styling comes from the table-level stylesheet (see apply_styles) via
         // the `obCancel` dynamic property — a per-row setStyleSheet here meant
         // one full CSS reparse per working order on every order-book push.
-        auto* cancel_btn = new QPushButton("×", table_);
-        cancel_btn->setProperty("obCancel", true);
-        cancel_btn->setToolTip(tr("Cancel order %1").arg(o.order_id));
-        cancel_btn->setAccessibleName(tr("Cancel order %1").arg(o.order_id));
-        cancel_btn->setCursor(Qt::PointingHandCursor);
-        cancel_btn->setFixedHeight(18);
-        const QString oid = o.order_id;
-        connect(cancel_btn, &QPushButton::clicked, this, [this, oid]() { cancel_order(oid); });
-        table_->setCellWidget(i, 5, cancel_btn);
+        auto* cancel_btn = qobject_cast<QPushButton*>(table_->cellWidget(i, 5));
+        if (!cancel_btn) {
+            cancel_btn = new QPushButton("×", table_);
+            cancel_btn->setProperty("obCancel", true);
+            cancel_btn->setCursor(Qt::PointingHandCursor);
+            cancel_btn->setFixedHeight(18);
+            // The row's order id is read at click time — the button is reused.
+            connect(cancel_btn, &QPushButton::clicked, this,
+                    [this, cancel_btn]() { cancel_order(cancel_btn->property("order_id").toString()); });
+            table_->setCellWidget(i, 5, cancel_btn);
+        }
+        if (cancel_btn->property("order_id").toString() != o.order_id) {
+            cancel_btn->setProperty("order_id", o.order_id);
+            cancel_btn->setToolTip(tr("Cancel order %1").arg(o.order_id));
+            cancel_btn->setAccessibleName(tr("Cancel order %1").arg(o.order_id));
+        }
     }
     set_loading(false);
 }
@@ -210,11 +235,10 @@ void OrderBookMiniWidget::cancel_order(const QString& order_id) {
         return;
 
     // BrokerHttp blocking trap (P1) — always wrap live broker calls in QtConcurrent::run.
+    // Runs on the dedicated order pool so a busy global pool can't delay it, and
+    // completes even if this widget is closed meanwhile (the user confirmed it).
     const QString acct_id = account_id_;
-    QPointer<OrderBookMiniWidget> self = this;
-    (void)QtConcurrent::run([self, acct_id, order_id]() {
-        if (!self)
-            return;
+    (void)QtConcurrent::run(&trading::order_thread_pool(), [acct_id, order_id]() {
         trading::UnifiedTrading::instance().cancel_order(acct_id, order_id);
         // Order stream will publish the updated order state via the hub;
         // populate() repaints automatically.

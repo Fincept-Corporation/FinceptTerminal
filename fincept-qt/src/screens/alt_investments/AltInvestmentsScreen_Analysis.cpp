@@ -86,6 +86,27 @@ static AltField spin_field(const QString& key, const QString& label, double def,
     return f;
 }
 
+// Comma-separated numbers -> JSON array; `div100` converts percent input to decimals.
+static AltField series_field(const QString& key, const QString& label, const QString& def, bool div100) {
+    AltField f;
+    f.key = key;
+    f.label = label;
+    f.type = AltField::Series;
+    f.combo_items = def;
+    f.divide_100 = div100;
+    return f;
+}
+
+// "YYYY-MM-DD:amount; ..." -> [{"date", "amount"}].
+static AltField cashflow_field(const QString& key, const QString& label, const QString& def) {
+    AltField f;
+    f.key = key;
+    f.label = label;
+    f.type = AltField::CashFlows;
+    f.combo_items = def;
+    return f;
+}
+
 static AltField combo_field(const QString& key, const QString& label, const QString& items) {
     AltField f;
     f.key = key;
@@ -93,99 +114,6 @@ static AltField combo_field(const QString& key, const QString& label, const QStr
     f.type = AltField::Combo;
     f.combo_items = items;
     return f;
-}
-
-// ── Category definitions ─────────────────────────────────────────────────────
-
-[[maybe_unused]] static QList<AltCategory> build_categories() {
-    return {
-        {"bonds",
-         "Bonds & Fixed Income",
-         "#3B82F6",
-         "B",
-         {
-             {"high-yield", "High-Yield Bonds", "Spread analysis, default probability, equity-like behavior"},
-             {"em-bonds", "Emerging Market Bonds", "Yield spread, sovereign default risk, currency risk"},
-             {"convertible-bonds", "Convertible Bonds", "Conversion premium, bond floor, upside participation"},
-             {"preferred-stocks", "Preferred Stocks", "Current yield, call risk, dividend safety analysis"},
-         }},
-        {"real_estate",
-         "Real Estate",
-         "#8B5CF6",
-         "RE",
-         {
-             {"real-estate", "Direct Property / REIT", "NOI, cap rate, DCF valuation, financing analysis"},
-         }},
-        {"hedge_funds",
-         "Hedge Funds",
-         "#EAB308",
-         "HF",
-         {
-             {"hedge-funds", "Long/Short Equity", "Strategy metrics, fee impact, liquidity risk"},
-             {"managed-futures", "Managed Futures / CTA", "Fee drag, trend following, crisis alpha analysis"},
-             {"market-neutral", "Market Neutral", "Beta neutrality, factor exposure, leverage risk"},
-         }},
-        {"commodities",
-         "Commodities",
-         "#F97316",
-         "C",
-         {
-             {"natural-resources", "Natural Resources", "Futures basis, contango/backwardation, roll yield"},
-             {"pme", "Precious Metals Equities", "Correlation to metals, inflation hedge, drawdowns"},
-         }},
-        {"private_capital",
-         "Private Capital",
-         "#EC4899",
-         "PE",
-         {
-             {"private-capital", "Private Equity / Venture Capital", "IRR, MOIC, DPI, RVPI, J-curve, fee drag"},
-         }},
-        {"annuities",
-         "Annuities",
-         "#22C55E",
-         "AN",
-         {
-             {"annuities", "Fixed Annuity", "Payout analysis, breakeven years, inflation erosion"},
-             {"variable-annuities", "Variable Annuity", "Total fee drag, tax deferral myth, vs. alternatives"},
-             {"eia", "Equity-Indexed Annuity", "Crediting rate, upside cap limitations, surrender charges"},
-             {"inflation-annuity", "Inflation-Indexed Annuity",
-              "vs. fixed annuity, vs. TIPS ladder, longevity break-even"},
-         }},
-        {"structured",
-         "Structured Products",
-         "#06B6D4",
-         "SP",
-         {
-             {"structured-products", "Structured Notes", "Complexity score, hidden costs, issuer credit risk"},
-             {"leveraged-funds", "Leveraged ETFs (2x/3x)", "Volatility decay, path-dependency, holding cost"},
-         }},
-        {"inflation",
-         "Inflation Protected",
-         "#FB923C",
-         "IP",
-         {
-             {"tips", "TIPS — Inflation-Linked Treasuries", "Real yield, inflation scenarios, tax efficiency"},
-             {"ibonds", "I-Bonds — Series I Savings Bonds", "Composite rate, early redemption penalty, vs. TIPS"},
-             {"stable-value", "Stable Value Funds", "Market-to-book ratio, crediting rate, wrap contract risk"},
-         }},
-        {"strategies",
-         "Strategies & Analysis",
-         "#67E8F9",
-         "ST",
-         {
-             {"covered-calls", "Covered Call Strategy", "Tax consequences, opportunity cost, premium income"},
-             {"sri", "SRI / ESG Funds", "Performance vs. benchmark, screening costs, approaches"},
-             {"asset-location", "Tax-Efficient Asset Location",
-              "Optimal account placement, muni bonds, annual tax drag"},
-         }},
-        {"crypto",
-         "Digital Assets",
-         "#F87171",
-         "DA",
-         {
-             {"digital-assets", "Cryptocurrency", "Fundamental metrics, NVT ratio, market cap analysis"},
-         }},
-    };
 }
 
 // ── Per-analyzer form fields ─────────────────────────────────────────────────
@@ -199,6 +127,8 @@ static QList<AltField> fields_for(const QString& id) {
             spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 8.5, 0, 30, 2, "", "%", true),
             spin_field("maturity_years", alt_tr("MATURITY (years)"), 5, 0.5, 30, 1),
             combo_field("credit_rating", alt_tr("CREDIT RATING"), "BB|B|CCC|BB+|BB-|B+|B-|CCC+"),
+            // The spread is measured against this; it used to be a hidden fixed 4%.
+            spin_field("treasury_yield", alt_tr("TREASURY YIELD, SAME TENOR (%)"), 4.0, 0, 20, 2, "", "%", true),
         };
     if (id == "em-bonds")
         return {
@@ -208,6 +138,10 @@ static QList<AltField> fields_for(const QString& id) {
             spin_field("coupon_rate", alt_tr("COUPON RATE (%)"), 6.0, 0, 25, 2, "", "%", true),
             spin_field("maturity_years", alt_tr("MATURITY (years)"), 10, 0.5, 30, 1),
             spin_field("credit_spread", alt_tr("CREDIT SPREAD (%)"), 3.0, 0, 20, 2, "", "%", true),
+            spin_field("treasury_yield", alt_tr("TREASURY YIELD, SAME TENOR (%)"), 4.0, 0, 20, 2, "", "%", true),
+            combo_field("sovereign_rating", alt_tr("SOVEREIGN RATING"), "BB|BBB|B|CCC|BB+|BB-|B+|B-"),
+            // currency_risk only has something to say about local-currency bonds.
+            combo_field("currency", alt_tr("BOND CURRENCY"), "USD|EUR|LOCAL"),
         };
     if (id == "convertible-bonds")
         return {
@@ -240,9 +174,13 @@ static QList<AltField> fields_for(const QString& id) {
     if (id == "hedge-funds")
         return {
             text_field("name", alt_tr("FUND NAME"), "Global Macro Fund"),
+            // The fund's own track record: nothing is computed without it.
+            series_field("monthly_returns", alt_tr("MONTHLY GROSS RETURNS (%, oldest first, 12+)"),
+                         "1.2, -0.4, 1.8, 0.6, -1.1, 0.9, 1.4, -0.2, 0.7, 1.0, -0.6, 1.3", true),
             spin_field("management_fee", alt_tr("MGMT FEE (%)"), 2.0, 0, 10, 2, "", "%", true),
             spin_field("performance_fee", alt_tr("PERF FEE (%)"), 20.0, 0, 50, 1, "", "%", true),
-            spin_field("hurdle_rate", alt_tr("HURDLE RATE (%)"), 6.0, 0, 20, 2, "", "%", true),
+            spin_field("hurdle_rate", alt_tr("HURDLE RATE (%)"), 0.0, 0, 20, 2, "", "%", true),
+            spin_field("risk_free_rate", alt_tr("RISK-FREE RATE (%)"), 4.0, 0, 20, 2, "", "%", true),
             combo_field("strategy_type", alt_tr("STRATEGY"),
                         "equity_long_short|global_macro|event_driven|relative_value|multi_strategy"),
         };
@@ -269,16 +207,15 @@ static QList<AltField> fields_for(const QString& id) {
             spin_field("twelve_month_futures", alt_tr("12M FUTURES") + " ($)", 87, 0, 1e6, 2, "$"),
             combo_field("sector", alt_tr("SECTOR"), "energy|metals|agriculture|livestock"),
         };
-    if (id == "pme")
-        return {
-            text_field("name", alt_tr("FUND NAME"), "Gold Miners ETF"),
-        };
     if (id == "private-capital")
         return {
+            // The LP's own cash flows drive every metric (the old fee fields were never read).
             text_field("name", alt_tr("FUND NAME"), "Buyout Fund III"),
-            spin_field("management_fee", alt_tr("MGMT FEE (%)"), 2.0, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", alt_tr("CARRIED INT (%)"), 20.0, 0, 40, 1, "", "%", true),
-            spin_field("hurdle_rate", alt_tr("HURDLE RATE (%)"), 8.0, 0, 20, 2, "", "%", true),
+            cashflow_field("cash_flows", alt_tr("CASH FLOWS (date:amount; calls negative)"),
+                           "2020-03-31:-1000000; 2021-06-30:-500000; 2023-12-31:600000"),
+            spin_field("current_nav", alt_tr("CURRENT NAV") + " ($)", 1400000, 0, 1e12, 0, "$"),
+            text_field("nav_date", alt_tr("NAV DATE (YYYY-MM-DD, blank = today)"), ""),
+            spin_field("commitment", alt_tr("COMMITMENT") + " ($)", 2000000, 0, 1e12, 0, "$"),
         };
     if (id == "annuities")
         return {
@@ -317,11 +254,9 @@ static QList<AltField> fields_for(const QString& id) {
         };
     if (id == "structured-products")
         return {
+            // The analyzer returns a fixed qualitative verdict; principal / participation / cap
+            // inputs were shown but never read, so they are not offered.
             text_field("name", alt_tr("PRODUCT NAME"), "Principal Protected Note"),
-            spin_field("principal", alt_tr("PRINCIPAL") + " ($)", 50000, 1000, 1e9, 0, "$"),
-            spin_field("participation_rate", alt_tr("PARTICIPATION (%)"), 80.0, 10, 100, 1, "", "%", true),
-            spin_field("cap_rate", alt_tr("UPSIDE CAP (%)"), 20.0, 0, 100, 1, "", "%", true),
-            spin_field("maturity_years", alt_tr("MATURITY (years)"), 5, 1, 30, 0),
         };
     if (id == "leveraged-funds")
         return {
@@ -341,7 +276,10 @@ static QList<AltField> fields_for(const QString& id) {
             text_field("name", alt_tr("BOND NAME"), "I-Bond 2025"),
             spin_field("purchase_price", alt_tr("PURCHASE PRICE") + " ($)", 10000, 25, 10000, 0, "$"),
             spin_field("fixed_rate", alt_tr("FIXED RATE (%)"), 0.4, 0, 5, 2, "", "%", true),
-            spin_field("inflation_rate", alt_tr("CPI-U INFLATION (%)"), 3.4, 0, 20, 2, "", "%", true),
+            // Treasury's composite formula takes the SEMIANNUAL rate; entering an annual
+            // CPI figure here doubled the inflation component.
+            spin_field("inflation_rate", alt_tr("SEMIANNUAL CPI-U INFLATION (%)"), 1.5, -10, 20, 2, "", "%", true),
+            spin_field("years_held", alt_tr("YEARS HELD"), 1, 0, 30, 0),
         };
     if (id == "stable-value")
         return {
@@ -349,6 +287,14 @@ static QList<AltField> fields_for(const QString& id) {
             spin_field("book_value", alt_tr("BOOK VALUE") + " ($)", 100000, 1000, 1e9, 0, "$"),
             spin_field("market_value", alt_tr("MARKET VALUE") + " ($)", 98000, 1000, 1e9, 0, "$"),
             spin_field("crediting_rate", alt_tr("CREDITING RATE (%)"), 3.2, 0, 15, 2, "", "%", true),
+            // These drove the analysis as hidden defaults before.
+            spin_field("portfolio_yield", alt_tr("UNDERLYING PORTFOLIO YIELD (%)"), 4.0, 0, 20, 2, "", "%", true),
+            spin_field("wrap_fee", alt_tr("WRAP FEE (%)"), 0.25, 0, 2, 2, "", "%", true),
+            spin_field("treasury_yield", alt_tr("TREASURY YIELD (%)"), 4.0, 0, 20, 2, "", "%", true),
+            spin_field("credit_spread", alt_tr("CREDIT SPREAD (%)"), 1.0, 0, 10, 2, "", "%", true),
+            spin_field("investor_age", alt_tr("INVESTOR AGE"), 50, 18, 100, 0),
+            spin_field("retirement_age", alt_tr("RETIREMENT AGE"), 65, 40, 100, 0),
+            combo_field("risk_tolerance", alt_tr("RISK TOLERANCE"), "moderate|conservative|aggressive"),
         };
     if (id == "covered-calls")
         return {
@@ -377,8 +323,9 @@ static QList<AltField> fields_for(const QString& id) {
         };
     if (id == "digital-assets")
         return {
+            // No PRICE field: the analyzer derives price as market cap / circulating supply
+            // and ignored an entered price (two different prices on one screen).
             text_field("name", alt_tr("ASSET NAME"), "Bitcoin"),
-            spin_field("price", alt_tr("PRICE") + " ($)", 45000, 0, 1e9, 2, "$"),
             spin_field("market_cap", alt_tr("MARKET CAP ($B)"), 850, 0, 1e6, 1, "$", "B"),
             spin_field("volume_24h", alt_tr("24H VOLUME ($B)"), 25, 0, 1e6, 1, "$", "B"),
             spin_field("circulating_supply", alt_tr("CIRC. SUPPLY (M)"), 19.5, 0, 1e6, 1, "", "M"),
@@ -402,7 +349,7 @@ struct AltMethod {
 static QList<AltMethod> alt_methods_for(const QString& id) {
     static const QHash<QString, QList<AltMethod>> kTable = {
         {"digital-assets", {{"fundamental", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Fundamental metrics")}}},
-        {"hedge-funds", {{"metrics", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Strategy metrics")}}},
+        {"hedge-funds", {{"metrics", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Gross vs net performance")}}},
         {"natural-resources", {{"basis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Futures basis")}}},
         {"private-capital", {{"metrics", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Key metrics")}}},
         {"real-estate",
@@ -420,16 +367,11 @@ static QList<AltMethod> alt_methods_for(const QString& id) {
           {"tax_efficiency", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Tax efficiency")}}},
         {"high-yield",
          {{"credit_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Credit spread analysis")},
-          {"default_prob", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Default probability")},
-          {"equity_behavior", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Equity-like behavior")}}},
+          {"default_prob", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Default probability")}}},
         {"preferred-stocks",
          {{"yield_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Yield analysis")},
           {"call_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Call risk")},
           {"dividend_safety", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Dividend safety")}}},
-        {"pme",
-         {{"correlation", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Correlation")},
-          {"drawdowns", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Drawdowns")},
-          {"crisis_performance", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Crisis performance")}}},
         {"convertible-bonds",
          {{"conversion_premium", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Conversion premium")},
           {"upside_participation", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Upside participation")}}},
@@ -443,14 +385,11 @@ static QList<AltMethod> alt_methods_for(const QString& id) {
          {{"yield_spread", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Yield spread")},
           {"default_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Sovereign default risk")},
           {"currency_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Currency risk")}}},
-        {"managed-futures",
-         {{"trend_following", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Trend following")},
-          {"crisis_alpha", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Crisis alpha")},
-          {"fee_impact", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Fee impact")}}},
-        {"market-neutral",
-         {{"beta_analysis", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Beta analysis")},
-          {"factor_exposure", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Factor exposure")},
-          {"leverage_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Leverage risk")}}},
+        // trend_following / crisis_alpha / beta_analysis / factor_exposure need price or
+        // return histories this form does not collect: they only ever answered
+        // "Insufficient data", so they are not offered.
+        {"managed-futures", {{"fee_impact", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Fee impact")}}},
+        {"market-neutral", {{"leverage_risk", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Leverage risk")}}},
         {"stable-value",
          {{"market_to_book", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Market-to-book")},
           {"crediting_rate", QT_TRANSLATE_NOOP("AltInvestmentsScreen", "Crediting rate")},
@@ -524,7 +463,7 @@ static void adapt_form_for_cli(const QString& id, QJsonObject& form) {
     } else if (id == QLatin1String("sri")) {
         alias("sri_return", "fund_return");
     } else if (id == QLatin1String("leveraged-funds")) {
-        alias("leverage_ratio", "leverage_multiple");
+        // cli.py reads leverage_ratio directly now (it used to drop it and analyse every fund as 2x).
     } else if (id == QLatin1String("natural-resources")) {
         // The script prices the basis from `futures_price` (3-month contract here) and `expiry_months`.
         alias("three_month_futures", "futures_price");
@@ -621,8 +560,9 @@ void AltInvestmentsScreen::rebuild_form(int cat, int ana) {
             lbl->setObjectName("altFieldLabel");
             cl->addWidget(lbl);
 
-            if (f.type == AltField::Text) {
+            if (f.type == AltField::Text || f.type == AltField::Series || f.type == AltField::CashFlows) {
                 auto* le = new QLineEdit(f.combo_items);
+                connect(le, &QLineEdit::returnPressed, this, &AltInvestmentsScreen::on_analyze);
                 cl->addWidget(le);
                 field_widgets_.append(le);
             } else if (f.type == AltField::Combo) {
@@ -706,8 +646,37 @@ QJsonObject AltInvestmentsScreen::collect_form_data() const {
         const auto& f = current_fields_[i];
         auto* w = field_widgets_[i];
         if (f.type == AltField::Text) {
-            if (auto* le = qobject_cast<QLineEdit*>(w))
-                form[f.key] = le->text();
+            if (auto* le = qobject_cast<QLineEdit*>(w)) {
+                if (!le->text().trimmed().isEmpty() || f.key == QLatin1String("name"))
+                    form[f.key] = le->text().trimmed();
+            }
+        } else if (f.type == AltField::Series) {
+            // "1.2, -0.4 1.8" -> [0.012, -0.004, 0.018] (percent input when divide_100).
+            QJsonArray arr;
+            if (auto* le = qobject_cast<QLineEdit*>(w)) {
+                for (const QString& tok : le->text().split(QRegularExpression(R"([,;\s]+)"), Qt::SkipEmptyParts)) {
+                    bool ok = false;
+                    const double v = tok.toDouble(&ok);
+                    if (ok)
+                        arr.append(f.divide_100 ? v / 100.0 : v);
+                }
+            }
+            form[f.key] = arr;
+        } else if (f.type == AltField::CashFlows) {
+            // "2020-03-31:-1000000; 2021-06-30:-500000" -> [{date, amount}, ...]
+            QJsonArray arr;
+            if (auto* le = qobject_cast<QLineEdit*>(w)) {
+                for (const QString& item : le->text().split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+                    const QStringList parts = item.trimmed().split(QLatin1Char(':'));
+                    if (parts.size() != 2)
+                        continue;
+                    bool ok = false;
+                    const double amount = QString(parts.at(1)).remove(QLatin1Char(',')).trimmed().toDouble(&ok);
+                    if (ok)
+                        arr.append(QJsonObject{{"date", parts.at(0).trimmed()}, {"amount", amount}});
+                }
+            }
+            form[f.key] = arr;
         } else if (f.type == AltField::Combo) {
             if (auto* cb = qobject_cast<QComboBox*>(w))
                 form[f.key] = cb->currentText();
@@ -816,6 +785,15 @@ static QString stars_for(const QString& rating_str) {
 void AltInvestmentsScreen::display_verdict(const QJsonObject& result, const QString& /*command*/) {
     const auto metrics = result.contains("metrics") ? result["metrics"].toObject() : result;
 
+    // Analyzers report "cannot compute" in-band ({"metrics": {"error": "Insufficient
+    // data"}} with success=true). That rendered as a normal verdict with an "Error"
+    // row — say it failed instead.
+    const QJsonValue inband = metrics.value("error");
+    if (inband.isString() && !inband.toString().trimmed().isEmpty()) {
+        display_error(inband.toString());
+        return;
+    }
+
     // ── Badge ─────────────────────────────────────────────────────────────────
     QString category = metrics.value("analysis_category").toString(metrics.value("category").toString());
     if (category.isEmpty())
@@ -910,7 +888,7 @@ void AltInvestmentsScreen::append_metric_row(QWidget* /*parent*/, QVBoxLayout* v
         sec->setObjectName("altMetricSection");
         vl->addWidget(sec);
         for (const auto& elem : arr) {
-            const QString text = "\xB7  " + (elem.isString() ? elem.toString() : format_value(elem));
+            const QString text = "\xB7  " + (elem.isString() ? elem.toString() : format_value(key, elem));
             auto* row = new QWidget(this);
             row->setObjectName("altMetricRow");
             auto* rl = new QHBoxLayout(row);
@@ -972,7 +950,7 @@ void AltInvestmentsScreen::append_metric_row(QWidget* /*parent*/, QVBoxLayout* v
 
     auto* klbl = new QLabel(words.join(' '));
     klbl->setObjectName("altMetricKey");
-    auto* vlbl = new QLabel(format_value(val));
+    auto* vlbl = new QLabel(format_value(key, val));
     vlbl->setObjectName("altMetricVal");
     vlbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 

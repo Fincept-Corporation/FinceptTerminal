@@ -21,15 +21,16 @@ hub registrant for `ws:<exchange>:*`.
 
 | Pattern | Producer | TTL | Notes |
 |---|---|---|---|
-| `ws:kraken:ticker:<pair>` | `ExchangeSessionManager` | push-only | Coalesced 50 ms |
-| `ws:kraken:orderbook:<pair>` | `ExchangeSessionManager` | push-only | |
-| `ws:kraken:trades:<pair>` | `ExchangeSessionManager` | push-only | |
-| `ws:kraken:ohlc:<pair>:<interval>` | `ExchangeSessionManager` | push-only | |
-| `ws:hyperliquid:*` | `ExchangeSessionManager` | push-only | Same sub-families as Kraken |
-| `prediction:polymarket:price:<asset_id>` | `PolymarketWebSocket` | push-only | Was `polymarket:price:*` before the prediction-markets refactor |
-| `prediction:polymarket:orderbook:<asset_id>` | `PolymarketWebSocket` | push-only | Was `polymarket:orderbook:*` before the prediction-markets refactor |
-| `prediction:kalshi:price:<ticker>:<side>` | `KalshiWsClient` | push-only | `<side>` is `yes` or `no`. Requires credentials — streaming activates in Phase 7 |
-| `prediction:kalshi:orderbook:<ticker>:<side>` | `KalshiWsClient` | push-only | Kalshi REST returns yes+no bids only; asks synthesised client-side |
+| `ws:kraken:ticker:<pair>` | `ExchangeSessionManager` | push-only | Coalesced 50 ms (hub latest-wins). Payload `TickerData` |
+| `ws:kraken:orderbook:<pair>` | `ExchangeSessionManager` | push-only | Coalesced 100 ms (hub latest-wins — every message is a full top-N snapshot). Payload `OrderBookData` |
+| `ws:kraken:trades:<pair>` | `ExchangeSessionManager` | push-only | **Batched, never latest-wins.** The manager accumulates prints for ≤ 100 ms and publishes ONE `QVector<TradeData>` per window, in arrival order (no print is dropped). Subscribers must accept the vector; a bare `TradeData` is still tolerated by the in-tree consumers |
+| `ws:kraken:ohlc:<pair>:<interval>` | `ExchangeSessionManager` | push-only | Collapsed by the manager over a ≤ 100 ms window to the last update **per bar timestamp**, then one `Candle` publish per bar in arrival order — a bar's final update survives the next bar opening inside the window (hub latest-wins would drop it) |
+| `ws:hyperliquid:*` | `ExchangeSessionManager` | push-only | Same sub-families and policies as Kraken (all `supported_exchange_ids()`) |
+| `prediction:polymarket:price:<asset_id>` | `PolymarketWebSocket` | push-only | Coalesced 100 ms (latest-wins; payload is a `double` 0..1). Was `polymarket:price:*` before the prediction-markets refactor |
+| `prediction:polymarket:orderbook:<asset_id>` | `PolymarketWebSocket` | push-only | Coalesced 100 ms (latest-wins; payload is the full patched book). Was `polymarket:orderbook:*` before the prediction-markets refactor |
+| `prediction:kalshi:price:<ticker>:<side>` | `KalshiWsClient` | push-only | Coalesced 100 ms (latest-wins). `<side>` is `yes` or `no`. Requires credentials — streaming activates in Phase 7 |
+| `prediction:kalshi:orderbook:<ticker>:<side>` | `KalshiWsClient` | push-only | Coalesced 100 ms (latest-wins). Kalshi REST returns yes+no bids only; asks synthesised client-side |
+| `prediction:kalshi:trade:<ticker>` | `KalshiWsClient` | — | Published per trade (`PredictionTrade`); no policy is registered, so it is never coalesced. Not in the producer's `topic_patterns()` |
 
 ## News (Phase 5)
 
@@ -48,6 +49,12 @@ hub registrant for `ws:<exchange>:*`.
 | `econ:fincept:upcoming_events` | `MacroCalendarService` | 5 min | 60 s | HTTP-backed (`api.fincept.in/macro/upcoming-events?limit=25`). Payload: `QJsonArray` of `{event, country, date, time, importance, actual, forecast, previous}`. Consumed by the dashboard `EconomicCalendarWidget`. |
 | `dbnomics:<provider>:<dataset>:<series>` | `DBnomicsService` | 1 h | 60 s | Observations endpoint only |
 | `govdata:<provider>:<request_id>` | `GovDataService` | 1 h | 60 s | Gov open-data APIs |
+
+## Python data connectors (catalogue)
+
+| Pattern | Producer | TTL | Min interval | push_only | Notes |
+|---|---|---|---|---|---|
+| `connector:<name>:<command>:<args-hash>` | `ConnectorService` | 15 min (per-connector `ttl_sec` override from `resources/data_connectors.json`, e.g. 60 s for quote connectors) | 5 s | no | One topic per distinct request to a catalogue connector (`<name>` = catalogue/MCP name such as `data_fred`). `<args-hash>` = first 16 hex chars of SHA-1 over the args joined with U+001F, or `_` when there are no args. Published on every successful run from any caller (Data Sources › CATALOG, MCP `data_*` tools, workflow data-source nodes); failures `publish_error`. Payload: `QJsonObject {connector, command, args[], fetched_at (ISO UTC), duration_ms, rows, data}` where `data` is the script's full JSON. `refresh()` replays a request it has seen; a never-run topic is only replayable when it has no args (`_`). `refresh_timeout_ms` = run watchdog (120 s) + 15 s. Producer paced at 2 req/s; identical in-flight requests are de-duplicated. |
 
 ## Broker account streams (Phase 7)
 
@@ -76,10 +83,10 @@ plan's risk-mitigation cadence).
 
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
-| `geopolitics:events` | `GeopoliticsService` | 2 min | 30 s | Conflict monitor news events (default params). Payload: `EventsPage` (events sorted newest-first + pagination + credits metering). Only an unfiltered first-page fetch publishes here; filtered/paged Monitor queries are delivered to their caller via `events_loaded` and matched by `EventsPage::request_key`. |
-| `geopolitics:countries` | `GeopoliticsService` | 10 min | 60 s | Unique country list w/ event counts |
-| `geopolitics:categories` | `GeopoliticsService` | 10 min | 60 s | Unique event category list |
-| `geopolitics:cities` | `GeopoliticsService` | 10 min | 60 s | Cities with extracted coordinates |
+| `geopolitics:events` | `GeopoliticsService` | 30 min | 5 min | Conflict monitor news events (default params). Payload: `EventsPage` (events sorted newest-first + pagination + credits metering; each fetch costs ~3 credits, so the TTL follows the source's ~30-min update cadence). Only an unfiltered first-page fetch publishes here; filtered/paged Monitor queries are delivered to their caller via `events_loaded` and matched by `EventsPage::request_key`. |
+| `geopolitics:countries` | `GeopoliticsService` | 6 h | 60 s | Unique country list w/ event counts |
+| `geopolitics:categories` | `GeopoliticsService` | 6 h | 60 s | Unique event category list |
+| `geopolitics:cities` | `GeopoliticsService` | 6 h | 60 s | Cities with extracted coordinates |
 | `geopolitics:hdx:<context>` | `GeopoliticsService` | 1 h | 60 s | `<context>` = conflicts, humanitarian, country:<iso>, topic:<slug>, search:<q> |
 | `geopolitics:trade:<kind>` | `GeopoliticsService` | 15 min (push-only) | — | `<kind>` = benefits, restrictions, blocs, barrier |
 | `geopolitics:geolocation` | `GeopoliticsService` | 15 min (push-only) | — | Extracted coords from headline batch |
@@ -177,15 +184,15 @@ Terminal-wide topics — same numbers shown to every user, no `<pubkey>` segment
 
 ### STAKE / veFNCPT / tier system (Phase 3)
 
-veFNCPT lock surface for the STAKE tab. All four producers ship in **mock mode** until `fincept.lock_program_id` (Anchor program) and `fincept.yield_endpoint` are configured in SecureStorage. Each payload carries `is_mock=true` so panels can surface the state explicitly.
+veFNCPT lock surface for the STAKE tab. Staking is **not live** in this release: there is no on-chain lock program and no yield endpoint, so `StakingService`/`RealYieldService` publish an error (`publish_error`) instead of payloads, and the panels show the lock UI as a calculator with LOCK disabled ("COMING SOON"). Nothing here gates features.
 
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
-| `wallet:locks:<pubkey>` | `StakingService` | 60 s | 30 s | Vector of `LockPosition{position_id, amount_raw, decimals, lock_start_ts, unlock_ts, duration_secs, weight_raw, lifetime_yield_usdc, is_mock}`. Real path: `getProgramAccounts` against `fincept.lock_program_id`, filter by owner. Mock path: 3 demo positions (2,000 @ 4yr / 1,000 @ 1yr / 500 @ 6mo) per plan §3.2. |
-| `wallet:vefncpt:<pubkey>` | `StakingService` | 60 s | 30 s | Aggregate weight + projected next-period yield. Shape: `VeFncptAggregate{pubkey_b58, total_weight_raw, decimals, position_count, projected_next_period_yield_usdc, is_mock}`. Computed by summing `LockPosition.weight_raw` and applying §3.4 25 %-of-revenue staker-share. |
-| `wallet:yield:<pubkey>` | `RealYieldService` | 5 min | 60 s | Realised USDC yield. Shape: `YieldSnapshot{pubkey_b58, lifetime_usdc, last_period_usdc, last_period_end_ts, is_mock}`. Real path: `<endpoint>/yield/<pubkey>`. Mock path derives numbers from `treasury:revenue × 25 % / weight share` so demo numbers stay internally consistent with the buyback dashboard. |
+| `wallet:locks:<pubkey>` | `StakingService` | 60 s | 30 s | Vector of `LockPosition{position_id, amount_raw, decimals, lock_start_ts, unlock_ts, duration_secs, weight_raw, lifetime_yield_usdc}`. Staking not live → `publish_error` (no demo positions). |
+| `wallet:vefncpt:<pubkey>` | `StakingService` | 60 s | 30 s | Aggregate weight + projected next-period yield. Shape: `VeFncptAggregate{pubkey_b58, total_weight_raw, decimals, position_count, projected_next_period_yield_usdc}`. Staking not live → `publish_error`. |
+| `wallet:yield:<pubkey>` | `RealYieldService` | 5 min | 60 s | Realised USDC yield. Shape: `YieldSnapshot{pubkey_b58, lifetime_usdc, last_period_usdc, last_period_end_ts}`. Real path: `<endpoint>/yield/<pubkey>`; no endpoint configured → `publish_error` (no derived demo numbers). |
 | `treasury:revenue` | `RealYieldService` | 1 h | 5 min | Terminal-wide weekly revenue bucket. Shape: `TreasuryRevenue{period_start_ts, period_end_ts, total_usd, is_mock}`. Used by `LockPanel` for "EST. YIELD" before lock-creation; also feeds the Phase 5 dashboard's revenue breakdown. Bucketed weekly to match the buyback worker's epoch cadence. |
-| `billing:tier:<pubkey>` | `TierService` | 60 s | 15 s | Derived from `wallet:vefncpt:<pubkey>`; service subscribes to vefncpt internally and republishes whenever weight changes. Shape: `TierStatus{pubkey_b58, tier (Free/Bronze/Silver/Gold), weight_raw, next_threshold_raw, decimals, is_mock}`. Thresholds in `services/billing/TierConfig.h` (100 / 1k / 10k veFNCPT). Drives cross-screen gating (AI Quant Lab, Alpha Arena) via the `tier_changed` Qt signal. |
+| `billing:tier:<pubkey>` | `TierService` | 60 s | 15 s | Derived from `wallet:vefncpt:<pubkey>`; republished whenever weight changes. Shape: `TierStatus{pubkey_b58, tier (Free/Bronze/Silver/Gold), weight_raw, next_threshold_raw, decimals}`. Thresholds in `services/billing/TierConfig.h` (100 / 1k / 10k veFNCPT). Display only — tiers are planned benefits and gate nothing. |
 
 ### Internal prediction markets (Phase 4)
 
@@ -215,7 +222,7 @@ The F&O screen owns its own producer family. `OptionChainService` is the sole hu
 |---|---|---|---|---|
 | `fno:pcr:<broker>:<underlying>:<expiry>` | `OptionChainService` | push-only | — | Put/Call Ratio = sum(PE OI) / sum(CE OI). Republished on every chain publish (coalesce 250 ms). Payload: `double`. |
 | `fno:max_pain:<broker>:<underlying>:<expiry>` | `OptionChainService` | push-only | — | Strike minimising total option-writer pain at expiry. Payload: `double`. |
-| `fno:fii_dii:daily` | `FiiDiiService` | 1 h | 30 min | Daily institutional flows scraped from NSE via `scripts/fii_dii_scraper.py` (session-cookie auth, browser User-Agent). Refreshed at most once per 30 min — NSE only updates the source numbers once per trading day post 6 PM IST. Payload: `QVector<FiiDiiDay>` ascending by date — rolling last 30 days served from `fii_dii_daily` SQLite table. Empty payload before market close on a fresh DB. |
+| `fno:fii_dii:daily` | `FiiDiiService` | 1 h | 30 min | Daily institutional flows fetched over HTTP by `FiiDiiService` itself (the old `scripts/fii_dii_scraper.py` was unused and has been removed). Refreshed at most once per 30 min — NSE only updates the source numbers once per trading day post 6 PM IST. Payload: `QVector<FiiDiiDay>` ascending by date — rolling last 30 days served from `fii_dii_daily` SQLite table. Empty payload before market close on a fresh DB. |
 | `oi:history:<broker>:<token>:<window>` | `OISnapshotter` | 60 s | 30 s | Intraday OI series for the OI Analytics sub-tab. `<window>` = `1d` / `5d` / `7d`. Snapshotter subscribes to `option:chain:*`, buffers the latest CE/PE quote per token, and flushes minute-aligned rows to SQLite (`oi_snapshots`, schema v025) every 60 s. Payload: `QVector<OISample>` ordered ascending by `ts_minute`. Retention 7 days rolling — older rows are pruned hourly. |
 
 > **Greeks worker:** `OptionGreeksWorker` is a sibling daemon to `PythonWorker`, running `scripts/option_greeks_daemon.py --daemon` against `venv-numpy2` (where `py_vollib` lives). Sole supported action: `option_greeks_batch`. Inputs are per-contract (`token, S, K, t, r, q, flag, market_price, model="bsm"`); outputs are per-contract IV (decimal) + Greeks. Scaling: vega and rho are returned per 1.00 σ / 1.00 r (multiply py_vollib's per-1% values by 100); theta is per calendar day. Risk-free rate `r` is read once per session from `settings.fno.risk_free_rate` (default 0.067, RBI 91-day T-bill ballpark). Per-strike Greeks recompute is throttled to 500 ms.
@@ -225,6 +232,12 @@ The F&O screen owns its own producer family. `OptionChainService` is the sole hu
 > **Underlying spot:** the chain producer always re-fetches the underlying quote alongside the option quotes in the same `get_quotes` batch, so subscribers don't need to cross-subscribe to `market:quote:<sym>`. Index symbols use `NSE_INDEX:<NAME>` (NIFTY/BANKNIFTY/FINNIFTY/MIDCPNIFTY); stocks use `NSE:<SYM>`.
 
 > **Broker requirement:** F&O topics require a connected, instruments-loaded broker. The producer publishes `publish_error("no instruments cached for …")` when the InstrumentService cache is empty; consumers should surface a "connect a broker" prompt when this happens.
+
+## System health
+
+| Pattern | Producer | TTL | Min interval | Notes |
+|---|---|---|---|---|
+| `system:health` | `ConnectivityService` | 30 s (15 s after a failed probe) | 10 s | `GET <api_base_url>/health` latency probe. Payload `QJsonObject{ok, latency_ms, http_status, error, checked_at_ms, endpoint}`; a failure is published as a value (`ok=false`), not via `publish_error`. Not push-only; refresh timeout 10 s. Registered lazily by `DashboardStatusBar`. |
 
 ## Force refresh
 

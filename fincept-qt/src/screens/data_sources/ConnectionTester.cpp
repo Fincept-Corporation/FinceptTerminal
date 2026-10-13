@@ -69,12 +69,6 @@ QString provider_probe_url(const QString& provider_id, const QJsonObject& cfg) {
         const QString key = cfg.value("apiKey").toString().trimmed();
         return QString("https://finnhub.io/api/v1/stock/profile2?symbol=AAPL&token=%1").arg(key);
     }
-    if (provider_id == "iex-cloud") {
-        const QString token = cfg.value("token").toString().trimmed();
-        const bool sandbox = cfg.value("sandbox").toBool();
-        const QString base = sandbox ? "https://sandbox.iexapis.com" : "https://cloud.iexapis.com";
-        return QString("%1/stable/stock/AAPL/quote?token=%2").arg(base, token);
-    }
     if (provider_id == "twelve-data") {
         const QString key = cfg.value("apiKey").toString().trimmed();
         return QString("https://api.twelvedata.com/time_series?symbol=AAPL&interval=1min&outputsize=1&apikey=%1")

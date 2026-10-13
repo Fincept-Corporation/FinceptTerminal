@@ -16,15 +16,18 @@ namespace fincept::screens::panels {
 
 /// TierPanel — bottom section of the STAKE tab (Phase 3 §3.2).
 ///
-/// Three rows:
-///   BRONZE   100+ veFNCPT       basic API quota
-///   SILVER   1k+ veFNCPT        premium screens
-///   GOLD     10k+ veFNCPT       all agents + arena
+/// Three rows — tier · veFNCPT threshold · PLANNED benefit:
+///   BRONZE   100+ veFNCPT       planned: basic API quota
+///   SILVER   1k+ veFNCPT        planned: premium screens
+///   GOLD     10k+ veFNCPT       planned: all agents + arena
 ///
-/// Each row shows an [achieved] / [locked] chip on the right, and the
-/// current tier's row is highlighted (amber border). Subscribes
-/// `billing:tier:<pubkey>`. Empty state (no wallet) shows all rows in
-/// "[locked]" with a small "Connect a wallet to see your tier" footnote.
+/// The benefits are labelled as planned because nothing in the terminal is
+/// gated on a tier: holding or reaching one unlocks nothing in this build.
+///
+/// While on-chain staking is not live (`StakingService::staking_live()`),
+/// there is no veFNCPT weight to derive a tier from, so the panel does not
+/// subscribe and shows the program as PLANNED. Once live it subscribes
+/// `billing:tier:<pubkey>` (visibility-driven, P3) and marks reached tiers.
 class TierPanel : public QWidget {
     Q_OBJECT
   public:
@@ -44,11 +47,16 @@ class TierPanel : public QWidget {
     void on_wallet_connected(const QString& pubkey, const QString& label);
     void on_wallet_disconnected();
     void on_tier_update(const QVariant& v);
+    void subscribe_if_live();
 
+    /// Static copy (tier names, thresholds, planned benefits).
+    void apply_row_texts();
+    /// The not-live state: every row PLANNED, explanatory footer.
+    void render_planned();
     /// `remaining_ui_str` is the veFNCPT weight still missing for the next tier
     /// (threshold minus current weight), empty at Gold / when unknown.
     void render_state(fincept::wallet::TierStatus::Tier current, const QString& weight_ui_str,
-                      const QString& remaining_ui_str, bool is_mock);
+                      const QString& remaining_ui_str);
 
     struct TierRow {
         QFrame* host = nullptr;

@@ -5,12 +5,10 @@ via the World Bank Worldwide Governance Indicators (WGI) API.
 """
 import sys
 import json
-import os
 import requests
 from typing import Dict, Any, Optional, List
 
-API_KEY = os.environ.get('PRS_API_KEY', '')
-BASE_URL = "https://info.worldbank.org/governance/wgi"
+BASE_URL = "https://api.worldbank.org/v2"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
@@ -44,12 +42,28 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
 
 
 def _fetch_wgi(indicator_code: str, country: str = None, year: str = None) -> Any:
-    country_code = country if country else "all"
-    url = f"{WB_API_BASE}/country/{country_code}/indicator/WGI.{indicator_code}"
-    params = {"format": "json", "per_page": 200}
+    """WGI estimates from the World Bank API (source 3 = Worldwide Governance Indicators).
+    The indicator ids are GOV_WGI_<code> (the old WGI.<code> ids were removed). Without a year,
+    the most recent 10 values are returned for one country, or the latest value for all."""
+    country_code = country.replace(",", ";") if country else "all"
+    url = f"{WB_API_BASE}/country/{country_code}/indicator/GOV_WGI_{indicator_code}"
+    params = {"format": "json", "per_page": 20000, "source": 3}
     if year:
         params["date"] = year
-    return _make_request(url, params)
+    else:
+        params["mrv"] = 1 if country_code == "all" else 10
+    data = _make_request(url, params)
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, list) and data and isinstance(data[0], dict) and "message" in data[0]:
+        msg = data[0]["message"][0] if data[0]["message"] else {}
+        return {"error": f"World Bank API: {msg.get('value') or msg}"}
+    if not isinstance(data, list) or len(data) < 2 or not data[1]:
+        return {"error": "No data returned"}
+    rows = [{"country": r["country"]["value"], "iso3": r.get("countryiso3code"), "year": r.get("date"),
+             "value": r.get("value")} for r in data[1] if r.get("value") is not None]
+    return {"indicator": data[1][0]["indicator"]["value"], "code": f"GOV_WGI_{indicator_code}",
+            "scale": "approx. -2.5 (weak) to +2.5 (strong governance)", "count": len(rows), "data": rows}
 
 
 def get_governance_indicators(country: str = None, indicator: str = None, year: str = None) -> Any:

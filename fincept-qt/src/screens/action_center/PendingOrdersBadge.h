@@ -1,6 +1,8 @@
 #pragma once
 // PendingOrdersBadge — status-bar indicator of orders awaiting approval.
-// Hidden when zero pending; click opens the PendingOrdersPanel popover anchored
+// Amber pill while orders wait; a muted outline (still visible, so the Action
+// Center and its kill switch stay reachable) when none do. Click opens the
+// PendingOrdersPanel popover anchored
 // above the badge. Subscribes to ActionCenter signals so the count stays live
 // without polling.
 

@@ -262,6 +262,7 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
                     if (auto* l = dynamic_cast<IGroupLinked*>(s))
                         l->set_group(SymbolGroup::None);
                 }
+                dock_router_link_defaults::mark_user_configured_links();
                 QPointer<ui::GroupBadge> badge = group_badges_.value(id);
                 if (badge)
                     badge->set_group_silent(SymbolGroup::None);
@@ -285,6 +286,7 @@ void DockScreenRouter::show_tab_context_menu(const QString& id, const QPoint& gl
                     if (!l)
                         return;
                     l->set_group(g);
+                    dock_router_link_defaults::mark_user_configured_links();
                     QPointer<ui::GroupBadge> badge = group_badges_.value(id);
                     if (badge)
                         badge->set_group_silent(g);

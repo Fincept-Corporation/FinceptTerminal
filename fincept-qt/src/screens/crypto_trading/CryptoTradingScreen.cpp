@@ -547,28 +547,38 @@ void CryptoTradingScreen::hub_subscribe_topics() {
             self->has_pending_orderbook_ = true;
         });
 
-    // Trades — selected symbol only.
-    hub.subscribe<fincept::trading::TradeData>(
-        ws_subscription_owner_, QStringLiteral("ws:") + ex + QStringLiteral(":trades:") + selected_symbol_,
-        [self](const fincept::trading::TradeData& td) {
-            if (!self || td.symbol != self->selected_symbol_)
-                return;
-            crypto::TradeEntry e;
-            e.id = td.id;
-            e.side = td.side;
-            e.price = td.price;
-            e.amount = td.amount;
-            // The tape's TIME column renders e.timestamp; leaving it at the 0
-            // default stamped every row 00:00:00 (epoch). Fall back to receive
-            // time if the exchange sent none.
-            e.timestamp = td.timestamp > 0 ? td.timestamp : QDateTime::currentMSecsSinceEpoch();
-            // Hard cap — belt and braces against the drain ever stalling
-            // (hidden screen, blocked event loop). Newest wins: the time &
-            // sales tape only ever renders the most recent rows anyway.
-            if (self->pending_trades_.size() >= kMaxPendingTrades)
-                self->pending_trades_.remove(0, self->pending_trades_.size() - kMaxPendingTrades + 1);
-            self->pending_trades_.append(e);
-        });
+    // Trades — selected symbol only. ExchangeSessionManager publishes one
+    // QVector<TradeData> per ~100 ms window (arrival order) so no print is lost
+    // to coalescing; a single TradeData payload is still accepted.
+    const auto push_trade = [self](const fincept::trading::TradeData& td) {
+        if (!self || td.symbol != self->selected_symbol_)
+            return;
+        crypto::TradeEntry e;
+        e.id = td.id;
+        e.side = td.side;
+        e.price = td.price;
+        e.amount = td.amount;
+        // The tape's TIME column renders e.timestamp; leaving it at the 0
+        // default stamped every row 00:00:00 (epoch). Fall back to receive
+        // time if the exchange sent none.
+        e.timestamp = td.timestamp > 0 ? td.timestamp : QDateTime::currentMSecsSinceEpoch();
+        // Hard cap — belt and braces against the drain ever stalling
+        // (hidden screen, blocked event loop). Newest wins: the time &
+        // sales tape only ever renders the most recent rows anyway.
+        if (self->pending_trades_.size() >= kMaxPendingTrades)
+            self->pending_trades_.remove(0, self->pending_trades_.size() - kMaxPendingTrades + 1);
+        self->pending_trades_.append(e);
+    };
+    hub.subscribe(ws_subscription_owner_, QStringLiteral("ws:") + ex + QStringLiteral(":trades:") + selected_symbol_,
+                  [push_trade](const QVariant& v) {
+                      if (v.metaType() == QMetaType::fromType<QVector<fincept::trading::TradeData>>()) {
+                          const auto batch = v.value<QVector<fincept::trading::TradeData>>();
+                          for (const auto& td : batch)
+                              push_trade(td);
+                      } else if (v.canConvert<fincept::trading::TradeData>()) {
+                          push_trade(v.value<fincept::trading::TradeData>());
+                      }
+                  });
 
     // OHLC — selected symbol at the chart's current timeframe.
     const QString interval = chart_ ? chart_->current_timeframe() : QStringLiteral("1m");

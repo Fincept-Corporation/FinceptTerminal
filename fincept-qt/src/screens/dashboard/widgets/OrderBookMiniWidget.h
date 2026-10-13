@@ -51,6 +51,7 @@ class OrderBookMiniWidget : public BaseWidget {
     QLabel* header_hint_ = nullptr;
 
     bool hub_active_ = false;
+    bool showing_empty_ = false; // table currently shows the "No working orders" row
 };
 
 } // namespace fincept::screens::widgets

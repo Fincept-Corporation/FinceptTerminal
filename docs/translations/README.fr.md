@@ -1,16 +1,17 @@
 > [!IMPORTANT]
-> ## 🔒 Fincept Terminal **Enterprise** — l'édition privée. Prix de lancement : **−90 %, pour une durée limitée.**
-> Données propriétaires en temps réel · Recherche IA multi-agents · Exécution courtier & algo en direct · Support prioritaire
+> ## 🔒 Fincept Terminal **Enterprise** — l'édition privée est désormais disponible.
+> Données en temps réel · Recherche IA multi-agents · Exécution courtier, backtest & algo en direct · Support prioritaire ·
+> Recherche actions · Gestion de portefeuille · Workflows financiers · Quant Research Lab · Maritime · Géopolitique
 >
-> | Offre | Avant | **Prix de lancement** |
-> |:--|:--:|:--:|
-> | **Exclusive** | ~~99 $~~ | **10 $** /utilisateur/mois |
-> | **Exclusive+** | ~~199 $~~ | **20 $** /utilisateur/mois |
-> | **Exclusive Pro** ⭐ La plus choisie | ~~299 $~~ | **40 $** /utilisateur/mois |
+> | Offre | Prix |
+> |:--|:--:|
+> | **Exclusive** | **15 $** /utilisateur/mois |
+> | **Exclusive+** | **30 $** /utilisateur/mois |
+> | **Exclusive Pro** ⭐ La plus choisie | **45 $** /utilisateur/mois |
 >
-> [![🔥 Profiter du prix de lancement →](https://img.shields.io/badge/%F0%9F%94%A5_Profiter_du_prix_de_lancement_%E2%86%92-C06524?style=for-the-badge)](https://fincept.in/enterprise/signup) &nbsp; [![Comparer les offres](https://img.shields.io/badge/Comparer_les_offres-1F2328?style=for-the-badge)](https://fincept.in/pricing)
+> [![Obtenir Enterprise →](https://img.shields.io/badge/Obtenir_Enterprise_%E2%86%92-C06524?style=for-the-badge)](https://fincept.in/enterprise/signup) &nbsp; [![Comparer les offres](https://img.shields.io/badge/Comparer_les_offres-1F2328?style=for-the-badge)](https://fincept.in/pricing)
 >
-> <sub>Les premiers postes conservent le prix de lancement à vie · Sans engagement annuel, résiliable à tout moment · Ce dépôt open source reste gratuit sous AGPL-3.0</sub>
+> <sub>Sans engagement annuel, résiliable à tout moment · Ce dépôt open source reste gratuit sous AGPL-3.0</sub>
 
 # Fincept Terminal
 
@@ -44,10 +45,10 @@ Prenez l'édition ouverte si vous êtes étudiant, amateur ou universitaire. Pre
 | | Open source | **Enterprise** |
 |---|---|---|
 | **Licence** | AGPL-3.0 — copyleft fort | Propriétaire — aucune obligation de copyleft |
-| **Coût** | Gratuit, plus vos factures de données et de LLM | ~~99 $ / 199 $ / 299 $~~ **10 $ / 20 $ / 40 $** par utilisateur/mois — prix de lancement |
+| **Coût** | Gratuit, plus vos factures de données et de LLM | **15 $ / 30 $ / 45 $** par utilisateur/mois |
 | **Données** | Flux publics gratuits, vos propres clés | Jeux de données privés, historique plus profond, point-in-time |
 | **IA** | Votre clé LLM | 400–5 000 crédits inclus · recherche multi-agents · data room privée |
-| **Trading** | Papier + intégrations courtier | Routage courtier en direct + déploiement d'algos en direct |
+| **Trading** | Papier + trading en direct via votre courtier | Routage en direct géré, analytique d'exécution, SLA prioritaire |
 | **Contrôles** | — | SSO/SAML, journaux d'audit, RBAC, support adossé à un SLA |
 
 [**Découvrir Enterprise →**](https://fincept.in/enterprise) · [Comparatif complet](https://fincept.in/comparison) · [Tarifs](https://fincept.in/pricing) · [FAQ](https://fincept.in/faq)
@@ -60,12 +61,12 @@ Prenez l'édition ouverte si vous êtes étudiant, amateur ou universitaire. Pre
 
 | | **Exclusive** | **Exclusive+** | **Exclusive Pro** ★ |
 |---|---|---|---|
-| | ~~99 $~~ **10 $**/utilisateur/mois | ~~199 $~~ **20 $**/utilisateur/mois | ~~299 $~~ **40 $**/utilisateur/mois |
+| | **15 $**/utilisateur/mois | **30 $**/utilisateur/mois | **45 $**/utilisateur/mois |
 | Crédits IA / mois | 400 | 2 000 | 5 000 |
 | Deep research + équipes d'agents | — | ✓ | ✓ |
 | Trading en direct + algos | — | — | ✓ |
 
-Facturation mensuelle, sans engagement, sans minimum de postes, 10 % de remise au trimestre — au prix de lancement, soit **120 à 480 $ par utilisateur et par an**, contre environ 27 000 $ pour un poste Bloomberg. **Universités :** 5 postes Exclusive Pro pour **699 $/mois**. Ces formules constituent toute la grille tarifaire : aucun tarif négocié, aucune licence commerciale distincte.
+Facturation mensuelle, sans engagement annuel, sans minimum de postes — soit **180 à 540 $ par utilisateur et par an**, contre environ 27 000 $ pour un poste Bloomberg. Les conditions trimestrielles et universitaires figurent sur la [page des tarifs](https://fincept.in/pricing). Aucun tarif négocié, aucune licence commerciale distincte.
 
 Enterprise exige son propre compte — les identifiants Fincept gratuits n'y donnent pas accès.
 

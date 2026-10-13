@@ -435,7 +435,10 @@ ApiResponse<QVector<BrokerPosition>> DhanBroker::get_positions(const BrokerCrede
         // using the row's own securityId + exchangeSegment.
         pos.ltp = 0.0;
         pos.pnl = p.value("unrealizedProfit").toDouble();
-        pos.day_pnl = p.value("realizedProfit").toDouble();
+        // Dhan reports no day P&L for positions. realizedProfit is P&L already
+        // booked on closed quantity, not today's move — leave day_pnl unset (0 =
+        // not reported) so the UI shows n/a instead of a misleading figure.
+        pos.day_pnl = 0.0;
         pos.side = qty > 0 ? "LONG" : "SHORT";
         pos.pnl_pct = 0.0;
         const QString seg = p.value("exchangeSegment").toString();

@@ -13,7 +13,11 @@
 #include <QPushButton>
 #include <QScopeGuard>
 #include <QSignalBlocker>
+#include <QSpinBox>
+#include <QTimer>
 #include <QVBoxLayout>
+
+#include <memory>
 
 namespace fincept::screens {
 
@@ -22,23 +26,32 @@ using fincept::trading::PendingOrder;
 
 namespace {
 constexpr int kColTime = 0;
-constexpr int kColAccount = 1;
-constexpr int kColType = 2;
-constexpr int kColSymbol = 3;
-constexpr int kColSide = 4;
-constexpr int kColQty = 5;
-constexpr int kColPriceType = 6;
-constexpr int kColStatus = 7;
-constexpr int kColActions = 8;
-constexpr int kColCount = 9;
+constexpr int kColExpires = 1;
+constexpr int kColAccount = 2;
+constexpr int kColType = 3;
+constexpr int kColSymbol = 4;
+constexpr int kColSide = 5;
+constexpr int kColQty = 6;
+constexpr int kColPriceType = 7;
+constexpr int kColStatus = 8;
+constexpr int kColActions = 9;
+constexpr int kColCount = 10;
+// Item data role carrying a pending row's expiry (QDateTime) for the countdown.
+constexpr int kExpiryRole = Qt::UserRole + 1;
 } // namespace
 
 PendingOrdersPanel::PendingOrdersPanel(QWidget* parent) : QWidget(parent) {
     setObjectName("pendingOrdersPanel");
     // Frameless popup: auto-closes when the user clicks elsewhere.
     setWindowFlags(Qt::Popup);
-    setFixedSize(760, 380);
+    setFixedSize(900, 400);
     build_ui();
+
+    // Countdown for the Expires column. Interval/connect only — started in
+    // showEvent, stopped in hideEvent (P3).
+    countdown_timer_ = new QTimer(this);
+    countdown_timer_->setInterval(1000);
+    connect(countdown_timer_, &QTimer::timeout, this, &PendingOrdersPanel::tick_countdown);
 
     // Live updates — wire ActionCenter signals once, here (a popup has no
     // persistent show/hide lifecycle to hang them on).
@@ -87,7 +100,12 @@ void PendingOrdersPanel::build_ui() {
                           "#acRowReject{background:rgba(220,38,38,0.12);color:%8;border:1px solid %8;"
                           "padding:2px 10px;font-size:10px;font-weight:700;border-radius:2px;}"
                           "#acRowReject:hover{background:rgba(220,38,38,0.25);}"
-                          "#acRowReject:disabled{color:%5;border-color:%5;background:transparent;}")
+                          "#acRowReject:disabled{color:%5;border-color:%5;background:transparent;}"
+                          "#acTtlSpin{background:%2;color:%6;border:1px solid %3;padding:2px 4px;font-size:11px;}"
+                          "#acKillSwitch{background:%8;color:#000;border:1px solid %8;padding:4px 12px;"
+                          "font-size:11px;font-weight:700;letter-spacing:1px;border-radius:2px;}"
+                          "#acKillSwitch:hover{background:rgba(220,38,38,0.75);}"
+                          "#acKillSwitch:disabled{background:transparent;color:%5;border-color:%5;}")
                       .arg(fincept::ui::colors::DARK(), fincept::ui::colors::PANEL(), fincept::ui::colors::BORDER(),
                            fincept::ui::colors::AMBER(), fincept::ui::colors::TEXT_SECONDARY(),
                            fincept::ui::colors::TEXT_PRIMARY(), fincept::ui::colors::POSITIVE(),
@@ -123,7 +141,28 @@ void PendingOrdersPanel::build_ui() {
     status_filter_->addItem(tr("All"), "all");
     hlay->addWidget(status_filter_);
 
+    // Approval window: a queued order not approved within this many minutes is
+    // auto-rejected (the market it was priced against has moved on).
+    ttl_caption_ = new QLabel(tr("Expire after:"));
+    hlay->addWidget(ttl_caption_);
+    ttl_spin_ = new QSpinBox;
+    ttl_spin_->setObjectName("acTtlSpin");
+    ttl_spin_->setRange(ActionCenter::kMinPendingTtlMinutes, ActionCenter::kMaxPendingTtlMinutes);
+    ttl_spin_->setSuffix(tr(" min"));
+    ttl_spin_->setValue(ActionCenter::pending_ttl_minutes());
+    ttl_spin_->setToolTip(tr("Approval window for newly queued orders. An order not approved in time is "
+                             "auto-rejected — it is never sent at a price that is minutes old."));
+    ttl_spin_->setAccessibleName(tr("Pending order approval window in minutes"));
+    hlay->addWidget(ttl_spin_);
+
     hlay->addStretch(1);
+
+    kill_btn_ = new QPushButton(tr("KILL SWITCH"));
+    kill_btn_->setObjectName("acKillSwitch");
+    kill_btn_->setCursor(Qt::PointingHandCursor);
+    kill_btn_->setToolTip(tr("Cancel every open order and square off every open position on all LIVE accounts"));
+    kill_btn_->setAccessibleName(tr("Kill switch: cancel all orders and square off all positions on live accounts"));
+    hlay->addWidget(kill_btn_);
 
     root->addWidget(header);
 
@@ -170,8 +209,8 @@ void PendingOrdersPanel::build_ui() {
     table_ = new QTableWidget;
     table_->setObjectName("acTable");
     table_->setColumnCount(kColCount);
-    table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"), tr("Qty"),
-                                       tr("Price Type"), tr("Status"), tr("Actions")});
+    table_->setHorizontalHeaderLabels({tr("Time"), tr("Expires"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"),
+                                       tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
     table_->verticalHeader()->setVisible(false);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -185,6 +224,24 @@ void PendingOrdersPanel::build_ui() {
     // ── Wiring ────────────────────────────────────────────────────────────────
     connect(account_combo_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
     connect(status_filter_, &QComboBox::currentIndexChanged, this, [this](int) { refresh(); });
+    // Persist on edit-finish, not per keystroke/arrow tick.
+    connect(ttl_spin_, &QSpinBox::editingFinished, this,
+            [this]() { ActionCenter::instance().set_pending_ttl_minutes(ttl_spin_->value()); });
+    connect(kill_btn_, &QPushButton::clicked, this, [this]() {
+        QPointer<QPushButton> guard(kill_btn_);
+        if (guard)
+            guard->setEnabled(false);
+        // Results are reported against the main window: this popover closes as
+        // soon as focus moves to the confirmation dialog.
+        QWidget* host = parentWidget() ? parentWidget() : this;
+        if (!confirm_and_run_kill_switch(host) && guard)
+            guard->setEnabled(true);
+    });
+    connect(&ActionCenter::instance(), &ActionCenter::kill_switch_finished, this,
+            [this](const QVector<ActionCenter::KillSwitchAccountResult>&) {
+                if (kill_btn_)
+                    kill_btn_->setEnabled(true);
+            });
     approve_all_btn_->setAccessibleName(tr("Approve all pending orders"));
     reject_all_btn_->setAccessibleName(tr("Reject all pending orders"));
     connect(approve_all_btn_, &QPushButton::clicked, this, [this]() {
@@ -220,9 +277,7 @@ void PendingOrdersPanel::build_ui() {
         int buys = 0;
         int sells = 0;
         for (const auto& p : pending) {
-            bool s = false;
-            order_age_text(p.created_at, &s);
-            if (s)
+            if (ActionCenter::is_expired(p))
                 ++stale_count;
             const QString a = p.action.toUpper();
             if (a == QLatin1String("BUY"))
@@ -240,10 +295,9 @@ void PendingOrdersPanel::build_ui() {
                            .arg(buys)
                            .arg(sells);
         if (stale_count > 0)
-            body += tr("\n\n⚠  %1 of these have been waiting over %2 minutes and will be REFUSED\n"
+            body += tr("\n\n⚠  %1 of these are past their approval window and will be REFUSED\n"
                        "as expired rather than executed. Re-place them if you still want the trade.")
-                        .arg(stale_count)
-                        .arg(ActionCenter::kPendingOrderTtlMinutes);
+                        .arg(stale_count);
         const auto ans =
             QMessageBox::question(this, tr("Approve All"), body, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (ans != QMessageBox::Yes)
@@ -280,6 +334,10 @@ void PendingOrdersPanel::build_ui() {
 
 void PendingOrdersPanel::popup_at(const QPoint& global_anchor) {
     reload_accounts();
+    if (ttl_spin_) {
+        QSignalBlocker b(ttl_spin_);
+        ttl_spin_->setValue(ActionCenter::pending_ttl_minutes());
+    }
     refresh();
     move(global_anchor.x() - width(), global_anchor.y() - height());
     show();
@@ -290,6 +348,18 @@ void PendingOrdersPanel::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
     QWidget::changeEvent(event);
+}
+
+void PendingOrdersPanel::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    if (countdown_timer_)
+        countdown_timer_->start();
+}
+
+void PendingOrdersPanel::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    if (countdown_timer_)
+        countdown_timer_->stop();
 }
 
 void PendingOrdersPanel::retranslateUi() {
@@ -323,10 +393,16 @@ void PendingOrdersPanel::retranslateUi() {
         approve_all_btn_->setText(tr("APPROVE ALL"));
     if (reject_all_btn_)
         reject_all_btn_->setText(tr("REJECT ALL"));
+    if (ttl_caption_)
+        ttl_caption_->setText(tr("Expire after:"));
+    if (ttl_spin_)
+        ttl_spin_->setSuffix(tr(" min"));
+    if (kill_btn_)
+        kill_btn_->setText(tr("KILL SWITCH"));
 
     if (table_) {
-        table_->setHorizontalHeaderLabels({tr("Time"), tr("Account"), tr("Type"), tr("Symbol"), tr("Side"), tr("Qty"),
-                                           tr("Price Type"), tr("Status"), tr("Actions")});
+        table_->setHorizontalHeaderLabels({tr("Time"), tr("Expires"), tr("Account"), tr("Type"), tr("Symbol"),
+                                           tr("Side"), tr("Qty"), tr("Price Type"), tr("Status"), tr("Actions")});
     }
     // Per-row Approve/Reject button widgets are rebuilt on the next refresh().
 }
@@ -371,18 +447,30 @@ void PendingOrdersPanel::refresh() {
             item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
             table_->setItem(row, col, item);
         };
-        // Time column carries the age too: a queued order's staleness is the
-        // single most important thing to know before executing it at market.
-        bool stale = false;
-        const QString age = order_age_text(o.created_at, &stale);
+        // Time column carries the age in its tooltip; the Expires column counts the
+        // approval window down (tick_countdown() re-renders it every second).
         auto* time_item = new QTableWidgetItem(o.created_at.toString("HH:mm:ss"));
-        time_item->setToolTip(tr("Queued %1").arg(age));
-        const bool flag_stale = stale && o.status == QLatin1String("pending");
-        time_item->setForeground(flag_stale ? QColor(fincept::ui::colors::WARNING())
-                                            : QColor(fincept::ui::colors::TEXT_PRIMARY()));
-        if (flag_stale)
-            time_item->setText(o.created_at.toString("HH:mm:ss") + QStringLiteral(" ⚠"));
+        time_item->setToolTip(tr("Queued %1").arg(order_age_text(o.created_at)));
+        time_item->setForeground(QColor(fincept::ui::colors::TEXT_PRIMARY()));
         table_->setItem(row, kColTime, time_item);
+
+        const bool is_pending = (o.status == QLatin1String("pending"));
+        auto* exp_item = new QTableWidgetItem;
+        if (is_pending) {
+            exp_item->setData(kExpiryRole, o.expires_at);
+            const qint64 left = ActionCenter::secs_until_expiry(o);
+            exp_item->setText(remaining_text(left));
+            exp_item->setForeground(left <= kExpiringSoonSecs ? QColor(fincept::ui::colors::WARNING())
+                                                              : QColor(fincept::ui::colors::TEXT_PRIMARY()));
+            exp_item->setToolTip(o.expires_at.isValid()
+                                     ? tr("Auto-rejected at %1 if not approved")
+                                           .arg(o.expires_at.toLocalTime().toString("HH:mm:ss"))
+                                     : tr("Unknown queue time — this order cannot be approved"));
+        } else {
+            exp_item->setText(QStringLiteral("—"));
+            exp_item->setForeground(QColor(fincept::ui::colors::TEXT_SECONDARY()));
+        }
+        table_->setItem(row, kColExpires, exp_item);
         // Resolve account display name.
         const auto acct_meta = trading::AccountManager::instance().get_account(o.account_id);
         set(kColAccount, acct_meta.display_name.isEmpty() ? o.account_id : acct_meta.display_name);
@@ -474,12 +562,44 @@ void PendingOrdersPanel::refresh_stats() {
     stat_sell_->setText(QString::number(s.total_sell));
 }
 
-// Human-readable age of a queued order, plus whether it is stale enough that
-// approving it could execute against a market that has moved on.
-QString PendingOrdersPanel::order_age_text(const QDateTime& created, bool* stale_out) {
+void PendingOrdersPanel::tick_countdown() {
+    if (!table_)
+        return;
+    bool any_expired = false;
+    for (int row = 0; row < table_->rowCount(); ++row) {
+        auto* item = table_->item(row, kColExpires);
+        if (!item)
+            continue;
+        const QVariant v = item->data(kExpiryRole);
+        if (!v.isValid())
+            continue; // not a pending row
+        const QDateTime exp = v.toDateTime();
+        const qint64 left = exp.isValid() ? QDateTime::currentDateTime().secsTo(exp) : 0;
+        if (left <= 0)
+            any_expired = true;
+        const QString txt = remaining_text(left);
+        if (item->text() != txt)
+            item->setText(txt);
+        item->setForeground(left <= kExpiringSoonSecs ? QColor(fincept::ui::colors::WARNING())
+                                                      : QColor(fincept::ui::colors::TEXT_PRIMARY()));
+    }
+    // Don't wait for the service's sweep tick to drop the row — reject now; the
+    // resulting order_rejected signal rebuilds the table.
+    if (any_expired)
+        ActionCenter::instance().expire_stale_orders();
+}
+
+QString PendingOrdersPanel::remaining_text(qint64 secs) {
+    if (secs <= 0)
+        return tr("EXPIRED");
+    if (secs < 3600)
+        return QStringLiteral("%1:%2").arg(secs / 60).arg(secs % 60, 2, 10, QLatin1Char('0'));
+    return tr("%1h %2m").arg(secs / 3600).arg((secs % 3600) / 60);
+}
+
+// Human-readable age of a queued order.
+QString PendingOrdersPanel::order_age_text(const QDateTime& created) {
     const qint64 secs = created.isValid() ? created.secsTo(QDateTime::currentDateTime()) : 0;
-    if (stale_out)
-        *stale_out = (secs >= kStaleOrderSecs);
     if (!created.isValid())
         return tr("unknown age");
     if (secs < 60)
@@ -512,10 +632,20 @@ bool PendingOrdersPanel::approve_row(const QString& pending_id) {
         return true;
     }
 
+    if (ActionCenter::is_expired(o)) {
+        // Let the service record the refusal (with its reason) — nothing is sent.
+        ActionCenter::instance().approve_order(pending_id);
+        QMessageBox::information(this, tr("Approve Order"),
+                                 tr("This order's approval window has closed — it was rejected as expired and "
+                                    "nothing was sent. Re-place it if you still want the trade."));
+        return true;
+    }
+
     const auto acct_meta = trading::AccountManager::instance().get_account(o.account_id);
     const QString acct_label = acct_meta.display_name.isEmpty() ? o.account_id : acct_meta.display_name;
-    bool stale = false;
-    const QString age = order_age_text(o.created_at, &stale);
+    const QString age = order_age_text(o.created_at);
+    const qint64 left = ActionCenter::secs_until_expiry(o);
+    const bool stale = left <= kExpiringSoonSecs;
 
     // An approval sends a REAL order. Restate every field the user is agreeing
     // to — previously a single click on a 10px button executed it with no
@@ -532,11 +662,13 @@ bool PendingOrdersPanel::approve_row(const QString& pending_id) {
                       "  Queued:     %9")
                        .arg(o.symbol, o.exchange.isEmpty() ? tr("—") : o.exchange, o.action.toUpper(), o.quantity,
                             o.price_type, o.order_type, acct_label, o.strategy, age);
+    body += tr("\n  Expires in: %1").arg(remaining_text(left));
     if (stale) {
-        body += tr("\n\n⚠  This order has been waiting a long time. The market has almost\n"
-                   "certainly moved since it was queued — a MARKET order will fill at\n"
-                   "today's price, not the price that triggered it.");
+        body += tr("\n\n⚠  This order's approval window is about to close. If it closes while\n"
+                   "this dialog is open the order is refused, not sent.");
     }
+    body += tr("\n\nA MARKET order fills at the price when you approve, not the price\n"
+               "that existed when it was queued.");
 
     const auto ans = QMessageBox::question(this, tr("Approve Order"), body,
                                            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
@@ -554,6 +686,96 @@ bool PendingOrdersPanel::reject_row(const QString& pending_id) {
     if (!ok)
         return false;
     ActionCenter::instance().reject_order(pending_id, reason);
+    return true;
+}
+
+// ── Kill switch ─────────────────────────────────────────────────────────────
+
+bool PendingOrdersPanel::confirm_and_run_kill_switch(QWidget* parent) {
+    auto& ac = ActionCenter::instance();
+    if (ac.kill_switch_running()) {
+        QMessageBox::information(parent, tr("Kill Switch"),
+                                 tr("The kill switch is already running — wait for its report."));
+        return false;
+    }
+    const QStringList targets = ac.kill_switch_target_labels();
+    if (targets.isEmpty()) {
+        QMessageBox::information(parent, tr("Kill Switch"),
+                                 tr("There is no active LIVE account — nothing to cancel or square off.\n\n"
+                                    "Paper accounts are not touched by the kill switch; use SQUARE OFF ALL on the "
+                                    "trading screen for those."));
+        return false;
+    }
+
+    // Strong confirmation: spell out every consequence and every account, and make
+    // the user type the word — a stray click or Enter can never fire it.
+    const QString body =
+        tr("KILL SWITCH — real money.\n\n"
+           "On EVERY active LIVE account below this will:\n"
+           "  1. reject every order still waiting for approval here\n"
+           "  2. cancel ALL open / pending orders at the broker\n"
+           "  3. square off ALL open positions with MARKET orders\n\n"
+           "Holdings (delivery stock already in your demat) are NOT sold. Paper accounts are skipped.\n"
+           "Algo deployments and agents are NOT stopped by this — pause them separately.\n\n"
+           "Accounts (%1):\n%2\n\n"
+           "Type KILL to confirm.")
+            .arg(targets.size())
+            .arg(QStringLiteral("  • ") + targets.join(QStringLiteral("\n  • ")));
+    bool ok = false;
+    const QString typed =
+        QInputDialog::getText(parent, tr("Kill Switch"), body, QLineEdit::Normal, QString(), &ok).trimmed();
+    if (!ok || typed != QLatin1String("KILL")) {
+        if (ok)
+            QMessageBox::information(parent, tr("Kill Switch"), tr("Not confirmed — nothing was done."));
+        return false;
+    }
+
+    // One-shot result report against the caller's window.
+    QPointer<QWidget> host(parent);
+    auto conn = std::make_shared<QMetaObject::Connection>();
+    *conn = QObject::connect(
+        &ac, &ActionCenter::kill_switch_finished, &ac,
+        [host, conn](const QVector<ActionCenter::KillSwitchAccountResult>& results) {
+            QObject::disconnect(*conn);
+            QStringList lines;
+            bool all_ok = true;
+            for (const auto& r : results) {
+                if (r.skipped) {
+                    lines << tr("• %1 [%2] — skipped (%3)%4")
+                                 .arg(r.display_name, r.broker_id, r.skip_reason)
+                                 .arg(r.queued_rejected > 0 ? tr(", %1 queued rejected").arg(r.queued_rejected)
+                                                            : QString());
+                    continue;
+                }
+                all_ok = all_ok && r.ok();
+                QString line = tr("• %1 [%2] — %3: %4 orders cancelled (%5 failed), %6 positions closed (%7 failed), "
+                                  "%8 queued rejected")
+                                   .arg(r.display_name, r.broker_id, r.ok() ? tr("OK") : tr("CHECK BROKER"))
+                                   .arg(r.orders_cancelled)
+                                   .arg(r.orders_cancel_failed)
+                                   .arg(r.positions_closed)
+                                   .arg(r.positions_close_failed)
+                                   .arg(r.queued_rejected);
+                if (!r.errors.isEmpty())
+                    line += QStringLiteral("\n     ") + r.errors.join(QStringLiteral("\n     "));
+                lines << line;
+            }
+            const QString text = (all_ok ? tr("Kill switch finished. Every live account reported success.\n\n")
+                                         : tr("Kill switch finished WITH ERRORS. Verify the accounts marked "
+                                              "CHECK BROKER in the broker's own terminal now.\n\n")) +
+                                 lines.join(QStringLiteral("\n"));
+            QMessageBox box(host ? host.data() : nullptr);
+            box.setWindowTitle(tr("Kill Switch Report"));
+            box.setIcon(all_ok ? QMessageBox::Information : QMessageBox::Critical);
+            box.setText(text);
+            box.exec();
+        });
+
+    if (!ac.run_kill_switch()) {
+        QObject::disconnect(*conn);
+        QMessageBox::information(parent, tr("Kill Switch"), tr("The kill switch is already running."));
+        return false;
+    }
     return true;
 }
 

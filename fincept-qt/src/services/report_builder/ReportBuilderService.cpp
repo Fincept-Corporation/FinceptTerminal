@@ -5,6 +5,7 @@
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
@@ -326,10 +327,25 @@ ReportBuilderService::ReportBuilderService() {
     doc_.metadata.date = QDateTime::currentDateTime().toString("yyyy-MM-dd");
     undo_stack_ = new QUndoStack(this);
 
+    // Autosave is driven by edits, not by the clock: the first change after a save
+    // arms a one-shot timer, and nothing runs while the report is clean. (The service
+    // is constructed at startup, and a free-running 60 s timer re-serialised the
+    // document every minute even if Report Builder was never opened.)
     autosave_timer_ = new QTimer(this);
+    autosave_timer_->setSingleShot(true);
     autosave_timer_->setInterval(kAutosaveIntervalMs);
     connect(autosave_timer_, &QTimer::timeout, this, &ReportBuilderService::trigger_autosave);
-    autosave_timer_->start();
+    connect(this, &ReportBuilderService::document_changed, this, [this]() {
+        autosave_dirty_ = true;
+        if (!autosave_timer_->isActive())
+            autosave_timer_->start();
+    });
+    // Don't lose the last < 60 s of edits on a normal quit.
+    if (auto* app = QCoreApplication::instance())
+        connect(app, &QCoreApplication::aboutToQuit, this, [this]() {
+            if (autosave_dirty_)
+                trigger_autosave();
+        });
 
     llm_window_timer_ = new QTimer(this);
     llm_window_timer_->setSingleShot(true);
@@ -521,6 +537,8 @@ void ReportBuilderService::clear_document() {
     // report's autosave behind, and the next launch brought it back from the dead.
     QFile::remove(autosave_path_);
     autosave_hash_ = 0;
+    autosave_dirty_ = false; // nothing to recover in a blank report
+    autosave_timer_->stop();
     // The date was stamped after set_metadata() had already announced the blank metadata;
     // say so again or the fresh report's cover shows no date until the next edit.
     emit metadata_changed();
@@ -601,6 +619,8 @@ Result<void> ReportBuilderService::save_to(const QString& path) {
     if (!f.commit())
         return Result<void>::err("Could not finish writing the file: " + f.errorString().toStdString());
     set_current_file(path);
+    // The recovery copy must not lag behind what the user just saved.
+    write_autosave(json);
     return Result<void>::ok();
 }
 
@@ -652,6 +672,8 @@ QString ReportBuilderService::autosave_path() const {
 }
 
 void ReportBuilderService::trigger_autosave() {
+    autosave_timer_->stop();
+    autosave_dirty_ = false;
     QString json;
     {
         QMutexLocker lock(&mutex_);
@@ -661,10 +683,13 @@ void ReportBuilderService::trigger_autosave() {
             return;
         json = doc_.to_json();
     }
-    // The timer fires every minute whether or not anything changed, and a big report is
-    // hundreds of KB written on the UI thread — skip when it is byte-identical to what is
-    // already on disk. Written via QSaveFile so a crash mid-write can't leave a truncated
-    // autosave that fails to parse and silently loses the whole report on next launch.
+    write_autosave(json);
+}
+
+void ReportBuilderService::write_autosave(const QString& json) {
+    // Skip when byte-identical to what is already on disk. Written via QSaveFile so a
+    // crash mid-write can't leave a truncated autosave that fails to parse and silently
+    // loses the whole report on next launch.
     const std::size_t digest = qHash(json);
     if (digest == autosave_hash_)
         return;
@@ -673,6 +698,8 @@ void ReportBuilderService::trigger_autosave() {
         f.write(json.toUtf8());
         if (f.commit())
             autosave_hash_ = digest;
+        else
+            LOG_WARN(RB_SVC_TAG, "Autosave could not be written: " + f.errorString());
     }
 }
 

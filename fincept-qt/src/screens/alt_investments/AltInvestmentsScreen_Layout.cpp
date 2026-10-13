@@ -18,6 +18,8 @@
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QKeySequence>
+#include <QShortcut>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPointer>
@@ -203,6 +205,13 @@ QWidget* AltInvestmentsScreen::create_center_panel() {
     fpvl->addWidget(fhdr);
 
     form_container_ = new QWidget(this);
+    // Enter in any field (spin boxes and combos included) runs the analyzer.
+    for (const auto key : {Qt::Key_Return, Qt::Key_Enter}) {
+        auto* sc = new QShortcut(QKeySequence(key), form_container_);
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, &AltInvestmentsScreen::on_analyze);
+    }
+    analyze_btn_->setToolTip(tr("Run the analyzer (Enter)"));
     form_layout_ = new QVBoxLayout(form_container_);
     form_layout_->setContentsMargins(12, 12, 12, 12);
     form_layout_->setSpacing(8);

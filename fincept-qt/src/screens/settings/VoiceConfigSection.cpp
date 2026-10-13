@@ -474,7 +474,7 @@ void VoiceConfigSection::on_test() {
 #endif
         if (sp.isEmpty() || !QFileInfo::exists(sp)) {
             set_status(tr("Deepgram Python SDK is missing from venv-numpy2. "
-                          "Open Settings -> Python Env -> Reinstall packages, then test again."),
+                          "Open Settings → Python Env → Install Missing, then test again."),
                        true);
             return;
         }

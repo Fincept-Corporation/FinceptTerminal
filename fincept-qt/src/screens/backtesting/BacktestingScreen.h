@@ -3,6 +3,7 @@
 #include "core/symbol/IGroupLinked.h"
 #include "screens/common/IStatefulScreen.h"
 #include "services/backtesting/BacktestingTypes.h"
+#include "ui/tables/LiveTableModel.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -11,7 +12,9 @@
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QHideEvent>
+#include <QJsonArray>
 #include <QJsonObject>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -19,7 +22,9 @@
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QSortFilterProxyModel>
 #include <QTabWidget>
+#include <QTableView>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QTimer>
@@ -28,7 +33,15 @@
 
 namespace fincept::screens {
 
-/// Multi-provider backtesting terminal with 6 providers, 9 commands, 50+ strategies.
+/// One row of the DETAILS table (trades, optimisation runs, walk-forward windows,
+/// signals ...). `index` is the row's position in the provider payload - its
+/// stable key for the model.
+struct BtDetailRow {
+    int index = 0;
+    QJsonObject rec;
+};
+
+/// Multi-provider backtesting terminal (6 providers, 11 commands).
 class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     Q_OBJECT
     Q_INTERFACES(fincept::IGroupLinked)
@@ -50,6 +63,7 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     SymbolRef current_symbol() const override;
 
   protected:
+    void keyPressEvent(QKeyEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void changeEvent(QEvent* event) override;
@@ -59,8 +73,14 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     void on_command_changed(int index);
     void on_strategy_changed(int index);
     void on_run();
+    void on_cancel();
+    // Catalogue loads (get_strategies / get_indicators) arrive on the legacy signals.
     void on_result(const QString& provider, const QString& command, const QJsonObject& data);
     void on_error(const QString& context, const QString& message);
+    // This screen's runs, correlated by run id.
+    void on_run_completed(quint64 run_id, const QString& provider, const QString& command, const QJsonObject& data);
+    void on_run_failed(quint64 run_id, const QString& context, const QString& message);
+    void on_run_cancelled(quint64 run_id, const QString& provider, const QString& command);
     void on_command_options_loaded(const QString& provider, const QJsonObject& options);
 
   private:
@@ -71,7 +91,23 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QWidget* build_right_panel();
     QWidget* build_status_bar();
     void connect_service();
-    void set_status_state(const QString& text, const QString& color, const QString& bg_rgba);
+    /// Rebuild the screen's single root stylesheet from the active theme tokens.
+    /// Every widget is styled through an objectName / dynamic-property selector here
+    /// instead of an inline setStyleSheet call.
+    void refresh_theme();
+    /// state: ready | running | done | error | cancelled | synthetic
+    void set_status_state(const QString& text, const QString& state);
+    /// Leave the running state (RUN enabled, CANCEL hidden, ticker stopped).
+    void end_run();
+    /// Fill the DETAILS model (all rows - no cap) with the given columns.
+    void set_detail_rows(const QJsonArray& rows, const QStringList& columns);
+    /// CSV exports of the DETAILS rows and of the equity curve. Both carry a
+    /// "# ..." metadata header (provider, strategy, period, execution model) and an
+    /// unmistakable SYNTHETIC warning when the run used synthetic prices.
+    void export_details_csv();
+    void export_equity_csv();
+    QStringList export_header_lines() const;
+    bool write_text_file(const QString& path, const QString& text, const QString& title);
     void update_provider_buttons();
     void update_command_buttons();
     void populate_strategies();
@@ -100,6 +136,7 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     // Center panel
     QLabel* results_title_ = nullptr;
     QPushButton* export_json_btn_ = nullptr;
+    QPushButton* export_csv_btn_ = nullptr;
     QLabel* summary_hint_ = nullptr;
     QLabel* equity_hint_ = nullptr;
     // Right panel section/field titles
@@ -133,6 +170,7 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     // Top bar
     QVector<QPushButton*> provider_buttons_;
     QPushButton* run_button_ = nullptr;
+    QPushButton* cancel_button_ = nullptr;
     QLabel* status_dot_ = nullptr;
 
     // Left panel - commands + strategies
@@ -177,6 +215,9 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QDoubleSpinBox* pos_sizing_value_spin_ = nullptr;
     QLabel* pos_sizing_value_label_ = nullptr;
     QCheckBox* allow_short_check_ = nullptr;
+    // Off by default and never persisted: a run on random-walk prices must be an
+    // explicit, per-session choice.
+    QCheckBox* allow_synthetic_check_ = nullptr;
     QLineEdit* benchmark_edit_ = nullptr;
 
     // Right panel - command-specific config (stacked)
@@ -312,9 +353,21 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QVBoxLayout* summary_layout_ = nullptr;
     QWidget* summary_container_ = nullptr;
     QTableWidget* metrics_table_ = nullptr;
-    QTableWidget* trades_table_ = nullptr;
+    // DETAILS: model/view so a 100k-trade run renders lazily and sorts numerically.
+    QTableView* details_view_ = nullptr;
+    ui::LiveTableModel<BtDetailRow>* details_model_ = nullptr;
+    QSortFilterProxyModel* details_proxy_ = nullptr;
+    QStringList details_cols_;
     QTextEdit* raw_json_edit_ = nullptr;
     QLabel* status_label_ = nullptr;
+    QLabel* strategies_count_label_ = nullptr;
+    QLabel* providers_count_label_ = nullptr;
+
+    // Last completed result (full payload - the RAW JSON tab may show a capped
+    // preview) plus what was asked for, for exports.
+    QJsonObject last_payload_;
+    QString last_command_;
+    QJsonObject last_run_meta_;
 
     // Custom combo strategy builder (up to 3 indicators)
     struct ComboIndicatorRow {
@@ -343,12 +396,12 @@ class BacktestingScreen : public QWidget, public IStatefulScreen, public IGroupL
     QJsonArray pending_weights_;
     bool first_show_ = true;
     bool is_running_ = false;
-    // Identity of the in-flight run (slug + command id), so on_result()/on_error() only
-    // consume THEIR run. BacktestingService is a process-wide singleton whose
-    // result_ready/error_occurred signals also carry other screens' runs (Portfolio's
-    // "backtest current weights") and background catalogue loads.
+    // The in-flight run. Results are matched on current_run_id_ (BacktestingService
+    // is a process-wide singleton that also serves Portfolio and workflow runs);
+    // provider/command are kept for the cost disclosure and exports.
     QString running_provider_;
     QString running_command_;
+    quint64 current_run_id_ = 0; // BacktestingService run id of the in-flight run (0 = none)
     // Set when a caller requests an immediate backtest but strategies are still
     // loading; the get_strategies callback fires the deferred run once ready.
     bool pending_auto_run_ = false;

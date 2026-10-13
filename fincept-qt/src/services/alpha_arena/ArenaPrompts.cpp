@@ -31,6 +31,9 @@ QString system_prompt(const CompetitionRow& comp) {
                "- Instruments: %2 (USD-margined perps, long or short)\n"
                "- Max leverage: %3x. Taker fee 0.045%. Funding accrues hourly.\n"
                "- One position per coin. Opening the opposite side flips the position.\n"
+               "- Risk limits (orders breaching them are rejected): one position's notional may not exceed 50% "
+               "of your equity — adding to a position counts toward it — and new notional opened in one round "
+               "may not exceed 100% of your equity.\n"
                "- A decision round happens every %4 seconds; between rounds your positions ride the market.\n"
                "- If your margin is exhausted you are liquidated — survival matters.\n"
                "Be decisive but size positions so a single move against you cannot end your run.")

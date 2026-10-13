@@ -15,7 +15,7 @@
 
 namespace fincept::mcp::tools {
 
-static constexpr const char* TAG = "NewsTools";
+static constexpr const char* kNewsToolsTag = "NewsTools";
 
 using namespace fincept::services;
 
@@ -170,7 +170,7 @@ std::vector<ToolDef> get_news_tools() {
             for (const auto& a : filtered)
                 result.append(article_to_json(a));
 
-            LOG_DEBUG(TAG, QString("get_news: %1/%2 articles").arg(filtered.size()).arg(all.size()));
+            LOG_DEBUG(kNewsToolsTag, QString("get_news: %1/%2 articles").arg(filtered.size()).arg(all.size()));
 
             const bool truncated = matched > filtered.size();
             return ToolResult::ok(truncated ? QString("Showing %1 of %2 matching articles (raise `limit`, max 100, or "
@@ -395,7 +395,7 @@ std::vector<ToolDef> get_news_tools() {
             });
             EventBus::instance().publish("news.monitor_added", QVariantMap{{"label", label}});
 
-            LOG_INFO(TAG, "Added news monitor: " + label);
+            LOG_INFO(kNewsToolsTag, "Added news monitor: " + label);
             return ToolResult::ok("Monitor created: " + label,
                                   QJsonObject{{"id", new_id},
                                               {"label", label},
@@ -565,8 +565,12 @@ std::vector<ToolDef> get_news_tools() {
                 });
             });
 
-            if (!ok)
-                return ToolResult::fail("Analysis failed (network error or insufficient credits)");
+            if (!ok) {
+                // HTTP_402 = out of credits; anything else is a network / server failure.
+                const QString why = analysis.error.isEmpty() ? QStringLiteral("network error or insufficient credits")
+                                                             : analysis.error.left(300);
+                return ToolResult::fail("Analysis failed: " + why);
+            }
 
             auto risk_to_json = [](const RiskSignal& r) {
                 return QJsonObject{{"level", r.level}, {"details", r.details}};
@@ -585,6 +589,7 @@ std::vector<ToolDef> get_news_tools() {
                                                          {"geopolitical", risk_to_json(analysis.geopolitical)},
                                                          {"operational", risk_to_json(analysis.operational)},
                                                          {"market", risk_to_json(analysis.market)}}},
+                            // Fractional; -1 = not reported by the server.
                             {"credits_used", analysis.credits_used},
                             {"credits_remaining", analysis.credits_remaining}});
         };
@@ -595,8 +600,9 @@ std::vector<ToolDef> get_news_tools() {
     {
         ToolDef t;
         t.name = "summarize_news_headlines";
-        t.description = "AI-summarize the top N current news headlines into a single paragraph "
-                        "of market-relevant insight. Cached for 10 minutes per headline set.";
+        t.description = "Collect the top N current headlines as a digest for you to summarise: most "
+                        "important first (priority, impact, source tier), grouped by category, each line "
+                        "with source, time and tickers. Built locally from the feed — no AI call, no credits.";
         t.category = "news";
         t.input_schema.properties = QJsonObject{
             {"count", QJsonObject{{"type", "integer"},
@@ -631,7 +637,7 @@ std::vector<ToolDef> get_news_tools() {
             });
 
             if (!ok || summary.isEmpty())
-                return ToolResult::fail("Summarization failed (network error or empty response)");
+                return ToolResult::fail("No headlines to digest for this filter");
 
             return ToolResult::ok_data(
                 QJsonObject{{"summary", summary}, {"headline_count", filtered.size()}, {"time_range", time_range}});

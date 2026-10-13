@@ -51,7 +51,7 @@ class PythonEnvSection : public QWidget {
 
     // ── Data ──────────────────────────────────────────────────────────────────
     struct PackageRow {
-        QString name;          // canonical: lowercase, hyphens/dots → underscore
+        QString name;          // canonical (PEP 503): PythonSetupManager::canonical_package_name()
         QString display_name;  // original name from requirements file
         QString venv;          // "venv-numpy1" or "venv-numpy2"
         QString venv_label;    // "Trading" or "Analytics"
@@ -63,8 +63,6 @@ class PythonEnvSection : public QWidget {
     QList<PackageRow> all_packages_;      // merged from both req files
     QMap<QString, QString> installed_v1_; // canonical_name → version, venv-numpy1
     QMap<QString, QString> installed_v2_; // canonical_name → version, venv-numpy2
-    bool v1_loaded_ = false;
-    bool v2_loaded_ = false;
 
     // ── Action queue — drained one batch at a time ────────────────────────────
     struct ActionBatch {
@@ -91,7 +89,6 @@ class PythonEnvSection : public QWidget {
     void on_list_finished(const QString& venv_name, int exit_code);
     void parse_requirements(const QString& req_file, const QString& venv_name, const QString& venv_label);
     void merge_and_populate_table();
-    QString find_req_file(const QString& filename) const;
 
     // ── Action phase ──────────────────────────────────────────────────────────
     void start_action(const QList<ActionBatch>& batches);
@@ -106,8 +103,6 @@ class PythonEnvSection : public QWidget {
     // ── Misc ──────────────────────────────────────────────────────────────────
     void set_actions_enabled(bool enabled);
     void show_status(const QString& msg, bool error = false);
-
-    static QString canonicalise(const QString& name);
 };
 
 } // namespace fincept::screens

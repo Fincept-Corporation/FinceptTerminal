@@ -418,15 +418,13 @@ void EquityWatchlist::update_quote(const trading::BrokerQuote& quote) {
 
     // Update the cached entry for this symbol. Bail early if we don't track it —
     // position symbols stream quotes too but may not be in the active watchlist.
-    WatchlistEntry* entry = nullptr;
-    for (auto& e : entries_) {
-        if (e.symbol == quote.symbol) {
-            entry = &e;
-            break;
-        }
-    }
-    if (!entry)
+    // O(1): this runs for every broker tick (it used to scan entries_ and then
+    // every table row, converting each row's stored symbol to a string).
+    const auto found = row_of_.constFind(quote.symbol);
+    if (found == row_of_.constEnd())
         return;
+    const int index = found.value();
+    WatchlistEntry* entry = &entries_[index];
     entry->ltp = quote.ltp;
     entry->change_pct = quote.change_pct;
     entry->volume = quote.volume;
@@ -434,19 +432,27 @@ void EquityWatchlist::update_quote(const trading::BrokerQuote& quote) {
 
     // Repaint only this symbol's row. setText / setForeground are no-ops when the
     // value is unchanged (Qt early-returns), so identical ticks cost nothing.
-    for (int row = 0; row < table_->rowCount(); ++row) {
-        auto* sym_item = table_->item(row, 0);
-        if (!sym_item || sym_item->data(Qt::UserRole).toString() != quote.symbol)
-            continue;
-        if (auto* ltp_item = table_->item(row, 1))
-            ltp_item->setText(QString::number(entry->ltp, 'f', 2));
-        if (auto* chg_item = table_->item(row, 2)) {
-            chg_item->setText(
-                QString("%1%2%").arg(entry->change_pct >= 0 ? "+" : "").arg(entry->change_pct, 0, 'f', 2));
-            chg_item->setForeground(entry->change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
-                                                           : QColor(fincept::ui::colors::NEGATIVE()));
+    int row = index;
+    auto* sym_item = table_->item(row, 0);
+    if (!sym_item || sym_item->data(Qt::UserRole).toString() != quote.symbol) {
+        // Not expected (rows mirror entries_), but never paint the wrong row.
+        row = -1;
+        for (int r = 0; r < table_->rowCount(); ++r) {
+            auto* it = table_->item(r, 0);
+            if (it && it->data(Qt::UserRole).toString() == quote.symbol) {
+                row = r;
+                break;
+            }
         }
-        break;
+        if (row < 0)
+            return;
+    }
+    if (auto* ltp_item = table_->item(row, 1))
+        ltp_item->setText(QString::number(entry->ltp, 'f', 2));
+    if (auto* chg_item = table_->item(row, 2)) {
+        chg_item->setText(QString("%1%2%").arg(entry->change_pct >= 0 ? "+" : "").arg(entry->change_pct, 0, 'f', 2));
+        chg_item->setForeground(entry->change_pct >= 0 ? QColor(fincept::ui::colors::POSITIVE())
+                                                       : QColor(fincept::ui::colors::NEGATIVE()));
     }
 }
 
@@ -494,10 +500,14 @@ void EquityWatchlist::rebuild_table() {
     // the position/holding union changes, which happens while the user is
     // scrolling through it.
     const int scroll = table_->verticalScrollBar() ? table_->verticalScrollBar()->value() : 0;
+    row_of_.clear();
+    row_of_.reserve(entries_.size());
     table_->setUpdatesEnabled(false);
     table_->setRowCount(entries_.size());
     for (int i = 0; i < entries_.size(); ++i) {
         const auto& e = entries_[i];
+        if (!row_of_.contains(e.symbol))
+            row_of_.insert(e.symbol, i);
 
         auto* sym_item = new QTableWidgetItem(e.symbol);
         sym_item->setData(Qt::UserRole, e.symbol);

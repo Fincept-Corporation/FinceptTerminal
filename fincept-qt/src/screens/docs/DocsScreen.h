@@ -1,5 +1,6 @@
 #pragma once
 #include <QEvent>
+#include <QHash>
 #include <QLabel>
 #include <QListWidget>
 #include <QScrollArea>
@@ -23,6 +24,9 @@ class DocsScreen : public QWidget {
 
   protected:
     void changeEvent(QEvent* event) override;
+    /// Search box keys: Enter opens the first match, Down moves into the topic
+    /// list, Esc clears the search.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
   private:
     void build_sidebar();
@@ -90,6 +94,7 @@ class DocsScreen : public QWidget {
     QWidget* page_ai_chat();
     QWidget* page_agent_config();
     QWidget* page_alpha_arena();
+    QWidget* page_agent_workbench();
 
     // Data Sources
     QWidget* page_dbnomics();
@@ -117,9 +122,6 @@ class DocsScreen : public QWidget {
     QWidget* page_data_mapping();
     QWidget* page_file_manager();
 
-    // Community
-    QWidget* page_forum();
-
     // Account
     QWidget* page_settings();
     QWidget* page_profile();
@@ -136,6 +138,10 @@ class DocsScreen : public QWidget {
     QPushButton* open_btn_ = nullptr; ///< "OPEN SCREEN" — opens the screen the current topic documents
     QString current_topic_;           ///< section id of the page on top of pages_
     QMap<QString, int> page_index_; // section_id → stacked widget index
+    /// Lower-cased text of every page, so search finds topics by what they say
+    /// ("XIRR", "VaR") and not only by their titles.
+    QHash<QString, QString> page_text_;
+    void index_page_text();
 };
 
 } // namespace fincept::screens

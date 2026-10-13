@@ -18,6 +18,7 @@ The JSON args object supports:
 Outputs a single JSON object to stdout.
 """
 
+import csv
 import sys
 import json
 import argparse
@@ -49,114 +50,186 @@ def parse_range(range_str):
 
 # ── LOCAL ─────────────────────────────────────────────────────────────────────
 
+def _is_csv(file_path):
+    return os.path.splitext(file_path)[1].lower() in (".csv", ".tsv", ".txt")
+
+
+def _csv_delimiter(file_path):
+    return "\t" if os.path.splitext(file_path)[1].lower() == ".tsv" else ","
+
+
+def _normalise_rows(data):
+    """Rows to write: a list of lists, or a list of dicts (header row added)."""
+    if data and all(isinstance(r, dict) for r in data):
+        header = []
+        for r in data:
+            for k in r:
+                if k not in header:
+                    header.append(k)
+        return [header] + [[r.get(k) for k in header] for r in data]
+    return [r if isinstance(r, list) else [r] for r in data]
+
+
+def _cell_json(v):
+    """JSON-safe cell value (openpyxl yields datetime/date/time/Decimal)."""
+    if v is None or isinstance(v, (bool, int, float, str)):
+        return v
+    iso = getattr(v, "isoformat", None)
+    if callable(iso):
+        return iso()
+    return str(v)
+
+
+def _read_csv_rows(file_path):
+    # csv module: quoted fields keep their commas and line breaks.
+    with open(file_path, "r", encoding="utf-8-sig", newline="") as f:
+        return [row for row in csv.reader(f, delimiter=_csv_delimiter(file_path))]
+
+
+def _write_csv_rows(file_path, rows):
+    with open(file_path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f, delimiter=_csv_delimiter(file_path))
+        for row in rows:
+            writer.writerow(["" if v is None else v for v in row])
+
+
+def _window(rows, r1, c1, r2, c2):
+    out = []
+    for row in rows[r1 - 1:r2]:
+        cells = list(row[c1 - 1:c2])
+        if any(v not in (None, "") for v in cells):
+            out.append([_cell_json(v) for v in cells])
+    return out
+
+
 def local_read(file_path, sheet_name, range_str):
-    ext = os.path.splitext(file_path)[1].lower()
     parsed = parse_range(range_str)
     r1, c1, r2, c2 = parsed if parsed else (1, 1, 1000, 26)
+    if _is_csv(file_path):
+        rows = _window(_read_csv_rows(file_path), r1, c1, r2, c2)
+        return {"source": "local", "operation": "read", "path": file_path, "rows": len(rows), "data": rows}
 
-    if ext == ".csv":
+    import openpyxl
+    # data_only=True returns the values Excel cached for formulas; a workbook
+    # saved by a tool that does not calculate stores none (they read as null).
+    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    try:
+        if sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+        else:
+            ws = wb.active
         rows = []
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line_no, line in enumerate(f, start=1):
-                if line_no < r1:
-                    continue
-                if line_no > r2:
-                    break
-                cells = line.rstrip("\n").split(",")
-                rows.append(cells[c1 - 1 : c2])
-        return {"source": "local", "operation": "read", "path": file_path,
-                "rows": len(rows), "data": rows}
-    else:
-        import openpyxl
-        wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-        ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.active
-        rows = []
-        for r_idx, row in enumerate(ws.iter_rows(min_row=r1, max_row=r2,
-                                                  min_col=c1, max_col=c2,
-                                                  values_only=True), start=r1):
+        for row in ws.iter_rows(min_row=r1, max_row=r2, min_col=c1, max_col=c2, values_only=True):
             if any(v is not None for v in row):
-                rows.append([v if v is not None else None for v in row])
+                rows.append([_cell_json(v) for v in row])
+        used_sheet = ws.title
+    finally:
         wb.close()
-        return {"source": "local", "operation": "read", "path": file_path,
-                "rows": len(rows), "data": rows}
+    return {"source": "local", "operation": "read", "path": file_path, "sheet": used_sheet,
+            "rows": len(rows), "data": rows}
 
 
 def local_write(file_path, sheet_name, range_str, data, append=False):
-    import openpyxl
     parsed = parse_range(range_str)
     r1, c1 = (parsed[0], parsed[1]) if parsed else (1, 1)
+    rows_in = _normalise_rows(data)
 
-    if append and os.path.exists(file_path):
+    if _is_csv(file_path):
+        # CSV used to be saved through openpyxl — an XLSX zip written into a
+        # file named .csv, destroying the original.
+        existing = _read_csv_rows(file_path) if os.path.exists(file_path) else []
+        if append:
+            start = len(existing)
+        else:
+            start = r1 - 1
+        for ri, row in enumerate(rows_in):
+            target = start + ri
+            while len(existing) <= target:
+                existing.append([])
+            line = existing[target]
+            for ci, val in enumerate(row):
+                col = (0 if append else c1 - 1) + ci
+                while len(line) <= col:
+                    line.append("")
+                line[col] = val
+        _write_csv_rows(file_path, existing)
+        return {"source": "local", "operation": "append" if append else "write",
+                "path": file_path, "rows_written": len(rows_in)}
+
+    import openpyxl
+    if os.path.exists(file_path):
+        # Write INTO the existing workbook. Creating a fresh one here wiped every
+        # other sheet of the user's file on a plain "write".
         wb = openpyxl.load_workbook(file_path)
+        ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.create_sheet(sheet_name)
     else:
         wb = openpyxl.Workbook()
-
-    if sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-    else:
-        ws = wb.create_sheet(sheet_name)
-        # Remove default empty sheet if it exists
-        if "Sheet" in wb.sheetnames and ws.title != "Sheet":
-            del wb["Sheet"]
+        ws = wb.active
+        ws.title = sheet_name or "Sheet1"
 
     start_row = r1
+    start_col = c1
     if append:
-        start_row = ws.max_row + 1 if ws.max_row else 1
+        start_row = (ws.max_row + 1) if ws.max_row and any(c.value is not None for c in ws[ws.max_row]) else 1
+        start_col = 1
 
-    rows_written = 0
-    for ri, row in enumerate(data):
+    for ri, row in enumerate(rows_in):
         for ci, val in enumerate(row):
-            ws.cell(row=start_row + ri, column=c1 + ci, value=val)
-        rows_written += 1
+            ws.cell(row=start_row + ri, column=start_col + ci, value=val)
 
     wb.save(file_path)
     return {"source": "local", "operation": "append" if append else "write",
-            "path": file_path, "rows_written": rows_written}
+            "path": file_path, "sheet": ws.title, "rows_written": len(rows_in)}
 
 
 def local_clear(file_path, sheet_name, range_str):
-    import openpyxl
     parsed = parse_range(range_str)
     r1, c1, r2, c2 = parsed if parsed else (1, 1, 1000, 26)
+    if _is_csv(file_path):
+        rows = _read_csv_rows(file_path)
+        for r in range(r1 - 1, min(r2, len(rows))):
+            for c in range(c1 - 1, min(c2, len(rows[r]))):
+                rows[r][c] = ""
+        _write_csv_rows(file_path, rows)
+        return {"source": "local", "operation": "clear", "path": file_path}
 
+    import openpyxl
     wb = openpyxl.load_workbook(file_path)
     ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.active
     for r in range(r1, r2 + 1):
         for c in range(c1, c2 + 1):
             ws.cell(row=r, column=c).value = None
     wb.save(file_path)
-    return {"source": "local", "operation": "clear", "path": file_path}
+    return {"source": "local", "operation": "clear", "path": file_path, "sheet": ws.title}
 
 
 # ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
 
-def _get_gspread_client(credentials_path):
-    import gspread
-    if credentials_path:
-        return gspread.service_account(filename=credentials_path)
-    else:
-        # Anonymous / public read-only via API key not supported by gspread.
-        # Fall back to requests for public sheets.
-        return None
-
-
 def google_read(spreadsheet_id, sheet_name, range_str, credentials_path):
-    import gspread
     if credentials_path:
+        import gspread
         gc = gspread.service_account(filename=credentials_path)
         sh = gc.open_by_key(spreadsheet_id)
         ws = sh.worksheet(sheet_name)
-        full_range = f"{sheet_name}!{range_str}"
         rows = ws.get(range_str)
     else:
-        # Public sheet — use requests directly (no auth needed)
+        # A sheet shared "anyone with the link can view" is readable without
+        # credentials through its CSV export. (The Sheets v4 values API this used
+        # requires an API key, so the no-credentials path always failed.)
+        import io
+        import urllib.parse
         import requests
-        url = (f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
-               f"/values/{sheet_name}!{range_str}")
-        resp = requests.get(url)
-        if not resp.ok:
-            return {"error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
-        rows = resp.json().get("values", [])
+        url = ("https://docs.google.com/spreadsheets/d/%s/gviz/tq?tqx=out:csv&sheet=%s"
+               % (urllib.parse.quote(spreadsheet_id, safe=""), urllib.parse.quote(sheet_name or "", safe="")))
+        resp = requests.get(url, timeout=30)
+        if not resp.ok or "text/csv" not in resp.headers.get("Content-Type", ""):
+            return {"error": "Could not read the sheet without credentials (HTTP %d). Share it as 'Anyone with "
+                             "the link can view', or provide a service-account credentials JSON."
+                             % resp.status_code}
+        all_rows = list(csv.reader(io.StringIO(resp.content.decode("utf-8-sig"))))
+        parsed = parse_range(range_str)
+        r1, c1, r2, c2 = parsed if parsed else (1, 1, 1000, 26)
+        rows = _window(all_rows, r1, c1, r2, c2)
 
     return {"source": "google", "operation": "read", "sheet_id": spreadsheet_id,
             "range": range_str, "rows": len(rows), "data": rows}
@@ -253,7 +326,7 @@ def main():
     except Exception as e:
         result = {"error": str(e)}
 
-    print(json.dumps(result))
+    print(json.dumps(result, default=str))
 
 
 if __name__ == "__main__":

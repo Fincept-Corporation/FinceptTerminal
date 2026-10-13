@@ -7,6 +7,7 @@ Each endpoint works independently with isolated error handling
 
 import sys
 import json
+import math
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
@@ -655,6 +656,19 @@ class FederalReserveWrapper:
 
 # ===== CLI INTERFACE =====
 
+def _json_safe(obj: Any) -> Any:
+    """Replace NaN / +-Inf (pandas gaps) with None. json.dumps writes them as bare NaN / Infinity,
+    which is not JSON: the terminal's parser rejected the whole money_measures payload because of
+    one empty cell."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def main():
     """CLI interface for Federal Reserve Data Fetcher"""
     if len(sys.argv) < 2:
@@ -683,54 +697,54 @@ def main():
             start_date = sys.argv[2] if len(sys.argv) > 2 else None
             end_date = sys.argv[3] if len(sys.argv) > 3 else None
             result = wrapper.get_federal_funds_rate(start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "sofr_rate":
             start_date = sys.argv[2] if len(sys.argv) > 2 else None
             end_date = sys.argv[3] if len(sys.argv) > 3 else None
             result = wrapper.get_sofr_rate(start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "treasury_rates":
             start_date = sys.argv[2] if len(sys.argv) > 2 else None
             end_date = sys.argv[3] if len(sys.argv) > 3 else None
             result = wrapper.get_treasury_rates(start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "yield_curve":
             date = sys.argv[2] if len(sys.argv) > 2 else None
             result = wrapper.get_yield_curve(date)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "money_measures":
             start_date = sys.argv[2] if len(sys.argv) > 2 else None
             end_date = sys.argv[3] if len(sys.argv) > 3 else None
             adjusted = sys.argv[4].lower() == "true" if len(sys.argv) > 4 else False
             result = wrapper.get_money_measures(start_date, end_date, adjusted)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "central_bank_holdings":
             holding_type = sys.argv[2] if len(sys.argv) > 2 else "all_treasury"
             summary = sys.argv[3].lower() == "true" if len(sys.argv) > 3 else False
             date = sys.argv[4] if len(sys.argv) > 4 else None
             result = wrapper.get_central_bank_holdings(holding_type, summary, date)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "overnight_bank_funding_rate":
             start_date = sys.argv[2] if len(sys.argv) > 2 else None
             end_date = sys.argv[3] if len(sys.argv) > 3 else None
             result = wrapper.get_overnight_bank_funding_rate(start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "comprehensive_monetary_data":
             start_date = sys.argv[2] if len(sys.argv) > 2 else None
             end_date = sys.argv[3] if len(sys.argv) > 3 else None
             result = wrapper.get_comprehensive_monetary_data(start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         elif command == "market_overview":
             result = wrapper.get_market_overview()
-            print(json.dumps(result, indent=2))
+            print(json.dumps(_json_safe(result), indent=2, allow_nan=False))
 
         else:
             print(json.dumps({

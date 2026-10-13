@@ -8,7 +8,6 @@
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "python/PythonRunner.h"
 #include "screens/code_editor/CodeEditorScreen.h"
 #include "services/file_manager/FileManagerService.h"
 #include "ui/theme/Theme.h"
@@ -34,6 +33,7 @@
 #include <QScrollBar>
 #include <QSplitter>
 #include <QTextBlock>
+#include <QTextCharFormat>
 #include <QTextCursor>
 #include <QTextDocument>
 #include <QToolButton>
@@ -432,6 +432,7 @@ void CellWidget::set_running(bool running) {
 
 void CellWidget::set_outputs(const QVector<CellOutput>& outputs, int exec_count) {
     execution_count_ = exec_count;
+    live_out_ = nullptr; // deleted with the rest of the output widgets below
     update_gutter();
 
     // Clear old output content
@@ -523,6 +524,54 @@ void CellWidget::set_outputs(const QVector<CellOutput>& outputs, int exec_count)
             output_content_layout_->addWidget(err_widget);
         }
     }
+}
+
+void CellWidget::begin_stream() {
+    while (output_content_layout_->count() > 0) {
+        auto* item = output_content_layout_->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    // Styled by the screen stylesheet (#nbLiveOut) — no per-run setStyleSheet.
+    live_out_ = new QPlainTextEdit(output_content_);
+    live_out_->setObjectName("nbLiveOut");
+    live_out_->setReadOnly(true);
+    live_out_->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+    // Display bound while streaming; the service caps what is kept for saving.
+    live_out_->setMaximumBlockCount(5000);
+    live_out_->setFixedHeight(60);
+    output_content_layout_->addWidget(live_out_);
+    output_area_->setVisible(true);
+    output_toggle_->setVisible(true);
+    output_toggle_->setText(tr("OUTPUT — running…"));
+    output_collapsed_ = false;
+    output_content_->setVisible(true);
+}
+
+void CellWidget::append_stream(const QString& text, bool is_stderr) {
+    if (!live_out_)
+        begin_stream();
+    QTextCursor cur(live_out_->document());
+    cur.movePosition(QTextCursor::End);
+    QTextCharFormat fmt;
+    fmt.setForeground(QColor(is_stderr ? colors::WARNING() : colors::TEXT_PRIMARY()));
+    // The service delivers newline-terminated chunks: write the separator before
+    // a chunk rather than after it, so the pane never ends with an empty line.
+    const QString body = text.endsWith(QLatin1Char('\n')) ? text.chopped(1) : text;
+    cur.insertText(live_out_->document()->isEmpty() ? body : QLatin1Char('\n') + body, fmt);
+    const int lines = live_out_->document()->blockCount();
+    const int line_h = QFontMetrics(live_out_->font()).lineSpacing();
+    live_out_->setFixedHeight(qBound(40, lines * line_h + 12, 300));
+    live_out_->moveCursor(QTextCursor::End);
+    live_out_->ensureCursorVisible();
+}
+
+void CellWidget::set_elapsed(qint64 ms) {
+    if (!output_toggle_->isVisible())
+        return;
+    const QString t = ms < 1000 ? tr("%1 ms").arg(ms) : tr("%1 s").arg(ms / 1000.0, 0, 'f', ms < 10000 ? 2 : 1);
+    output_toggle_->setText(tr("OUT [%1]  ·  %2").arg(execution_count_).arg(t));
 }
 
 void CellWidget::set_selected(bool selected) {

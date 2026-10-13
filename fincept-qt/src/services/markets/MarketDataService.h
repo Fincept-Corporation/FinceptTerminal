@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <QVector>
 
@@ -167,6 +168,21 @@ class MarketDataService : public QObject, public fincept::datahub::Producer {
     QHash<QString, QString> name_cache_;
     QHash<QString, QString> currency_cache_; // symbol → ISO currency code (e.g. "USD")
     bool name_cache_loaded_ = false;
+
+    // Name resolution is coalesced: every resolve_names() call inside a short
+    // window shares ONE quote_names subprocess. Without this the Markets screen
+    // (one call per panel) spawned ~17 processes at once, filled every
+    // PythonRunner slot for half a minute and starved other Python work.
+    void flush_name_requests();
+    struct NameWaiter {
+        QStringList symbols;
+        NamesCallback cb;
+    };
+    QVector<NameWaiter> name_waiters_;
+    QSet<QString> names_queued_;    // waiting for the next flush
+    QSet<QString> names_inflight_;  // inside a running quote_names call
+    QSet<QString> names_attempted_; // asked once this session — unresolvable ones are not retried
+    bool names_flush_scheduled_ = false;
 
     // ── Batching ──
     struct PendingRequest {

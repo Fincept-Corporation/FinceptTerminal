@@ -57,23 +57,10 @@ QWidget* QuantModulePanel::build_quant_reporting_panel() {
     tabs->setStyleSheet(tab_ss(module_.color.name()));
     tabs->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
-    // Local LOAD SAMPLE helper — same shape as the other panels.
+    // Shared helper: synthetic-sample button styled by the panel sheet; runs
+    // fed with its data are flagged SAMPLE INPUT on the results.
     auto add_sample_btn = [this](QLineEdit* edit, QWidget* parent, unsigned seed, const QString& tip) -> QPushButton* {
-        auto* btn = new QPushButton(tr("LOAD SAMPLE"), parent);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setFixedHeight(22);
-        btn->setToolTip(tip);
-        btn->setStyleSheet(
-            QString("QPushButton { color:%1; background:transparent; border:1px solid %2;"
-                    "padding:0 8px; font-size:9px; font-weight:700; letter-spacing:0.5px; border-radius:2px; }"
-                    "QPushButton:hover { color:%3; border-color:%3; background:rgba(255,255,255,0.04); }")
-                .arg(ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM(), module_.color.name()));
-        QPointer<QLineEdit> guard(edit);
-        connect(btn, &QPushButton::clicked, this, [guard, seed]() {
-            if (guard)
-                guard->setText(sample_returns(seed));
-        });
-        return btn;
+        return make_sample_button(edit, parent, tip, [seed]() { return sample_returns(seed); });
     };
 
     // ── IC Analysis ──────────────────────────────────────────────────────────

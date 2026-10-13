@@ -14,6 +14,58 @@ from typing import Dict, Any, List, Optional
 
 # Module-level flag to track synthetic data usage across calls
 _last_fetch_used_synthetic = False
+# Synthetic prices are refused unless the user ticked "Allow synthetic data"
+# (bt_provider.main sets this from the request).
+_allow_synthetic = False
+
+
+def import_bt_library():
+    """Import the real `bt` library (pmorissette/bt), or return None if absent.
+
+    This provider lives in a directory that is itself called `bt` (with an
+    __init__.py) and that directory - plus its parent - is on sys.path, so a
+    plain `import bt` imported THIS package. `bt.algos` then raised
+    AttributeError inside every run and the provider silently fell back to its
+    numpy approximation while labelling the result "BT". Import with those
+    directories temporarily removed from the path.
+    """
+    import importlib
+    import os
+    here = os.path.dirname(os.path.abspath(__file__))
+    parent = os.path.dirname(here)
+    mod = sys.modules.get('bt')
+    if mod is not None and hasattr(mod, 'algos') and hasattr(mod, 'Backtest'):
+        return mod
+    if mod is not None:
+        del sys.modules['bt']
+
+    def _shadows(entry):
+        try:
+            return os.path.normcase(os.path.abspath(entry or os.getcwd())) in (
+                os.path.normcase(here), os.path.normcase(parent))
+        except Exception:
+            return False
+
+    saved = list(sys.path)
+    try:
+        sys.path[:] = [p for p in sys.path if not _shadows(p)]
+        lib = importlib.import_module('bt')
+        return lib if hasattr(lib, 'algos') else None
+    except ImportError:
+        return None
+    finally:
+        sys.path[:] = saved
+
+
+def set_allow_synthetic(allowed: bool) -> None:
+    global _allow_synthetic
+    _allow_synthetic = bool(allowed)
+
+
+def _synthetic_or_refuse(symbols, reason):
+    if not _allow_synthetic:
+        from base.base_provider import refuse_synthetic
+        refuse_synthetic(symbols, reason)
 
 
 def fetch_data(
@@ -37,8 +89,9 @@ def fetch_data(
     try:
         import yfinance as yf
     except ImportError:
-        print('[BT-DATA] WARNING: yfinance not installed, using SYNTHETIC data. '
-              'Install yfinance: pip install yfinance', file=sys.stderr)
+        _synthetic_or_refuse(symbols, 'yfinance is not installed')
+        print('[BT-DATA] WARNING: yfinance not installed, using SYNTHETIC data (user opted in).',
+              file=sys.stderr)
         _last_fetch_used_synthetic = True
         return _generate_synthetic(symbols, start_date, end_date)
 
@@ -51,6 +104,7 @@ def fetch_data(
             df = ticker.history(start=start_date, end=end_date, interval=timeframe)
 
             if df.empty:
+                _synthetic_or_refuse([sym], 'no data returned')
                 print(f'[BT-DATA] WARNING: No data for {sym}, using SYNTHETIC', file=sys.stderr)
                 synth = _generate_synthetic([sym], start_date, end_date)
                 frames[sym] = synth[sym]
@@ -71,6 +125,9 @@ def fetch_data(
             print(f'[BT-DATA] {sym}: {len(df)} bars loaded', file=sys.stderr)
 
         except Exception as e:
+            if type(e).__name__ == 'SyntheticDataRefused':
+                raise
+            _synthetic_or_refuse([sym], str(e) or type(e).__name__)
             print(f'[BT-DATA] WARNING: Error fetching {sym}: {e}, using SYNTHETIC', file=sys.stderr)
             synth = _generate_synthetic([sym], start_date, end_date)
             frames[sym] = synth[sym]
@@ -98,6 +155,7 @@ def fetch_ohlcv(
     try:
         import yfinance as yf
     except ImportError:
+        _synthetic_or_refuse(symbols, 'yfinance is not installed')
         return _generate_ohlcv_synthetic(symbols, start_date, end_date)
 
     result = {}
@@ -106,6 +164,7 @@ def fetch_ohlcv(
             ticker = yf.Ticker(sym)
             df = ticker.history(start=start_date, end=end_date, interval=timeframe)
             if df.empty:
+                _synthetic_or_refuse([sym], 'no data returned')
                 synth = _generate_ohlcv_synthetic([sym], start_date, end_date)
                 result[sym] = synth[sym]
                 continue
@@ -125,6 +184,9 @@ def fetch_ohlcv(
                     df[col] = df[col].round(4)
             result[sym] = df
         except Exception as e:
+            if type(e).__name__ == 'SyntheticDataRefused':
+                raise
+            _synthetic_or_refuse([sym], str(e) or type(e).__name__)
             synth = _generate_ohlcv_synthetic([sym], start_date, end_date)
             result[sym] = synth[sym]
     return result

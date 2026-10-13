@@ -77,6 +77,8 @@ class AddAssetDialog : public QDialog {
     QString symbol() const;
     double quantity() const;
     double price() const;
+    /// Trade date, YYYY-MM-DD (defaults to today, never in the future).
+    QString date() const;
 
     /// Pre-fill the ticker (and optionally the last price) and jump focus to
     /// the quantity field. Used when BUY is invoked with a position already
@@ -105,6 +107,8 @@ class AddAssetDialog : public QDialog {
     QLabel* symbol_row_label_ = nullptr;
     QLabel* quantity_row_label_ = nullptr;
     QLabel* price_row_label_ = nullptr;
+    QDateEdit* date_edit_ = nullptr;
+    QLabel* date_row_label_ = nullptr;
     QPushButton* cancel_btn_ = nullptr;
     QPushButton* add_btn_ = nullptr;
 
@@ -125,6 +129,10 @@ class SellAssetDialog : public QDialog {
 
     double quantity() const;
     double price() const;
+    /// Trade date, YYYY-MM-DD (defaults to today, never in the future).
+    QString date() const;
+    /// Pre-fill the sale price (e.g. with the last price).
+    void preset_price(double price);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -140,6 +148,8 @@ class SellAssetDialog : public QDialog {
     QLabel* held_label_ = nullptr;
     QLabel* quantity_row_label_ = nullptr;
     QLabel* price_row_label_ = nullptr;
+    QDateEdit* date_edit_ = nullptr;
+    QLabel* date_row_label_ = nullptr;
     QPushButton* cancel_btn_ = nullptr;
     QPushButton* sell_btn_ = nullptr;
 };
@@ -172,27 +182,6 @@ class EditTransactionDialog : public QDialog {
     QLabel* price_row_label_ = nullptr;
     QLabel* date_row_label_ = nullptr;
     QLabel* notes_row_label_ = nullptr;
-    QPushButton* cancel_btn_ = nullptr;
-    QPushButton* save_btn_ = nullptr;
-};
-
-/// Dialog for mapping symbols to sectors.
-class SectorMappingDialog : public QDialog {
-    Q_OBJECT
-  public:
-    explicit SectorMappingDialog(const QVector<portfolio::HoldingWithQuote>& holdings, QWidget* parent = nullptr);
-
-    QHash<QString, QString> sector_map() const;
-
-  protected:
-    void changeEvent(QEvent* event) override;
-
-  private:
-    void retranslateUi();
-
-    QHash<QString, QComboBox*> combos_;
-    QLabel* title_label_ = nullptr;
-    QLabel* desc_label_ = nullptr;
     QPushButton* cancel_btn_ = nullptr;
     QPushButton* save_btn_ = nullptr;
 };

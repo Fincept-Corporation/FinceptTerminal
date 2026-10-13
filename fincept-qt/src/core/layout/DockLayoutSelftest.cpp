@@ -73,7 +73,7 @@ ads::CDockWidget* make_widget(ads::CDockManager* mgr, const QString& id) {
 const QStringList& all_ids() {
     static const QStringList ids = {"dashboard",      "markets",     "portfolio",    "news",        "report_builder",
                                     "settings",       "profile",     "about",        "support",     "fno",
-                                    "watchlist",      "forum",       "economics",    "ai_chat",     "crypto_trading",
+                                    "watchlist",      "notes",       "economics",    "ai_chat",     "crypto_trading",
                                     "equity_trading", "backtesting", "algo_trading", "node_editor", "code_editor"};
     return ids;
 }

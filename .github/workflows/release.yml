@@ -949,6 +949,7 @@ jobs:
           mkdir -p "${APPDIR}/usr/bin/resources"
           cp resources/requirements-numpy1.txt "${APPDIR}/usr/bin/resources/" 2>/dev/null || true
           cp resources/requirements-numpy2.txt "${APPDIR}/usr/bin/resources/" 2>/dev/null || true
+          cp resources/requirements-numpy2-core.txt "${APPDIR}/usr/bin/resources/" 2>/dev/null || true
 
           # Download linuxdeploy + Qt plugin
           wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"

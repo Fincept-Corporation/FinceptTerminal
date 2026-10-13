@@ -28,8 +28,9 @@ class NewsDetailPanel : public QWidget {
     void show_entities(const services::EntityResult& entities);
     void show_infrastructure(const QVector<services::InfrastructureItem>& items);
     /// Tell the user the ANALYZE request failed (and re-arm the button) instead
-    /// of leaving it spinning until the 30 s guard fires.
-    void show_analysis_failed();
+    /// of leaving it spinning until the 30 s guard fires. `error` is the service's
+    /// failure text; an HTTP 402 (out of credits) offers Plans & Pricing.
+    void show_analysis_failed(const QString& error = {});
     /// Re-read the bookmark state of the current article from the DB and
     /// reflect it on the BOOKMARK button (also reverts a failed toggle).
     void refresh_bookmark_state();
@@ -50,6 +51,8 @@ class NewsDetailPanel : public QWidget {
     void analyze_requested(const QString& article_url);
     void related_article_clicked(const services::NewsArticle& article);
     void bookmark_requested(const services::NewsArticle& article);
+    /// "Filter feed by $TICKER" from a ticker link's menu.
+    void ticker_filter_requested(const QString& ticker);
     void panel_closed();
 
   private:
@@ -103,6 +106,8 @@ class NewsDetailPanel : public QWidget {
     QVBoxLayout* ai_entities_layout_ = nullptr;
     QPushButton* analyze_btn_ = nullptr;
     QTimer* analyze_timeout_ = nullptr;
+    /// Shown when analysis credits are exhausted / low — opens Plans & Pricing.
+    QPushButton* plans_btn_ = nullptr;
 
     // Monitor matches section
     QWidget* monitor_section_ = nullptr;

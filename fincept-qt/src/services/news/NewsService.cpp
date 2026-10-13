@@ -22,6 +22,7 @@
 #include <QJsonDocument>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QPointer>
 #include <QRegularExpression>
 #include <QSet>
 #include <QUuid>
@@ -33,12 +34,21 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 
 namespace fincept::services {
 
 // HTTP timing + browser user agent — used by the RSS fetch paths.
 static constexpr int kFeedTransferTimeoutMs = 4000; // 4s per RSS feed request
+
+namespace news_svc_detail {
+// Newest "news:articles" cache write handed to a worker, plus the lock that
+// makes "still the newest? then write" atomic — so an older list whose worker
+// finishes late can never overwrite a newer one.
+QMutex g_cache_write_mutex;
+std::atomic<quint64> g_cache_write_generation{0};
+} // namespace news_svc_detail
 
 // ── Cache (de)serialisation + merge helpers ─────────────────────────────────
 
@@ -125,6 +135,49 @@ void NewsService::persist_articles_async(const QVector<NewsArticle>& articles) {
     });
 }
 
+void NewsService::store_cache_async(const QVector<NewsArticle>& articles) {
+    // JSON-encoding thousands of articles and writing a multi-MB cache row used
+    // to run on the GUI thread at the end of every refresh.
+    const quint64 generation = ++news_svc_detail::g_cache_write_generation;
+    (void)QtConcurrent::run([articles, generation]() {
+        const QString json = serialize_articles(articles);
+        QMutexLocker lock(&news_svc_detail::g_cache_write_mutex);
+        if (generation != news_svc_detail::g_cache_write_generation.load())
+            return; // a newer list was handed off meanwhile — it owns the entry
+        fincept::CacheManager::instance().put("news:articles", QVariant(json), kArticleCacheTtlSec, "news");
+    });
+}
+
+QVector<NewsArticle> NewsService::parse_feed_payload(const QByteArray& data, int http_code, bool ok,
+                                                     const QString& error, const RSSFeed& feed) {
+    QVector<NewsArticle> articles;
+    if (ok) {
+        const QByteArray trimmed = data.trimmed();
+        // Cheap shape check: real RSS/Atom starts with <?xml or <rss or
+        // <feed. HTML error pages (Akamai access-denied, Cloudflare
+        // captcha) start with <html / <!doctype and would pass through
+        // the parser silently producing 0 articles — flag them clearly.
+        const bool looks_like_html =
+            trimmed.left(20).toLower().contains("<html") || trimmed.left(20).toLower().contains("<!doctype html");
+        if (looks_like_html) {
+            LOG_WARN("NewsService", QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
+                                        .arg(feed.id, feed.source)
+                                        .arg(data.size()));
+        } else if (trimmed.startsWith('<')) {
+            articles = parse_rss_xml(data, feed);
+        }
+        if (articles.isEmpty() && !looks_like_html) {
+            LOG_WARN("NewsService", QString("Feed %1 (%2) returned %3 bytes but no parsed articles")
+                                        .arg(feed.id, feed.source)
+                                        .arg(data.size()));
+        }
+    } else {
+        LOG_WARN("NewsService",
+                 QString("Feed %1 (%2) failed: HTTP %3, err=%4").arg(feed.id, feed.source).arg(http_code).arg(error));
+    }
+    return articles;
+}
+
 // Use a real browser User-Agent — major financial publishers reject
 // "FinceptTerminal/4.0" as scraper traffic. Browser UA gets us 200s on
 // the same endpoints.
@@ -200,71 +253,63 @@ void NewsService::fetch_all_news(bool force, ArticlesCallback cb) {
         req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
-        connect(reply, &QNetworkReply::finished, this, [reply, feed, state]() {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, feed, state]() {
             reply->deleteLater();
 
-            QVector<NewsArticle> articles;
+            // Only the reply bookkeeping stays on the GUI thread: parsing a feed
+            // (XML + enrichment + threat classification of every item) runs on a
+            // worker, so ~50 feeds landing together no longer stall the UI. The
+            // parsed batch comes back here and is merged in arrival order.
+            const bool ok = reply->error() == QNetworkReply::NoError;
             const int http_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            if (reply->error() == QNetworkReply::NoError) {
-                QByteArray data = reply->readAll();
-                const QByteArray trimmed = data.trimmed();
-                // Cheap shape check: real RSS/Atom starts with <?xml or <rss or
-                // <feed. HTML error pages (Akamai access-denied, Cloudflare
-                // captcha) start with <html / <!doctype and would pass through
-                // the parser silently producing 0 articles — flag them clearly.
-                const bool looks_like_html = trimmed.left(20).toLower().contains("<html") ||
-                                             trimmed.left(20).toLower().contains("<!doctype html");
-                if (looks_like_html) {
-                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
-                                                .arg(feed.id, feed.source)
-                                                .arg(data.size()));
-                } else if (trimmed.startsWith('<')) {
-                    articles = parse_rss_xml(data, feed);
-                }
-                if (articles.isEmpty() && !looks_like_html) {
-                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned %3 bytes but no parsed articles")
-                                                .arg(feed.id, feed.source)
-                                                .arg(data.size()));
-                }
-            } else {
-                LOG_WARN("NewsService", QString("Feed %1 (%2) failed: HTTP %3, err=%4")
-                                            .arg(feed.id, feed.source)
-                                            .arg(http_code)
-                                            .arg(reply->errorString()));
-            }
+            const QByteArray data = ok ? reply->readAll() : QByteArray();
+            const QString error = ok ? QString() : reply->errorString();
+            QPointer<NewsService> self = this;
+            (void)QtConcurrent::run([self, data, http_code, ok, error, feed, state]() {
+                QVector<NewsArticle> parsed = parse_feed_payload(data, http_code, ok, error, feed);
+                if (!self)
+                    return;
+                QMetaObject::invokeMethod(
+                    self,
+                    [self, state, articles = std::move(parsed)]() {
+                        if (!self)
+                            return;
+                        {
+                            QMutexLocker lock(&state->mutex);
+                            merge_unique(state->all_articles, state->seen_ids, articles);
+                        }
 
-            {
-                QMutexLocker lock(&state->mutex);
-                merge_unique(state->all_articles, state->seen_ids, articles);
-            }
+                        if (state->remaining.fetchAndSubRelaxed(1) == 1) {
+                            // Last feed done — sort by time descending
+                            auto& all = state->all_articles;
+                            std::sort(all.begin(), all.end(), [](const NewsArticle& a, const NewsArticle& b) {
+                                return a.sort_ts > b.sort_ts;
+                            });
 
-            if (state->remaining.fetchAndSubRelaxed(1) == 1) {
-                // Last feed done — sort by time descending
-                auto& all = state->all_articles;
-                std::sort(all.begin(), all.end(),
-                          [](const NewsArticle& a, const NewsArticle& b) { return a.sort_ts > b.sort_ts; });
+                            QSet<QString> sources;
+                            for (const auto& a : all)
+                                sources.insert(a.source);
+                            state->service->active_sources_ = sources.values();
 
-                QSet<QString> sources;
-                for (const auto& a : all)
-                    sources.insert(a.source);
-                state->service->active_sources_ = sources.values();
+                            // Keep the last-known-good cache when every feed failed (see
+                            // the progressive path) instead of overwriting it with an
+                            // empty list.
+                            if (!all.isEmpty()) {
+                                store_cache_async(all);
+                                state->service->latest_articles_ = all;
+                                state->service->persist_articles_async(all);
+                            }
 
-                // Keep the last-known-good cache when every feed failed (see the
-                // progressive path) instead of overwriting it with an empty list.
-                if (!all.isEmpty()) {
-                    fincept::CacheManager::instance().put("news:articles", QVariant(serialize_articles(all)),
-                                                          kArticleCacheTtlSec, "news");
-                    state->service->latest_articles_ = all;
-                    state->service->persist_articles_async(all);
-                }
+                            LOG_INFO("NewsService",
+                                     QString("Fetched %1 articles from %2 sources").arg(all.size()).arg(sources.size()));
 
-                LOG_INFO("NewsService",
-                         QString("Fetched %1 articles from %2 sources").arg(all.size()).arg(sources.size()));
-
-                state->callback(true, all);
-                emit state->service->articles_updated(all);
-                state->service->publish_articles_to_hub(all);
-            }
+                            state->callback(true, all);
+                            emit state->service->articles_updated(all);
+                            state->service->publish_articles_to_hub(all);
+                        }
+                    },
+                    Qt::QueuedConnection);
+            });
         });
     }
 }
@@ -328,85 +373,80 @@ void NewsService::fetch_all_news_progressive(bool force, ArticlesCallback final_
         req.setTransferTimeout(kFeedTransferTimeoutMs);
 
         auto* reply = nam_->get(req);
-        connect(reply, &QNetworkReply::finished, this, [reply, feed, state, total, this]() {
+        connect(reply, &QNetworkReply::finished, this, [this, reply, feed, state, total]() {
             reply->deleteLater();
 
-            QVector<NewsArticle> batch;
+            // Parse on a worker (see fetch_all_news); the batch is merged back on
+            // the GUI thread in arrival order, so partial snapshots and the final
+            // list are still emitted strictly in sequence.
+            const bool ok = reply->error() == QNetworkReply::NoError;
             const int http_code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            if (reply->error() == QNetworkReply::NoError) {
-                QByteArray data = reply->readAll();
-                const QByteArray trimmed = data.trimmed();
-                const bool looks_like_html = trimmed.left(20).toLower().contains("<html") ||
-                                             trimmed.left(20).toLower().contains("<!doctype html");
-                if (looks_like_html) {
-                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned HTML (likely access-denied), %3 bytes")
-                                                .arg(feed.id, feed.source)
-                                                .arg(data.size()));
-                } else if (trimmed.startsWith('<')) {
-                    batch = parse_rss_xml(data, feed);
-                }
-                if (batch.isEmpty() && !looks_like_html) {
-                    LOG_WARN("NewsService", QString("Feed %1 (%2) returned %3 bytes but no parsed articles")
-                                                .arg(feed.id, feed.source)
-                                                .arg(data.size()));
-                }
-            } else {
-                LOG_WARN("NewsService", QString("Feed %1 (%2) failed: HTTP %3, err=%4")
-                                            .arg(feed.id, feed.source)
-                                            .arg(http_code)
-                                            .arg(reply->errorString()));
-            }
+            const QByteArray data = ok ? reply->readAll() : QByteArray();
+            const QString error = ok ? QString() : reply->errorString();
+            QPointer<NewsService> self = this;
+            (void)QtConcurrent::run([self, data, http_code, ok, error, feed, state, total]() {
+                QVector<NewsArticle> parsed = parse_feed_payload(data, http_code, ok, error, feed);
+                if (!self)
+                    return;
+                QMetaObject::invokeMethod(
+                    self,
+                    [self, state, total, batch = std::move(parsed)]() {
+                        if (!self)
+                            return;
+                        QVector<NewsArticle> snapshot;
+                        int feeds_done = 0;
+                        {
+                            QMutexLocker lock(&state->mutex);
+                            merge_unique(state->all_articles, state->seen_ids, batch);
+                            feeds_done = state->done.fetchAndAddRelaxed(1) + 1;
+                            // Partial snapshot sorted by time for progressive display
+                            snapshot = state->all_articles;
+                        }
+                        std::sort(snapshot.begin(), snapshot.end(),
+                                  [](const NewsArticle& a, const NewsArticle& b) { return a.sort_ts > b.sort_ts; });
+                        emit self->articles_partial(snapshot, feeds_done, total);
+                        // Progressive publish — each chunk fans out the accumulated
+                        // list. Hub's per-topic coalescing (news:general at 250ms)
+                        // throttles the UI repaint storm on cold-cache fills.
+                        self->publish_articles_to_hub(snapshot);
 
-            QVector<NewsArticle> snapshot;
-            int feeds_done = 0;
-            {
-                QMutexLocker lock(&state->mutex);
-                merge_unique(state->all_articles, state->seen_ids, batch);
-                feeds_done = state->done.fetchAndAddRelaxed(1) + 1;
-                // Partial snapshot sorted by time for progressive display
-                snapshot = state->all_articles;
-            }
-            std::sort(snapshot.begin(), snapshot.end(),
-                      [](const NewsArticle& a, const NewsArticle& b) { return a.sort_ts > b.sort_ts; });
-            emit articles_partial(snapshot, feeds_done, total);
-            // Progressive publish — each chunk fans out the accumulated
-            // list. Hub's per-topic coalescing (news:general at 250ms)
-            // throttles the UI repaint storm on cold-cache fills.
-            publish_articles_to_hub(snapshot);
+                        if (state->remaining.fetchAndSubRelaxed(1) == 1) {
+                            // All feeds done — finalize cache
+                            auto& all = state->all_articles;
+                            std::sort(all.begin(), all.end(), [](const NewsArticle& a, const NewsArticle& b) {
+                                return a.sort_ts > b.sort_ts;
+                            });
 
-            if (state->remaining.fetchAndSubRelaxed(1) == 1) {
-                // All feeds done — finalize cache
-                auto& all = state->all_articles;
-                std::sort(all.begin(), all.end(),
-                          [](const NewsArticle& a, const NewsArticle& b) { return a.sort_ts > b.sort_ts; });
+                            QSet<QString> sources;
+                            for (const auto& a : all)
+                                sources.insert(a.source);
+                            state->service->active_sources_ = sources.values();
 
-                QSet<QString> sources;
-                for (const auto& a : all)
-                    sources.insert(a.source);
-                state->service->active_sources_ = sources.values();
+                            // Only rewrite the on-disk cache when we actually fetched
+                            // articles. If every feed failed (e.g. full network loss)
+                            // `all` is empty — overwriting the cache with an empty array
+                            // would wipe the last-known-good news and leave a blank
+                            // widget after a restart. Keep the previous cache then.
+                            if (!all.isEmpty()) {
+                                store_cache_async(all);
+                                state->service->latest_articles_ = all;
+                                state->service->persist_articles_async(all);
+                            } else {
+                                LOG_WARN("NewsService",
+                                         "All feeds returned no articles — keeping last-known-good cache");
+                            }
 
-                // Only rewrite the on-disk cache when we actually fetched
-                // articles. If every feed failed (e.g. full network loss) `all`
-                // is empty — overwriting the cache with an empty array would wipe
-                // the last-known-good news and leave a blank widget after a
-                // restart. Keep the previous cache in that case.
-                if (!all.isEmpty()) {
-                    fincept::CacheManager::instance().put("news:articles", QVariant(serialize_articles(all)),
-                                                          kArticleCacheTtlSec, "news");
-                    state->service->latest_articles_ = all;
-                    state->service->persist_articles_async(all);
-                } else {
-                    LOG_WARN("NewsService", "All feeds returned no articles — keeping last-known-good cache");
-                }
+                            LOG_INFO("NewsService", QString("Progressive fetch complete: %1 articles, %2 sources")
+                                                        .arg(all.size())
+                                                        .arg(sources.size()));
 
-                LOG_INFO(
-                    "NewsService",
-                    QString("Progressive fetch complete: %1 articles, %2 sources").arg(all.size()).arg(sources.size()));
-
-                state->callback(true, all);
-                emit state->service->articles_updated(all);
-                state->service->publish_articles_to_hub(all);
-            }
+                            state->callback(true, all);
+                            emit state->service->articles_updated(all);
+                            state->service->publish_articles_to_hub(all);
+                        }
+                    },
+                    Qt::QueuedConnection);
+            });
         });
     }
 }
@@ -426,8 +466,9 @@ static NewsAnalysis parse_analysis_data(const QJsonObject& data) {
     analysis.sentiment = {sent["score"].toDouble(), sent["intensity"].toDouble(), sent["confidence"].toDouble()};
     analysis.market_impact = {mi["urgency"].toString(), mi["prediction"].toString()};
     analysis.summary = a["summary"].toString();
-    analysis.credits_used = data["credits_used"].toInt();
-    analysis.credits_remaining = data["credits_remaining"].toInt();
+    // Credits are fractional (a call can cost 0.35); -1 = not reported.
+    analysis.credits_used = data["credits_used"].toDouble(-1);
+    analysis.credits_remaining = data["credits_remaining"].toDouble(-1);
 
     for (const auto& v : a["keywords"].toArray())
         analysis.keywords << v.toString();
@@ -492,14 +533,18 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
         [url, cb](Result<QJsonDocument> result) {
             if (result.is_err()) {
                 LOG_ERROR("NewsService", "Analysis failed: " + QString::fromStdString(result.error()));
-                cb(false, {});
+                NewsAnalysis failed;
+                failed.error = QString::fromStdString(result.error());
+                cb(false, failed);
                 return;
             }
 
             auto obj = result.value().object();
             if (!obj["success"].toBool(false)) {
                 LOG_ERROR("NewsService", "API returned failure: " + obj["message"].toString());
-                cb(false, {});
+                NewsAnalysis failed;
+                failed.error = obj["message"].toString();
+                cb(false, failed);
                 return;
             }
 
@@ -522,50 +567,65 @@ void NewsService::analyze_article(const QString& url, AnalysisCallback cb) {
 // ── AI Headline Summarization ────────────────────────────────────────────────
 
 void NewsService::summarize_headlines(const QVector<NewsArticle>& articles, int count, SummaryCallback cb) {
-    // Build headline signature for cache check
-    QStringList headlines;
-    for (int i = 0; i < std::min(count, static_cast<int>(articles.size())); ++i)
-        headlines.append(articles[i].headline);
-    std::sort(headlines.begin(), headlines.end());
-    QString sig = headlines.join("|").left(500);
+    // Deterministic, offline headline digest. There is no backend summarisation
+    // endpoint (POST /news/summarize never existed, so this used to fail every
+    // time); the caller — the AI tool loop — writes the prose summary itself from
+    // this digest. Most important first: higher-tier sources and higher urgency,
+    // grouped by category, each line carrying its source and time for citation.
+    const int n = std::clamp(count, 1, 100);
+    QVector<const NewsArticle*> picked;
+    picked.reserve(std::min(n, static_cast<int>(articles.size())));
+    for (const auto& a : articles) {
+        if (picked.size() >= n)
+            break;
+        if (!a.headline.trimmed().isEmpty())
+            picked.append(&a);
+    }
+    if (picked.isEmpty()) {
+        cb(false, {});
+        return;
+    }
+    // Priority enum is ordered FLASH < URGENT < BREAKING < ROUTINE, Impact HIGH < MEDIUM < LOW,
+    // so the underlying values sort most-important first.
+    std::stable_sort(picked.begin(), picked.end(), [](const NewsArticle* x, const NewsArticle* y) {
+        if (x->priority != y->priority)
+            return static_cast<int>(x->priority) < static_cast<int>(y->priority);
+        if (x->impact != y->impact)
+            return static_cast<int>(x->impact) < static_cast<int>(y->impact);
+        return x->tier < y->tier;
+    });
 
-    {
-        const QString sum_key = "news:summary:" + sig.left(200);
-        const QVariant cached = fincept::CacheManager::instance().get(sum_key);
-        if (!cached.isNull()) {
-            cb(true, cached.toString());
-            return;
-        }
+    QStringList categories;
+    QHash<QString, QStringList> lines_by_cat;
+    for (const NewsArticle* a : picked) {
+        const QString cat = a->category.trimmed().isEmpty() ? QStringLiteral("General") : a->category.trimmed();
+        if (!lines_by_cat.contains(cat))
+            categories.append(cat);
+        QString line = QStringLiteral("- ") + a->headline.trimmed();
+        QStringList meta;
+        if (!a->source.isEmpty())
+            meta << a->source;
+        if (!a->time.isEmpty())
+            meta << a->time;
+        if (!a->tickers.isEmpty())
+            meta << a->tickers.mid(0, 5).join(QLatin1Char(','));
+        if (a->priority == Priority::FLASH || a->priority == Priority::URGENT)
+            meta << QStringLiteral("URGENT");
+        else if (a->impact == Impact::HIGH)
+            meta << QStringLiteral("HIGH IMPACT");
+        if (!meta.isEmpty())
+            line += QStringLiteral(" (") + meta.join(QStringLiteral(" · ")) + QLatin1Char(')');
+        lines_by_cat[cat].append(line);
     }
 
-    // Build request body
-    QJsonArray headline_array;
-    for (const auto& h : headlines)
-        headline_array.append(h);
-
-    QJsonObject body;
-    body["headlines"] = headline_array;
-    body["count"] = count;
-
-    HttpClient::instance().post("/news/summarize", body, [cb, sig](Result<QJsonDocument> result) {
-        if (result.is_err()) {
-            LOG_WARN("NewsService", "Summarization failed: " + QString::fromStdString(result.error()));
-            cb(false, {});
-            return;
-        }
-
-        auto obj = result.value().object();
-        QString summary = obj["summary"].toString();
-        if (summary.isEmpty() && obj.contains("data"))
-            summary = obj["data"].toObject()["summary"].toString();
-
-        if (!summary.isEmpty()) {
-            fincept::CacheManager::instance().put("news:summary:" + sig.left(200), QVariant(summary),
-                                                  kSummaryCacheTtlSec, "news");
-        }
-
-        cb(!summary.isEmpty(), summary);
-    });
+    const QChar nl(u'\n');
+    QString digest = QStringLiteral("%1 headlines across %2 categories:").arg(picked.size()).arg(categories.size());
+    digest += nl;
+    for (const QString& cat : categories) {
+        digest += nl + QLatin1Char('[') + cat.toUpper() + QLatin1Char(']') + nl;
+        digest += lines_by_cat.value(cat).join(nl) + nl;
+    }
+    cb(true, digest);
 }
 
 // ── WebSocket live feed lives in NewsService_LiveFeed.cpp ───────────────────

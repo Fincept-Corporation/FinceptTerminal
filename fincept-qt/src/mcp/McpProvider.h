@@ -64,7 +64,6 @@ class McpProvider {
         bool is_destructive = false;
         AuthLevel auth_required = AuthLevel::None;
         QJsonObject input_schema; // serialised JSON Schema
-        QStringList legacy_aliases;
     };
 
     /// One ToolAuditInfo per registered tool (enabled and disabled). Used by
@@ -151,24 +150,28 @@ class McpProvider {
     //
     // The gate now fails closed: a tool that declares `is_destructive` is
     // refused unless destructive capability has been granted for the current
-    // context. Two ways to grant it, and both are explicit:
+    // context. Three ways to grant it, all explicit:
     //   1. Per call — the agent bridge's destructive capability token
     //      (TerminalMcpBridge::destructive_token(), echoed back as
     //      X-MCP-Allow-Destructive and surfaced via is_destructive_allowed()).
-    //      Reused as-is; this is not a second mechanism.
-    //   2. Per session — set_destructive_allowed(true), persisted as
+    //   2. Per call — the user approved THIS call in the terminal UI
+    //      (ToolApprovalDialog wraps the dispatch in mcp::ScopedApprovedCall,
+    //      see mcp/server/CallApproval.h). A per-call human approval is a
+    //      stronger grant than the session switch below.
+    //   3. Per session — set_destructive_allowed(true), persisted as
     //      `mcp/allow_destructive_tools`. Defaults to false.
     //
-    // AuthLevel::ExplicitConfirm tools additionally trip the >= Verified
-    // fail-closed branch below and stay refused even with the grant, until the
-    // confirmation modal lands.
+    // AuthLevel::ExplicitConfirm (and Verified/Subscribed) tools additionally
+    // go through the AuthChecker AgentService installs, which lets them run
+    // only inside a user-approved call (ScopedApprovedCall::active()).
 
     /// Grant/revoke destructive-tool capability for this session. Persists to
     /// `mcp/allow_destructive_tools` so the choice survives a restart.
     static void set_destructive_allowed(bool allowed);
 
     /// True when destructive tools may run in the CURRENT context — i.e. the
-    /// per-call capability token is present, or the session grant is on.
+    /// per-call capability token is present, the user approved this call in
+    /// the UI, or the session grant is on.
     static bool destructive_allowed();
 
     /// Run the Phase 6.3 authorization gate for one call WITHOUT executing
@@ -189,9 +192,10 @@ class McpProvider {
                                                   bool destructive_declared = true) const;
 
     // ── LLM Integration ────────────────────────────────────────────────────
-
-    /// Format all enabled tools for OpenAI function calling
-    QJsonArray format_tools_for_openai() const;
+    //
+    // Provider tool arrays are built by McpService::format_tools_for_* only —
+    // they share Tool RAG / Tier-0 selection, which a registry-wide dump here
+    // would bypass.
 
     /// Parse "serverId__toolName" → { server_id, tool_name }.
     /// Reverses any wire-encoding applied by `encode_tool_name_for_wire` (e.g.
@@ -214,20 +218,12 @@ class McpProvider {
     ///   - Gemini:
     ///     [a-zA-Z0-9_:.-]{1,128}  (permissive; dots/colons allowed).
     ///
-    /// Encoding rules:
-    ///   1. Each '.' in the internal name → "-dot-" (no internal tool name uses
-    ///      hyphens, so the round-trip is unambiguous).
-    ///   2. If the resulting name fails the common-subset regex (e.g. starts
-    ///      with a digit or contains other illegal chars), the encoder prefixes
-    ///      it with `t_` and replaces every illegal byte with `_`.
-    ///   3. The combined `<server_id>__<encoded_tool>` must fit in 64 chars.
-    ///      Server prefix `fincept-terminal__` is 18 chars; longer tool names
-    ///      are tail-truncated and a 4-char hash suffix preserves uniqueness.
-    ///
-    /// `decode_tool_name_from_wire` reverses step 1 only — steps 2 and 3 are
-    /// effectively irreversible, so any tool whose name needs them must be
-    /// looked up by its hash via `find_tool_by_wire_name` (registered when
-    /// `format_tools_for_openai` is called) rather than by string round-trip.
+    /// Encoding: each '.' in the internal name → "-dot-" (no internal tool name
+    /// uses hyphens, so the round-trip is unambiguous). Nothing else is
+    /// rewritten — a name that still fails the common-subset regex is logged
+    /// once so it can be renamed at source, because a silently mangled name
+    /// breaks the model's ability to call the tool by its advertised string.
+    /// `decode_tool_name_from_wire` reverses the '.' encoding.
     static QString encode_tool_name_for_wire(const QString& tool_name);
     static QString decode_tool_name_from_wire(const QString& wire_name);
 

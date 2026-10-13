@@ -24,16 +24,26 @@ class McpService {
     std::vector<UnifiedTool> get_all_tools();
 
     /// Filtered variant — same `ToolFilter` semantics as
-    /// `format_tools_for_openai(filter)`. Lets non-OpenAI builders
-    /// (Anthropic, Gemini, Fincept text catalog) honour the same scope.
+    /// `format_tools_for_openai(filter)`, including the 50-tool safety cap when
+    /// `max_tools` is 0. Lets non-OpenAI builders (Anthropic, Gemini, Fincept
+    /// text catalog) honour the same scope.
     std::vector<UnifiedTool> get_all_tools(const ToolFilter& filter);
 
-    /// Format for OpenAI function calling — full catalogue.
-    QJsonArray format_tools_for_openai();
+    /// Catalogue for an internal agent run (TerminalMcpBridge / finagent_core).
+    ///
+    /// Same include/exclude predicates as get_all_tools(filter), but `max_tools`
+    /// is the agent author's own cap — 0 means EVERY matching tool — and the
+    /// order puts read-only tools first (then the caller's category order, then
+    /// name), so a capped catalogue keeps the most useful tools. The hidden
+    /// 50-tool cap only exists for the LLM provider formatters, whose payload
+    /// rides on every request of a turn; applying it here silently cut agents
+    /// down to an alphabetical slice (add_*, agent_*, alt_*…) with no quotes,
+    /// news or filings while the UI promised "0 = no cap".
+    std::vector<UnifiedTool> get_agent_tools(const ToolFilter& filter);
 
     /// Phase 6: format with a filter applied. Lets callers scope the
     /// catalogue per-LLM-request to reduce prompt size and tool-pick noise.
-    /// Equivalent to format_tools_for_openai() when filter is default-constructed.
+    /// A default-constructed filter selects the Tier-0 (Tool RAG) set.
     QJsonArray format_tools_for_openai(const ToolFilter& filter);
 
     /// Tool RAG activation variant. In Tier-0 (Tool RAG) mode the model only
@@ -74,6 +84,22 @@ class McpService {
 
     // ── Unified Tool Execution ──────────────────────────────────────────
 
+    /// Where a bare tool name lives — used by the generic `tool_invoke`
+    /// dispatcher and by the agent bridge (which must apply its dispatch policy
+    /// to the tool tool_invoke is about to call, not just to tool_invoke).
+    struct ToolTarget {
+        QString server_id;           // INTERNAL_SERVER_ID or an external server id
+        QString category;            // empty for external tools
+        bool is_destructive = false; // external tools: true (no metadata on the wire)
+        QString error;               // non-empty ⇒ unresolved; human/LLM-readable reason
+    };
+
+    /// Resolve `name` (bare, as tool_list returns it). An empty `server_id`
+    /// means "built-in tool if one exists, otherwise the external tool with
+    /// that name" — ambiguous external names are refused with the candidate
+    /// server ids, never guessed.
+    ToolTarget resolve_tool_target(const QString& name, const QString& server_id = {});
+
     /// Route to internal or external server.
     ///
     /// `allow_defer` opts the call into the long-running-job protocol: an
@@ -104,6 +130,15 @@ class McpService {
     // Phase 3: removed. McpProvider::call_tool now invokes
     // mcp::validate_args automatically; SchemaValidator.h is the single
     // entry point for input checks.
+
+    // ── Tool enable/disable (persisted) ─────────────────────────────────
+
+    /// Enable/disable an INTERNAL tool and remember the choice across restarts
+    /// (SettingsRepository key `mcp.disabled_tools`, a JSON array of names).
+    /// McpProvider::set_tool_enabled alone is in-memory only, which is why the
+    /// MCP Servers screen's per-tool toggle used to reset on every launch.
+    /// Call from the GUI thread (SettingsRepository's connection lives there).
+    void set_tool_enabled_persistent(const QString& tool_name, bool enabled);
 
     // ── Lifecycle ───────────────────────────────────────────────────────
 
@@ -140,6 +175,10 @@ class McpService {
 
     void refresh_cache();        // requires mutex_ held
     bool is_cache_valid() const; // requires mutex_ held
+
+    /// Re-apply the persisted disabled-tool set (see set_tool_enabled_persistent).
+    /// Called from initialize(), i.e. after every internal tool is registered.
+    void apply_persisted_tool_states();
 
     // Snapshot the unfiltered cached tool list (refreshing if stale). Caller
     // must hold mutex_. Splitting this out lets get_all_tools(filter) and

@@ -41,50 +41,71 @@ class PortfolioService : public QObject {
     // ── Asset operations ─────────────────────────────────────────────────────
     /// `broker_symbol`+`exchange` are stored alongside the canonical
     /// yfinance-format `symbol` so broker quote calls can use the native
-    /// pair. Both empty for manual / JSON imports.
-    void add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
+    /// pair. Both empty for manual / JSON imports. `date` is the trade date
+    /// (YYYY-MM-DD or ISO date-time; empty = now). Returns false (and records
+    /// nothing) on a non-positive quantity/price or a database error.
+    bool add_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
                    const QString& date = {}, const QString& broker_symbol = {}, const QString& exchange = {});
-    void sell_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
+    /// Records a SELL and reduces (or closes) the position. Refuses — returning
+    /// false and recording nothing — when the symbol is not held or @p qty
+    /// exceeds the quantity held: an over-sell used to close the position and
+    /// still write a SELL for the larger quantity, leaving the ledger short.
+    bool sell_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
                     const QString& date = {});
 
     // ── Transactions ─────────────────────────────────────────────────────────
     void load_transactions(const QString& portfolio_id, int limit = 50);
-    void update_transaction(const QString& id, double qty, double price, const QString& date,
-                            const QString& notes = {});
-    void delete_transaction(const QString& id, const QString& portfolio_id);
+    /// Full ledger, newest first (local SQLite read — for exports/edits).
+    QVector<portfolio::Transaction> ledger(const QString& portfolio_id) const;
+    /// Edits a ledger row and re-derives that symbol's position from the
+    /// ledger, so holdings and history can no longer disagree.
+    bool update_transaction(const QString& portfolio_id, const QString& id, double qty, double price,
+                            const QString& date, const QString& notes = {});
+    bool delete_transaction(const QString& id, const QString& portfolio_id);
 
     // ── Dividend ──────────────────────────────────────────────────────────────
-    void record_dividend(const QString& portfolio_id, const QString& symbol, double qty, double amount_per_share,
+    bool record_dividend(const QString& portfolio_id, const QString& symbol, double qty, double amount_per_share,
                          double total, const QString& date = {}, const QString& notes = {});
 
-    // ── Historical correlation ─────────────────────────────────────────────────
-    /// Fetch 30-day daily closes for @p symbols and compute pairwise Pearson
-    /// correlation matrix. Result emitted via correlation_computed().
-    void fetch_correlation(const QStringList& symbols);
+    // ── Market analytics (one Python call) ────────────────────────────────────
+    /// Downloads every holding + the currency benchmark + the 13-week T-bill in
+    /// ONE threaded yfinance call (scripts/portfolio_metrics.py) and derives the
+    /// correlation matrix, benchmark history, risk-free rate and ex-ante risk at
+    /// current weights. Results are cached per (portfolio, day, holdings,
+    /// benchmark); repeats inside the TTL replay from memory and identical
+    /// in-flight requests are collapsed. Emits market_analytics_loaded().
+    void fetch_market_analytics(const portfolio::PortfolioSummary& summary, bool force = false);
+    /// Last analytics delivered for @p portfolio_id (empty portfolio_id if none).
+    portfolio::MarketAnalytics last_market_analytics(const QString& portfolio_id) const;
 
-    // ── Benchmark data ───────────────────────────────────────────────────────
-    /// Fetch daily closes for an arbitrary benchmark ticker (defaults to SPY
-    /// for backward compatibility). Emits benchmark_history_loaded(symbol, ...)
-    /// AND the legacy spy_history_loaded(...) so older consumers keep working.
-    void fetch_benchmark_history(const QString& symbol = "SPY", const QString& period = "1y");
-    /// Convenience wrapper: pick a default benchmark from a portfolio currency
-    /// (CAD → ^GSPTSE, USD → SPY, GBP → ^FTSE, EUR → ^STOXX50E, AUD → ^AXJO,
-    /// INR → ^NSEI). Falls back to SPY for unknown currencies.
+    /// Pick a default benchmark from a portfolio currency (CAD → ^GSPTSE,
+    /// USD → SPY, GBP → ^FTSE, EUR → ^STOXX50E, AUD → ^AXJO, INR → ^NSEI,
+    /// JPY → ^N225, HKD → ^HSI). Falls back to SPY for unknown currencies.
     static QString default_benchmark_for_currency(const QString& currency);
-    /// Legacy shim — calls fetch_benchmark_history("SPY", period).
-    void fetch_spy_history(const QString& period = "1y");
 
-    // ── Risk-free rate ────────────────────────────────────────────────────────
-    /// Fetch the current 10-year Treasury yield (DGS10) from FRED.
-    /// Result is cached 24h in SettingsRepository. Emits risk_free_rate_loaded(rate).
-    void fetch_risk_free_rate();
+    /// Trailing trading days behind the holdings correlation matrix.
+    static constexpr int kCorrelationWindowDays = 63;
 
-    // ── Metrics (async computation) ──────────────────────────────────────────
+    /// Annual risk-free rate currently used for Sharpe/Sortino/alpha, and a
+    /// human-readable description of where it came from.
+    double risk_free_rate() const { return rf_rate_; }
+    QString risk_free_source() const { return rf_source_; }
+
+    // ── Metrics ──────────────────────────────────────────────────────────────
     void compute_metrics(const portfolio::PortfolioSummary& summary);
+
+    /// Build the flow-adjusted (time-weighted) return series from NAV
+    /// snapshots and the transaction ledger. Exposed for tests/exports.
+    static QVector<portfolio::TwrPoint> build_twr_series(const QVector<portfolio::PortfolioSnapshot>& snapshots,
+                                                         const QVector<portfolio::Transaction>& transactions);
 
     // ── Import / Export ──────────────────────────────────────────────────────
     void export_csv(const QString& portfolio_id, const QString& file_path);
     void export_json(const QString& portfolio_id, const QString& file_path);
+    /// Accepts the terminal's export format ({portfolio_name, transactions[]})
+    /// AND the holdings-snapshot shape ({name, holdings[]}). The whole file is
+    /// validated before anything is written; a rejected file reports every
+    /// problem found (row-by-row) instead of a generic "unsupported format".
     void import_json(const QString& file_path, portfolio::ImportMode mode, const QString& merge_target_id = {});
 
     // ── Snapshots (performance history) ─────────────────────────────────────
@@ -126,6 +147,11 @@ class PortfolioService : public QObject {
 
     void asset_added(QString portfolio_id);
     void asset_sold(QString portfolio_id);
+    /// A ledger row was edited or deleted and the affected position re-derived.
+    void ledger_changed(QString portfolio_id);
+    /// A user-initiated write was refused or failed (over-sell, bad input, DB
+    /// error). Previously these were log-only and the action looked ignored.
+    void operation_failed(QString portfolio_id, QString message);
 
     void export_complete(QString file_path);
     /// An export could not be written (unreadable portfolio or unwritable
@@ -133,21 +159,12 @@ class PortfolioService : public QObject {
     void export_failed(QString file_path, QString error);
     void import_complete(portfolio::ImportResult result);
 
-    /// Pairwise Pearson correlation matrix keyed by "SYM1|SYM2".
-    /// Values in [-1, 1]. Diagonal (self-correlation) = 1.0.
-    void correlation_computed(QHash<QString, double> matrix);
-
-    /// SPY daily close history: parallel vectors of ISO date strings and prices.
-    /// Kept for back-compat — also fired whenever benchmark_history_loaded fires
-    /// with symbol == "SPY" so existing consumers don't break.
-    void spy_history_loaded(QStringList dates, QVector<double> closes);
-
-    /// Generalised benchmark history: includes the symbol so chart consumers
-    /// can label the overlay correctly when a non-SPY benchmark is requested.
-    void benchmark_history_loaded(QString symbol, QStringList dates, QVector<double> closes);
-
-    /// Current 10-year risk-free rate as annual decimal (e.g. 0.043 = 4.3%).
-    void risk_free_rate_loaded(double rate);
+    /// fetch_market_analytics() finished for @p portfolio_id. On success read
+    /// the result (correlation matrix "SYM1|SYM2", benchmark closes, risk-free
+    /// rate, ex-ante risk) with last_market_analytics(). On failure `ok` is
+    /// false, `error` says why, and the previous result (if any) is still
+    /// served by last_market_analytics().
+    void market_analytics_loaded(QString portfolio_id, bool ok, QString error);
 
     /// Fired when backfill_history finishes. point_count is the number of
     /// trading days written (0 on failure).
@@ -170,9 +187,18 @@ class PortfolioService : public QObject {
     /// creation time.
     void record_custom_index_values(const portfolio::PortfolioSummary& summary);
 
-    /// Single exit path for a benchmark download (live or cache hit): refreshes
-    /// the SPY beta cache and fires both history signals.
-    void publish_benchmark(const QString& symbol, const QStringList& dates, const QVector<double>& closes);
+    /// Single exit path for an analytics result (live or cache hit).
+    void publish_market_analytics(const portfolio::MarketAnalytics& a);
+
+    /// Load the last known-good risk-free rate from settings (once per process).
+    void ensure_risk_free_loaded();
+
+    /// Re-derive @p symbol's position (quantity + weighted-average cost) from
+    /// the ledger after a ledger row changed. Only applied when the ledger
+    /// explained the position before the change; otherwise the quantity delta
+    /// is applied so positions that pre-date their transactions survive.
+    void reconcile_position(const QString& portfolio_id, const QString& symbol,
+                            const QVector<portfolio::Transaction>& before);
 
     /// Try to fetch live quotes via the broker linked to `portfolio.broker_account_id`.
     /// On success, calls finalize_summary with broker-sourced QuoteData.
@@ -196,38 +222,28 @@ class PortfolioService : public QObject {
     QMutex cache_mutex_;
     static constexpr int kCacheTtlSec = 300; // 5 minutes
 
-    // ── SPY cache (for OLS beta in compute_metrics) ──────────────────────────
-    // Beta is always computed against SPY regardless of which benchmark is
-    // shown on the chart, so the cache keys to "SPY" specifically.
-    QStringList spy_dates_cache_;
-    QVector<double> spy_closes_cache_;
+    // ── Risk-free rate (annual fraction, e.g. 0.043) ─────────────────────────
+    // Live value comes from the analytics run (^IRX); the last good value is
+    // persisted in SettingsRepository so a restart without network still has
+    // one. The 4% default is used only when nothing was ever fetched, and the
+    // source label says so.
+    static constexpr double kDefaultRiskFreeRate = 0.04;
+    double rf_rate_ = kDefaultRiskFreeRate;
+    QString rf_source_;
+    bool rf_loaded_ = false;
 
-    // ── Risk-free rate cache (annual decimal, e.g. 0.043) ────────────────────
-    // Canonical fallback used wherever the live FRED rate is unavailable.
-    static constexpr double kDefaultRiskFreeRate = 0.04; // 4%
-    double rf_rate_ = kDefaultRiskFreeRate;              // default until FRED responds
-
-    // ── Aux-fetch caches ─────────────────────────────────────────────────────
-    // The screen re-requests correlation + benchmark history on EVERY summary
-    // refresh (60 s by default). Each is a Python spawn that downloads from
-    // yfinance, and neither changes minute to minute, so serve repeats from
-    // memory and collapse identical in-flight requests into one.
-    struct CorrelationCache {
-        QString key; // sorted symbol list
+    // ── Market analytics cache (P11) ─────────────────────────────────────────
+    // The screen asks on every summary refresh (60 s by default). The inputs
+    // are daily closes, so one run per (portfolio, market day, holdings,
+    // benchmark) is enough; repeats replay from memory.
+    struct AnalyticsCacheEntry {
+        QString key; // portfolio|date|benchmark|sorted holdings
         qint64 timestamp = 0;
-        QHash<QString, double> matrix;
+        portfolio::MarketAnalytics data;
     };
-    CorrelationCache corr_cache_;
-    QString corr_inflight_key_;
-    struct BenchmarkCache {
-        QStringList dates;
-        QVector<double> closes;
-        qint64 timestamp = 0;
-    };
-    QHash<QString, BenchmarkCache> bench_cache_; // "SYMBOL|period"
-    QSet<QString> bench_inflight_;
-    static constexpr int kCorrelationTtlSec = 15 * 60;
-    static constexpr int kBenchmarkTtlSec = 30 * 60;
+    QHash<QString, AnalyticsCacheEntry> analytics_cache_; // portfolio_id → last result
+    QHash<QString, QString> analytics_inflight_;          // portfolio_id → key being fetched
+    static constexpr int kAnalyticsTtlSec = 30 * 60;
 
     // ── Sector-resolved refresh debounce ─────────────────────────────────────
     // A fresh import resolves one sector per holding; each resolution used to

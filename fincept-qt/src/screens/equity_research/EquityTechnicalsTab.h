@@ -29,7 +29,7 @@ class EquityTechnicalsTab : public QWidget {
     void clear_sections();
 
     QString signal_text(services::equity::TechSignal s) const;
-    static const char* signal_color(services::equity::TechSignal s);
+    static const char* signal_key(services::equity::TechSignal s);
     QString interpretation(const QString& col_key, double value) const;
 
     QString current_symbol_;

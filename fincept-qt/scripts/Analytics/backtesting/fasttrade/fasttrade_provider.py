@@ -83,7 +83,12 @@ from base.base_provider import (
     EquityPoint,
     BacktestStatistics,
     json_response,
-    parse_json_input
+    parse_json_input,
+    build_assumptions,
+    ignored_request_settings,
+    read_cli_args,
+    refuse_synthetic,
+    synthetic_allowed,
 )
 
 # Import fast-trade wrapper modules
@@ -309,6 +314,18 @@ class FastTradeProvider(BacktestingProviderBase):
             result_dict = backtest_result.to_dict()
             using_synthetic = getattr(self, '_using_synthetic', False)
             result_dict['using_synthetic_data'] = using_synthetic
+            result_dict['assumptions'] = build_assumptions(
+                'fast-trade library',
+                'SAME-BAR CLOSE: fast-trade evaluates its rules on a bar and fills at that same '
+                "bar's close - optimistic (look-ahead) versus a next-bar fill.",
+                request,
+                costs=f"commission {float(request.get('commission', 0) or 0) * 100:.3f}% per fill; no slippage model",
+                position_sizing='fast-trade default (full account)',
+                annualization='CAGR over calendar days / 365.25; Sharpe as reported by fast-trade',
+                data_source=('SYNTHETIC random-walk prices (user opted in) - results have NO market meaning'
+                             if using_synthetic else None),
+                ignored=ignored_request_settings(request, ['commission']),
+            )
 
             if using_synthetic:
                 result_dict['synthetic_data_warning'] = (
@@ -361,8 +378,10 @@ class FastTradeProvider(BacktestingProviderBase):
             interval='1d'  # Daily data by default
         )
 
-        # Fallback to synthetic data if yfinance fails
+        # Synthetic data only when the user opted in; otherwise refuse with a reason.
         if data.empty:
+            if not getattr(self, '_allow_synthetic', False):
+                refuse_synthetic([symbol], 'Yahoo Finance returned no data')
             import sys
             # Use deterministic seed based on symbol name (not constant 42)
             sym_seed = sum(ord(c) for c in symbol) % (2**31)
@@ -566,7 +585,8 @@ class FastTradeProvider(BacktestingProviderBase):
             average_loss=float(summary.get('avg_loss_perc', 0) or 0) / 100.0,
             largest_win=float(quality.get('largest_winning_trade', summary.get('best_trade_perc', 0)) or 0),
             largest_loss=float(quality.get('largest_losing_trade', summary.get('min_trade_perc', 0)) or 0),
-            average_trade_return=float(summary.get('mean_trade_perc', 0) or 0),
+            # mean_trade_perc is a PERCENT; every other provider reports a fraction.
+            average_trade_return=float(summary.get('mean_trade_perc', 0) or 0) / 100.0,
             expectancy=0.0,  # not reported by fast-trade
             alpha=None,
             beta=None,
@@ -777,19 +797,16 @@ class FastTradeProvider(BacktestingProviderBase):
 
 def main():
     """Main entry point for CLI execution"""
-    if len(sys.argv) < 3:
-        print(json_response({
-            'success': False,
-            'error': 'Usage: python fasttrade_provider.py <command> <json_args>'
-        }))
+    try:
+        command, json_args = read_cli_args()
+    except ValueError as e:
+        print(json_response({'success': False, 'error': str(e)}))
         sys.exit(1)
-
-    command = sys.argv[1]
-    json_args = sys.argv[2]
 
     try:
         args = parse_json_input(json_args)
         provider = FastTradeProvider()
+        provider._allow_synthetic = synthetic_allowed(args)
 
         if command == 'initialize':
             result = provider.initialize(args)

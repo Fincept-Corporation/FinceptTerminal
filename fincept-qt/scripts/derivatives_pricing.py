@@ -1,21 +1,32 @@
 """
 Derivatives Pricing Bridge Script
 ==================================
-CLI bridge for the QT terminal to invoke derivatives pricing calculations.
-Wraps the Analytics/derivatives modules and returns JSON results.
+Self-contained pricing engine behind the terminal's Derivatives screen
+(DerivativesScreen.cpp is the only caller). Prints one JSON object on stdout;
+failures are reported as {"error": "..."}.
 
 Usage:
     python derivatives_pricing.py <command> [--param value ...]
 
-Commands:
-    bond_price          - Calculate bond price from YTM
-    bond_ytm            - Calculate YTM from clean price
-    option_price        - Black-Scholes option pricing + Greeks
-    implied_vol         - Calculate implied volatility
-    fx_option_price     - FX vanilla option pricing (Garman-Kohlhagen)
-    swap_value          - Interest rate swap valuation
-    cds_value           - Credit default swap valuation
-    forward_price       - Forward/futures pricing
+Commands (all rates, vols and yields are passed in PERCENT, e.g. --rate 5 = 5%):
+    bond_price          - Clean/dirty price, accrued, Macaulay/modified duration and
+                          convexity from a YTM compounded at the coupon frequency.
+                          Prices are per 100 face; durations in years.
+    bond_ytm            - YTM (percent, coupon-frequency compounding) from a clean price.
+    option_price        - Black-Scholes-Merton price + Greeks. Rate and dividend yield
+                          are continuously compounded. Greeks: delta and gamma per 1.0
+                          move in spot, vega per 1 vol point, theta per calendar day,
+                          rho per 1 percentage point of rate.
+    implied_vol         - Implied volatility (percent) from an option's market price.
+    fx_option_price     - Garman-Kohlhagen FX vanilla (continuous domestic/foreign rates).
+                          `price` is the premium in domestic currency for `notional`
+                          units of foreign currency; `greeks` are per 1 unit of foreign
+                          notional, `greeks_notional` are scaled to the notional.
+    swap_value          - Fixed/float swap on a flat continuously-compounded curve,
+                          valued at the effective date, to the payer of fixed.
+    cds_value           - CDS on a flat hazard rate (credit triangle) and a flat
+                          continuously-compounded risk-free rate, valued to the
+                          protection buyer.
 """
 
 import sys
@@ -354,12 +365,21 @@ def swap_value(effective_date, maturity_date, fixed_rate, freq, notional, discou
 
 def cds_value(valuation_date, maturity_date, recovery_rate, notional, spread_bps,
               risk_free_rate=5.0, coupon_bps=None):
-    """Simple CDS valuation (credit-triangle hazard rate, flat risk-free rate).
+    """CDS valuation on a flat hazard rate and a flat continuously-compounded rate.
 
-    `spread_bps` is the MARKET spread - it sets the hazard rate. `coupon_bps` is the
-    contractual premium actually paid; when omitted it equals the market spread (the
-    old behaviour, which makes the upfront ~0 by construction). Value is to the
+    `spread_bps` is the MARKET (par) spread: the flat hazard rate is calibrated so a
+    CDS paying that spread is worth exactly zero (seeded with the credit triangle
+    h = s / (1 - R)). `coupon_bps` is the contractual premium actually paid; when
+    omitted it equals the market spread, which makes the value zero. Value is to the
     protection BUYER: protection leg PV minus premium leg PV.
+
+    The premium schedule is quarterly, rolled BACKWARD from maturity (the first period
+    is the short stub from the valuation date), and the premium leg includes the premium
+    accrued up to a default (paid at default, mid-period approximation). The previous
+    int(T * 4) schedule dropped the final quarter whenever T came out a hair under a
+    whole number of quarters - e.g. a 5-year CDS valued from today (T = 4.9993 years)
+    paid 19 premiums while the protection leg ran the full 5 years, overstating the
+    protection buyer's value by roughly one quarterly premium (~25k on 10m notional).
     """
     rec_rate = recovery_rate / 100.0
     spread = spread_bps / 10000.0
@@ -372,79 +392,85 @@ def cds_value(valuation_date, maturity_date, recovery_rate, notional, spread_bps
     if T <= 0:
         return {"error": "Maturity must be after valuation date"}
 
-    # Simple hazard rate from spread: h = spread / (1 - R)
     lgd = 1 - rec_rate
     if lgd <= 0:
         return {"error": "LGD must be positive (recovery < 100%)"}
-
-    hazard_rate = spread / lgd
+    if spread < 0 or coupon < 0:
+        return {"error": "Spread and coupon must not be negative"}
 
     # Flat continuously-compounded risk-free rate (percent input, default 5%)
     r = risk_free_rate / 100.0
 
-    # Premium leg PV (quarterly payments)
-    premium_pv = 0.0
-    n_quarters = max(1, int(T * 4))
-    for i in range(1, n_quarters + 1):
-        t_i = i * 0.25
-        if t_i > T:
+    # Quarterly payment dates strictly after valuation, built backward from maturity.
+    pay_dates = []
+    k = 0
+    while True:
+        d = _add_months(mat, -3 * k)
+        if d <= val:
             break
-        surv = math.exp(-hazard_rate * t_i)
-        df = math.exp(-r * t_i)
-        premium_pv += coupon * 0.25 * notional * surv * df
+        pay_dates.append(d)
+        k += 1
+        if k > 4000:
+            return {"error": "Premium schedule too long - check the dates"}
+    pay_dates.reverse()
+    periods = []
+    prev = val
+    for d in pay_dates:
+        periods.append(((prev - val).days / 365.25, (d - val).days / 365.25))
+        prev = d
 
-    # Protection leg PV
-    protection_pv = 0.0
-    n_steps = max(1, int(T * 12))
-    dt = T / n_steps
-    for i in range(1, n_steps + 1):
-        t_i = i * dt
-        surv_prev = math.exp(-hazard_rate * (t_i - dt))
-        surv_curr = math.exp(-hazard_rate * t_i)
-        default_prob = surv_prev - surv_curr
-        df = math.exp(-r * t_i)
-        protection_pv += lgd * notional * default_prob * df
+    def risky_annuity(h):
+        """PV of 1 per year of premium: scheduled payments on survival + premium
+        accrued to the default time."""
+        a = 0.0
+        for t_prev, t_i in periods:
+            accrual = t_i - t_prev
+            s_prev = math.exp(-h * t_prev)
+            s_i = math.exp(-h * t_i)
+            a += accrual * s_i * math.exp(-r * t_i)
+            a += 0.5 * accrual * (s_prev - s_i) * math.exp(-r * 0.5 * (t_prev + t_i))
+        return a
 
-    # Upfront value
+    def protection_per_unit(h):
+        """LGD-weighted PV of 1 of protection, closed form for flat h and r."""
+        hr = h + r
+        if abs(hr) < 1e-12:
+            return lgd * h * T
+        return lgd * h / hr * (1.0 - math.exp(-hr * T))
+
+    # Calibrate the flat hazard rate to the market (par) spread.
+    hazard_rate = spread / lgd
+    if spread > 0:
+        def par_gap(h):
+            return protection_per_unit(h) - spread * risky_annuity(h)
+        hi = max(1.0, 10.0 * hazard_rate)
+        try:
+            hazard_rate = brentq(par_gap, 1e-12, hi, xtol=1e-14, maxiter=200)
+        except (ValueError, RuntimeError):
+            return {"error": "Could not calibrate a hazard rate to this spread and recovery"}
+
+    annuity = risky_annuity(hazard_rate)
+    premium_pv = coupon * notional * annuity
+    protection_pv = protection_per_unit(hazard_rate) * notional
     upfront = protection_pv - premium_pv
-
-    # Breakeven spread
-    annuity = 0.0
-    for i in range(1, n_quarters + 1):
-        t_i = i * 0.25
-        if t_i > T:
-            break
-        surv = math.exp(-hazard_rate * t_i)
-        df = math.exp(-r * t_i)
-        annuity += 0.25 * notional * surv * df
-
-    breakeven_spread = (protection_pv / annuity * 10000) if annuity > 0 else 0
-
-    # Survival probability
+    breakeven_spread = (protection_pv / (notional * annuity) * 10000) if annuity > 0 else 0
     survival_prob = math.exp(-hazard_rate * T)
 
     return {
         "upfront_value": round(upfront, 2),
+        "upfront_points": round(upfront / notional * 100.0, 4) if notional else 0,
         "premium_leg_pv": round(premium_pv, 2),
         "protection_leg_pv": round(protection_pv, 2),
         "breakeven_spread_bps": round(breakeven_spread, 2),
+        "risky_pv01": round(annuity * notional * 1e-4, 2),
         "hazard_rate": round(hazard_rate * 100, 4),
         "survival_probability": round(survival_prob * 100, 2),
         "notional": notional,
         "coupon_bps": round(coupon * 10000.0, 4),
         "risk_free_rate": round(risk_free_rate, 4),
-    }
-
-
-def forward_price(spot, r, T, q=0.0, storage=0.0, convenience=0.0):
-    """Calculate forward/futures price using cost-of-carry model"""
-    carry = r - q + storage - convenience
-    fwd = spot * math.exp(carry * T)
-    return {
-        "forward_price": round(fwd, 4),
-        "spot_price": spot,
-        "carry_rate": round(carry * 100, 4),
-        "time_to_expiry": T,
+        "premium_payments": len(pay_dates),
+        "tenor_years": round(T, 4),
+        "position": "protection buyer",
     }
 
 
@@ -521,13 +547,6 @@ def main():
     cd.add_argument("--coupon-bps", type=float, default=None,
                     help="Contractual premium in bps (default: equal to --spread-bps)")
 
-    # Forward
-    fw = subparsers.add_parser("forward_price")
-    fw.add_argument("--spot", type=float, required=True)
-    fw.add_argument("--rate", type=float, required=True)
-    fw.add_argument("--time", type=float, required=True)
-    fw.add_argument("--div-yield", type=float, default=0.0)
-
     args = parser.parse_args()
 
     if not args.command:
@@ -580,14 +599,31 @@ def main():
                 result = {"error": "Time to expiry must be positive"}
             elif sigma <= 0:
                 result = {"error": "Volatility must be positive"}
+            elif args.notional <= 0:
+                result = {"error": "Notional must be positive"}
             else:
                 price = garman_kohlhagen_price(S, K, T, r_d, r_f, sigma, args.type, args.notional)
                 greeks = black_scholes_greeks(S, K, T, r_d, sigma, r_f, args.type)
+                per_unit = price / args.notional
+                n = args.notional
                 result = {
                     "price": round(price, 4),
-                    "price_per_unit": round(price / args.notional, 6) if args.notional > 0 else 0,
-                    "notional": args.notional,
+                    "price_per_unit": round(per_unit, 6),
+                    # Premium as a share of the foreign notional's domestic value.
+                    "premium_pct_foreign": round(per_unit / S * 100.0, 4),
+                    "notional": n,
                     "greeks": greeks,
+                    # Desk units for the whole notional: delta as the foreign-currency
+                    # hedge amount, gamma as the change in that amount for a 1% spot
+                    # move, vega / theta / rho in domestic currency (per vol point,
+                    # per calendar day, per 1% of the domestic rate).
+                    "greeks_notional": {
+                        "delta_foreign": round(greeks["delta"] * n, 2),
+                        "gamma_1pct_foreign": round(greeks["gamma"] * S * 0.01 * n, 2),
+                        "vega_domestic": round(greeks["vega"] * n, 2),
+                        "theta_domestic": round(greeks["theta"] * n, 2),
+                        "rho_domestic": round(greeks["rho"] * n, 2),
+                    },
                 }
         elif args.command == "swap_value":
             result = swap_value(
@@ -599,10 +635,6 @@ def main():
                 args.valuation_date, args.maturity_date,
                 args.recovery_rate, args.notional, args.spread_bps,
                 args.risk_free_rate, args.coupon_bps
-            )
-        elif args.command == "forward_price":
-            result = forward_price(
-                args.spot, args.rate / 100, args.time, args.div_yield / 100
             )
         else:
             result = {"error": f"Unknown command: {args.command}"}

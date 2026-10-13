@@ -4,6 +4,7 @@
 #include "ui/pushpins/PushpinBar.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QAction>
 #include <QDateTime>
@@ -14,6 +15,7 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScreen>
+#include <QStyle>
 
 namespace fincept::ui {
 
@@ -114,11 +116,13 @@ ToolBar::ToolBar(QWidget* parent) : QWidget(parent) {
     credits_label_->setMaximumWidth(100);
     hl->addWidget(credits_label_);
     sep();
-    plan_btn_ = new QPushButton("---");
+    plan_btn_ = new QPushButton(QStringLiteral("---"));
+    plan_btn_->setFixedHeight(20);
     plan_btn_->setCursor(Qt::PointingHandCursor);
     plan_btn_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(plan_btn_, &QPushButton::clicked, this, &ToolBar::plan_clicked);
     hl->addWidget(plan_btn_);
+    hl->addSpacing(4);
 
     // Enterprise CTA. Deliberately added without its own separator: the
     // credits/chat visibility toggles in apply_responsive_layout() index into
@@ -188,13 +192,10 @@ void ToolBar::retranslateUi() {
     if (live_label_)
         live_label_->setText(tr(" LIVE"));
     if (plan_btn_)
-        plan_btn_->setToolTip(tr("View Plans & Pricing"));
+        plan_btn_->setToolTip(tr("Plans & pricing — Pro is $10/month"));
     if (upgrade_btn_) {
-        // U+25B4 up-pointing triangle as an icon; only the label translates.
-        // fromUtf8 is required — QStringLiteral would widen each UTF-8 byte
-        // into its own UTF-16 unit and render as mojibake.
-        upgrade_btn_->setText(QString::fromUtf8("\xe2\x96\xb4 ") + tr("UPGRADE"));
-        upgrade_btn_->setToolTip(tr("Upgrade to Fincept Terminal Enterprise — the private edition"));
+        upgrade_btn_->setText(tr("ENTERPRISE"));
+        upgrade_btn_->setToolTip(tr("Fincept Terminal Enterprise — the private edition for firms"));
     }
     if (chat_mode_btn_) {
         // Keep the ⬡ glyph (U+2B21) as a visual icon; only the label after it
@@ -251,20 +252,25 @@ void ToolBar::refresh_theme() {
     lbl(clock_label_, colors::TEXT_PRIMARY());
     lbl(user_label_, colors::AMBER());
     lbl(credits_label_, colors::POSITIVE());
+    // Plan badge. Free accounts get a subtle amber outline (tier="free", set in
+    // refresh_user_display) — a quiet pointer to Pro, not a nag.
     if (plan_btn_)
-        plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:none;padding:0 2px;}"
-                                         "QPushButton:hover{color:%2;}")
-                                     .arg(colors::TEXT_PRIMARY())
-                                     .arg(colors::AMBER()));
+        plan_btn_->setStyleSheet(QString("QPushButton{color:%1;background:transparent;border:1px solid transparent;"
+                                         "padding:0 6px;font-weight:700;}"
+                                         "QPushButton:hover{color:%2;}"
+                                         "QPushButton[tier=\"free\"]{border-color:%3;}"
+                                         "QPushButton[tier=\"free\"]:hover{border-color:%2;}")
+                                     .arg(colors::TEXT_PRIMARY(), colors::AMBER(), colors::AMBER_DIM()));
     // Filled rather than outlined — the only solid button on the row, so the
-    // Enterprise CTA reads as the primary action next to LOGOUT and CHAT.
+    // Enterprise CTA reads as the primary action next to LOGOUT and CHAT. Dark
+    // text on amber (white fails contrast); the hover swaps to light text on
+    // the dimmed amber so it stays legible.
     if (upgrade_btn_)
         upgrade_btn_->setStyleSheet(QString("QPushButton{background:%1;color:%2;border:1px solid %1;"
                                             "padding:0 8px;font-weight:700;}"
-                                            "QPushButton:hover{background:%3;border-color:%3;}")
-                                        .arg(colors::AMBER())
-                                        .arg(colors::BG_BASE())
-                                        .arg(colors::AMBER_DIM()));
+                                            "QPushButton:hover{background:%3;border-color:%1;color:%4;}")
+                                        .arg(colors::AMBER(), colors::BG_BASE(), colors::AMBER_DIM(),
+                                             colors::TEXT_PRIMARY()));
     if (chat_mode_btn_)
         chat_mode_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
                                               "padding:0 8px;font-weight:700;}"
@@ -321,10 +327,18 @@ void ToolBar::update_clock() {
 
 void ToolBar::refresh_user_display() {
     const auto& s = auth::AuthManager::instance().session();
+    auto set_tier = [this](const QString& tier) {
+        if (plan_btn_->property("tier").toString() == tier)
+            return;
+        plan_btn_->setProperty("tier", tier);
+        plan_btn_->style()->unpolish(plan_btn_);
+        plan_btn_->style()->polish(plan_btn_);
+    };
     if (!s.authenticated) {
-        user_label_->setText("---");
-        credits_label_->setText("---");
-        plan_btn_->setText("---");
+        user_label_->setText(QStringLiteral("---"));
+        credits_label_->setText(QStringLiteral("---"));
+        plan_btn_->setText(QStringLiteral("---"));
+        set_tier(QString());
         return;
     }
 
@@ -333,14 +347,16 @@ void ToolBar::refresh_user_display() {
     user_label_->setText(fm.elidedText(name, Qt::ElideRight, user_label_->maximumWidth() - 4));
     user_label_->setToolTip(name);
 
-    int credits = static_cast<int>(s.user_info.credit_balance);
-    credits_label_->setText(tr("%1 CR").arg(credits));
+    // Fractional balances are real (an AI call can cost 0.35 credits) — the
+    // int cast showed 0.35 as "0 CR".
+    credits_label_->setText(tr("%1 CR").arg(auth::format_credits(s.user_info.credit_balance)));
     credits_label_->setStyleSheet(
         QString("color:%1;background:transparent;")
             .arg(s.user_info.credit_balance > 0 ? colors::POSITIVE.get() : colors::NEGATIVE.get()));
 
-    QString plan_text = s.account_type().toUpper();
-    plan_btn_->setText(plan_text.isEmpty() ? tr("FREE") : plan_text);
+    // "FREE" / "PRO"; legacy paid tiers keep their own name.
+    plan_btn_->setText(s.plan_label());
+    set_tier(s.has_paid_plan() ? QStringLiteral("paid") : QStringLiteral("free"));
 }
 
 QMenu* ToolBar::build_file_menu() {
@@ -442,6 +458,7 @@ QMenu* ToolBar::build_navigate_menu() {
 
     auto* tools = add_sub(tr("Tools"));
     nav(tools, tr("Agent Config"), "agent_config");
+    nav(tools, tr("Agent Workbench"), "agent_workbench");
     nav(tools, tr("MCP Servers"), "mcp_servers");
     nav(tools, tr("Data Mapping"), "data_mapping");
     nav(tools, tr("Data Sources"), "data_sources");
@@ -453,7 +470,6 @@ QMenu* ToolBar::build_navigate_menu() {
 
     m->addSeparator();
 
-    nav(m, tr("Forum"), "forum");
     nav(m, tr("Docs"), "docs");
     nav(m, tr("Support"), "support");
     nav(m, tr("About"), "about");
@@ -543,6 +559,14 @@ QMenu* ToolBar::build_help_menu() {
     m->addAction(tr("Terms of Service"), this, [this]() { emit navigate_to("terms"); });
     m->addAction(tr("Privacy Policy"), this, [this]() { emit navigate_to("privacy"); });
     m->addAction(tr("Trademarks"), this, [this]() { emit navigate_to("trademarks"); });
+    m->addSeparator();
+    m->addAction(tr("Plans && Pricing…"), this, [this]() { emit plan_clicked(); });
+    m->addAction(tr("Fincept Terminal Enterprise…"), this,
+                 [this]() { UpgradeDialog::show_now(window(), QStringLiteral("help-menu")); });
+    m->addAction(tr("Compare Editions"), this, []() {
+        enterprise::open_url(enterprise::url_with_ref(enterprise::comparison_url(), QStringLiteral("help-menu")));
+    });
+    m->addAction(tr("Book an Enterprise Demo"), this, []() { enterprise::open_url(enterprise::demo_url()); });
     m->addSeparator();
     m->addAction(tr("Check for Updates"), this, [this]() { emit action_triggered("check_updates"); });
     m->addSeparator();

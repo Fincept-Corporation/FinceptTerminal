@@ -72,23 +72,6 @@ Based on Henry Kissinger's world order analysis:
 | **Islamic Order** | `islamic_order_agent.py` | Islamic governance principles |
 | **Multipolar Order** | `multipolar_order_agent.py` | Multiple power centers |
 
-## Hedge Fund Agents (`/hedgeFundAgents/`)
-
-Simulate strategies from world's top hedge funds:
-
-| Hedge Fund | File/Directory | Strategy Style | AUM |
-|------------|----------------|----------------|-----|
-| **Bridgewater Associates** | `bridgewater_associates_hedge_fund_agent/` | Global macro, risk parity | $124B |
-| **Citadel** | `citadel_hedge_fund_agent/` | Multi-strategy, quant | $62B |
-| **Renaissance Technologies** | `renaissance_technologies_hedge_fund_agent/` | Quantitative, mathematical models | $55B |
-| **Two Sigma** | `two_sigma_hedge_fund_agent/` | AI/ML, systematic trading | $60B |
-| **D.E. Shaw** | | `de_shaw_hedge_fund_agent/` | Computational finance | $60B |
-| **Elliott Management** | `elliott_management_hedge_fund_agent/` | Activist, distressed debt | $56B |
-| **Pershing Square** | `pershing_square_hedge_fund_agent/` | Activist value investing | $16B |
-| **AQR Capital** | `arq_capital_hedge_fund_agent/` | Factor investing, quant | $90B |
-
-**Fincept Hedge Fund**: Custom multi-agent hedge fund system (`fincept_hedge_fund/main.py`)
-
 ## Legendary Investor Agents (`/TraderInvestorsAgent/`)
 
 | Investor | File | Investment Philosophy |
@@ -118,13 +101,6 @@ Simulate strategies from world's top hedge funds:
 - Strategic alliance evaluation
 - Risk mapping for investments
 
-### Hedge Fund Agents:
-- Strategy-specific recommendations
-- Portfolio construction
-- Risk management approaches
-- Market regime analysis
-- Factor exposure analysis
-
 ### Investor Agents:
 - Stock screening criteria
 - Valuation analysis
@@ -139,11 +115,6 @@ Simulate strategies from world's top hedge funds:
 from agents.GeopoliticsAgents.PrisonersOfGeographyAgents.region_agents.china_geography_agent import ChinaGeographyAgent
 agent = ChinaGeographyAgent()
 analysis = agent.analyze("Impact of Taiwan situation on semiconductor supply chain")
-
-# Hedge fund agent
-from agents.hedgeFundAgents.bridgewater_associates_hedge_fund_agent.bridgewater_associates_agent import BridgewaterAgent
-agent = BridgewaterAgent()
-recommendation = agent.analyze_market("US bond market outlook")
 
 # Investor agent
 from agents.TraderInvestorsAgent.warren_buffett_agent import WarrenBuffettAgent

@@ -1,5 +1,7 @@
 #include "screens/alpha_arena/LeaderboardCards.h"
 
+#include "services/alpha_arena/ArenaMetrics.h"
+
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLocale>
@@ -10,7 +12,21 @@
 namespace fincept::screens::alpha_arena {
 namespace {
 
-enum Col { ColRank = 0, ColChip, ColModel, ColEquity, ColPnlPct, ColUpnl, ColPos, ColTok, ColSt, ColAct, ColCount };
+enum Col {
+    ColRank = 0,
+    ColChip,
+    ColModel,
+    ColEquity,
+    ColPnlPct,
+    ColDd,
+    ColSharpe,
+    ColUpnl,
+    ColPos,
+    ColTok,
+    ColSt,
+    ColAct,
+    ColCount
+};
 
 constexpr int kRowHeight = 22;
 
@@ -50,7 +66,28 @@ LeaderboardCards::LeaderboardCards(QWidget* parent) : QWidget(parent) {
 
     table_ = new QTableWidget(0, ColCount);
     table_->setHorizontalHeaderLabels({QStringLiteral("#"), QStringLiteral("●"), tr("MODEL"), tr("EQUITY $"),
-                                       tr("PnL %"), tr("uPnL $"), tr("POS"), tr("TOK"), tr("ST"), tr("ACT")});
+                                       tr("RET %"), tr("MAX DD %"), tr("SHARPE"), tr("uPnL $"), tr("POS"), tr("TOK"),
+                                       tr("ST"), tr("ACT")});
+    // Say what each figure is — a professional reads "Sharpe" and asks "of what?".
+    const QStringList header_tips = {
+        tr("Rank by equity"),
+        QString(),
+        tr("Model"),
+        tr("Account equity: free balance + margin + unrealised PnL (net of funding)"),
+        tr("Return on starting capital, fees and funding included"),
+        tr("Largest peak-to-trough fall of equity, as % of the peak (starting capital counts as the first peak)"),
+        tr("Annualised Sharpe ratio of per-round returns (risk-free rate 0, 365-day year). Shown once %1 rounds "
+           "have settled.")
+            .arg(fincept::arena::kArenaMinSharpeReturns + 1),
+        tr("Unrealised PnL of open positions, net of accrued funding"),
+        tr("Open positions"),
+        tr("LLM tokens used (prompt + completion)"),
+        tr("Status: ▶ active · ⏸ halted by user · ⚡ halted by circuit breaker"),
+        tr("Halt / resume · close positions & halt"),
+    };
+    for (int c = 0; c < ColCount && c < header_tips.size(); ++c)
+        if (auto* h = table_->horizontalHeaderItem(c))
+            h->setToolTip(header_tips[c]);
     table_->verticalHeader()->setVisible(false);
     table_->verticalHeader()->setDefaultSectionSize(kRowHeight);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -98,6 +135,14 @@ void LeaderboardCards::set_data(QVector<AgentCardData> cards) {
     rebuild();
 }
 
+void LeaderboardCards::set_controls_enabled(bool on) {
+    if (controls_enabled_ == on)
+        return;
+    controls_enabled_ = on;
+    table_->setColumnHidden(ColAct, !on);
+    rebuild();
+}
+
 void LeaderboardCards::rebuild() {
     table_->setRowCount(cards_.size());
     for (int i = 0; i < cards_.size(); ++i) {
@@ -115,6 +160,18 @@ void LeaderboardCards::rebuild() {
             i, ColPnlPct,
             cell(QStringLiteral("%1%2%").arg(d.pnl_pct >= 0 ? "+" : "").arg(QString::number(d.pnl_pct, 'f', 2)),
                  pnl_fg));
+        table_->setItem(i, ColDd,
+                        cell(d.max_dd_pct > 0.005 ? QStringLiteral("-%1%").arg(QString::number(d.max_dd_pct, 'f', 2))
+                                                  : QStringLiteral("0.00%"),
+                             d.max_dd_pct > 0.005 ? QColor("#E0245E") : QColor("#999")));
+        auto* sh = cell(d.sharpe_valid ? QString::number(d.sharpe, 'f', 2) : QStringLiteral("—"),
+                        !d.sharpe_valid ? QColor("#777") : d.sharpe >= 0 ? QColor("#26A65B") : QColor("#E0245E"));
+        sh->setToolTip(d.sharpe_valid
+                           ? tr("From %n per-round return(s)", "", d.sharpe_returns)
+                           : tr("Needs at least %1 per-round returns (%2 so far)")
+                                 .arg(fincept::arena::kArenaMinSharpeReturns)
+                                 .arg(d.sharpe_returns));
+        table_->setItem(i, ColSharpe, sh);
         table_->setItem(
             i, ColUpnl,
             cell(QStringLiteral("%1%2").arg(d.upnl >= 0 ? "+" : "").arg(QString::number(d.upnl, 'f', 2)), upnl_fg));
@@ -144,6 +201,11 @@ void LeaderboardCards::rebuild() {
         // ACT: halt/resume toggle + kill. Emissions are deferred — handlers
         // refresh the dashboard, which calls set_data → rebuild and would
         // delete the clicked button under its own clicked() handler.
+        if (!controls_enabled_) {
+            table_->removeCellWidget(i, ColAct);
+            table_->setRowHeight(i, kRowHeight);
+            continue;
+        }
         auto* act = new QWidget;
         act->setObjectName(QStringLiteral("arenaAct"));
         act->setProperty("sel", selected);

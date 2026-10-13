@@ -132,6 +132,12 @@ DataHub::TopicState& DataHub::state_for(const QString& topic) {
     return it.value();
 }
 
+void DataHub::clear_undispatched_in_flight(const QString& topic) {
+    // Caller holds mutex_.
+    if (auto it = topics_.find(topic); it != topics_.end())
+        it->in_flight = false;
+}
+
 Producer* DataHub::find_producer(const QString& topic) const {
     // Caller holds mutex_.
     // Pattern index is sorted by prefix length DESC so the first entry
@@ -254,7 +260,12 @@ void DataHub::on_owner_destroyed(QObject* owner) {
                 idle_set.insert(t);
             for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end();) {
                 it.value().erase(std::remove_if(it.value().begin(), it.value().end(),
-                                                [&idle_set](const QString& t) { return idle_set.contains(t); }),
+                                                [this, &idle_set](const QString& t) {
+                                                    if (!idle_set.contains(t))
+                                                        return false;
+                                                    clear_undispatched_in_flight(t);
+                                                    return true;
+                                                }),
                                  it.value().end());
                 if (it.value().isEmpty())
                     it = coalesce_pending_.erase(it);
@@ -438,7 +449,8 @@ void DataHub::unsubscribe(QObject* owner, const QString& topic) {
             // drop it now — there's no point dispatching a producer call for
             // a topic that has no subscribers left.
             for (auto it = coalesce_pending_.begin(); it != coalesce_pending_.end();) {
-                it.value().removeAll(topic);
+                if (it.value().removeAll(topic) > 0)
+                    clear_undispatched_in_flight(topic);
                 if (it.value().isEmpty())
                     it = coalesce_pending_.erase(it);
                 else

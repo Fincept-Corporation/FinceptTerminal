@@ -1,27 +1,41 @@
 """
 WHO Immunization Data Fetcher
-Provides vaccination coverage rates, disease incidence, immunization schedules,
-stockout data, and global coverage statistics via WHO and UNICEF data sources.
+Vaccination coverage (WHO/UNICEF WUENIC estimates) and reported cases of vaccine-preventable
+diseases, by country, WHO region or globally, from the keyless WHO Global Health Observatory
+OData API (ghoapi.azureedge.net).
 """
 import sys
 import json
-import os
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 
-API_KEY = os.environ.get('WHO_IMMUNIZATION_API_KEY', '')
-BASE_URL = "https://immunizationdata.who.int/api"
+BASE_URL = "https://ghoapi.azureedge.net/api"
+
+VACCINES = {
+    "BCG": "WHS4_543", "DTP1": "VACCINECOVERAGE_DTP1", "DTP3": "WHS4_100", "HEPB3": "WHS4_117",
+    "HIB3": "WHS4_129", "IPV1": "VACCINECOVERAGE_IPV1", "POL3": "WHS4_544", "IPVC": "WHS4_544",
+    "MCV1": "WHS8_110", "MCV2": "MCV2", "PCV3": "PCV3", "ROTAC": "ROTAC", "YFV": "VACCINECOVERAGE_YFV",
+    "MENA": "VACCINECOVERAGE_MENA_C", "HPV": "SDGHPVRECEIVED",
+}
+DISEASES = {
+    "MEASLES": "WHS3_62", "DIPHTHERIA": "WHS3_41", "PERTUSSIS": "WHS3_43", "TETANUS": "WHS3_46",
+    "NEONATAL_TETANUS": "WHS3_56", "POLIO": "WHS3_49", "WILD_POLIO": "VACCINEPREVENTABLE_WILDPOLIO",
+    "RUBELLA": "WHS3_57", "CRS": "WHS3_55", "MUMPS": "WHS3_53", "YELLOW_FEVER": "WHS3_50",
+    "JAPANESE_ENCEPHALITIS": "WHS3_42", "MENINGITIS": "WHS3_47",
+}
+REGIONS = {"AFR", "AMR", "SEAR", "EUR", "EMR", "WPR"}
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
+session.headers.update({"User-Agent": "FinceptTerminal/4.5 (+https://fincept.in)"})
 
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
-    url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
+    url = f"{BASE_URL}/{endpoint}"
     try:
-        response = session.get(url, params=params, timeout=30)
+        response = session.get(url, params=params, timeout=60)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
@@ -32,71 +46,80 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
+def _gho(code: str, area: str = None, year: int = None) -> Any:
+    filters = []
+    if area:
+        a = area.upper()
+        if a == "GLOBAL":
+            filters.append("SpatialDimType eq 'GLOBAL'")
+        else:
+            filters.append(f"SpatialDim eq '{a}'")
+    if year:
+        filters.append(f"TimeDim eq {int(year)}")
+    params = {"$filter": " and ".join(filters)} if filters else None
+    data = _make_request(code, params)
+    if isinstance(data, dict) and "error" in data:
+        return data
+    rows = [{"area": r.get("SpatialDim"), "area_type": r.get("SpatialDimType"), "year": r.get("TimeDim"),
+             "value": r.get("NumericValue"), "display": r.get("Value")}
+            for r in (data or {}).get("value", []) if r.get("NumericValue") is not None]
+    rows.sort(key=lambda r: (r["area"] or "", r["year"] or 0))
+    return rows
+
+
+def _resolve(name: str, table: Dict[str, str]) -> str:
+    return table.get(name.upper().replace("-", "_"), name)
+
+
 def get_coverage(vaccine: str, country: str, year: int = None) -> Any:
-    """Return vaccination coverage rate for a specific vaccine and country."""
-    params = {
-        "vaccine": vaccine.upper(),
-        "ISO_3_CODE": country.upper()
-    }
-    if year:
-        params["YEAR"] = year
-    data = _make_request("coverage", params=params)
-    if isinstance(data, dict) and "error" in data:
-        return data
-    return {"vaccine": vaccine, "country": country, "year": year, "coverage": data}
+    """Vaccination coverage (%) for a vaccine and country (ISO-3) or WHO region code."""
+    code = _resolve(vaccine, VACCINES)
+    rows = _gho(code, country, year)
+    if isinstance(rows, dict):
+        return rows
+    if not rows:
+        return {"error": f"No coverage data for {vaccine} / {country}"}
+    return {"vaccine": vaccine.upper(), "indicator": code, "country": country.upper(), "year": year,
+            "unit": "% of target population", "coverage": rows}
 
 
-def get_global_coverage(vaccine: str, year: int = None) -> Any:
-    """Return global vaccination coverage for a specific vaccine."""
-    params = {"vaccine": vaccine.upper(), "group": "GLOBAL"}
-    if year:
-        params["YEAR"] = year
-    data = _make_request("coverage", params=params)
-    if isinstance(data, dict) and "error" in data:
-        return data
-    return {"vaccine": vaccine, "year": year, "global_coverage": data}
+def get_global_coverage(vaccine: str = "DTP3", year: int = None) -> Any:
+    """Global and WHO-region coverage (%) for a vaccine."""
+    code = _resolve(vaccine, VACCINES)
+    rows = _gho(code, None, year)
+    if isinstance(rows, dict):
+        return rows
+    rows = [r for r in rows if r["area_type"] in ("GLOBAL", "REGION")]
+    if not rows:
+        return {"error": f"No global coverage data for {vaccine}"}
+    return {"vaccine": vaccine.upper(), "indicator": code, "year": year, "unit": "% of target population",
+            "global_coverage": rows}
 
 
 def get_disease_incidence(disease: str, country: str, year: int = None) -> Any:
-    """Return disease incidence/case counts for a vaccine-preventable disease."""
-    params = {
-        "disease": disease.upper(),
-        "ISO_3_CODE": country.upper()
-    }
-    if year:
-        params["YEAR"] = year
-    data = _make_request("incidence", params=params)
-    if isinstance(data, dict) and "error" in data:
-        return data
-    return {"disease": disease, "country": country, "year": year, "incidence": data}
-
-
-def get_stockout_data(country: str, year: int = None) -> Any:
-    """Return vaccine stockout and supply disruption data for a country."""
-    params = {"ISO_3_CODE": country.upper()}
-    if year:
-        params["YEAR"] = year
-    data = _make_request("supply", params=params)
-    if isinstance(data, dict) and "error" in data:
-        return data
-    return {"country": country, "year": year, "stockout_data": data}
-
-
-def get_schedule(country: str) -> Any:
-    """Return the national immunization schedule for a country."""
-    params = {"ISO_3_CODE": country.upper()}
-    data = _make_request("schedule", params=params)
-    if isinstance(data, dict) and "error" in data:
-        return data
-    return {"country": country, "schedule": data}
+    """Reported cases of a vaccine-preventable disease for a country (ISO-3) / region / GLOBAL."""
+    code = _resolve(disease, DISEASES)
+    rows = _gho(code, country, year)
+    if isinstance(rows, dict):
+        return rows
+    if not rows:
+        return {"error": f"No reported-case data for {disease} / {country}"}
+    return {"disease": disease.upper(), "indicator": code, "country": country.upper(), "year": year,
+            "unit": "reported cases", "incidence": rows}
 
 
 def get_countries() -> Any:
-    """Return all countries available in the WHO immunization database."""
-    data = _make_request("countries")
+    """Countries (ISO-3 codes) available in the WHO Global Health Observatory."""
+    data = _make_request("DIMENSION/COUNTRY/DimensionValues")
     if isinstance(data, dict) and "error" in data:
         return data
-    return {"countries": data}
+    rows = [{"code": r.get("Code"), "name": r.get("Title"), "region": r.get("ParentCode")}
+            for r in data.get("value", [])]
+    return {"count": len(rows), "countries": rows, "regions": sorted(REGIONS)}
+
+
+def get_vaccines() -> Any:
+    return {"vaccines": VACCINES, "diseases": DISEASES}
 
 
 def main(args=None):
@@ -116,12 +139,9 @@ def main(args=None):
             year = int(args[3]) if len(args) > 3 else None
             result = get_coverage(vaccine, country, year)
     elif command == "global":
-        vaccine = args[1] if len(args) > 1 else ""
-        if not vaccine:
-            result = {"error": "vaccine required"}
-        else:
-            year = int(args[2]) if len(args) > 2 else None
-            result = get_global_coverage(vaccine, year)
+        vaccine = args[1] if len(args) > 1 else "DTP3"
+        year = int(args[2]) if len(args) > 2 else None
+        result = get_global_coverage(vaccine, year)
     elif command == "incidence":
         if len(args) < 3:
             result = {"error": "disease and country required"}
@@ -130,21 +150,10 @@ def main(args=None):
             country = args[2]
             year = int(args[3]) if len(args) > 3 else None
             result = get_disease_incidence(disease, country, year)
-    elif command == "stockout":
-        country = args[1] if len(args) > 1 else ""
-        if not country:
-            result = {"error": "country required"}
-        else:
-            year = int(args[2]) if len(args) > 2 else None
-            result = get_stockout_data(country, year)
-    elif command == "schedule":
-        country = args[1] if len(args) > 1 else ""
-        if not country:
-            result = {"error": "country required"}
-        else:
-            result = get_schedule(country)
     elif command == "countries":
         result = get_countries()
+    elif command == "vaccines":
+        result = get_vaccines()
     print(json.dumps(result))
 
 

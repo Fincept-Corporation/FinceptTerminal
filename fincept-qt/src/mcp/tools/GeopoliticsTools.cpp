@@ -25,7 +25,7 @@
 namespace fincept::mcp::tools {
 
 namespace {
-static constexpr const char* TAG = "GeopoliticsTools";
+static constexpr const char* kGeopoliticsToolsTag = "GeopoliticsTools";
 static constexpr int kDefaultTimeoutMs = 120000;
 
 // HDX, trade-analysis and geolocation results come back keyed by CONTEXT only ("country",
@@ -522,7 +522,7 @@ std::vector<ToolDef> get_geopolitics_tools() {
         tools.push_back(std::move(t));
     }
 
-    LOG_INFO(TAG, QString("Defined %1 geopolitics tools").arg(tools.size()));
+    LOG_INFO(kGeopoliticsToolsTag, QString("Defined %1 geopolitics tools").arg(tools.size()));
     return tools;
 }
 

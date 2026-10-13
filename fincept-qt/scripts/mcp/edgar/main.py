@@ -17,11 +17,13 @@ Example:
     python -m mcp.edgar.main 10k_sections AAPL business risk_factors
 """
 
+import os
 import sys
 import json
+import traceback
 from typing import Dict, Any
 
-# Import all modules
+# Import all modules (base first: it repairs the SSL context before edgartools loads)
 from . import base
 from . import forms_10k
 from . import forms_10q
@@ -29,6 +31,13 @@ from . import forms_8k
 from . import forms_insider
 from . import forms_13f
 from . import financials
+from . import research
+
+try:
+    import fincept_json  # NaN/Infinity-safe JSON boundary shared by the app's scripts
+except ImportError:  # scripts/ not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    import fincept_json
 
 
 def execute_command(command: str, args: list) -> Dict[str, Any]:
@@ -258,6 +267,25 @@ def execute_command(command: str, args: list) -> Dict[str, Any]:
         deal_value = float(args[1]) if len(args) > 1 else 0.0
         return base.calc_multiples(ticker_or_cik, deal_value)
 
+    # =========================================================================
+    # RESEARCH VIEWS — Equity Research FILINGS tab (compact, display-ready)
+    # =========================================================================
+
+    elif command == "research_filings":
+        limit = int(args[1]) if len(args) > 1 else 150
+        return research.research_filings(args[0] if args else None, limit)
+
+    elif command == "research_financials":
+        return research.research_financials(args[0] if args else None)
+
+    elif command == "research_insiders":
+        limit = int(args[1]) if len(args) > 1 else 25
+        return research.research_insiders(args[0] if args else None, limit)
+
+    elif command == "research_holders":
+        top_n = int(args[1]) if len(args) > 1 else 10
+        return research.research_holders(args[0] if args else None, top_n)
+
     # Unknown command
     else:
         return {
@@ -271,7 +299,8 @@ def execute_command(command: str, args: list) -> Dict[str, Any]:
                     "8k": ["8k_latest", "8k_events", "8k_events_categorized", "8k_full_text", "8k_search"],
                     "insider": ["insider_transactions", "insider_transactions_detailed", "insider_summary"],
                     "13f": ["13f_holdings", "13f_top_holdings", "13f_manager_info", "13f_summary"],
-                    "financials": ["get_financials", "get_financial_metrics", "get_xbrl_statements", "get_company_facts"]
+                    "financials": ["get_financials", "get_financial_metrics", "get_xbrl_statements", "get_company_facts"],
+                    "research": ["research_filings", "research_financials", "research_insiders", "research_holders"]
                 }
             }
         }
@@ -300,14 +329,17 @@ def main():
     command = sys.argv[1]
     args = sys.argv[2:]
 
-    # Initialize Edgar
-    base.initialize_edgar()
+    # A bad integer argument or a missing edgartools install used to escape as a bare
+    # traceback on stderr; the host then had no JSON envelope to read the failure from.
+    try:
+        base.initialize_edgar()
+        result = execute_command(command, args)
+    except Exception as exc:
+        result = {"success": False, "error": f"{command}: {exc}", "details": traceback.format_exc(limit=4)}
 
-    # Execute command
-    result = execute_command(command, args)
-
-    # Output JSON result
-    print(json.dumps(result, indent=2, default=str))
+    # One line, and never the bare NaN/Infinity tokens json.dumps emits by default —
+    # QJsonDocument rejects the whole document on the first one.
+    print(fincept_json.dumps(result))
 
 
 if __name__ == "__main__":

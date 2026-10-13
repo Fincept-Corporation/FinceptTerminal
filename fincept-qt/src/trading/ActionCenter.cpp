@@ -1,24 +1,32 @@
 // ActionCenter.cpp — semi-auto order approval implementation (Phase 3 §2).
 #include "trading/ActionCenter.h"
 
+#include "algo_engine/AlgoEngine.h"
+
 #include "core/logging/Logger.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/OrderThreadPool.h"
+#include "trading/OrderValidator.h"
 #include "trading/TradingEvents.h"
 #include "trading/UnifiedTrading.h"
 
+#include <QCoreApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMetaObject>
 #include <QPointer>
+#include <QSet>
 #include <QSqlQuery>
 #include <QStringList>
 #include <QThreadPool>
+#include <QTimer>
 #include <QUuid>
 #include <QtConcurrent/QtConcurrent>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::trading {
@@ -32,10 +40,15 @@ constexpr const char* kLog = "ActionCenter";
 // broker — while taking the blocking broker round-trip off the GUI thread (P1).
 // Deliberately leaked: the pool must outlive every singleton it calls into, and a
 // static QThreadPool would block process exit on an in-flight broker call.
+// Kept separate from trading::order_thread_pool() (4 threads) because approvals
+// must stay strictly FIFO on ONE thread. The thread never expires, so
+// BrokerHttp's per-thread QNetworkAccessManager keeps its TLS connections warm
+// between approvals instead of re-handshaking after every idle period.
 QThreadPool& action_center_exec_pool() {
     static QThreadPool* const pool = []() {
         auto* p = new QThreadPool();
         p->setMaxThreadCount(1);
+        p->setExpiryTimeout(-1);
         return p;
     }();
     return *pool;
@@ -47,11 +60,297 @@ QString iso(const QDateTime& dt) {
 QDateTime from_iso(const QString& s) {
     return s.isEmpty() ? QDateTime() : QDateTime::fromString(s, Qt::ISODate);
 }
+
+// Expiry sweep cadence. The approval window is minutes long; a 5 s sweep keeps the
+// auto-reject within a few seconds of the deadline (approve_order() enforces the
+// exact deadline regardless). The timer only runs while something is pending.
+constexpr int kAcExpirySweepMs = 5000;
+constexpr const char* kAcTtlKey = "action_center.pending_ttl_minutes";
+constexpr const char* kAcOneClickPrefix = "action_center.one_click.";
+
+// Cached approval-window length (0 = not loaded yet). map_row() needs it for
+// every legacy row, and get_stats() maps up to 100k rows — one settings query
+// per row would be absurd. set_pending_ttl_minutes() keeps it coherent.
+std::atomic<int> g_ac_ttl_minutes{0};
+
+int ac_clamp_ttl(int minutes) {
+    return std::clamp(minutes, ActionCenter::kMinPendingTtlMinutes, ActionCenter::kMaxPendingTtlMinutes);
+}
+
+// End of a pending order's approval window: the stamped order_data["expires_at"]
+// when present, else created_at + the configured TTL (rows queued before the
+// stamp existed). Invalid when neither is readable.
+QDateTime ac_compute_expiry(const PendingOrder& po) {
+    return ActionCenter::expiry_for(po.order_data, po.created_at, ActionCenter::pending_ttl_minutes());
+}
+
+QString ac_expiry_reason(const PendingOrder& po) {
+    const qint64 window_min = (po.created_at.isValid() && po.expires_at.isValid())
+                                  ? std::max<qint64>(1, po.created_at.secsTo(po.expires_at) / 60)
+                                  : ActionCenter::pending_ttl_minutes();
+    const QString queued = po.created_at.isValid() ? po.created_at.toLocalTime().toString("HH:mm:ss")
+                                                   : QStringLiteral("unknown time");
+    return QString("Expired: not approved within the %1-minute approval window (queued %2) — auto-rejected, "
+                   "nothing was sent. The market has moved since; re-place the order if you still want the trade.")
+        .arg(window_min)
+        .arg(queued);
+}
 } // namespace
 
 ActionCenter& ActionCenter::instance() {
     static ActionCenter s;
     return s;
+}
+
+ActionCenter::ActionCenter() : QObject(nullptr) {
+    // Created BEFORE any thread move so it travels with us (a child cannot be
+    // created for a parent living on another thread).
+    expiry_timer_ = new QTimer(this);
+    expiry_timer_->setInterval(kAcExpirySweepMs);
+    connect(expiry_timer_, &QTimer::timeout, this, &ActionCenter::on_expiry_tick);
+    // The singleton can be first touched from a worker (MCP tool, workflow node,
+    // order pool). Re-home it on the application thread so its timer and queued
+    // signal deliveries run on a live event loop (same pattern as RiskManager).
+    if (auto* app = QCoreApplication::instance(); app && thread() != app->thread())
+        moveToThread(app->thread());
+    // Orders left in the queue by a previous session are swept as soon as the
+    // event loop runs.
+    ensure_expiry_sweep();
+}
+
+// ── Expiry ─────────────────────────────────────────────────────────────────
+
+int ActionCenter::pending_ttl_minutes() {
+    const int cached = g_ac_ttl_minutes.load();
+    if (cached > 0)
+        return cached;
+    int minutes = kDefaultPendingTtlMinutes;
+    auto r = SettingsRepository::instance().get(QString::fromLatin1(kAcTtlKey),
+                                                QString::number(kDefaultPendingTtlMinutes));
+    if (r.is_ok()) {
+        bool ok = false;
+        const int v = r.value().trimmed().toInt(&ok);
+        if (ok && v > 0)
+            minutes = ac_clamp_ttl(v);
+    } else {
+        // Do not cache a read failure — fall back to the (short) default and retry next time.
+        LOG_WARN(kLog, QString("Approval-window setting unreadable, using %1 min: %2")
+                           .arg(kDefaultPendingTtlMinutes)
+                           .arg(QString::fromStdString(r.error())));
+        return kDefaultPendingTtlMinutes;
+    }
+    g_ac_ttl_minutes.store(minutes);
+    return minutes;
+}
+
+void ActionCenter::set_pending_ttl_minutes(int minutes) {
+    const int v = ac_clamp_ttl(minutes);
+    auto r = SettingsRepository::instance().set(QString::fromLatin1(kAcTtlKey), QString::number(v), "action_center");
+    if (r.is_err()) {
+        LOG_ERROR(kLog, QString("Saving the approval window failed: %1").arg(QString::fromStdString(r.error())));
+        return;
+    }
+    g_ac_ttl_minutes.store(v);
+    LOG_INFO(kLog, QString("Pending-order approval window set to %1 min").arg(v));
+}
+
+qint64 ActionCenter::secs_until_expiry(const PendingOrder& po) {
+    if (!po.expires_at.isValid())
+        return 0;
+    return QDateTime::currentDateTime().secsTo(po.expires_at);
+}
+
+int ActionCenter::expire_stale_orders() {
+    int expired = 0;
+    QSet<QString> touched;
+    const auto pending = get_pending_orders();
+    for (const auto& po : pending) {
+        if (!is_expired(po))
+            continue;
+        const QString reason = ac_expiry_reason(po);
+        // Conditional on 'pending': an approval that claimed the row first wins.
+        auto r = Database::instance().execute("UPDATE pending_orders SET status = 'rejected', rejected_at = ?, "
+                                              "rejection_reason = ? WHERE id = ? AND status = 'pending'",
+                                              {iso(QDateTime::currentDateTime()), reason, po.id});
+        if (r.is_err()) {
+            LOG_ERROR(kLog, QString("Auto-expiry update failed for %1: %2")
+                                .arg(po.id, QString::fromStdString(r.error())));
+            continue;
+        }
+        if (r.value().numRowsAffected() != 1)
+            continue;
+        ++expired;
+        touched.insert(po.account_id);
+        LOG_INFO(kLog, QString("Auto-rejected expired pending order %1 (%2 %3 %4)")
+                           .arg(po.id, po.action, po.quantity, po.symbol));
+        emit order_rejected(po.id, reason);
+    }
+    for (const auto& acct : touched)
+        emit stats_updated(acct);
+    return expired;
+}
+
+void ActionCenter::ensure_expiry_sweep() {
+    // Always hop to this object's (GUI) thread: QTimer::start() must run there.
+    QMetaObject::invokeMethod(
+        this,
+        [this]() {
+            if (expiry_timer_ && !expiry_timer_->isActive())
+                expiry_timer_->start();
+            on_expiry_tick();
+        },
+        Qt::QueuedConnection);
+}
+
+void ActionCenter::on_expiry_tick() {
+    expire_stale_orders();
+    // Nothing left to watch — stop until the next queue_order().
+    if (expiry_timer_ && get_pending_orders().isEmpty())
+        expiry_timer_->stop();
+}
+
+// ── One-click trading ──────────────────────────────────────────────────────
+
+bool ActionCenter::one_click_enabled(const QString& account_id) const {
+    if (account_id.isEmpty())
+        return false;
+    auto r = SettingsRepository::instance().get(QString::fromLatin1(kAcOneClickPrefix) + account_id, "0");
+    if (r.is_err()) {
+        // Fail closed: an unreadable opt-in means the confirmation dialog shows.
+        LOG_WARN(kLog, QString("One-click setting unreadable for %1 — confirmation stays on: %2")
+                           .arg(account_id, QString::fromStdString(r.error())));
+        return false;
+    }
+    return r.value().trimmed() == QLatin1String("1");
+}
+
+void ActionCenter::set_one_click_enabled(const QString& account_id, bool enabled) {
+    if (account_id.isEmpty())
+        return;
+    auto r = SettingsRepository::instance().set(QString::fromLatin1(kAcOneClickPrefix) + account_id,
+                                                enabled ? QStringLiteral("1") : QStringLiteral("0"), "action_center");
+    if (r.is_err()) {
+        LOG_ERROR(kLog, QString("Saving one-click setting for %1 failed: %2")
+                            .arg(account_id, QString::fromStdString(r.error())));
+        return;
+    }
+    LOG_INFO(kLog, QString("One-click trading %1 for account %2").arg(enabled ? "ENABLED" : "disabled", account_id));
+    emit one_click_changed(account_id, enabled);
+}
+
+// ── Kill switch ────────────────────────────────────────────────────────────
+
+QStringList ActionCenter::kill_switch_target_labels() const {
+    QStringList out;
+    for (const auto& a : AccountManager::instance().list_accounts()) {
+        if (!a.is_active || a.trading_mode != QLatin1String("live"))
+            continue;
+        out << QString("%1  [%2]").arg(a.display_name.isEmpty() ? a.account_id : a.display_name, a.broker_id);
+    }
+    return out;
+}
+
+bool ActionCenter::run_kill_switch() {
+    bool expected = false;
+    if (!kill_switch_running_.compare_exchange_strong(expected, true)) {
+        LOG_WARN(kLog, "Kill switch already running — ignoring a second trigger");
+        return false;
+    }
+    LOG_WARN(kLog, "KILL SWITCH engaged: rejecting queued orders, cancelling open orders and squaring off "
+                   "positions on every active LIVE account");
+
+    QVector<KillSwitchAccountResult> plan;
+
+    // FIRST stop every LIVE algo deployment: otherwise a running strategy could
+    // re-enter seconds after its account was squared off. stop_all_live() blocks
+    // their orders immediately (kill flag + engine-side gate) and marks them
+    // stopped so they never auto-resume. Reported as rows with broker_id "algo"
+    // (skipped = no broker call was made for the row itself).
+    for (const auto& s : fincept::algo::AlgoEngine::instance().stop_all_live(QStringLiteral("Kill switch engaged"))) {
+        KillSwitchAccountResult r;
+        r.account_id = QStringLiteral("algo:") + s.deployment_id;
+        r.display_name = QStringLiteral("ALGO %1 on %2").arg(s.strategy_name, s.symbol);
+        r.broker_id = QStringLiteral("algo");
+        r.skipped = true;
+        r.skip_reason = QStringLiteral("live algo deployment stopped before the square-off (%1%2)")
+                            .arg(s.note, s.db_marked_stopped ? QString() : QStringLiteral("; DB update FAILED"));
+        plan.append(r);
+    }
+    for (const auto& a : AccountManager::instance().list_accounts()) {
+        if (!a.is_active)
+            continue;
+        KillSwitchAccountResult r;
+        r.account_id = a.account_id;
+        r.display_name = a.display_name.isEmpty() ? a.account_id : a.display_name;
+        r.broker_id = a.broker_id;
+        if (a.trading_mode != QLatin1String("live")) {
+            r.skipped = true;
+            r.skip_reason = QStringLiteral("paper account");
+        }
+        // Unapproved queued orders go first, on this thread, for EVERY account
+        // (paper included): nothing still waiting for approval may be sent once
+        // the user has hit the kill switch.
+        const auto pending = get_pending_orders(a.account_id);
+        for (const auto& po : pending)
+            reject_order(po.id, QStringLiteral("Kill switch engaged — queued order rejected, nothing was sent"));
+        r.queued_rejected = int(pending.size());
+        plan.append(r);
+    }
+
+    QPointer<ActionCenter> self(this);
+    (void)QtConcurrent::run(&order_thread_pool(), [self, plan]() mutable {
+        for (auto& r : plan) {
+            if (r.skipped)
+                continue;
+            try {
+                // Cancel FIRST: a resting stop-loss left behind after the square-off
+                // would trigger later and open a fresh position in the other direction.
+                const auto c = UnifiedTrading::instance().cancel_all_orders(r.account_id);
+                if (c.success && c.data.has_value()) {
+                    r.orders_cancelled = int(c.data->canceled_order_ids.size());
+                    r.orders_cancel_failed = int(c.data->failed.size());
+                    for (const auto& f : c.data->failed)
+                        r.errors << QString("cancel %1: %2").arg(f.first, f.second);
+                } else {
+                    r.errors << QString("cancel-all failed: %1").arg(c.error.isEmpty() ? QStringLiteral("no detail")
+                                                                                        : c.error);
+                }
+                const auto p = UnifiedTrading::instance().close_all_positions(r.account_id);
+                if (p.success && p.data.has_value()) {
+                    r.positions_closed = int(p.data->closed_symbols.size());
+                    r.positions_close_failed = int(p.data->failed.size());
+                    for (const auto& f : p.data->failed)
+                        r.errors << QString("close %1: %2").arg(f.first, f.second);
+                } else {
+                    r.errors << QString("square-off failed: %1").arg(p.error.isEmpty() ? QStringLiteral("no detail")
+                                                                                       : p.error);
+                }
+            } catch (const std::exception& e) {
+                r.errors << QString("unexpected error: %1 — check the broker terminal").arg(QString::fromUtf8(e.what()));
+            } catch (...) {
+                r.errors << QStringLiteral("unexpected error — check the broker terminal");
+            }
+            LOG_WARN(kLog, QString("Kill switch %1 (%2): cancelled %3 (%4 failed), closed %5 (%6 failed)%7")
+                               .arg(r.display_name, r.broker_id)
+                               .arg(r.orders_cancelled)
+                               .arg(r.orders_cancel_failed)
+                               .arg(r.positions_closed)
+                               .arg(r.positions_close_failed)
+                               .arg(r.errors.isEmpty() ? QString() : " — " + r.errors.join("; ")));
+        }
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, plan]() {
+                if (!self)
+                    return;
+                self->kill_switch_running_ = false;
+                emit self->kill_switch_finished(plan);
+            },
+            Qt::QueuedConnection);
+    });
+    return true;
 }
 
 const QSet<QString>& ActionCenter::immediate_ops() {
@@ -250,9 +549,19 @@ QString ActionCenter::queue_order(const QString& account_id, const QString& orde
     clean.remove("api_key");
     clean.remove("api_secret");
     clean.remove("access_token");
-    po.order_data = clean;
     po.status = "pending";
     po.created_at = QDateTime::currentDateTime();
+    // Stamp the end of the approval window into the row itself so a later change
+    // of the TTL setting never silently extends an order already in the queue. A
+    // caller may ask for a SHORTER window via its own "expires_at"; never a longer one.
+    QDateTime expiry = po.created_at.addSecs(static_cast<qint64>(pending_ttl_minutes()) * 60);
+    const QDateTime caller_expiry =
+        QDateTime::fromString(clean.value(QStringLiteral("expires_at")).toString(), Qt::ISODateWithMs);
+    if (caller_expiry.isValid() && caller_expiry < expiry)
+        expiry = caller_expiry;
+    clean["expires_at"] = expiry.toUTC().toString(Qt::ISODateWithMs);
+    po.order_data = clean;
+    po.expires_at = expiry;
     populate_display_fields(po);
 
     const QString json_str = QString::fromUtf8(QJsonDocument(po.order_data).toJson(QJsonDocument::Compact));
@@ -265,9 +574,11 @@ QString ActionCenter::queue_order(const QString& account_id, const QString& orde
         return {};
     }
 
-    LOG_INFO(kLog, QString("Queued %1 order %2 for account %3").arg(order_type, po.id, account_id));
+    LOG_INFO(kLog, QString("Queued %1 order %2 for account %3 (approval window ends %4)")
+                       .arg(order_type, po.id, account_id, expiry.toLocalTime().toString("HH:mm:ss")));
     emit pending_order_created(po);
     emit stats_updated(account_id);
+    ensure_expiry_sweep();
     return po.id;
 }
 
@@ -283,6 +594,7 @@ PendingOrder ActionCenter::map_row(QSqlQuery& q) {
     po.rejected_at = from_iso(q.value("rejected_at").toString());
     po.rejection_reason = q.value("rejection_reason").toString();
     po.broker_order_id = q.value("broker_order_id").toString();
+    po.expires_at = ac_compute_expiry(po);
     populate_display_fields(po);
     return po;
 }
@@ -368,6 +680,12 @@ ActionCenter::Stats ActionCenter::get_stats(const QString& account_id) const {
 QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString& err, bool& async) {
     ok = false;
     async = false;
+    // An approval still waiting on the FIFO executor when the kill switch is hit
+    // must not reach the broker in the middle of the flatten.
+    if (kill_switch_running_) {
+        err = QStringLiteral("Kill switch engaged — order not sent");
+        return {};
+    }
     if (po.order_type == "placeorder" || po.order_type == "smartorder") {
         // Smart collapses to a standard place via UnifiedTrading for now —
         // the serialized order carries the same fields. (place_smart_order
@@ -402,6 +720,17 @@ QString ActionCenter::execute_pending(const PendingOrder& po, bool& ok, QString&
         const UnifiedOrder base = deserialize_unified_order(po.order_data);
         if (base.stop_price <= 0.0) {
             err = "GTT order missing trigger_price";
+            return {};
+        }
+        // GTTs bypass UnifiedTrading::place_order, so they take the same
+        // validation + settings-driven risk gate here.
+        if (const auto vr = OrderValidator::validate(base); !vr.valid) {
+            err = "Validation failed: " + vr.errors.join("; ");
+            return {};
+        }
+        if (const auto gate = OrderValidator::pre_trade_risk(po.account_id, base, /*broker_routed=*/true);
+            !gate.valid) {
+            err = "Risk check failed: " + gate.errors.join("; ");
             return {};
         }
         GttOrder gtt;
@@ -509,12 +838,9 @@ qint64 ActionCenter::age_secs(const PendingOrder& po) {
 
 bool ActionCenter::is_expired(const PendingOrder& po) {
     // Only a still-pending order can expire; approved/rejected rows are history.
-    if (po.status != QLatin1String("pending"))
-        return false;
-    const qint64 age = age_secs(po);
-    if (age < 0)
-        return false; // unparseable timestamp — don't block on a data defect
-    return age > static_cast<qint64>(kPendingOrderTtlMinutes) * 60;
+    // Unreadable timestamps: we cannot prove the order is fresh, so it may not
+    // be executed (fail closed). The sweep rejects it with an explanation.
+    return expired_at(po.status, po.expires_at, QDateTime::currentDateTime());
 }
 
 void ActionCenter::approve_order(const QString& pending_id) {
@@ -533,21 +859,19 @@ void ActionCenter::approve_order(const QString& pending_id) {
     // means no caller — the approval panel, a bulk approve, or a future
     // automation path — can execute one by taking a different route.
     if (is_expired(po)) {
-        const qint64 mins = age_secs(po) / 60;
-        const QString reason =
-            QString("Expired: queued %1 minutes ago (limit %2). The market has moved since this order was "
-                    "created — re-place it if you still want the trade.")
-                .arg(mins)
-                .arg(kPendingOrderTtlMinutes);
-        LOG_WARN(kLog, QString("approve_order: refusing expired order %1 (age %2m)").arg(pending_id).arg(mins));
+        const QString reason = ac_expiry_reason(po);
+        LOG_WARN(kLog, QString("approve_order: refusing expired order %1 (age %2 s)").arg(pending_id).arg(age_secs(po)));
 
-        auto r = Database::instance().execute(
-            "UPDATE pending_orders SET status = ?, rejected_at = ?, rejection_reason = ? WHERE id = ?",
-            {"rejected", iso(QDateTime::currentDateTime()), reason, pending_id});
+        // Conditional on 'pending' so it can never overwrite a row another path
+        // already finalized.
+        auto r = Database::instance().execute("UPDATE pending_orders SET status = 'rejected', rejected_at = ?, "
+                                              "rejection_reason = ? WHERE id = ? AND status = 'pending'",
+                                              {iso(QDateTime::currentDateTime()), reason, pending_id});
         if (r.is_err())
             LOG_ERROR(kLog, QString("approve_order expiry update failed: %1").arg(QString::fromStdString(r.error())));
 
         emit order_rejected(pending_id, reason);
+        emit stats_updated(po.account_id);
         return;
     }
 

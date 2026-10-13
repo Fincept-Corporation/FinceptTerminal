@@ -59,10 +59,7 @@ void NberPanel::activate() {
 
 void NberPanel::build_controls(QHBoxLayout* thl) {
     dataset_lbl_ = new QLabel(tr("DATASET"));
-    // objectName instead of setStyleSheet(ctrl_label_style()): the rule lives in
-    // the container stylesheet EconPanelBase already applies, so this label
-    // costs no extra CSS parse. The other 30 panels still use the inline form;
-    // migrate them as they're touched.
+    // Styled by the container stylesheet EconPanelBase applies (no per-label CSS parse).
     dataset_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     dataset_combo_ = new QComboBox;

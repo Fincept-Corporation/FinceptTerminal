@@ -339,10 +339,13 @@ void EquityOverviewTab::set_symbol(const QString& symbol) {
     info_loaded_ = quote_loaded_ = historical_loaded_ = false;
     set_overview_error(this, QString()); // drop the previous symbol's failure
     loading_overlay_->show_loading(tr("LOADING OVERVIEW…"));
-    // Candles for the period button that is currently selected. The screen used to
-    // fetch a fixed 1Y series for every new symbol, leaving a 1M/5Y selection showing
-    // 1Y data under the wrong highlighted button. Quote + info come from the screen.
-    services::equity::EquityResearchService::instance().load_historical_only(symbol, current_period_);
+    // The tab is handed its symbol only when shown, so it asks for every leg it renders
+    // (a cached copy answers at once; a request the header bar already started is shared).
+    // Candles follow the period button that is currently selected.
+    auto& svc = services::equity::EquityResearchService::instance();
+    svc.load_quote_only(symbol);
+    svc.load_info_only(symbol);
+    svc.load_historical_only(symbol, current_period_);
 }
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
@@ -623,9 +626,12 @@ QWidget* EquityOverviewTab::build_profitability_panel() {
 }
 
 QWidget* EquityOverviewTab::build_growth_panel() {
-    auto* p = make_panel_(QT_TR_NOOP("GROWTH RATES"), BLUE);
+    auto* p = make_panel_(QT_TR_NOOP("GROWTH (LATEST QTR, YoY)"), BLUE);
     rev_growth_val_ = add_row_(p, QT_TR_NOOP("REVENUE"), ui::colors::POSITIVE);
     earnings_growth_val_ = add_row_(p, QT_TR_NOOP("EARNINGS"), ui::colors::POSITIVE);
+    // yfinance revenueGrowth / earningsGrowth compare the most recent quarter with the same
+    // quarter a year earlier — not annual or TTM growth.
+    p->setToolTip(tr("Most recent quarter vs the same quarter a year earlier (Yahoo Finance)"));
     static_cast<QVBoxLayout*>(p->layout())->addStretch();
     return p;
 }
@@ -717,7 +723,7 @@ void EquityOverviewTab::on_info_loaded(services::equity::StockInfo info) {
 // recommendation badge) without involving the service or the load flags.
 
 void EquityOverviewTab::render_info(const services::equity::StockInfo& info) {
-    const QString na = tr("N/A");
+    const QString na = QString::fromUtf8("â"); // missing → "—", never a made-up 0
     // The info payload reports a field the source lacks as 0 — show N/A, not a made-up
     // "0" / "0.00%" (shares, float, volumes and the balance-sheet snapshot included).
     auto large_or_na = [&na](double v) { return v > 0.0 ? fmt_large(v) : na; };

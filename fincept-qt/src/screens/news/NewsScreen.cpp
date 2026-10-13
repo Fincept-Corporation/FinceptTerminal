@@ -19,6 +19,7 @@
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QDateTime>
 #include <QDesktopServices>
@@ -42,11 +43,37 @@ static constexpr int64_t kNewsNotifyMaxAgeSec = 1800;
 // grow them forever (clearing at worst re-notifies something still in the feed).
 static constexpr int kNewsNotifiedSetCap = 20000;
 
+// State rules layered over ui::styles::news_screen_styles(): per-priority stripes,
+// signal / odds colours, live badge, credit footer. Widgets select them by object
+// name / dynamic property instead of carrying an inline stylesheet each (several
+// of these used to be set per row, inside loops).
+static QString news_screen_local_rules() {
+    using services::Priority;
+    using services::priority_color;
+    return QString("QPushButton#newsTopStoryBtn[prio=\"flash\"] { border-left: 3px solid %1; }"
+                   "QPushButton#newsTopStoryBtn[prio=\"urgent\"] { border-left: 3px solid %2; }"
+                   "QPushButton#newsTopStoryBtn[prio=\"breaking\"] { border-left: 3px solid %3; }"
+                   "QPushButton#newsTopStoryBtn[prio=\"routine\"] { border-left: 3px solid %4; }"
+                   "QLabel#newsSignalCritical, QLabel#newsPredLow { color: %5; background: transparent; }"
+                   "QLabel#newsSignalWarn, QLabel#newsPredMid { color: %6; background: transparent; }"
+                   "QLabel#newsPredHigh { color: %7; background: transparent; }"
+                   "QLabel#newsPredSource { color: %8; background: transparent; font-size: 9px; }"
+                   "QPushButton#newsLiveBadge { color: %8; background: transparent; border: 1px solid %8;"
+                   " padding: 0 6px; font-weight: 700; font-size: 10px; }"
+                   "QPushButton#newsLiveBadge[live=\"true\"] { color: %7; border-color: %7; }"
+                   "QLabel#newsDetailAiCredits { color: %8; font-size: 10px; }"
+                   "QLabel#newsDetailAiCredits[low=\"true\"] { color: %6; }")
+        .arg(priority_color(Priority::FLASH), priority_color(Priority::URGENT), priority_color(Priority::BREAKING),
+             priority_color(Priority::ROUTINE), ui::colors::NEGATIVE(), ui::colors::WARNING(),
+             ui::colors::POSITIVE(), ui::colors::TEXT_TERTIARY());
+}
+
 NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
     setObjectName("newsScreen");
-    LOG_INFO("NewsScreen", "Applying news_screen_styles");
-    setStyleSheet(ui::styles::news_screen_styles());
-    LOG_INFO("NewsScreen", "news_screen_styles applied");
+    apply_news_styles();
+    // The sheet bakes theme colours in; rebuild it when the theme changes.
+    connect(&ui::ThemeManager::instance(), &ui::ThemeManager::theme_changed, this,
+            [this](const ui::ThemeTokens&) { apply_news_styles(); });
 
     // Restore persistent preferences
     QSettings settings;
@@ -83,6 +110,10 @@ NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
     });
 
     LOG_INFO("NewsScreen", "News screen constructed (no data fetch in constructor)");
+}
+
+void NewsScreen::apply_news_styles() {
+    setStyleSheet(ui::styles::news_screen_styles() + news_screen_local_rules());
 }
 
 void NewsScreen::build_ui() {
@@ -174,7 +205,7 @@ void NewsScreen::connect_signals() {
     connect(side_panel_, &NewsSidePanel::monitor_added, this, &NewsScreen::on_monitor_added);
     connect(side_panel_, &NewsSidePanel::monitor_toggled, this, &NewsScreen::on_monitor_toggled);
     connect(side_panel_, &NewsSidePanel::monitor_deleted, this, &NewsScreen::on_monitor_deleted);
-    connect(side_panel_, &NewsSidePanel::close_requested, this, &NewsScreen::on_drawer_toggle);
+    connect(side_panel_, &NewsSidePanel::close_requested, this, [this]() { set_drawer_open(false); });
 
     // Detail panel (overlay)
     connect(detail_panel_, &NewsDetailPanel::analyze_requested, this, &NewsScreen::on_analyze_requested);
@@ -330,15 +361,21 @@ void NewsScreen::connect_signals() {
             return;
         command_bar_->set_summarizing(true);
         QPointer<NewsScreen> self = this;
+        // Offline digest of the current filter's top stories (NewsService builds it
+        // locally — no network, no credits).
         services::NewsService::instance().summarize_headlines(filtered_articles_, 8, [self](bool ok, QString summary) {
             if (!self)
                 return;
             self->command_bar_->set_summarizing(false);
-            if (ok)
-                self->command_bar_->show_summary(summary);
+            self->command_bar_->show_summary(ok ? summary : self->tr("No headlines to brief for the current filter."));
         });
     });
     connect(detail_panel_, &NewsDetailPanel::related_article_clicked, this, &NewsScreen::on_related_clicked);
+    connect(detail_panel_, &NewsDetailPanel::ticker_filter_requested, this, [this](const QString& ticker) {
+        SymbolRef ref;
+        ref.symbol = ticker;
+        on_group_symbol_changed(ref);
+    });
 
     // Ticker strip
     connect(ticker_strip_, &NewsTickerStrip::article_clicked, this, &NewsScreen::on_article_clicked);
@@ -386,7 +423,7 @@ void NewsScreen::connect_signals() {
         if (detail_panel_->is_panel_open())
             detail_panel_->close_panel();
         else if (side_panel_->is_drawer_open())
-            side_panel_->toggle_drawer();
+            set_drawer_open(false);
     });
 }
 
@@ -661,27 +698,23 @@ void NewsScreen::on_article_clicked(const services::NewsArticle& article) {
     }
     detail_panel_->show_monitor_matches(article_matches);
 
-    // Show NER entities for this article
-    auto ner = services::NewsNlpService::instance().cached_ner();
-    for (const auto& e : ner.per_article) {
-        if (e.id == article.id) {
-            detail_panel_->show_entities(e);
-            break;
-        }
-    }
+    // NER entities for this article (per-article cache filled by enrichment).
+    if (auto entities = services::NewsNlpService::instance().cached_entities(article.id))
+        detail_panel_->show_entities(*entities);
+    else
+        detail_panel_->show_entities({});
 
-    // If geolocated, fetch nearby infrastructure
-    auto geo = services::NewsNlpService::instance().cached_geo();
-    for (const auto& g : geo) {
-        if (g.id == article.id && !g.locations.isEmpty()) {
-            QPointer<NewsScreen> geo_self = this;
-            services::NewsNlpService::instance().nearby_infrastructure(
-                g.primary_lat, g.primary_lon, 50, [geo_self](bool ok, QVector<services::InfrastructureItem> items) {
-                    if (geo_self && ok)
-                        geo_self->detail_panel_->show_infrastructure(items);
-                });
-            break;
-        }
+    // If geolocated, fetch nearby infrastructure. The reply is pinned to this
+    // article so a slow Overpass answer can't land on the next one opened.
+    if (auto geo = services::NewsNlpService::instance().cached_geo(article.id)) {
+        QPointer<NewsScreen> geo_self = this;
+        const QString link = article.link;
+        services::NewsNlpService::instance().nearby_infrastructure(
+            geo->primary_lat, geo->primary_lon, 50,
+            [geo_self, link](bool ok, QVector<services::InfrastructureItem> items) {
+                if (geo_self && ok && geo_self->detail_panel_->current_article_link() == link)
+                    geo_self->detail_panel_->show_infrastructure(items);
+            });
     }
 }
 
@@ -743,7 +776,7 @@ void NewsScreen::on_analyze_requested(const QString& url) {
         if (ok)
             self->detail_panel_->show_analysis(analysis);
         else
-            self->detail_panel_->show_analysis_failed(); // used to leave the button spinning for 30 s
+            self->detail_panel_->show_analysis_failed(analysis.error); // e.g. HTTP_402 -> plans link
     });
 }
 
@@ -752,7 +785,14 @@ void NewsScreen::on_related_clicked(const services::NewsArticle& article) {
 }
 
 void NewsScreen::on_drawer_toggle() {
-    side_panel_->toggle_drawer();
+    set_drawer_open(!side_panel_->is_drawer_open());
+}
+
+void NewsScreen::set_drawer_open(bool open) {
+    side_panel_->set_drawer_open(open);
+    command_bar_->set_drawer_checked(open);
+    if (open)
+        maybe_fetch_predictions();
 }
 
 void NewsScreen::on_detail_closed() {
@@ -1049,9 +1089,6 @@ void NewsScreen::update_ui_from_filtered(int /*generation*/, const QVector<servi
                                services::NewsService::instance().active_sources().size());
     command_bar_->update_sentiment(bullish, bearish, neutral);
 
-    // Side panel (drawer) — still gets data for when user opens it
-    side_panel_->update_sentiment(bullish, bearish, neutral);
-
     // Top 5 stories
     QVector<services::NewsArticle> top5;
     for (int i = 0; i < std::min(5, static_cast<int>(filtered.size())); i++)
@@ -1125,61 +1162,69 @@ void NewsScreen::run_enrichment_now() {
     if (filtered_articles_.isEmpty())
         return;
 
-    // Cap input size — Python NER on 1000+ articles is slow and adds
-    // little for the sidebar's top-N rendering. The top of the filtered
-    // list is what the user is looking at.
+    // Cap input size — the drawer renders top-N anyway and the top of the
+    // filtered list is what the user is looking at.
     constexpr int kMaxEnrichArticles = 200;
     const auto subset = filtered_articles_.mid(0, kMaxEnrichArticles);
+
+    // Skip a pass over an unchanged set: NER/places come from the per-article
+    // cache and the velocity signals only move with the clock, so recomputing
+    // more than once a minute buys nothing. (Every refresh / filter change used
+    // to spawn four Python processes here.)
+    QStringList ids;
+    ids.reserve(subset.size());
+    for (const auto& a : subset)
+        ids.append(a.id);
+    const size_t signature = qHash(ids);
+    const int64_t now = QDateTime::currentSecsSinceEpoch();
+    if (signature == last_enrich_signature_ && now - last_enrich_at_ < kEnrichMinIntervalSec) {
+        maybe_fetch_predictions();
+        return;
+    }
+    last_enrich_signature_ = signature;
+    last_enrich_at_ = now;
 
     const int gen = enrichment_generation_.fetch_add(1, std::memory_order_relaxed) + 1;
     QPointer<NewsScreen> self = this;
 
-    // NER → entities sidebar + per-article cache (used by detail panel
-    // "key actors" lookup at on_article_clicked).
-    services::NewsNlpService::instance().extract_entities(subset, [self, gen](bool ok, services::NerResult ner) {
-        if (!self || !ok)
-            return;
-        if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
-            return;
-        self->side_panel_->update_entities(ner);
-    });
-
-    // Geolocation → locations sidebar + feed-row geo dot flag.
-    services::NewsNlpService::instance().geolocate_articles(
-        subset, [self, gen](bool ok, QVector<services::ArticleGeo> geo) {
-            if (!self || !ok)
+    // NER + places -> entities / locations sections, feed-row geo dots, and the
+    // per-article cache the detail panel reads. Only articles never enriched
+    // before reach Python (one process for all of them).
+    services::NewsNlpService::instance().enrich_articles(
+        subset, [self, gen](bool ok, services::NewsEnrichment result) {
+            if (!self || gen != self->enrichment_generation_.load(std::memory_order_relaxed))
+                return; // superseded by a newer filter
+            if (!ok) {
+                self->last_enrich_signature_ = 0; // let the next pass retry
                 return;
-            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
-                return;
-            self->side_panel_->update_locations(geo);
+            }
+            self->side_panel_->update_entities(result.ner);
+            self->side_panel_->update_locations(result.geo);
             QSet<QString> geo_ids;
-            geo_ids.reserve(geo.size());
-            for (const auto& g : geo)
-                if (!g.locations.isEmpty())
-                    geo_ids.insert(g.id);
+            geo_ids.reserve(result.geo.size());
+            for (const auto& g : std::as_const(result.geo))
+                geo_ids.insert(g.id);
             self->feed_panel_->model()->set_geo_articles(geo_ids);
         });
 
-    // Correlation signals → signals sidebar.
+    // Correlation signals — computed in-process (synchronous).
     services::NewsCorrelationService::instance().detect_signals(
-        subset, [self, gen](bool ok, QVector<services::CorrelationSignal> sigs) {
-            if (!self || !ok)
-                return;
-            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
-                return;
-            self->side_panel_->update_signals(sigs);
+        subset, [self](bool ok, QVector<services::CorrelationSignal> sigs) {
+            if (self && ok)
+                self->side_panel_->update_signals(sigs);
         });
 
-    // Prediction markets → predictions sidebar (one-shot per session,
-    // not article-dependent — but keeping it inside the same enrichment
-    // pass keeps the UI lit consistently after a refresh).
+    maybe_fetch_predictions();
+}
+
+void NewsScreen::maybe_fetch_predictions() {
+    if (!visible_ || !side_panel_->is_drawer_open())
+        return;
+    QPointer<NewsScreen> self = this;
     services::NewsCorrelationService::instance().fetch_predictions(
-        [self, gen](bool ok, QVector<services::PredictionMarket> preds) {
-            if (!self || !ok)
-                return;
-            if (gen < self->enrichment_generation_.load(std::memory_order_relaxed) - 1)
-                return;
-            self->side_panel_->update_predictions(preds);
+        [self](bool ok, QVector<services::PredictionMarket> preds) {
+            if (self && ok)
+                self->side_panel_->update_predictions(preds);
         });
 }
 
@@ -1360,12 +1405,6 @@ void NewsScreen::compute_deviations() {
         }
     }
 
-    // Persist baselines — once per hourly sample. This used to spawn a Python
-    // process on every UI update (dozens per refresh) and discard the result.
-    if (take_sample) {
-        services::NewsCorrelationService::instance().update_baseline(
-            current_counts, [](bool /*ok*/, QMap<QString, services::CategoryBaseline> /*baselines*/) {});
-    }
 }
 
 void NewsScreen::sort_articles(QVector<services::NewsArticle>& articles) const {

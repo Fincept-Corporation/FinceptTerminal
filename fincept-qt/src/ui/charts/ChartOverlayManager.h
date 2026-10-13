@@ -27,7 +27,10 @@ class ChartOverlayManager : public QObject {
     bool has_layer(const QString& id) const;
 
     void set_candles(QVector<CandleData> candles);
-    void append_candle(const CandleData& candle);
+    /// Apply live candle updates in order (same timestamp as the last candle =
+    /// update of the forming bar, otherwise a new bar), then recompute every
+    /// layer ONCE for the whole batch.
+    void append_candles(const QVector<CandleData>& candles);
 
     void recompute_all();
     void reposition_all();

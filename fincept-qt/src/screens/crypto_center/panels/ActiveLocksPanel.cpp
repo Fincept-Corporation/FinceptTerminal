@@ -157,7 +157,7 @@ void ActiveLocksPanel::build_ui() {
     connect(table_, &QTableWidget::customContextMenuRequested, this, &ActiveLocksPanel::on_row_context_menu);
     bl->addWidget(table_, 1);
 
-    empty_state_ = new QLabel(tr("No active locks. Lock $FNCPT above to start earning yield."), body);
+    empty_state_ = new QLabel(QStringLiteral("—"), body); // text set by rebuild_table()
     empty_state_->setObjectName(QStringLiteral("activeLocksEmpty"));
     empty_state_->setAlignment(Qt::AlignCenter);
     empty_state_->setMinimumHeight(120);
@@ -237,6 +237,11 @@ void ActiveLocksPanel::apply_theme() {
 
 void ActiveLocksPanel::on_wallet_connected(const QString& pubkey, const QString& /*label*/) {
     current_pubkey_ = pubkey;
+    // Nothing to read while staking is not live: no subscription at all.
+    if (!fincept::wallet::StakingService::instance().staking_live()) {
+        rebuild_table();
+        return;
+    }
     if (isVisible() && current_topic_.isEmpty()) {
         current_topic_ = QStringLiteral("wallet:locks:%1").arg(pubkey);
         auto& hub = fincept::datahub::DataHub::instance();
@@ -258,6 +263,8 @@ void ActiveLocksPanel::on_wallet_disconnected() {
 
 void ActiveLocksPanel::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    if (!fincept::wallet::StakingService::instance().staking_live())
+        return;
     if (!current_pubkey_.isEmpty() && current_topic_.isEmpty()) {
         current_topic_ = QStringLiteral("wallet:locks:%1").arg(current_pubkey_);
         auto& hub = fincept::datahub::DataHub::instance();
@@ -290,9 +297,7 @@ void ActiveLocksPanel::retranslateUi() {
             tr("YIELD (LIFETIME)"),
         });
     }
-    if (empty_state_)
-        empty_state_->setText(tr("No active locks. Lock $FNCPT above to start earning yield."));
-    // Re-render summary + TOTAL row + LIVE/DEMO pill in the new locale.
+    // Re-render empty state, summary, TOTAL row and the pill in the new locale.
     rebuild_table();
 }
 
@@ -319,35 +324,39 @@ void ActiveLocksPanel::on_topic_error(const QString& topic, const QString& error
 }
 
 void ActiveLocksPanel::rebuild_table() {
+    if (!fincept::wallet::StakingService::instance().staking_live()) {
+        // Not live: there are no positions to read, and none were ever shown
+        // as this wallet's. Say what the user can expect instead.
+        latest_.clear();
+        table_->setRowCount(0);
+        table_->hide();
+        empty_state_->setText(tr("No lock positions — on-chain staking is not live yet.\n"
+                                 "Your locks will appear here once the fincept_lock program launches."));
+        empty_state_->show();
+        summary_label_->setText(QStringLiteral("—"));
+        set_pill(tr("COMING SOON"), true);
+        return;
+    }
     if (latest_.isEmpty()) {
         table_->setRowCount(0);
         table_->hide();
         empty_state_->setText(feed_error_ ? tr("Locks unavailable — the locks feed returned an error.")
-                                          : tr("No active locks. Lock $FNCPT above to start earning yield."));
+                                          : tr("No active locks."));
         empty_state_->show();
         summary_label_->setText(tr("0 positions · 0 veFNCPT"));
-        if (feed_error_) {
-            // Reuse the amber "DEMO" pill style for the not-live state.
-            status_pill_->setText(tr("UNAVAILABLE"));
-            status_pill_->setObjectName(QStringLiteral("activeLocksPillDemo"));
-            status_pill_->style()->unpolish(status_pill_);
-            status_pill_->style()->polish(status_pill_);
-        } else {
-            update_demo_chip(false);
-        }
+        // Without cached positions an error must not sit next to a LIVE pill.
+        set_pill(feed_error_ ? tr("UNAVAILABLE") : tr("LIVE"), feed_error_);
         return;
     }
     empty_state_->hide();
     table_->show();
 
-    bool any_mock = false;
     double total_weight_ui = 0.0;
     double total_yield_ui = 0.0;
 
     table_->setRowCount(latest_.size() + 1); // +1 for the TOTAL row
     for (int i = 0; i < latest_.size(); ++i) {
         const auto& p = latest_[i];
-        any_mock = any_mock || p.is_mock;
         const double amount_ui = atomic_to_ui(p.amount_raw, p.decimals);
         const double weight_ui = atomic_to_ui(p.weight_raw, p.decimals);
         total_weight_ui += weight_ui;
@@ -360,21 +369,11 @@ void ActiveLocksPanel::rebuild_table() {
         table_->setItem(i, 2, new QTableWidgetItem(format_unlock_date(p.unlock_ts)));
         table_->setItem(i, 3, new QTableWidgetItem(format_token(weight_ui, 1)));
         table_->setItem(i, 4, new QTableWidgetItem(format_usdc(p.lifetime_yield_usdc)));
-        if (p.is_mock) {
-            // Per-row cue: the head pill sits at the far edge and a fabricated
-            // "2,000 $FNCPT locked · $1,240 lifetime yield" under the user's own
-            // address is exactly what must not be mistaken for chain data.
-            for (int c = 0; c < 5; ++c) {
-                if (auto* cell = table_->item(i, c))
-                    cell->setToolTip(tr("Demo position — fincept_lock is not deployed, so this is not read "
-                                        "from your wallet's on-chain locks."));
-            }
-        }
     }
 
     // TOTAL row — visually distinct via item-level styling.
     const int total_row = latest_.size();
-    auto* tot_label = new QTableWidgetItem(any_mock ? tr("TOTAL (DEMO)") : tr("TOTAL"));
+    auto* tot_label = new QTableWidgetItem(tr("TOTAL"));
     tot_label->setData(Qt::UserRole, QString()); // no position id
     table_->setItem(total_row, 0, tot_label);
     table_->setItem(total_row, 1, new QTableWidgetItem(QStringLiteral("—")));
@@ -383,10 +382,9 @@ void ActiveLocksPanel::rebuild_table() {
     table_->setItem(total_row, 4, new QTableWidgetItem(format_usdc(total_yield_ui)));
 
     // Plural form is a translator's decision, not an English "s" suffix.
-    const QString summary_text =
-        tr("%n position(s) · %1 veFNCPT", "", latest_.size()).arg(format_token(total_weight_ui, 1));
-    summary_label_->setText(any_mock ? tr("DEMO · ") + summary_text : summary_text);
-    update_demo_chip(any_mock);
+    summary_label_->setText(
+        tr("%n position(s) · %1 veFNCPT", "", latest_.size()).arg(format_token(total_weight_ui, 1)));
+    set_pill(tr("LIVE"), false);
     clear_error_strip();
 }
 
@@ -399,31 +397,22 @@ void ActiveLocksPanel::on_row_context_menu(const QPoint& pos) {
         return; // ignore TOTAL row
     const auto& p = latest_[row];
 
+    // Both actions are shown so the user can see what will exist, but neither
+    // transaction is implemented — they stay disabled with an honest reason.
+    // (The menu used to point at a "Settings > Lock program ID" field that
+    // does not exist, and configuring the key would not have enabled them.)
     QMenu menu(this);
-    auto* extend = menu.addAction(tr("Extend lock…"));
-    auto* withdraw = menu.addAction(tr("Withdraw"));
-    withdraw->setEnabled(position_is_expired(p));
-    if (!withdraw->isEnabled()) {
-        withdraw->setToolTip(tr("Available after %1").arg(format_unlock_date(p.unlock_ts)));
-    }
-
-    // Mock-mode disable + tooltip for both. Real-mode lock txs come in
-    // when the Anchor program ships.
-    if (p.is_mock || !fincept::wallet::StakingService::instance().program_is_configured()) {
-        extend->setEnabled(false);
-        extend->setToolTip(tr("fincept_lock not deployed — Settings > Lock program ID"));
-        withdraw->setEnabled(false);
-        withdraw->setToolTip(tr("fincept_lock not deployed — Settings > Lock program ID"));
-    }
-
-    QAction* chosen = menu.exec(table_->viewport()->mapToGlobal(pos));
-    if (!chosen)
-        return;
-    if (chosen == extend) {
-        show_error_strip(tr("Extend flow lands with the Anchor program."));
-    } else if (chosen == withdraw) {
-        show_error_strip(tr("Withdraw flow lands with the Anchor program."));
-    }
+    menu.setToolTipsVisible(true);
+    auto* extend = menu.addAction(tr("Extend lock… (coming soon)"));
+    auto* withdraw = menu.addAction(tr("Withdraw (coming soon)"));
+    extend->setEnabled(false);
+    withdraw->setEnabled(false);
+    extend->setToolTip(tr("Extending a lock is not implemented in this build."));
+    withdraw->setToolTip(position_is_expired(p)
+                             ? tr("Withdrawing is not implemented in this build.")
+                             : tr("Unlocks %1. Withdrawing is not implemented in this build.")
+                                   .arg(format_unlock_date(p.unlock_ts)));
+    menu.exec(table_->viewport()->mapToGlobal(pos));
 }
 
 void ActiveLocksPanel::show_error_strip(const QString& msg) {
@@ -440,14 +429,11 @@ void ActiveLocksPanel::clear_error_strip() {
     }
 }
 
-void ActiveLocksPanel::update_demo_chip(bool is_mock) {
-    if (is_mock) {
-        status_pill_->setText(tr("DEMO"));
-        status_pill_->setObjectName(QStringLiteral("activeLocksPillDemo"));
-    } else {
-        status_pill_->setText(tr("LIVE"));
-        status_pill_->setObjectName(QStringLiteral("activeLocksPill"));
-    }
+void ActiveLocksPanel::set_pill(const QString& text, bool highlighted) {
+    status_pill_->setText(text);
+    // The amber variant marks every not-live / not-healthy state.
+    status_pill_->setObjectName(highlighted ? QStringLiteral("activeLocksPillDemo")
+                                            : QStringLiteral("activeLocksPill"));
     status_pill_->style()->unpolish(status_pill_);
     status_pill_->style()->polish(status_pill_);
 }

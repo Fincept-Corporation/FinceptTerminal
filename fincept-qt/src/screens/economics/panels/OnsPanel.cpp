@@ -26,12 +26,19 @@ struct OnsSeries {
     QString command;
 };
 
+// D7G7 / L55O / CZBH are the 12-month inflation RATES (%), not the index levels — the labels used to
+// say "CPI All Items", inviting a reader to take 3.1 for an index value.
 static const QList<OnsSeries> kOnsSeries = {
-    {"GDP (Chained Volume, SA)", "gdp"},      {"CPI All Items", "cpi"},
-    {"CPIH (incl. Housing Costs)", "cpih"},   {"RPI", "rpi"},
-    {"Unemployment Rate", "unemployment"},    {"Employment Rate", "employment"},
-    {"Trade Balance (BoP)", "trade_balance"}, {"House Prices (HPI)", "house_prices"},
-    {"Average Earnings", "avg_earnings"},     {"Public Sector Net Debt", "public_debt"},
+    {"GDP (Chained Volume, SA)", "gdp"},
+    {"CPI Inflation (12-month rate, %)", "cpi"},
+    {"CPIH Inflation (12-month rate, %)", "cpih"},
+    {"RPI Inflation (12-month rate, %)", "rpi"},
+    {"Unemployment Rate (%)", "unemployment"},
+    {"Employment Rate (%)", "employment"},
+    {"Trade Balance (BoP)", "trade_balance"},
+    {"House Prices (UK HPI average price)", "house_prices"},
+    {"Average Weekly Earnings", "avg_earnings"},
+    {"Public Sector Net Debt (% of GDP)", "public_debt"},
 };
 
 OnsPanel::OnsPanel(QWidget* parent) : EconPanelBase(kOnsSourceId, kOnsColor, parent) {
@@ -48,7 +55,7 @@ void OnsPanel::activate() {
 
 void OnsPanel::build_controls(QHBoxLayout* thl) {
     series_lbl_ = new QLabel(tr("SERIES"));
-    series_lbl_->setStyleSheet(ctrl_label_style());
+    series_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_combo_ = new QComboBox;
     for (const auto& s : kOnsSeries)
@@ -94,15 +101,24 @@ void OnsPanel::on_result(const QString& request_id, const services::EconomicsRes
         return;
     }
 
+    // Label from the request id, not the combo (the user may have switched series mid-request).
+    const QString cmd = request_id.mid(4);
+    QString fallback = cmd;
+    for (const auto& s : kOnsSeries)
+        if (s.command == cmd)
+            fallback = s.label;
     const QString label = result.data["label"].toString();
     const QString unit = result.data["unit"].toString();
-    const QString title =
-        "ONS: " +
-        (label.isEmpty() ? (series_combo_->currentIndex() >= 0 ? kOnsSeries[series_combo_->currentIndex()].label
-                                                               : request_id.mid(4))
-                         : label) +
-        (unit.isEmpty() ? "" : " (" + unit + ")");
+    const QString title = "ONS: " + (label.isEmpty() ? fallback : label);
 
+    SeriesMeta meta;
+    meta.units = unit;
+    meta.frequency = result.data["frequency"].toString();
+    meta.source = result.data["source"].toString();
+    meta.last_updated = result.data["release_date"].toString().left(10);
+    if (label.contains(QLatin1String("Seasonally adjusted"), Qt::CaseInsensitive))
+        meta.seasonal_adj = tr("Seasonally adjusted");
+    set_series_meta(meta);
     display(rows, title);
     LOG_INFO("OnsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }

@@ -19,6 +19,7 @@
 #include "core/session/SessionManager.h"
 #include "screens/about/AboutScreen.h"
 #include "screens/agent_config/AgentConfigScreen.h"
+#include "screens/agent_workbench/AgentWorkbenchScreen.h"
 #include "screens/ai_chat/AiChatScreen.h"
 #include "screens/ai_quant_lab/AIQuantLabScreen.h"
 #include "screens/akshare/AkShareScreen.h"
@@ -34,7 +35,6 @@
 #include "screens/backtesting/BacktestingScreen.h"
 #include "screens/chat_mode/ChatModeScreen.h"
 #include "screens/code_editor/CodeEditorScreen.h"
-#include "screens/common/ComingSoonScreen.h"
 #include "screens/crypto_center/CryptoCenterScreen.h"
 #include "screens/crypto_trading/CryptoTradingScreen.h"
 #include "screens/dashboard/DashboardScreen.h"
@@ -49,7 +49,6 @@
 #include "screens/excel/ExcelScreen.h"
 #include "screens/file_manager/FileManagerScreen.h"
 #include "screens/fno/FnoScreen.h"
-#include "screens/forum/ForumScreen.h"
 #include "screens/geopolitics/GeopoliticsScreen.h"
 #include "screens/gov_data/GovDataScreen.h"
 #include "screens/info/ContactScreen.h"
@@ -122,11 +121,7 @@ void WindowFrame::setup_auth_screens() {
     connect(login, &screens::LoginScreen::navigate_forgot_password, this, &WindowFrame::show_forgot_password);
     connect(reg, &screens::RegisterScreen::navigate_login, this, &WindowFrame::show_login);
     connect(forgot, &screens::ForgotPasswordScreen::navigate_login, this, &WindowFrame::show_login);
-    connect(pricing, &screens::PricingScreen::navigate_dashboard, this, [this]() {
-        set_shell_visible(true);
-        stack_->setCurrentIndex(1);
-        dock_router_->navigate("dashboard");
-    });
+    // PricingScreen::back_requested is wired in WindowFrame.cpp (leave_pricing).
 
     // ── Info screen navigation ───────────────────────────────────────────────
     // Back from info → return to previous auth screen (login by default)
@@ -231,7 +226,6 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("markets", []() { return new screens::MarketsScreen; });
     dock_router_->register_factory("crypto_trading", []() { return new screens::CryptoTradingScreen; });
     dock_router_->register_factory("news", []() { return new screens::NewsScreen; });
-    dock_router_->register_factory("forum", []() { return new screens::ForumScreen; });
     dock_router_->register_factory("watchlist", []() { return new screens::WatchlistScreen; });
 
     // Lazily constructed on first navigation — deferred to avoid startup cost.
@@ -270,6 +264,7 @@ void WindowFrame::setup_dock_screens() {
     dock_router_->register_factory("maritime", []() { return new screens::MaritimeScreen; });
     dock_router_->register_factory("surface_analytics", []() { return new fincept::surface::SurfaceAnalyticsScreen; });
     dock_router_->register_factory("agent_config", []() { return new screens::AgentConfigScreen; });
+    dock_router_->register_factory("agent_workbench", []() { return new screens::AgentWorkbenchScreen; });
     dock_router_->register_factory("mcp_servers", []() { return new screens::McpServersScreen; });
     dock_router_->register_factory("data_mapping", []() { return new screens::DataMappingScreen; });
     dock_router_->register_factory("data_sources", []() { return new screens::DataSourcesScreen; });

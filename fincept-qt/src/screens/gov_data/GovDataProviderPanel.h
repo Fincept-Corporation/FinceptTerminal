@@ -19,9 +19,11 @@
 namespace fincept::screens {
 
 struct GovProviderOptions {
-    QString watermark_text;         // if non-empty, show a bottom status bar with this text
-    QStringList portal_combo_items; // if non-empty, show a portal selector bar at top
-    QString portal_combo_tooltip;   // tooltip for the portal combobox
+    QString watermark_text; // if non-empty, show a bottom status bar with this text
+    /// Multi-portal scripts (universal_ckan_api.py): command that lists the portals the script serves
+    /// ({data: [{code, name, default}]}). When set, a portal selector bar is shown and the selected
+    /// portal code is passed as the first argument of every other command.
+    QString portals_command;
 };
 
 class GovDataProviderPanel : public QWidget {
@@ -59,6 +61,15 @@ class GovDataProviderPanel : public QWidget {
     void update_toolbar_state();
     void update_breadcrumb();
 
+    // ── Multi-portal support (options_.portals_command) ─────────────────────
+    bool multi_portal() const { return !options_.portals_command.isEmpty(); }
+    /// Run `command` for the current portal: prepends the portal code to `args` and tags the
+    /// request id with it so a late answer for a previous portal can be recognised and dropped.
+    void execute_for_portal(const QString& command, const QStringList& args, const QString& request_prefix);
+    void populate_portals(const QJsonArray& portals);
+    void on_portal_changed(int index);
+    void load_publishers();
+
     /// org_label_ is a CKAN-style key passed in by the parent ("Publishers" or
     /// "Organizations"). These helpers return the user-visible, translated form
     /// in the casing the call site needs.
@@ -85,6 +96,9 @@ class GovDataProviderPanel : public QWidget {
 
     // Optional portal selector bar (CKAN universal panel only)
     QLabel* portal_label_ = nullptr;
+    QComboBox* portal_combo_ = nullptr;
+    QString portal_;            // code of the selected portal ("" until the list has loaded)
+    bool portals_loaded_ = false;
 
     // Breadcrumb
     QWidget* breadcrumb_ = nullptr;

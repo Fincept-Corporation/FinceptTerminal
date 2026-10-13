@@ -5,7 +5,6 @@
 #include "core/logging/Logger.h"
 #include "mcp/AsyncDispatch.h"
 #include "mcp/ToolSchemaBuilder.h"
-#include "mcp/tools/ThreadHelper.h"
 #include "python/PythonRunner.h"
 
 #include <QDir>
@@ -19,43 +18,6 @@
 namespace fincept::mcp::tools {
 
 static constexpr const char* TAG = "PythonTools";
-
-// Synchronously run a Python script. Tool handlers run on a worker thread;
-// PythonRunner's QProcess lives on the main thread. We marshal the run()
-// call onto the runner's thread (see mcp/tools/ThreadHelper.h).
-[[maybe_unused]] static ToolResult run_script_sync(const QString& script, const QStringList& args) {
-    if (!python::PythonRunner::instance().is_available())
-        return ToolResult::fail("Python is not available — run setup first");
-
-    ToolResult out;
-    auto* runner = &python::PythonRunner::instance();
-    detail::run_async_wait(runner, [&](auto signal_done) {
-        runner->run(script, args, [&, signal_done](python::PythonResult result) {
-            if (!result.success) {
-                out = ToolResult::fail("Script failed: " + result.error);
-            } else {
-                QString json_text = python::extract_json(result.output);
-                if (json_text.isEmpty())
-                    json_text = result.output;
-
-                QJsonDocument doc = QJsonDocument::fromJson(json_text.toUtf8());
-                if (!doc.isNull()) {
-                    if (doc.isObject())
-                        out = ToolResult::ok_data(doc.object());
-                    else if (doc.isArray())
-                        out = ToolResult::ok_data(doc.array());
-                    else
-                        out = ToolResult::ok(result.output);
-                } else {
-                    out = ToolResult::ok(result.output);
-                }
-            }
-            signal_done();
-        });
-    });
-
-    return out;
-}
 
 std::vector<ToolDef> get_python_tools() {
     std::vector<ToolDef> tools;
@@ -81,9 +43,11 @@ std::vector<ToolDef> get_python_tools() {
                 .length(1, 128)
                 .array("args", "Array of string arguments to pass to the script", QJsonObject{{"type", "string"}})
                 .build();
-        // Python scripts can take a while; allow a generous default. Override
-        // per-call via _meta.timeout_ms when Phase 6 wires that through.
-        t.default_timeout_ms = 60000;
+        // Match PythonRunner's 5-minute watchdog for top-level scripts (the only
+        // ones this tool can run): a shorter budget gave up on scripts that were
+        // still working. Over 30 s with an async handler, so long calls become a
+        // background job instead of holding the turn open (M1).
+        t.default_timeout_ms = 300000;
         // Phase 6.3: arbitrary script execution must be gated. Even with the
         // regex pattern check on script name, the script can read/write
         // files, hit the network, etc. Always confirm.

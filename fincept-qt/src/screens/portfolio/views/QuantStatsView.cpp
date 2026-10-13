@@ -3,6 +3,7 @@
 
 #include "core/logging/Logger.h"
 #include "services/portfolio/PortfolioAnalyticsService.h"
+#include "services/portfolio/PortfolioService.h"
 #include "ui/theme/Theme.h"
 
 #include <QBarSeries>
@@ -351,6 +352,14 @@ void QuantStatsView::update_metrics() {
             return 0;
         return qs_data_[group].toObject()[key].toInt();
     };
+    // Same statistics computed by the script for the benchmark index.
+    const QJsonObject bench_obj = qs_data_.value("benchmark").toObject();
+    auto b_val = [&](const QString& group, const QString& key, bool pct, int dp = 2) -> QString {
+        const QJsonValue v = bench_obj.value(group).toObject().value(key);
+        if (!v.isDouble())
+            return QStringLiteral("--");
+        return pct ? pct_str(v.toDouble() * 100.0, dp) : ratio_str(v.toDouble(), dp);
+    };
 
     // ── PERFORMANCE ──────────────────────────────────────────────────────────
     add_section(tr("PERFORMANCE"));
@@ -363,11 +372,11 @@ void QuantStatsView::update_metrics() {
         double worst_day = qs_pct("performance", "worst_day");
         double avg_daily = qs_pct("performance", "avg_daily_return");
 
-        rows.push_back({"", tr("Total Return"), pct_str(total_ret), "--", total_ret >= 0});
-        rows.push_back({"", tr("Annualized Return"), pct_str(ann_ret), "--", ann_ret >= 0});
+        rows.push_back({"", tr("Total Return"), pct_str(total_ret), b_val("performance", "total_return", true), total_ret >= 0});
+        rows.push_back({"", tr("Annualized Return"), pct_str(ann_ret), b_val("performance", "annualized_return", true), ann_ret >= 0});
         rows.push_back({"", tr("Trading Days"), QString::number(t_days), "--", true});
-        rows.push_back({"", tr("Best Day"), pct_str(best_day), "--", true});
-        rows.push_back({"", tr("Worst Day"), pct_str(worst_day), "--", worst_day >= 0});
+        rows.push_back({"", tr("Best Day"), pct_str(best_day), b_val("performance", "best_day", true), true});
+        rows.push_back({"", tr("Worst Day"), pct_str(worst_day), b_val("performance", "worst_day", true), worst_day >= 0});
         rows.push_back({"", tr("Avg Daily Return"), pct_str(avg_daily, 4), "--", avg_daily >= 0});
     } else {
         // Pre-run: show live summary values
@@ -390,11 +399,11 @@ void QuantStatsView::update_metrics() {
         double cvar95 = qs_pct("risk", "cvar_95_daily");
         double down_dev = qs_pct("risk", "downside_deviation");
 
-        rows.push_back({"", tr("Annualized Volatility"), pct_str(ann_vol), "--", ann_vol < 20.0});
-        rows.push_back({"", tr("Max Drawdown"), pct_str(max_dd), "--", max_dd >= 0});
-        rows.push_back({"", tr("VaR 95% (Daily)"), pct_str(var95), "--", var95 >= 0});
-        rows.push_back({"", tr("CVaR 95% (Daily)"), pct_str(cvar95), "--", cvar95 >= 0});
-        rows.push_back({"", tr("Downside Deviation"), pct_str(down_dev), "--", down_dev < 15.0});
+        rows.push_back({"", tr("Annualized Volatility"), pct_str(ann_vol), b_val("risk", "annualized_volatility", true), ann_vol < 20.0});
+        rows.push_back({"", tr("Max Drawdown"), pct_str(max_dd), b_val("risk", "max_drawdown", true), max_dd >= 0});
+        rows.push_back({"", tr("VaR 95% (Daily)"), pct_str(var95), b_val("risk", "var_95_daily", true), var95 >= 0});
+        rows.push_back({"", tr("CVaR 95% (Daily)"), pct_str(cvar95), b_val("risk", "cvar_95_daily", true), cvar95 >= 0});
+        rows.push_back({"", tr("Downside Deviation"), pct_str(down_dev), b_val("risk", "downside_deviation", true), down_dev < 15.0});
     } else {
         rows.push_back({"", tr("Annualized Volatility"), "--", "--", true});
         rows.push_back({"", tr("Max Drawdown"), "--", "--", true});
@@ -412,9 +421,9 @@ void QuantStatsView::update_metrics() {
         double calmar = qs_val("ratios", "calmar_ratio");
         double pf = qs_val("ratios", "profit_factor");
 
-        rows.push_back({"", tr("Sharpe Ratio"), ratio_str(sharpe), "--", sharpe >= 0});
-        rows.push_back({"", tr("Sortino Ratio"), ratio_str(sortino), "--", sortino >= 0});
-        rows.push_back({"", tr("Calmar Ratio"), ratio_str(calmar), "--", calmar >= 0});
+        rows.push_back({"", tr("Sharpe Ratio"), ratio_str(sharpe), b_val("ratios", "sharpe_ratio", false), sharpe >= 0});
+        rows.push_back({"", tr("Sortino Ratio"), ratio_str(sortino), b_val("ratios", "sortino_ratio", false), sortino >= 0});
+        rows.push_back({"", tr("Calmar Ratio"), ratio_str(calmar), b_val("ratios", "calmar_ratio", false), calmar >= 0});
         rows.push_back({"", tr("Profit Factor"), ratio_str(pf), "--", pf >= 1.0});
     } else {
         rows.push_back({"", tr("Sharpe Ratio"), "--", "--", true});
@@ -435,8 +444,8 @@ void QuantStatsView::update_metrics() {
         double avg_win = qs_pct("distribution", "avg_win");
         double avg_loss = qs_pct("distribution", "avg_loss");
 
-        rows.push_back({"", tr("Skewness"), ratio_str(skew, 3), "--", skew >= 0});
-        rows.push_back({"", tr("Kurtosis"), ratio_str(kurt, 3), "--", kurt <= 3.5});
+        rows.push_back({"", tr("Skewness"), ratio_str(skew, 3), b_val("distribution", "skewness", false, 3), skew >= 0});
+        rows.push_back({"", tr("Excess Kurtosis"), ratio_str(kurt, 3), b_val("distribution", "kurtosis", false, 3), kurt <= 1.0});
         rows.push_back({"", tr("Win Rate"), pct_str(win_rate), "--", win_rate >= 50.0});
         rows.push_back({"", tr("Win Days"), QString::number(win_days), "--", true});
         rows.push_back({"", tr("Loss Days"), QString::number(los_days), "--", los_days == 0});
@@ -444,7 +453,7 @@ void QuantStatsView::update_metrics() {
         rows.push_back({"", tr("Avg Loss"), pct_str(avg_loss), "--", avg_loss >= 0});
     } else {
         rows.push_back({"", tr("Skewness"), "--", "--", true});
-        rows.push_back({"", tr("Kurtosis"), "--", "--", true});
+        rows.push_back({"", tr("Excess Kurtosis"), "--", "--", true});
         rows.push_back({"", tr("Win Rate"), "--", "--", true});
         rows.push_back({"", tr("Win Days"), "--", "--", true});
         rows.push_back({"", tr("Loss Days"), "--", "--", true});
@@ -545,7 +554,7 @@ void QuantStatsView::update_returns() {
         {tr("AVG WIN"), pct_str(avg_win), ui::colors::POSITIVE()},
         {tr("AVG LOSS"), pct_str(avg_loss), ui::colors::NEGATIVE()},
         {tr("SKEWNESS"), ratio_str(skew, 3), ui::colors::TEXT_PRIMARY()},
-        {tr("KURTOSIS"), ratio_str(kurt, 3), ui::colors::TEXT_PRIMARY()},
+        {tr("EXCESS KURTOSIS"), ratio_str(kurt, 3), ui::colors::TEXT_PRIMARY()},
     };
 
     auto* grid_w = new QWidget(this);
@@ -1018,8 +1027,15 @@ void QuantStatsView::run_quantstats() {
         weights.append(h.weight / 100.0);
     }
 
+    // Live risk-free rate and the portfolio currency's benchmark, so the
+    // BENCHMARK column is filled and Sharpe/Sortino use the same rf as the
+    // rest of the tab (the script used to hard-code 4%).
+    auto& psvc = services::PortfolioService::instance();
+    const QString bench = services::PortfolioService::default_benchmark_for_currency(summary_.portfolio.currency);
+
     QPointer<QuantStatsView> self = this;
-    PortfolioAnalyticsService::instance().run_quantstats(symbols, weights, [self](const AnalyticsResult& r) {
+    PortfolioAnalyticsService::instance().run_quantstats(symbols, weights, psvc.risk_free_rate(), bench,
+                                                         [self](const AnalyticsResult& r) {
         if (!self)
             return;
         QMetaObject::invokeMethod(

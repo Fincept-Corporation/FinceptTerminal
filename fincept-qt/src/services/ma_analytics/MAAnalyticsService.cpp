@@ -874,32 +874,8 @@ void MAAnalyticsService::run_vision_index(const QString& command, const QJsonObj
     run_python_json("vision_quant/setup_index.py", command, params, "vq_index_" + command);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Data connectors — keyless *_data.py CLIs. Positional argv (command + args), and
-// (unlike run_python) tolerant of a top-level JSON array result → wrapped as {data}.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-void MAAnalyticsService::run_data_connector(const QString& script, const QStringList& args, const QString& context) {
-    QPointer<MAAnalyticsService> self = this;
-    python::PythonRunner::instance().run(script, args, [self, context](python::PythonResult result) {
-        if (!self)
-            return;
-        if (!result.success) {
-            LOG_ERROR("MAAnalytics", QString("Connector failed [%1]: %2").arg(context, result.error));
-            emit self->error_occurred(context, result.error);
-            return;
-        }
-        const auto json_str = python::extract_json(result.output);
-        const auto doc = QJsonDocument::fromJson(json_str.toUtf8());
-        if (doc.isNull()) {
-            emit self->error_occurred(context, "Invalid JSON response from connector");
-            return;
-        }
-        const QJsonObject obj = doc.isArray() ? QJsonObject{{"data", doc.array()}} : doc.object();
-        emit self->result_ready(context, obj);
-        publish_ma_result(self->hub_registered_, context, obj);
-    });
-}
+// Data connectors (scripts/*_data.py) moved to services/connectors/ConnectorService, which
+// the MCP data_* tools, the Data Sources › CATALOG tab and the workflow nodes share.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DATAHUB PRODUCER — ma:*

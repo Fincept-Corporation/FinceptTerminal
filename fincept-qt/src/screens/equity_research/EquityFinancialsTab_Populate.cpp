@@ -38,6 +38,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 namespace fincept::screens {
 
@@ -70,6 +71,35 @@ double growth_ratio(double current, double previous) {
                                                                            : (current - previous) / previous;
 }
 
+/// The statement column for the same fiscal period as `period` (matched by date, not by
+/// column index — yfinance does not guarantee the three statements carry the same periods,
+/// and an index match paired one year's income with another year's balance sheet).
+QJsonObject fin_same_period(const QVector<QPair<QString, QJsonObject>>& stmt, const QString& period) {
+    const QString date = period.left(10);
+    for (const auto& col : stmt)
+        if (col.first.left(10) == date)
+            return col.second;
+    return {};
+}
+
+/// Axis unit for statement charts (values arrive in billions). Statements are in the
+/// company's REPORTING currency, so no "$"; small companies get millions instead of a
+/// "$0B" axis.
+QString fin_rescale(std::initializer_list<QVector<double>*> series) {
+    double max_abs = 0.0;
+    for (auto* v : series)
+        for (double x : *v)
+            if (!std::isnan(x))
+                max_abs = std::max(max_abs, std::fabs(x));
+    if (max_abs > 0.0 && max_abs < 1.0) {
+        for (auto* v : series)
+            for (double& x : *v)
+                x *= 1000.0;
+        return QStringLiteral("%.0fM");
+    }
+    return max_abs < 10.0 ? QStringLiteral("%.1fB") : QStringLiteral("%.0fB");
+}
+
 } // namespace
 
 void EquityFinancialsTab::on_financials_loaded(services::equity::FinancialsData payload) {
@@ -85,6 +115,15 @@ void EquityFinancialsTab::on_financials_loaded(services::equity::FinancialsData 
     cached_data_ = payload;
     loaded_ = true;
     loading_overlay_->hide_loading();
+    if (period_note_) {
+        QString note = tr("ANNUAL STATEMENTS · FISCAL YEARS · AS REPORTED (REPORTING CURRENCY)");
+        if (payload.stale)
+            note += tr(" · CACHED COPY — REFRESHING");
+        else if (payload.fetched_at > 0)
+            note += tr(" · FETCHED %1")
+                        .arg(QDateTime::fromSecsSinceEpoch(payload.fetched_at).toString(QStringLiteral("yyyy-MM-dd HH:mm")));
+        period_note_->setText(note);
+    }
 
     populate_income_view(payload);
     populate_balance_view(payload);
@@ -168,8 +207,8 @@ void EquityFinancialsTab::populate_income_view(const services::equity::Financial
     set(inc_ebitda_margin_, missing(ebitda_margin) ? kNoData : fmt_pct(ebitda_margin));
 
     // DuPont (needs balance sheet too)
-    if (!d.balance_sheet.isEmpty()) {
-        const auto& bal = d.balance_sheet[0].second;
+    const QJsonObject bal = fin_same_period(d.balance_sheet, d.income_statement[0].first);
+    if (!bal.isEmpty()) {
         double total_assets = get_val(bal, {"Total Assets"});
         double total_equity = get_val(bal, {"Stockholders Equity", "Total Equity", "Total Stockholder Equity"});
         double asset_turnover = pos_ratio(revenue, total_assets);
@@ -188,7 +227,15 @@ void EquityFinancialsTab::populate_income_view(const services::equity::Financial
         double total_debt = get_val(bal, {"Total Debt", "Long Term Debt"});
         double cash = get_val(bal, {"Cash And Cash Equivalents", "Cash"});
         double inv_cap = total_equity + total_debt - cash;
-        double roic = pos_ratio(op_income * 0.75, inv_cap);
+        // NOPAT at the company's own effective tax rate (yfinance "Tax Rate For Calcs", else
+        // tax provision ÷ pretax income). A flat 25% assumption mis-stated ROIC for every
+        // company not taxed at exactly 25%; no usable rate → no ROIC rather than a guess.
+        double tax_rate = get_val(latest, {"Tax Rate For Calcs"});
+        if (missing(tax_rate))
+            tax_rate = pos_ratio(get_val(latest, {"Tax Provision"}), get_val(latest, {"Pretax Income"}));
+        if (!missing(tax_rate))
+            tax_rate = std::clamp(tax_rate, 0.0, 0.6);
+        double roic = pos_ratio(op_income * (1.0 - tax_rate), inv_cap);
         double cur_liab = get_val(bal, {"Current Liabilities", "Total Current Liabilities"});
         double roce = pos_ratio(op_income, total_assets - cur_liab);
 
@@ -213,11 +260,13 @@ void EquityFinancialsTab::populate_balance_view(const services::equity::Financia
     double cur_liab = get_val(b, {"Current Liabilities", "Total Current Liabilities"});
     double inventory = get_val(b, {"Inventory"});
     // No income statement means no EBITDA / interest reading at all — not zero.
-    double ebitda = qQNaN();
+    // Interest coverage = EBIT ÷ interest expense (the standard definition; EBITDA overstated
+    // it for capital-heavy companies). Same fiscal period as the balance sheet shown.
+    double ebit = qQNaN();
     double interest = qQNaN();
-    if (!d.income_statement.isEmpty()) {
-        const auto& inc = d.income_statement[0].second;
-        ebitda = get_val(inc, {"EBITDA", "Normalized EBITDA"});
+    const QJsonObject inc = fin_same_period(d.income_statement, d.balance_sheet[0].first);
+    if (!inc.isEmpty()) {
+        ebit = get_val(inc, {"EBIT", "Operating Income"});
         interest = get_val(inc, {"Interest Expense", "Interest Expense Non Operating"});
         if (interest < 0)
             interest = -interest;
@@ -235,11 +284,12 @@ void EquityFinancialsTab::populate_balance_view(const services::equity::Financia
     set(bal_cash_val_, missing(cash) ? kNoData : fmt_large(cash));
 
     double cur_ratio = pos_ratio(cur_assets, cur_liab);
-    double quick_ratio = pos_ratio(cur_assets - inventory, cur_liab);
+    // No "Inventory" line = no inventory (software, services): quick ratio = current ratio.
+    double quick_ratio = pos_ratio(cur_assets - (missing(inventory) ? 0.0 : inventory), cur_liab);
     double work_cap = cur_assets - cur_liab;
     double d_e = pos_ratio(total_debt, total_equity);
     double d_a = pos_ratio(total_debt, total_assets);
-    double int_cov = pos_ratio(ebitda, interest);
+    double int_cov = pos_ratio(ebit, interest);
 
     set(bal_current_ratio_, missing(cur_ratio) ? kNoData : fmt_ratio(cur_ratio));
     set(bal_quick_ratio_, missing(quick_ratio) ? kNoData : fmt_ratio(quick_ratio));
@@ -269,9 +319,7 @@ void EquityFinancialsTab::populate_cashflow_view(const services::equity::Financi
     if (buybacks > 0)
         buybacks = -buybacks;
 
-    double revenue = qQNaN();
-    if (!d.income_statement.isEmpty())
-        revenue = get_val(d.income_statement[0].second, {"Total Revenue", "Revenue"});
+    double revenue = get_val(fin_same_period(d.income_statement, d.cash_flow[0].first), {"Total Revenue", "Revenue"});
     double fcf_margin = pos_ratio(fcf, revenue);
     double capex_rev = pos_ratio(qAbs(capex), revenue);
 
@@ -343,6 +391,7 @@ void EquityFinancialsTab::rebuild_revenue_chart(const services::equity::Financia
         net_v << get_val(stmt, {"Net Income", "Net Income Common Stockholders"}) / 1e9;
     }
 
+    const QString axis_fmt = fin_rescale({&revenue_v, &gross_v, &net_v});
     auto* chart = new QChart;
     style_chart(chart);
     if (cats.isEmpty()) {
@@ -383,7 +432,7 @@ void EquityFinancialsTab::rebuild_revenue_chart(const services::equity::Financia
     chart->legend()->show();
 
     auto* axX = make_x_axis(cats);
-    auto* axY = make_y_axis("$%.0fB");
+    auto* axY = make_y_axis(axis_fmt);
     chart->addAxis(axX, Qt::AlignBottom);
     chart->addAxis(axY, Qt::AlignLeft);
     bar_series->attachAxis(axX);
@@ -473,6 +522,7 @@ void EquityFinancialsTab::rebuild_balance_chart(const services::equity::Financia
         equity_v << get_val(b, {"Stockholders Equity", "Total Equity"}) / 1e9;
     }
 
+    const QString axis_fmt = fin_rescale({&assets_v, &liab_v, &equity_v});
     auto* chart = new QChart;
     style_chart(chart);
     if (cats.isEmpty()) {
@@ -499,7 +549,7 @@ void EquityFinancialsTab::rebuild_balance_chart(const services::equity::Financia
     chart->legend()->show();
 
     auto* axX = make_x_axis(cats);
-    auto* axY = make_y_axis("$%.0fB");
+    auto* axY = make_y_axis(axis_fmt);
     chart->addAxis(axX, Qt::AlignBottom);
     chart->addAxis(axY, Qt::AlignLeft);
     series->attachAxis(axX);
@@ -533,6 +583,7 @@ void EquityFinancialsTab::rebuild_cashflow_chart(const services::equity::Financi
         fcf_v << (op + capex) / 1e9;
     }
 
+    const QString axis_fmt = fin_rescale({&op_v, &inv_v, &fin_v, &fcf_v});
     auto* chart = new QChart;
     style_chart(chart);
     if (cats.isEmpty()) {
@@ -567,7 +618,7 @@ void EquityFinancialsTab::rebuild_cashflow_chart(const services::equity::Financi
     chart->legend()->show();
 
     auto* axX = make_x_axis(cats);
-    auto* axY = make_y_axis("$%.0fB");
+    auto* axY = make_y_axis(axis_fmt);
     chart->addAxis(axX, Qt::AlignBottom);
     chart->addAxis(axY, Qt::AlignLeft);
     bar_series->attachAxis(axX);
@@ -582,7 +633,7 @@ void EquityFinancialsTab::rebuild_return_chart(const services::equity::Financial
     if (d.income_statement.isEmpty() || d.balance_sheet.isEmpty() || !ret_chart_)
         return;
 
-    int n = qMin(5, qMin(d.income_statement.size(), d.balance_sheet.size()));
+    int n = qMin(5, static_cast<int>(d.income_statement.size()));
     QStringList cats;
 
     auto* roe_series = new QLineSeries;
@@ -598,8 +649,9 @@ void EquityFinancialsTab::rebuild_return_chart(const services::equity::Financial
     for (int i = n - 1; i >= 0; --i) {
         cats << d.income_statement[i].first.left(4);
         double net = get_val(d.income_statement[i].second, {"Net Income", "Net Income Common Stockholders"});
-        double assets = get_val(d.balance_sheet[i].second, {"Total Assets"});
-        double equity = get_val(d.balance_sheet[i].second, {"Stockholders Equity", "Total Equity"});
+        const QJsonObject bal_i = fin_same_period(d.balance_sheet, d.income_statement[i].first);
+        double assets = get_val(bal_i, {"Total Assets"});
+        double equity = get_val(bal_i, {"Stockholders Equity", "Total Equity"});
         // An uncomputable period is skipped, not plotted at 0% — a flat zero
         // return is a claim the filings never made.
         const double roe = pos_ratio(net, equity) * 100.0;

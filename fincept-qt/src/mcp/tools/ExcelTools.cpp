@@ -611,11 +611,20 @@ std::vector<ToolDef> get_excel_tools() {
     {
         ToolDef t;
         t.name = "get_excel_sheet_data";
-        t.description = "Get the entire sheet as a 2D array of cell text (rows of strings).";
+        t.description = "Get a sheet's cells as a 2D array of raw cell text (formulas start with '='). By default "
+                        "only the used range is returned (row_count/col_count still report the grid size); set "
+                        "include_values=true to also get `values`, the computed value of every cell.";
         t.category = "excel";
         t.default_timeout_ms = kBulkTimeoutMs;
-        t.input_schema =
-            ToolSchemaBuilder().integer("sheet_index", "Sheet index (-1 = active)").default_int(-1).min(-1).build();
+        t.input_schema = ToolSchemaBuilder()
+                             .integer("sheet_index", "Sheet index (-1 = active)")
+                             .default_int(-1)
+                             .min(-1)
+                             .boolean("include_values", "Also return computed values (formulas evaluated)")
+                             .default_bool(false)
+                             .boolean("full_grid", "Return the whole padded grid instead of the used range")
+                             .default_bool(false)
+                             .build();
         t.input_schema = with_sheet_aliases(std::move(t.input_schema));
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             run_on_ui(std::move(ctx), promise, [args](auto resolve) {
@@ -624,19 +633,31 @@ std::vector<ToolDef> get_excel_tools() {
                     resolve(ToolResult::fail("Sheet not found - call list_excel_sheets for valid sheet_index values"));
                     return;
                 }
-                const auto data = s->get_data();
+                const bool with_values = args["include_values"].toBool(false);
+                const auto data = args["full_grid"].toBool(false) ? s->get_data() : s->get_used_data();
                 QJsonArray rows;
-                for (const auto& row : data) {
-                    QJsonArray r;
-                    for (const auto& cell : row)
-                        r.append(cell);
-                    rows.append(r);
+                QJsonArray values;
+                for (int r = 0; r < data.size(); ++r) {
+                    QJsonArray raw_row;
+                    QJsonArray value_row;
+                    for (int c = 0; c < data[r].size(); ++c) {
+                        raw_row.append(data[r][c]);
+                        if (with_values)
+                            value_row.append(screens::formula::export_text(s->value_at(r, c)));
+                    }
+                    rows.append(raw_row);
+                    if (with_values)
+                        values.append(value_row);
                 }
-                resolve(ToolResult::ok_data(QJsonObject{
+                QJsonObject out{
                     {"rows", rows},
+                    {"used_rows", static_cast<int>(data.size())},
                     {"row_count", s->row_count()},
                     {"col_count", s->col_count()},
-                }));
+                };
+                if (with_values)
+                    out["values"] = values;
+                resolve(ToolResult::ok_data(out));
             });
         };
         tools.push_back(std::move(t));
@@ -952,6 +973,11 @@ std::vector<ToolDef> get_excel_tools() {
                         QStringList parts;
                         for (int c = 0; c <= last_col; ++c) {
                             QString cell = (c < data[r].size()) ? data[r][c] : QString();
+                            // CSV carries values: formulas export their result.
+                            if (cell.startsWith(QLatin1Char('=')))
+                                cell = screens::formula::export_text(s->value_at(r, c));
+                            else if (cell.startsWith(QLatin1Char('\'')))
+                                cell = cell.mid(1);
                             if (cell.contains(',') || cell.contains('"') || cell.contains('\n')) {
                                 cell.replace('"', "\"\"");
                                 cell = '"' + cell + '"';

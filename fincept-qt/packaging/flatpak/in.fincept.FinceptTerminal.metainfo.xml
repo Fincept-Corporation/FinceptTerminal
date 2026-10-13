@@ -71,6 +71,15 @@
   </provides>
 
   <releases>
+    <!-- 4.5.1: inert until v4.5.1 is tagged and the Flatpak manifest's tag+commit
+         are bumped to it (same rule as the 4.5.0 block below).
+    <release version="4.5.1" date="2026-10-31">
+      <description>
+        <p>Plans simplified to Free and Pro ($10/month). New Agent Workbench runs Claude Code and OpenAI Codex inside the terminal with live access to its data, and the terminal can act as an MCP server for external agents.</p>
+        <p>Faster first-run setup with parallel installs, a catalog of 240+ runnable data connectors, faster live tables and instrument search, and safer trading: confirmations for live orders, pre-trade risk limits, a kill switch and pending-order expiry.</p>
+      </description>
+    </release>
+    -->
     <!-- 4.5.0 is NOT released yet: no v4.4.1-style tag exists for it and
          updates.json still reports 4.4.1. The Flatpak manifest therefore
          builds v4.4.1, and the newest release listed here must match what

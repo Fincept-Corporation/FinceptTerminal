@@ -76,12 +76,17 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     void on_related_clicked(const services::NewsArticle& article);
 
     void on_drawer_toggle();
+    /// Open / close the intel drawer and keep the INTEL button in sync.
+    void set_drawer_open(bool open);
     void on_detail_closed();
     void on_manage_sources();
 
   private:
     void build_ui();
     void connect_signals();
+    /// Root stylesheet: the shared news sheet + this screen's state rules
+    /// (priority stripes, signal / odds colours, live badge). Re-run on theme change.
+    void apply_news_styles();
 
     void refresh_data(bool force);
     void apply_filters_async();
@@ -92,13 +97,15 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     void compute_deviations();
     void sort_articles(QVector<services::NewsArticle>& articles) const;
 
-    /// Kick off the four enrichment Python calls (NER, geolocation,
-    /// correlation signals, prediction-market odds) and route results
-    /// into the side-panel intel sections + feed model. Debounced via
-    /// `enrichment_timer_` so rapid filter changes don't spawn dozens of
-    /// duplicate Python processes.
+    /// Enrich the visible articles (NER + places, correlation signals) and route the
+    /// results into the intel drawer + feed model. Debounced via `enrichment_timer_`.
+    /// NER/places are cached per article in NewsNlpService (only NEW articles reach
+    /// Python, in one process); signals are computed in-process.
     void request_enrichment();
     void run_enrichment_now();
+    /// Prediction-market odds feed only the intel drawer: fetched (from a 10-min
+    /// cache) only while the drawer is open.
+    void maybe_fetch_predictions();
 
     int64_t time_window_seconds() const;
 
@@ -162,6 +169,11 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     // Monotonic counter so late async results from earlier filter
     // generations don't clobber the intel sections.
     std::atomic<int> enrichment_generation_{0};
+    // Last enriched article set (hash of ids) and when — an unchanged set is not
+    // re-enriched within kEnrichMinIntervalSec (signals only move with the clock).
+    size_t last_enrich_signature_ = 0;
+    int64_t last_enrich_at_ = 0;
+    static constexpr int64_t kEnrichMinIntervalSec = 60;
 
     // Active variant for feed filtering
     QString active_variant_ = "FULL";

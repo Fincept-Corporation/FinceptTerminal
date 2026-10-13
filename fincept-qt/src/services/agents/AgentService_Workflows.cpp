@@ -51,9 +51,41 @@ QString agent_wf_value_text(const QJsonValue& v) {
 }
 } // namespace
 
+QStringList AgentService::workflow_types() {
+    // Mirrors the WORKFLOWS tab (WorkflowsViewPanel kWorkflows). Each id is a
+    // finagent_core main.py action.
+    return {QStringLiteral("stock_analysis"),      QStringLiteral("portfolio_rebal"), QStringLiteral("risk_assessment"),
+            QStringLiteral("execute_multi_query"), QStringLiteral("macro_scan"),      QStringLiteral("earnings_brief"),
+            QStringLiteral("sector_rotation"),     QStringLiteral("options_scan"),    QStringLiteral("sentiment_scan"),
+            QStringLiteral("custom_query")};
+}
+
 QString AgentService::run_workflow(const QString& workflow_type, const QJsonObject& params) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     LOG_INFO("AgentService", QString("Running workflow [%1]: %2").arg(req_id.left(8), workflow_type));
+
+    // The type becomes the Python action name, so an unchecked string reached
+    // EVERY main.py action (task deletion, memory writes, …) — run_agent_workflow
+    // hands it straight from the model. Only the real workflows may run.
+    if (!workflow_types().contains(workflow_type)) {
+        AgentExecutionResult r;
+        r.request_id = req_id;
+        r.success = false;
+        r.error = QStringLiteral("Unknown workflow type '%1'. Valid types: %2")
+                      .arg(workflow_type, workflow_types().join(QStringLiteral(", ")));
+        QPointer<AgentService> self = this;
+        // Deferred: callers store the returned id before results can be matched.
+        QMetaObject::invokeMethod(
+            this,
+            [self, r]() {
+                if (!self)
+                    return;
+                emit self->agent_result(r);
+                self->publish_agent_result(r, /*final=*/true);
+            },
+            Qt::QueuedConnection);
+        return req_id;
+    }
 
     QJsonObject p = params;
     p["workflow_type"] = workflow_type;

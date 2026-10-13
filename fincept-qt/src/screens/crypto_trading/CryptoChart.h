@@ -37,7 +37,10 @@ class CryptoChart : public QWidget {
     explicit CryptoChart(QWidget* parent = nullptr);
 
     void set_candles(const QVector<trading::Candle>& candles);
-    void append_candle(const trading::Candle& candle);
+    /// Live updates, in order: a candle with the last candle's timestamp
+    /// updates the forming bar, any other appends a bar. Axes, the last-price
+    /// tag and every indicator overlay are refreshed ONCE per call.
+    void append_candles(const QVector<trading::Candle>& candles);
     void clear();
 
     QString current_timeframe() const;

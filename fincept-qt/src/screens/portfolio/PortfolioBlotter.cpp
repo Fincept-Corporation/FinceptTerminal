@@ -3,6 +3,7 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/portfolio/PortfolioCsv.h"
 #include "screens/portfolio/PortfolioSparkline.h"
 #include "services/markets/MarketDataService.h"
 #include "storage/repositories/SettingsRepository.h"
@@ -11,6 +12,9 @@
 #include "ui/theme/Theme.h"
 
 #include <QAction>
+#include <QClipboard>
+#include <QDate>
+#include <QGuiApplication>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -19,6 +23,7 @@
 #include <QJsonObject>
 #include <QLocale>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMetaObject>
 #include <QScrollBar>
 #include <QVBoxLayout>
@@ -498,6 +503,7 @@ void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, doubl
 }
 
 void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
+    const bool changed = symbol != selected_symbol_;
     selected_symbol_ = symbol;
     for (int r = 0; r < table_->rowCount(); ++r) {
         auto* item = table_->item(r, kColSymbol);
@@ -508,8 +514,22 @@ void PortfolioBlotter::set_selected_symbol(const QString& symbol) {
             return;
         }
     }
-    // Not on this page: clear the highlight instead of leaving the previous
-    // row looking selected while the selection actually lives elsewhere.
+    // Not on this page: jump to the page that holds it (a group-linked symbol or
+    // a heatmap click on a row beyond page 1 used to select nothing visible).
+    const auto& view = visible_view();
+    for (int i = 0; i < view.size(); ++i) {
+        // Only on a NEW selection: the 60 s refresh re-asserts the same symbol
+        // and must not yank the user back from a page they paged to.
+        if (changed && view[i].symbol == symbol && page_size_ > 0) {
+            const int page = i / page_size_ + 1;
+            if (page != current_page_) {
+                current_page_ = page;
+                populate_table(); // re-selects selected_symbol_
+                return;
+            }
+            break;
+        }
+    }
     table_->clearSelection();
 }
 
@@ -889,8 +909,26 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
     }());
     menu.addSeparator();
 
-    auto* research_act = menu.addAction(tr("Open in Equity Research"));
-    auto* news_act = menu.addAction(tr("Open in News"));
+    // Cross-link: hand the ticker to another screen through nav.open_symbol
+    // (the owner publishes it; the target receives it via IGroupLinked).
+    QMenu* open_in = menu.addMenu(tr("Open in"));
+    const struct {
+        const char* screen;
+        const char* label;
+    } kTargets[] = {
+        {"equity_research", QT_TR_NOOP("Equity Research")}, {"equity_trading", QT_TR_NOOP("Equity Trading")},
+        {"news", QT_TR_NOOP("News")},                       {"watchlist", QT_TR_NOOP("Watchlist")},
+        {"backtesting", QT_TR_NOOP("Backtesting")},
+    };
+    for (const auto& t : kTargets) {
+        const QString screen = QString::fromLatin1(t.screen);
+        connect(open_in->addAction(tr(t.label)), &QAction::triggered, this,
+                [this, screen, symbol]() { emit open_symbol_requested(screen, symbol); });
+    }
+    connect(menu.addAction(tr("Copy Symbol")), &QAction::triggered, this,
+            [symbol]() { QGuiApplication::clipboard()->setText(symbol); });
+    menu.addSeparator();
+    connect(menu.addAction(tr("Export Positions (CSV)…")), &QAction::triggered, this, &PortfolioBlotter::export_csv);
     menu.addSeparator();
     auto* edit_act = menu.addAction(tr("Edit Transaction"));
     auto* delete_act = menu.addAction(tr("Close / Delete Position"));
@@ -906,14 +944,33 @@ void PortfolioBlotter::on_context_menu(const QPoint& pos) {
         return f;
     }());
 
-    connect(research_act, &QAction::triggered, this,
-            [this, symbol]() { emit open_symbol_requested(QStringLiteral("equity_research"), symbol); });
-    connect(news_act, &QAction::triggered, this,
-            [this, symbol]() { emit open_symbol_requested(QStringLiteral("news"), symbol); });
     connect(edit_act, &QAction::triggered, this, [this, symbol]() { emit edit_transaction_requested(symbol); });
     connect(delete_act, &QAction::triggered, this, [this, symbol]() { emit delete_position_requested(symbol); });
 
     menu.exec(table_->viewport()->mapToGlobal(pos));
+}
+
+void PortfolioBlotter::export_csv() {
+    // The whole filtered + sorted view, not just the visible page.
+    const auto& rows_src = visible_view();
+    if (rows_src.isEmpty()) {
+        QMessageBox::information(this, tr("Export Positions"), tr("There are no positions to export."));
+        return;
+    }
+    QVector<QStringList> rows;
+    rows.reserve(rows_src.size());
+    for (const auto& h : rows_src) {
+        rows.append({h.symbol, h.sector, portfolio_csv::num(h.quantity, 8), portfolio_csv::num(h.current_price, 6),
+                     portfolio_csv::num(h.avg_buy_price, 6), portfolio_csv::num(h.market_value, 2),
+                     portfolio_csv::num(h.cost_basis, 2), portfolio_csv::num(h.unrealized_pnl, 2),
+                     portfolio_csv::num(h.unrealized_pnl_percent, 4), portfolio_csv::num(h.day_change, 6),
+                     portfolio_csv::num(h.day_change_percent, 4), portfolio_csv::num(h.weight, 4)});
+    }
+    portfolio_csv::save(this, QStringLiteral("positions_%1.csv").arg(QDate::currentDate().toString(Qt::ISODate)),
+                        {"symbol", "sector", "quantity", "last_price", "avg_cost", "market_value", "cost_basis",
+                         "unrealized_pnl", "unrealized_pnl_pct", "day_change_per_share", "day_change_pct",
+                         "weight_pct"},
+                        rows);
 }
 
 void PortfolioBlotter::refresh_theme() {

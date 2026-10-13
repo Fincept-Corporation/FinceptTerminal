@@ -9,6 +9,7 @@
 #include "mcp/McpManager.h"
 #include "mcp/McpMarketplace.h"
 #include "mcp/McpProvider.h"
+#include "mcp/McpService.h"
 #include "screens/mcp_servers/McpServersScreen.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -487,7 +488,9 @@ void McpServersScreen::on_tool_enabled_changed(int row, int col) {
     if (si->data(Qt::UserRole).toString() != QString(INTERNAL_SERVER_ID))
         return;
     const bool enabled = (ci->checkState() == Qt::Checked);
-    McpProvider::instance().set_tool_enabled(ni->text(), enabled);
+    // Persisted: McpProvider::set_tool_enabled alone is in-memory only, so the
+    // choice made here used to reset on every launch.
+    McpService::instance().set_tool_enabled_persistent(ni->text(), enabled);
     LOG_INFO("McpServers", QString("Tool '%1' %2").arg(ni->text(), enabled ? "enabled" : "disabled"));
 }
 

@@ -4,11 +4,10 @@
 
 #include "mcp/tools/EdgarTools.h"
 
-#include "core/logging/Logger.h"
-#include "mcp/tools/ThreadHelper.h"
-#include "python/PythonRunner.h"
-#include "storage/cache/CacheManager.h"
+#include "mcp/AsyncDispatch.h"
+#include "services/equity/SecFilingsService.h"
 
+#include <QJsonArray>
 #include <QJsonDocument>
 
 #include <algorithm>
@@ -17,18 +16,20 @@
 
 namespace fincept::mcp::tools {
 
-static constexpr const char* TAG = "EdgarTools";
-static constexpr const char* SCRIPT = "mcp/edgar/main.py";
-[[maybe_unused]] static constexpr int kTimeoutMs = 30000;
-static constexpr int kEdgarTtlSec = 30 * 60; // 30 min — SEC filings rarely change intra-day
+namespace edgar_tools_detail {
 
-// ── Helper: run mcp/edgar/main.py synchronously and return parsed JSON ───────
+constexpr int kEdgarTtlSec = 30 * 60; // 30 min — SEC filings rarely change intra-day
+// Full-text / Form 4 / 13F pulls download and parse many documents; with SecFilingsService
+// queueing behind PythonRunner's 3-process cap a call can take a minute. Declaring it
+// (> kMcpAsyncJobThresholdMs) makes every EDGAR tool backgroundable (job receipt + cancel)
+// instead of holding the provider's HTTP turn open.
+constexpr int kEdgarToolTimeoutMs = 120000;
 
 // Integer tool args are interpolated straight into the script's argv, so a negative or
 // absurd value (limit=-1, max_length=999999999) went to the Python side unchecked. Clamp
 // each to a sane window; the bounds are per-argument-name because they are the same
 // concept in every tool that uses them.
-static int edgar_int_arg(const QJsonObject& args, const char* key, int fallback) {
+int edgar_int_arg(const QJsonObject& args, const char* key, int fallback) {
     struct Bounds {
         const char* name;
         int lo;
@@ -46,67 +47,34 @@ static int edgar_int_arg(const QJsonObject& args, const char* key, int fallback)
     return v;
 }
 
-// State shared with the PythonRunner callback. Heap-allocated because run_async_wait stops
-// waiting after its bound (120 s) while the script may still be running or queued behind
-// the runner's 3-process cap; the callback that finally fires must write into live memory,
-// not a stack frame that has been unwound.
-struct EdgarWaitState {
-    QJsonObject result;
-    QString error;
-};
+/// Builds the mcp/edgar/main.py argv from the tool arguments; returns an error message
+/// (and leaves argv empty) when they are invalid.
+using EdgarArgv = std::function<QString(const QJsonObject& args, QStringList& argv)>;
 
-static ToolResult run_edgar(const QStringList& args) {
-    // Cache key: join all args
-    const QString cache_key = "edgar:" + args.join(":");
-    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
-    if (!cached.isNull()) {
-        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-        if (!doc.isNull() && doc.isObject())
-            return ToolResult::ok_data(doc.object());
-    }
-
-    auto st = std::make_shared<EdgarWaitState>();
-    st->error = QStringLiteral("EDGAR request did not complete in time (the Python runner may be busy) — try again");
-
-    // Marshal the PythonRunner::run() call onto the runner's thread (main).
-    // The previous worker-thread QEventLoop pattern caused QObject parentage
-    // violations since QProcess signals fire on the main thread and never
-    // wake the worker's loop. See mcp/tools/ThreadHelper.h.
-    auto* runner = &fincept::python::PythonRunner::instance();
-    detail::run_async_wait(runner, [runner, st, args](auto signal_done) {
-        runner->run(SCRIPT, args, [st, signal_done](const fincept::python::PythonResult& r) {
-            st->error.clear();
-            if (!r.success) {
-                st->error = r.error.isEmpty() ? r.output : r.error;
-            } else {
-                QString text = fincept::python::extract_json(r.output);
-                QJsonParseError pe;
-                auto doc = QJsonDocument::fromJson(text.toUtf8(), &pe);
-                if (pe.error != QJsonParseError::NoError) {
-                    st->error = QString("JSON parse error: %1").arg(pe.errorString());
-                } else {
-                    QJsonObject obj = doc.object();
-                    if (obj.value("success").toBool(true) == false)
-                        st->error = obj.value("error").toString("unknown error");
-                    else
-                        st->result = obj;
-                }
+/// Async handler shared by every EDGAR tool: SecFilingsService runs the script through
+/// PythonRunner (never blocking a worker thread), caches the result and coalesces an
+/// identical request already in flight (e.g. from the Equity Research FILINGS tab).
+void set_edgar_handler(ToolDef& t, EdgarArgv build) {
+    t.default_timeout_ms = kEdgarToolTimeoutMs;
+    t.async_handler = [build](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
+        QStringList argv;
+        const QString err = build(args, argv);
+        auto* svc = &services::equity::SecFilingsService::instance();
+        AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, argv, err](auto resolve) {
+            if (!err.isEmpty() || argv.isEmpty()) {
+                resolve(ToolResult::fail(err.isEmpty() ? QStringLiteral("Invalid arguments") : err));
+                return;
             }
-            signal_done();
+            svc->run_command(argv, kEdgarTtlSec, [resolve](bool ok, const QJsonObject& payload, const QString& error) {
+                resolve(ok ? ToolResult::ok_data(payload) : ToolResult::fail(error));
+            });
         });
-    });
-
-    if (!st->error.isEmpty()) {
-        LOG_WARN(TAG, QString("edgar error [%1]: %2").arg(args.value(0), st->error));
-        return ToolResult::fail(st->error);
-    }
-
-    fincept::CacheManager::instance().put(
-        cache_key, QVariant(QString::fromUtf8(QJsonDocument(st->result).toJson(QJsonDocument::Compact))),
-        kEdgarTtlSec, "edgar");
-
-    return ToolResult::ok_data(st->result);
+    };
 }
+
+} // namespace edgar_tools_detail
+
+using namespace edgar_tools_detail;
 
 // ── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -123,12 +91,13 @@ std::vector<ToolDef> get_edgar_tools() {
             QJsonObject{{"company", QJsonObject{{"type", "string"},
                                                 {"description", "Company name or ticker (e.g. AAPL, Apple Inc)"}}}};
         t.input_schema.required = {"company"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString company = args["company"].toString().trimmed();
             if (company.isEmpty())
-                return ToolResult::fail("Missing 'company'");
-            return run_edgar({"resolve_cik", company}); // → mcp/edgar/main.py resolve_cik
-        };
+                return QStringLiteral("Missing 'company'");
+            argv = QStringList{"resolve_cik", company};
+            return {}; // → mcp/edgar/main.py resolve_cik
+        });
         tools.push_back(std::move(t));
     }
 
@@ -142,12 +111,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"cik", QJsonObject{{"type", "string"}, {"description", "10-digit SEC CIK number"}}}};
         t.input_schema.required = {"cik"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString cik = args["cik"].toString().trimmed();
             if (cik.isEmpty())
-                return ToolResult::fail("Missing 'cik'");
-            return run_edgar({"get_company", cik});
-        };
+                return QStringLiteral("Missing 'cik'");
+            argv = QStringList{"get_company", cik};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -155,21 +125,23 @@ std::vector<ToolDef> get_edgar_tools() {
     {
         ToolDef t;
         t.name = "edgar_get_financials";
-        t.description = "Fetch XBRL financials from SEC EDGAR: revenue, EBITDA, net income, debt, cash, shares. "
-                        "Returns annual and TTM figures.";
+        t.description = "Fetch the latest XBRL financial statements (balance sheet, income statement, cash flow) "
+                        "from SEC EDGAR as full statement tables. For a compact latest-10-K/10-Q metric summary "
+                        "with YoY use edgar_key_financials.";
         t.category = "sec-edgar";
         t.input_schema.properties =
             QJsonObject{{"cik", QJsonObject{{"type", "string"}, {"description", "10-digit SEC CIK number"}}},
                         {"periods", QJsonObject{{"type", "integer"},
                                                 {"description", "Number of annual periods to fetch (default: 4)"}}}};
         t.input_schema.required = {"cik"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString cik = args["cik"].toString().trimmed();
             if (cik.isEmpty())
-                return ToolResult::fail("Missing 'cik'");
+                return QStringLiteral("Missing 'cik'");
             int periods = edgar_int_arg(args, "periods", 4);
-            return run_edgar({"get_financials", cik, QString::number(periods), "true"});
-        };
+            argv = QStringList{"get_financials", cik, QString::number(periods), "true"};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -185,15 +157,16 @@ std::vector<ToolDef> get_edgar_tools() {
                         {"form", QJsonObject{{"type", "string"},
                                              {"description", "Filing form type: 10-K, 10-Q, 8-K (default: 10-K)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             QString form = args["form"].toString().trimmed();
             if (form.isEmpty())
                 form = "10-K";
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"get_filing_text", ticker, form});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"get_filing_text", ticker, form};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -210,16 +183,17 @@ std::vector<ToolDef> get_edgar_tools() {
                         {"months_back", QJsonObject{{"type", "integer"},
                                                     {"description", "How many months back to search (default: 12)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             QString form = args["form"].toString().trimmed();
             if (form.isEmpty())
                 form = "8-K";
             int months = edgar_int_arg(args, "months_back", 12);
-            return run_edgar({"search_filings", ticker, form, QString::number(months)});
-        };
+            argv = QStringList{"search_filings", ticker, form, QString::number(months)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -234,13 +208,14 @@ std::vector<ToolDef> get_edgar_tools() {
             {"deal_value", QJsonObject{{"type", "number"}, {"description", "Total deal / enterprise value in USD"}}},
             {"cik", QJsonObject{{"type", "string"}, {"description", "10-digit SEC CIK of the target company"}}}};
         t.input_schema.required = {"deal_value", "cik"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             double deal_value = args["deal_value"].toDouble(0);
             QString cik = args["cik"].toString().trimmed();
             if (cik.isEmpty() || deal_value <= 0)
-                return ToolResult::fail("Missing or invalid 'deal_value' / 'cik'");
-            return run_edgar({"calc_multiples", cik, QString::number(deal_value, 'f', 2)});
-        };
+                return QStringLiteral("Missing or invalid 'deal_value' / 'cik'");
+            argv = QStringList{"calc_multiples", cik, QString::number(deal_value, 'f', 2)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -255,15 +230,16 @@ std::vector<ToolDef> get_edgar_tools() {
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol or CIK"}}},
                         {"form", QJsonObject{{"type", "string"}, {"description", "Filing form type (default: 10-K)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             QString form = args["form"].toString().trimmed();
             if (form.isEmpty())
                 form = "10-K";
-            return run_edgar({"get_filing_documents", ticker, form});
-        };
+            argv = QStringList{"get_filing_documents", ticker, form};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -277,12 +253,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol or CIK"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"get_filing_documents", ticker, "S-4"});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"get_filing_documents", ticker, "S-4"};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -303,18 +280,19 @@ std::vector<ToolDef> get_edgar_tools() {
                                      {"description", "Comma-separated sections: business, risk_factors, mda, "
                                                      "financials, controls, compensation, governance, all_items"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             QString sections = args["sections"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             if (sections.isEmpty())
                 sections = "business";
             QStringList cmd = {"10k_sections", ticker};
             for (const auto& s : sections.split(","))
                 cmd.append(s.trimmed());
-            return run_edgar(cmd);
-        };
+            argv = cmd;
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -329,13 +307,14 @@ std::vector<ToolDef> get_edgar_tools() {
                         {"max_length", QJsonObject{{"type", "integer"},
                                                    {"description", "Max characters to return (default: 20000)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int max_len = edgar_int_arg(args, "max_length", 20000);
-            return run_edgar({"10k_full_text", ticker, QString::number(max_len)});
-        };
+            argv = QStringList{"10k_full_text", ticker, QString::number(max_len)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -351,14 +330,15 @@ std::vector<ToolDef> get_edgar_tools() {
              QJsonObject{{"type", "string"}, {"description", "Search query (e.g. revenue recognition, litigation)"}}},
             {"max_results", QJsonObject{{"type", "integer"}, {"description", "Max results (default: 10)"}}}};
         t.input_schema.required = {"ticker", "query"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             QString query = args["query"].toString().trimmed();
             if (ticker.isEmpty() || query.isEmpty())
-                return ToolResult::fail("Missing 'ticker' or 'query'");
+                return QStringLiteral("Missing 'ticker' or 'query'");
             int max_results = edgar_int_arg(args, "max_results", 10);
-            return run_edgar({"10k_search", ticker, query, QString::number(max_results)});
-        };
+            argv = QStringList{"10k_search", ticker, query, QString::number(max_results)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -378,18 +358,19 @@ std::vector<ToolDef> get_edgar_tools() {
                                      {"description", "Comma-separated sections: part_i_item_1, part_i_item_2 (MD&A), "
                                                      "part_i_item_3, part_ii_item_1, all_items"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             QString sections = args["sections"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             if (sections.isEmpty())
                 sections = "part_i_item_2";
             QStringList cmd = {"10q_sections", ticker};
             for (const auto& s : sections.split(","))
                 cmd.append(s.trimmed());
-            return run_edgar(cmd);
-        };
+            argv = cmd;
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -404,13 +385,14 @@ std::vector<ToolDef> get_edgar_tools() {
                         {"max_length", QJsonObject{{"type", "integer"},
                                                    {"description", "Max characters to return (default: 15000)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int max_len = edgar_int_arg(args, "max_length", 15000);
-            return run_edgar({"10q_full_text", ticker, QString::number(max_len)});
-        };
+            argv = QStringList{"10q_full_text", ticker, QString::number(max_len)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -429,13 +411,14 @@ std::vector<ToolDef> get_edgar_tools() {
             {"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
             {"limit", QJsonObject{{"type", "integer"}, {"description", "Number of events to return (default: 20)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int limit = edgar_int_arg(args, "limit", 20);
-            return run_edgar({"8k_events", ticker, QString::number(limit)});
-        };
+            argv = QStringList{"8k_events", ticker, QString::number(limit)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -450,13 +433,14 @@ std::vector<ToolDef> get_edgar_tools() {
                         {"max_length", QJsonObject{{"type", "integer"},
                                                    {"description", "Max characters to return (default: 10000)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int max_len = edgar_int_arg(args, "max_length", 10000);
-            return run_edgar({"8k_full_text", ticker, QString::number(max_len)});
-        };
+            argv = QStringList{"8k_full_text", ticker, QString::number(max_len)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -468,20 +452,22 @@ std::vector<ToolDef> get_edgar_tools() {
     {
         ToolDef t;
         t.name = "edgar_insider_transactions";
-        t.description = "Get recent insider transactions (Form 4) for a company — buys/sells by executives, directors, "
-                        "major shareholders.";
+        t.description = "List recent Form 4 filings for a company with the insider's name, role and the "
+                        "transaction codes filed (P = open-market buy, S = sale, A grant, M option exercise, "
+                        "F tax withholding, G gift).";
         t.category = "sec-edgar";
         t.input_schema.properties = QJsonObject{
             {"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
             {"limit", QJsonObject{{"type", "integer"}, {"description", "Number of transactions (default: 25)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int limit = edgar_int_arg(args, "limit", 25);
-            return run_edgar({"insider_transactions", ticker, QString::number(limit)});
-        };
+            argv = QStringList{"insider_transactions", ticker, QString::number(limit)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -489,19 +475,22 @@ std::vector<ToolDef> get_edgar_tools() {
     {
         ToolDef t;
         t.name = "edgar_insider_summary";
-        t.description = "Get a summary of insider buying vs selling activity for a company.";
+        t.description = "Summarise open-market insider buying (code P) vs selling (code S) — counts, shares and "
+                        "USD value — over the most recent Form 4 filings. Grants, option exercises, tax "
+                        "withholding and gifts are reported separately, not as buys/sells.";
         t.category = "sec-edgar";
         t.input_schema.properties = QJsonObject{
             {"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
             {"limit", QJsonObject{{"type", "integer"}, {"description", "Transactions to summarize (default: 50)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int limit = edgar_int_arg(args, "limit", 50);
-            return run_edgar({"insider_summary", ticker, QString::number(limit)});
-        };
+            argv = QStringList{"insider_summary", ticker, QString::number(limit)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -513,20 +502,22 @@ std::vector<ToolDef> get_edgar_tools() {
     {
         ToolDef t;
         t.name = "edgar_13f_holdings";
-        t.description =
-            "Get 13F institutional holdings for a company across recent quarters (hedge funds, mutual funds, etc.).";
+        t.description = "Holdings reported in an INSTITUTIONAL MANAGER's own 13F-HR filings over recent "
+                        "quarters. The ticker/CIK must be a 13F filer (e.g. BRK-B, BLK) — this is NOT who owns "
+                        "a stock; use edgar_institutional_holders for that.";
         t.category = "sec-edgar";
         t.input_schema.properties = QJsonObject{
             {"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
             {"quarters", QJsonObject{{"type", "integer"}, {"description", "Number of recent quarters (default: 2)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int quarters = edgar_int_arg(args, "quarters", 2);
-            return run_edgar({"13f_holdings", ticker, QString::number(quarters)});
-        };
+            argv = QStringList{"13f_holdings", ticker, QString::number(quarters)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -534,19 +525,22 @@ std::vector<ToolDef> get_edgar_tools() {
     {
         ToolDef t;
         t.name = "edgar_13f_top_holdings";
-        t.description = "Get the top institutional holders of a company's stock from 13F filings.";
+        t.description = "Top positions (by value) in an INSTITUTIONAL MANAGER's latest 13F-HR portfolio. The "
+                        "ticker/CIK must be a 13F filer (e.g. BRK-B, BLK) — for the top holders OF a stock use "
+                        "edgar_institutional_holders.";
         t.category = "sec-edgar";
         t.input_schema.properties = QJsonObject{
             {"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
             {"top_n", QJsonObject{{"type", "integer"}, {"description", "Number of top holders (default: 20)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int top_n = edgar_int_arg(args, "top_n", 20);
-            return run_edgar({"13f_top_holdings", ticker, QString::number(top_n)});
-        };
+            argv = QStringList{"13f_top_holdings", ticker, QString::number(top_n)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -563,12 +557,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"10k_exhibits", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"10k_exhibits", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -582,12 +577,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"10k_metadata", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"10k_metadata", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -600,12 +596,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"10k_markdown", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"10k_markdown", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -623,12 +620,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"10q_metadata", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"10q_metadata", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -641,12 +639,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"10q_markdown", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"10q_markdown", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -661,14 +660,15 @@ std::vector<ToolDef> get_edgar_tools() {
             {"query", QJsonObject{{"type", "string"}, {"description", "Search query"}}},
             {"max_results", QJsonObject{{"type", "integer"}, {"description", "Max results (default: 10)"}}}};
         t.input_schema.required = {"ticker", "query"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             QString query = args["query"].toString().trimmed();
             if (ticker.isEmpty() || query.isEmpty())
-                return ToolResult::fail("Missing 'ticker' or 'query'");
+                return QStringLiteral("Missing 'ticker' or 'query'");
             int max_results = edgar_int_arg(args, "max_results", 10);
-            return run_edgar({"10q_search", ticker, query, QString::number(max_results)});
-        };
+            argv = QStringList{"10q_search", ticker, query, QString::number(max_results)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -687,13 +687,14 @@ std::vector<ToolDef> get_edgar_tools() {
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
                         {"limit", QJsonObject{{"type", "integer"}, {"description", "Number of events (default: 30)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int limit = edgar_int_arg(args, "limit", 30);
-            return run_edgar({"8k_events_categorized", ticker, QString::number(limit)});
-        };
+            argv = QStringList{"8k_events_categorized", ticker, QString::number(limit)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -708,14 +709,15 @@ std::vector<ToolDef> get_edgar_tools() {
             {"query", QJsonObject{{"type", "string"}, {"description", "Search query"}}},
             {"max_results", QJsonObject{{"type", "integer"}, {"description", "Max results (default: 10)"}}}};
         t.input_schema.required = {"ticker", "query"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             QString query = args["query"].toString().trimmed();
             if (ticker.isEmpty() || query.isEmpty())
-                return ToolResult::fail("Missing 'ticker' or 'query'");
+                return QStringLiteral("Missing 'ticker' or 'query'");
             int max_results = edgar_int_arg(args, "max_results", 10);
-            return run_edgar({"8k_search", ticker, query, QString::number(max_results)});
-        };
+            argv = QStringList{"8k_search", ticker, query, QString::number(max_results)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -733,13 +735,14 @@ std::vector<ToolDef> get_edgar_tools() {
             {"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
             {"limit", QJsonObject{{"type", "integer"}, {"description", "Number of transactions (default: 25)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             int limit = edgar_int_arg(args, "limit", 25);
-            return run_edgar({"insider_transactions_detailed", ticker, QString::number(limit)});
-        };
+            argv = QStringList{"insider_transactions_detailed", ticker, QString::number(limit)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -751,17 +754,19 @@ std::vector<ToolDef> get_edgar_tools() {
     {
         ToolDef t;
         t.name = "edgar_13f_manager_info";
-        t.description = "Get fund manager information from 13F filings for a company.";
+        t.description = "Manager details from an institutional manager's latest 13F-HR (the ticker/CIK must "
+                        "be a 13F filer).";
         t.category = "sec-edgar";
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"13f_manager_info", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"13f_manager_info", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -769,17 +774,19 @@ std::vector<ToolDef> get_edgar_tools() {
     {
         ToolDef t;
         t.name = "edgar_13f_summary";
-        t.description = "Get a summary of 13F institutional holdings for a company.";
+        t.description = "Portfolio summary (total value, positions, top-10 concentration) of an institutional "
+                        "manager's latest 13F-HR (the ticker/CIK must be a 13F filer).";
         t.category = "sec-edgar";
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"13f_summary", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"13f_summary", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -797,12 +804,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
-            return run_edgar({"get_financial_metrics", ticker});
-        };
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"get_financial_metrics", ticker};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -816,15 +824,16 @@ std::vector<ToolDef> get_edgar_tools() {
             {"ticker", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
             {"form", QJsonObject{{"type", "string"}, {"description", "Form type: 10-K or 10-Q (default: 10-K)"}}}};
         t.input_schema.required = {"ticker"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString ticker = args["ticker"].toString().trimmed();
             if (ticker.isEmpty())
-                return ToolResult::fail("Missing 'ticker'");
+                return QStringLiteral("Missing 'ticker'");
             QString form = args["form"].toString().trimmed();
             if (form.isEmpty())
                 form = "10-K";
-            return run_edgar({"get_xbrl_statements", ticker, form});
-        };
+            argv = QStringList{"get_xbrl_statements", ticker, form};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -837,12 +846,13 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"cik", QJsonObject{{"type", "string"}, {"description", "10-digit SEC CIK number"}}}};
         t.input_schema.required = {"cik"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString cik = args["cik"].toString().trimmed();
             if (cik.isEmpty())
-                return ToolResult::fail("Missing 'cik'");
-            return run_edgar({"get_company_facts", cik});
-        };
+                return QStringLiteral("Missing 'cik'");
+            argv = QStringList{"get_company_facts", cik};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -862,13 +872,14 @@ std::vector<ToolDef> get_edgar_tools() {
              QJsonObject{{"type", "string"}, {"description", "Company name or partial name (e.g. Apple, Tesla)"}}},
             {"top_n", QJsonObject{{"type", "integer"}, {"description", "Number of results (default: 10)"}}}};
         t.input_schema.required = {"query"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString query = args["query"].toString().trimmed();
             if (query.isEmpty())
-                return ToolResult::fail("Missing 'query'");
+                return QStringLiteral("Missing 'query'");
             int top_n = edgar_int_arg(args, "top_n", 10);
-            return run_edgar({"find_company", query, QString::number(top_n)});
-        };
+            argv = QStringList{"find_company", query, QString::number(top_n)};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 
@@ -881,12 +892,107 @@ std::vector<ToolDef> get_edgar_tools() {
         t.input_schema.properties =
             QJsonObject{{"query", QJsonObject{{"type", "string"}, {"description", "Company name (e.g. Apple Inc)"}}}};
         t.input_schema.required = {"query"};
-        t.handler = [](const QJsonObject& args) -> ToolResult {
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
             QString query = args["query"].toString().trimmed();
             if (query.isEmpty())
-                return ToolResult::fail("Missing 'query'");
-            return run_edgar({"resolve_ticker", query});
-        };
+                return QStringLiteral("Missing 'query'");
+            argv = QStringList{"resolve_ticker", query};
+            return {};
+        });
+        tools.push_back(std::move(t));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // RESEARCH VIEWS — compact, display-ready (same data as the Equity
+    // Research FILINGS tab)
+    // ════════════════════════════════════════════════════════════════════
+
+    // ── edgar_filings_overview ───────────────────────────────────────────
+    {
+        ToolDef t;
+        t.name = "edgar_filings_overview";
+        t.description = "Issuer profile (CIK, SIC, fiscal year end) plus its most recent SEC filings with document "
+                        "links (insider Forms 3/4/5/144 excluded) and recent 8-K events with plain-English item "
+                        "labels.";
+        t.category = "sec-edgar";
+        t.input_schema.properties = QJsonObject{
+            {"ticker", QJsonObject{{"type", "string"}, {"description", "US ticker (e.g. AAPL, BRK-B)"}}},
+            {"limit", QJsonObject{{"type", "integer"}, {"description", "Filings to list (default: 20, max 200)"}}}};
+        t.input_schema.required = {"ticker"};
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
+            const QString ticker = args["ticker"].toString().trimmed();
+            if (ticker.isEmpty())
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"research_filings", ticker, QString::number(edgar_int_arg(args, "limit", 20))};
+            return {};
+        });
+        tools.push_back(std::move(t));
+    }
+
+    // ── edgar_key_financials ─────────────────────────────────────────────
+    {
+        ToolDef t;
+        t.name = "edgar_key_financials";
+        t.description = "Key metrics from the latest annual (10-K/20-F) and quarterly (10-Q) XBRL filings — "
+                        "revenue, operating & net income, diluted EPS, operating cash flow, capex, FCF, assets, "
+                        "liabilities, equity, cash, long-term debt — with the same period a year earlier and YoY. "
+                        "10-Q cash-flow lines are year-to-date (see 'months').";
+        t.category = "sec-edgar";
+        t.input_schema.properties =
+            QJsonObject{{"ticker", QJsonObject{{"type", "string"}, {"description", "US ticker (e.g. AAPL)"}}}};
+        t.input_schema.required = {"ticker"};
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
+            const QString ticker = args["ticker"].toString().trimmed();
+            if (ticker.isEmpty())
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"research_financials", ticker};
+            return {};
+        });
+        tools.push_back(std::move(t));
+    }
+
+    // ── edgar_insider_activity ───────────────────────────────────────────
+    {
+        ToolDef t;
+        t.name = "edgar_insider_activity";
+        t.description = "Open-market insider buys (P) vs sells (S) with counts, shares and USD value, Rule 10b5-1 "
+                        "share of sales, and the individual non-derivative Form 4 transactions (newest first).";
+        t.category = "sec-edgar";
+        t.input_schema.properties = QJsonObject{
+            {"ticker", QJsonObject{{"type", "string"}, {"description", "US ticker"}}},
+            {"limit", QJsonObject{{"type", "integer"}, {"description", "Form 4 filings to parse (default: 25, max 60)"}}}};
+        t.input_schema.required = {"ticker"};
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
+            const QString ticker = args["ticker"].toString().trimmed();
+            if (ticker.isEmpty())
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"research_insiders", ticker,
+                               QString::number(std::min(edgar_int_arg(args, "limit", 25), 60))};
+            return {};
+        });
+        tools.push_back(std::move(t));
+    }
+
+    // ── edgar_institutional_holders ──────────────────────────────────────
+    {
+        ToolDef t;
+        t.name = "edgar_institutional_holders";
+        t.description = "Who owns a stock: top institutional holders from 13F filings (as aggregated by Yahoo "
+                        "Finance — shares, % outstanding, value, quarter-over-quarter change) and the institutional / "
+                        "insider ownership split; plus the company's own 13F-HR portfolio when it is a 13F filer.";
+        t.category = "sec-edgar";
+        t.input_schema.properties = QJsonObject{
+            {"ticker", QJsonObject{{"type", "string"}, {"description", "US ticker"}}},
+            {"top_n", QJsonObject{{"type", "integer"}, {"description", "Holders to return (default: 10, max 50)"}}}};
+        t.input_schema.required = {"ticker"};
+        set_edgar_handler(t, [](const QJsonObject& args, QStringList& argv) -> QString {
+            const QString ticker = args["ticker"].toString().trimmed();
+            if (ticker.isEmpty())
+                return QStringLiteral("Missing 'ticker'");
+            argv = QStringList{"research_holders", ticker,
+                               QString::number(std::min(edgar_int_arg(args, "top_n", 10), 50))};
+            return {};
+        });
         tools.push_back(std::move(t));
     }
 

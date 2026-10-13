@@ -19,6 +19,21 @@ from typing import Dict, Any, List, Optional, Tuple
 _LAST_FETCH_SYNTHETIC_SYMBOLS: set = set()
 
 
+# Synthetic prices are refused unless the user ticked "Allow synthetic data"
+# (zipline_provider.main sets this from the request).
+_ALLOW_SYNTHETIC = [False]
+
+
+def set_allow_synthetic(allowed: bool) -> None:
+    _ALLOW_SYNTHETIC[0] = bool(allowed)
+
+
+def _synthetic_or_refuse(symbols, reason):
+    if not _ALLOW_SYNTHETIC[0]:
+        from base.base_provider import refuse_synthetic
+        refuse_synthetic(symbols, reason)
+
+
 def was_last_fetch_synthetic() -> bool:
     """True if the most recent fetch_yfinance_data fell back to synthetic data
     for at least one symbol."""
@@ -42,6 +57,7 @@ def fetch_yfinance_data(
     try:
         import yfinance as yf
     except ImportError:
+        _synthetic_or_refuse(symbols, 'yfinance is not installed')
         print('[ZL-DATA] yfinance not installed, using synthetic data', file=sys.stderr)
         _LAST_FETCH_SYNTHETIC_SYMBOLS.update(symbols)
         return _generate_synthetic_data(symbols, start_date, end_date)
@@ -54,6 +70,7 @@ def fetch_yfinance_data(
             df = ticker.history(start=start_date, end=end_date, interval=timeframe)
 
             if df.empty:
+                _synthetic_or_refuse([sym], 'no data returned')
                 print(f'[ZL-DATA] No data for {sym}, using synthetic', file=sys.stderr)
                 _LAST_FETCH_SYNTHETIC_SYMBOLS.add(sym)
                 synth = _generate_synthetic_data([sym], start_date, end_date)
@@ -84,6 +101,9 @@ def fetch_yfinance_data(
             print(f'[ZL-DATA] {sym}: {len(df)} bars loaded', file=sys.stderr)
 
         except Exception as e:
+            if type(e).__name__ == 'SyntheticDataRefused':
+                raise
+            _synthetic_or_refuse([sym], str(e) or type(e).__name__)
             print(f'[ZL-DATA] Error fetching {sym}: {e}, using synthetic', file=sys.stderr)
             _LAST_FETCH_SYNTHETIC_SYMBOLS.add(sym)
             synth = _generate_synthetic_data([sym], start_date, end_date)

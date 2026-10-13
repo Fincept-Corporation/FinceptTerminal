@@ -5,12 +5,14 @@
 
 namespace fincept::billing {
 
-/// Static configuration for the $FNCPT fee-discount tier (Phase 2 §2C).
+/// Static configuration for the PLANNED $FNCPT fee discount (Phase 2 §2C).
 ///
 /// Header-only by design — these are compile-time constants that both
-/// `FeeDiscountService` and `FeeDiscountPanel` read. Phase 3's TierService
-/// will introduce a richer per-user override path; this stays as the
-/// fallback / Phase 2 baseline.
+/// `FeeDiscountService` and `FeeDiscountPanel` read.
+///
+/// Eligibility is computed and shown, but no checkout / billing path applies
+/// the discount yet (neither the terminal nor the backend keys on these SKU
+/// ids), so every user-facing surface must present it as planned.
 struct FeeDiscountConfig {
     /// Eligibility threshold in raw $FNCPT atomic units (decimals = 6).
     /// 1,000 $FNCPT = 1,000 × 10^6 = 1,000,000,000 raw.
@@ -20,12 +22,12 @@ struct FeeDiscountConfig {
     /// when rendering "1,000 $FNCPT" instead of the atomic count.
     static constexpr int kThresholdDecimals = 6;
 
-    /// Discount percentage on every applied SKU.
+    /// Planned discount percentage on the SKUs below.
     static constexpr int kDiscountPct = 30;
 
-    /// SKUs that honor the discount when eligible. The strings are stable
-    /// IDs the billing pipeline will eventually key on; the panel renders
-    /// human labels via `display_label()`.
+    /// SKUs the discount is planned for. The strings are stable IDs the
+    /// billing pipeline will eventually key on (nothing does yet); the panel
+    /// renders human labels via `display_label()`.
     static QStringList applied_skus() {
         return QStringList{
             QStringLiteral("ai-report"),

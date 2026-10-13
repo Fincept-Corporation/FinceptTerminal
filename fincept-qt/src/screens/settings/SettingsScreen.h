@@ -82,6 +82,10 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     /// headers are hidden while a filter is active — with a partial list they
     /// no longer describe what sits under them.
     void apply_nav_filter(const QString& text);
+    /// After a section opens from a search, pass the query into the section's
+    /// own filter when it names something inside it (Credentials, Keybindings).
+    void forward_search_to_section(int idx);
+    QLabel* nav_no_match_ = nullptr;
     QList<QLabel*> scope_headers_; // entries align with scope_header_keys_
     QList<QString> scope_header_keys_;
 

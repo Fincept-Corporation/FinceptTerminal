@@ -14,7 +14,7 @@ PortfolioAnalyticsService& PortfolioAnalyticsService::instance() {
     return s;
 }
 
-static QJsonArray to_json_array(const QList<double>& xs) {
+static QJsonArray portfolio_analytics_to_json_array(const QList<double>& xs) {
     QJsonArray a;
     for (double x : xs)
         a.append(x);
@@ -22,10 +22,13 @@ static QJsonArray to_json_array(const QList<double>& xs) {
 }
 
 void PortfolioAnalyticsService::run_quantstats(const QStringList& symbols, const QList<double>& weights,
-                                               AnalyticsCallback cb) {
+                                               double risk_free_rate, const QString& benchmark, AnalyticsCallback cb) {
     QJsonObject args;
     args["symbols"] = QJsonArray::fromStringList(symbols);
-    args["weights"] = to_json_array(weights);
+    args["weights"] = portfolio_analytics_to_json_array(weights);
+    args["risk_free_rate"] = risk_free_rate;
+    if (!benchmark.isEmpty())
+        args["benchmark"] = benchmark;
     // quantstats_analysis.py takes its input on stdin ONLY. Handing it the JSON as
     // argv (as this used to) left it blocked in sys.stdin.read() on a pipe nobody
     // ever closed until the 5-minute watchdog killed it.
@@ -38,7 +41,7 @@ void PortfolioAnalyticsService::run_monte_carlo(const QStringList& symbols, cons
                                                 int num_simulations, AnalyticsCallback cb) {
     QJsonObject args;
     args["symbols"] = QJsonArray::fromStringList(symbols);
-    args["weights"] = to_json_array(weights);
+    args["weights"] = portfolio_analytics_to_json_array(weights);
     args["num_simulations"] = num_simulations;
     run_script(QStringLiteral("quantstats_monte_carlo"),
                QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)), std::move(cb),
@@ -50,10 +53,11 @@ void PortfolioAnalyticsService::optimize_weights(const QString& args_json, Analy
 }
 
 void PortfolioAnalyticsService::run_ffn(const QStringList& symbols, const QJsonObject& weights_by_symbol,
-                                        AnalyticsCallback cb) {
+                                        double risk_free_rate, AnalyticsCallback cb) {
     QJsonObject args;
     args["symbols"] = QJsonArray::fromStringList(symbols);
     args["weights"] = weights_by_symbol;
+    args["risk_free_rate"] = risk_free_rate;
     run_script(QStringLiteral("ffn_analysis"), QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact)),
                std::move(cb), /*via_stdin=*/true); // stdin-only script, see run_quantstats()
 }

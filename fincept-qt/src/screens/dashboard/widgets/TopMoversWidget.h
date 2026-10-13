@@ -10,21 +10,26 @@
 
 namespace fincept::screens::widgets {
 
-/// Top movers widget with gainers/losers tab toggle. Fetches real data via yfinance.
+/// Gainers / losers ranked within a symbol UNIVERSE (configurable via the gear
+/// icon; default MarketDataService::mover_symbols()). It is not a whole-market
+/// scan — the tile says "among N tracked" so it never reads like one.
 ///
-/// Subscribes to `market:quote:<sym>` on the DataHub for the fixed mover
-/// symbol set. The row cache is re-sorted into `all_quotes_` on every
-/// delivery so the gainers/losers split stays current.
+/// Subscribes to `market:quote:<sym>` on the DataHub for the universe. The row
+/// cache is re-sorted into `all_quotes_` on every delivery burst.
 class TopMoversWidget : public BaseWidget {
     Q_OBJECT
   public:
-    explicit TopMoversWidget(QWidget* parent = nullptr);
+    explicit TopMoversWidget(const QJsonObject& cfg = {}, QWidget* parent = nullptr);
+
+    QJsonObject config() const override;
+    void apply_config(const QJsonObject& cfg) override;
 
   protected:
     void on_theme_changed() override;
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     void retranslateUi() override;
+    QDialog* make_config_dialog(QWidget* parent) override;
 
   private:
     void apply_styles();
@@ -37,6 +42,7 @@ class TopMoversWidget : public BaseWidget {
     void rebuild_from_cache();
 
     ui::DataTable* table_ = nullptr;
+    QLabel* universe_label_ = nullptr; ///< "ranked among N tracked" / empty-state line
     QPushButton* gainers_btn_ = nullptr;
     QPushButton* losers_btn_ = nullptr;
     QVector<services::QuoteData> all_quotes_;

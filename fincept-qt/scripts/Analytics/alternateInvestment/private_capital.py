@@ -62,6 +62,7 @@ class PrivateEquityAnalyzer(AlternativeInvestmentBase):
     def update_nav(self, nav_value: Decimal, nav_date: str) -> None:
         """Update current Net Asset Value"""
         self.current_nav = nav_value
+        self.nav_date = nav_date
         # Add as market data point
         market_data = MarketData(
             timestamp=nav_date,
@@ -87,8 +88,7 @@ class PrivateEquityAnalyzer(AlternativeInvestmentBase):
         # Add current NAV as final cash flow for IRR calculation
         cf_for_irr = self.cash_flows.copy()
         if self.current_nav > 0:
-            latest_date = max(cf.date for cf in self.cash_flows) if self.cash_flows else datetime.now().strftime(
-                '%Y-%m-%d')
+            latest_date = getattr(self, 'nav_date', None) or max(cf.date for cf in self.cash_flows)
             cf_for_irr.append(CashFlow(
                 date=latest_date,
                 amount=self.current_nav,

@@ -17,6 +17,9 @@
 #include <QLabel>
 #include <QProgressBar>
 
+#include <algorithm>
+#include <cmath>
+
 namespace fincept::screens::widgets {
 
 namespace {
@@ -193,22 +196,24 @@ void MarginUsageWidget::populate(const trading::BrokerFunds& funds) {
     collateral_val_->setText(fmt_money(funds.collateral, inr));
 
     const double denom = funds.total_balance > 0 ? funds.total_balance : (funds.available_balance + funds.used_margin);
+    // The label shows the real ratio — an account past 100% (margin shortfall)
+    // used to read a reassuring "Usage: 100%". Only the bar is clamped.
     int pct = 0;
-    if (denom > 0) {
-        pct = qBound(0, int((funds.used_margin / denom) * 100.0 + 0.5), 100);
-    }
-    usage_bar_->setValue(pct);
+    if (denom > 0)
+        pct = std::max(0, static_cast<int>(std::lround((funds.used_margin / denom) * 100.0)));
+    usage_bar_->setValue(std::min(pct, 100));
     last_usage_pct_ = pct;
     usage_pct_label_->setText(tr("Usage: %1%").arg(pct));
+    usage_pct_label_->setToolTip(pct > 100 ? tr("Used margin exceeds the account balance") : QString());
 
     QColor bar_color = ui::colors::POSITIVE();
     if (pct >= 80)
         bar_color = ui::colors::NEGATIVE();
     else if (pct >= 50)
         bar_color = ui::colors::WARNING();
-    usage_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
-                                      "QProgressBar::chunk{background:%2;border-radius:2px;}")
-                                  .arg(ui::colors::BG_RAISED(), bar_color.name()));
+    set_css_cached(usage_bar_, QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
+                                       "QProgressBar::chunk{background:%2;border-radius:2px;}")
+                                   .arg(ui::colors::BG_RAISED(), bar_color.name()));
 
     set_loading(false);
 }
@@ -272,9 +277,9 @@ void MarginUsageWidget::apply_styles() {
                 .arg(ui::colors::TEXT_SECONDARY()));
 
     if (usage_bar_)
-        usage_bar_->setStyleSheet(QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
-                                          "QProgressBar::chunk{background:%2;border-radius:2px;}")
-                                      .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE()));
+        set_css_cached(usage_bar_, QString("QProgressBar{background:%1;border:none;border-radius:2px;}"
+                                           "QProgressBar::chunk{background:%2;border-radius:2px;}")
+                                       .arg(ui::colors::BG_RAISED(), ui::colors::POSITIVE()));
 }
 
 void MarginUsageWidget::retranslateUi() {

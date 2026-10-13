@@ -24,6 +24,7 @@
 #include <QSizePolicy>
 #include <QSpinBox>
 #include <QString>
+#include <QStyle>
 #include <QWidget>
 
 #include <cmath>
@@ -95,6 +96,17 @@ inline void apply_pill_geometry(QWidget* w) {
     w->setFixedHeight(kPillHeight);
     w->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     w->setContentsMargins(0, 0, 0, 0);
+}
+
+/// Set a dynamic property that a root-stylesheet selector keys on and re-polish
+/// the widget so the new rule applies (Qt does not re-evaluate on its own).
+inline void set_style_prop(QWidget* w, const char* name, const QVariant& value) {
+    if (!w || w->property(name) == value)
+        return;
+    w->setProperty(name, value);
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+    w->update();
 }
 
 inline QString fmt_metric(const QString& key, const QJsonValue& val) {

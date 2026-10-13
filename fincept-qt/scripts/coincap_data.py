@@ -1,7 +1,7 @@
 """
-CoinCap v2 Data Fetcher
+CoinCap v3 Data Fetcher
 1000+ crypto prices, market caps, volumes, exchange data, candles.
-No API key required (rate limited). Optional key via COINCAP_API_KEY.
+Requires a free CoinCap API key (COINCAP_API_KEY) - the keyless v2 API (api.coincap.io) was retired.
 """
 import sys
 import json
@@ -10,7 +10,7 @@ import requests
 from typing import Dict, Any, Optional, List
 
 API_KEY = os.environ.get('COINCAP_API_KEY', '')
-BASE_URL = "https://api.coincap.io/v2"
+BASE_URL = "https://rest.coincap.io/v3"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
@@ -23,9 +23,14 @@ if API_KEY:
 
 def _make_request(endpoint: str, params: Dict = None) -> Any:
     """Make HTTP request with error handling."""
+    if not API_KEY:
+        return {"error": "CoinCap v3 requires a free API key: get one at https://pro.coincap.io/dashboard "
+                         "and save it as COINCAP_API_KEY in Settings > Credentials"}
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
         response = session.get(url, params=params, timeout=30)
+        if response.status_code in (401, 403):
+            return {"error": "CoinCap rejected the API key (COINCAP_API_KEY) - check it in Settings > Credentials"}
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:

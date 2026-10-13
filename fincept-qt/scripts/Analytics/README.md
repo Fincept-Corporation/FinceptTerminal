@@ -110,7 +110,7 @@ Comprehensive financial analytics library covering equity valuation, portfolio m
 | Module | File | Coverage |
 |--------|------|----------|
 | **Real Estate** | `real_estate.py` | REITs, property valuation |
-| **Hedge Funds** | `hedge_funds.py` | Hedge fund strategies, metrics |
+| **Market Neutral / Managed Futures** | `market_neutral.py`, `managed_futures.py` | Hedge-fund style strategies |
 | **Private Capital** | `private_capital.py` | PE, VC performance |
 | **Natural Resources** | `natural_resources.py` | Commodities, timberland |
 | **Digital Assets** | `digital_assets.py` | Cryptocurrency analytics |

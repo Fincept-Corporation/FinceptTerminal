@@ -294,7 +294,15 @@ void NewCompetitionWizard::build_step2() {
     av->addWidget(custom_prompt_);
     auto* vh = new QHBoxLayout;
     venue_paper_ = new QRadioButton(tr("Paper (real market data, simulated fills)"));
-    venue_live_ = new QRadioButton(tr("Hyperliquid LIVE (real funds — beta: order mirroring not yet active)"));
+    // Live mode is offered only when the Hyperliquid signer can actually place an
+    // order. It used to be selectable and then refused at "Create" with a dialog.
+    const bool live_available = fincept::trading::hyperliquid::HyperliquidSigner::is_wired();
+    venue_live_ = new QRadioButton(live_available ? tr("Hyperliquid LIVE (real funds)")
+                                                  : tr("Hyperliquid LIVE — not available in this build"));
+    venue_live_->setEnabled(live_available);
+    if (!live_available)
+        venue_live_->setToolTip(tr("The live order path is not production-ready yet. Paper mode uses the same live "
+                                   "Hyperliquid market data with simulated fills."));
     venue_paper_->setChecked(true);
     vh->addWidget(venue_paper_);
     vh->addWidget(venue_live_);

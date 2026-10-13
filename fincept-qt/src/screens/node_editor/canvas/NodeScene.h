@@ -73,12 +73,7 @@ class NodeScene : public QGraphicsScene {
     bool can_link(const PortItem* a, const PortItem* b) const;
 
   signals:
-    void node_added(const QString& id);
-    void node_removed(const QString& id);
-    void edge_added(const QString& id);
-    void edge_removed(const QString& id);
     void node_selection_changed(const QString& id);
-    void node_position_changed(const QString& id, double x, double y);
     void node_duplicate_requested(const QString& id);
     void node_execute_from_requested(const QString& id);
 

@@ -44,7 +44,9 @@ bool dm_parser_is_evaluated(const QString& parser) {
 void DataMappingScreen::on_test_api() {
     using fincept::services::DataNormalizationService;
 
-    const QString url = DataNormalizationService::join_url(api_base_url_->text(), api_endpoint_->text());
+    const QString url = DataNormalizationService::substitute_auth(
+        DataNormalizationService::join_url(api_base_url_->text(), api_endpoint_->text()), api_auth_value_->text(),
+        true);
     if (url.isEmpty()) {
         api_test_status_->setText(tr("Enter a URL first"));
         return;
@@ -61,7 +63,8 @@ void DataMappingScreen::on_test_api() {
     const bool has_body_verb = method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE";
     const QString body_text = api_body_->toPlainText().trimmed();
     if (has_body_verb && !body_text.isEmpty()) {
-        const auto doc = QJsonDocument::fromJson(body_text.toUtf8());
+        const auto doc = QJsonDocument::fromJson(
+            DataNormalizationService::substitute_auth(body_text, api_auth_value_->text(), false).toUtf8());
         if (!doc.isObject()) {
             // Used to be dropped silently, sending an empty body instead.
             api_test_status_->setText(tr("Request body must be a JSON object"));
@@ -101,8 +104,9 @@ void DataMappingScreen::on_test_api() {
     // an authenticated endpoint could not be tested at all).
     DataMappingTestClient::instance().test_api(
         m, url, body, this, callback,
-        DataNormalizationService::build_request_headers(api_headers_->toPlainText(), api_auth_type_->currentText(),
-                                                        api_auth_value_->text()));
+        DataNormalizationService::build_request_headers(
+            DataNormalizationService::substitute_auth(api_headers_->toPlainText(), api_auth_value_->text(), false),
+            api_auth_type_->currentText(), api_auth_value_->text()));
 }
 
 void DataMappingScreen::on_test_mapping() {
@@ -512,7 +516,6 @@ void DataMappingScreen::reset_wizard_state() {
     api_body_->clear();
     api_method_->setCurrentIndex(0);
     api_auth_type_->setCurrentIndex(0);
-    api_timeout_->setValue(30);
     api_test_status_->clear();
 
     schema_select_->setCurrentIndex(0);

@@ -157,24 +157,17 @@ void RealYieldService::refresh_revenue_real(const QString& endpoint) {
 
 // ── Mock paths ─────────────────────────────────────────────────────────────
 //
-// Numbers chosen for internal consistency with the Phase 5 mock buyback
-// epoch ($42,310 weekly revenue, 25 % staker share = $10,577.50 distributed).
-// The single "demo wallet" is assumed to own 100 % of veFNCPT weight, so
-// `lifetime_usdc` matches the sum of `LockPosition.lifetime_yield_usdc`
-// from the StakingService mock (1,240 + 42 + 14 = 1,296). `last_period_usdc`
-// matches the 1-yr position's most recent share — a tractable demo number.
+// Revenue: numbers consistent with the Phase 5 sample buyback epoch ($42,310
+// weekly revenue), flagged is_mock so every consumer labels them SAMPLE.
+//
+// Per-wallet yield has no sample: a wallet cannot have earned staking yield
+// while staking is not live, and the old "$1,296 lifetime" fabricated a
+// per-wallet balance for whoever was connected. Report unavailable instead.
 
-void RealYieldService::publish_mock_yield(const QString& topic, const QString& pubkey) {
-    YieldSnapshot s;
-    s.pubkey_b58 = pubkey;
-    s.lifetime_usdc = 1'296.0; // sum of mock LockPosition.lifetime_yield_usdc
-    s.last_period_usdc = 42.0;
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    // Most recent epoch ended now; aligns with the buyback mock's end_ts.
-    s.last_period_end_ts = now;
-    s.ts_ms = now;
-    s.is_mock = true;
-    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(s));
+void RealYieldService::publish_mock_yield(const QString& topic, const QString& /*pubkey*/) {
+    fincept::datahub::DataHub::instance().publish_error(
+        topic, QStringLiteral("Staking yield is unavailable — on-chain staking is not live and no yield "
+                              "endpoint is configured."));
 }
 
 void RealYieldService::publish_mock_revenue() {

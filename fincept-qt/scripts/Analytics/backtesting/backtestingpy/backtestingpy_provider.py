@@ -82,7 +82,15 @@ from base.base_provider import (
     BacktestStatistics,
     OptimizationResult,
     json_response,
-    parse_json_input
+    parse_json_input,
+    build_assumptions,
+    check_cancelled,
+    ignored_request_settings,
+    periods_per_year,
+    describe_annualization,
+    read_cli_args,
+    refuse_synthetic,
+    synthetic_allowed,
 )
 
 
@@ -205,8 +213,8 @@ class BacktestingPyProvider(BacktestingProviderBase):
 
             symbol = symbols[0]
 
-            # Load or generate data
-            data = self._load_data(symbol, start_date, end_date)
+            # Load data (refuses synthetic prices unless the user opted in)
+            data = self._load_data(symbol, start_date, end_date, request.get('interval', '1d'))
 
             if data is None or len(data) == 0:
                 return self._create_error_result(f'No data available for {symbol}')
@@ -217,12 +225,16 @@ class BacktestingPyProvider(BacktestingProviderBase):
             # Configure backtest
             from backtesting import Backtest
 
-            # Extract advanced parameters
-            commission = request.get('commission', 0.0)
+            # Extract advanced parameters. Slippage (a fraction of price per fill) is
+            # charged as extra relative commission - backtesting.py's commission is
+            # also applied per fill, so the cost is identical. It was ignored.
+            commission = float(request.get('commission', 0.0) or 0.0) + float(request.get('slippage', 0.0) or 0.0)
             trade_on_close = request.get('tradeOnClose', False)
             hedging = request.get('hedging', False)
             exclusive_orders = request.get('exclusiveOrders', False)
-            margin = request.get('margin', 1.0)  # 1.0 = no leverage
+            # The UI sends leverage (2.0 = 2x); backtesting.py takes margin = 1/leverage.
+            leverage = float(request.get('leverage', 1.0) or 1.0)
+            margin = float(request.get('margin', 1.0 / leverage if leverage > 0 else 1.0))
 
             bt = Backtest(
                 data,
@@ -256,6 +268,8 @@ class BacktestingPyProvider(BacktestingProviderBase):
                     'internet connectivity for real results. These results have NO financial meaning.'
                 )
 
+            result_dict['assumptions'] = self._assumptions(request, using_synthetic, data.index, bool(trade_on_close))
+
             # Add backtesting.py-specific extended stats
             result_dict['extended_stats'] = {
                 'sqn': self._safe_stat(stats, 'SQN', 0),
@@ -281,11 +295,13 @@ class BacktestingPyProvider(BacktestingProviderBase):
                     dates_list = [str(d).split(' ')[0] for d in equity_curve_data.index]
 
                     # Load benchmark if requested
-                    benchmark_symbol = request.get('benchmark', '')
+                    # The UI sends benchmarkSymbol; only the legacy key benchmark was read,
+                    # so alpha/beta and the benchmark overlay never ran from the screen.
+                    benchmark_symbol = request.get('benchmark') or request.get('benchmarkSymbol') or ''
                     benchmark_normalized = None
                     if benchmark_symbol:
                         benchmark_normalized = self._load_benchmark(
-                            benchmark_symbol, start_date, end_date, len(equity_values)
+                            benchmark_symbol, start_date, end_date, equity_curve_data.index
                         )
                         # Add benchmark equity to equity curve points (scaled to initial_capital)
                         if benchmark_normalized is not None and 'equity' in result_dict:
@@ -302,8 +318,9 @@ class BacktestingPyProvider(BacktestingProviderBase):
                     advanced = calc_advanced(
                         equity_values,
                         benchmark_series=benchmark_equity,
-                        risk_free_rate=0.0,
+                        risk_free_rate=float(request.get('riskFreeRate', 0.0) or 0.0),
                         dates=dates_list,
+                        periods_per_year=periods_per_year(equity_curve_data.index),
                     )
                     result_dict['advanced_metrics'] = advanced
                     result_dict['monthly_returns'] = advanced.pop('monthlyReturns', [])
@@ -363,7 +380,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
                 return self._create_error_result('No parameter ranges supplied (expected paramRanges)')
 
             symbol = symbols[0] if symbols else 'SPY'
-            data = self._load_data(symbol, start_date, end_date)
+            data = self._load_data(symbol, start_date, end_date, request.get('interval', '1d'))
             if data is None or len(data) == 0:
                 return self._create_error_result(f'No data available for {symbol}')
 
@@ -407,7 +424,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
             bt = Backtest(
                 data, strategy_class,
                 cash=initial_capital,
-                commission=request.get('commission', 0.0),
+                commission=float(request.get('commission', 0.0) or 0.0) + float(request.get('slippage', 0.0) or 0.0),
             )
 
             # Map frontend objective to backtesting.py stat key.
@@ -491,7 +508,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
             start_date = request.get('startDate')
             end_date = request.get('endDate')
             initial_capital = request.get('initialCapital', 10000)
-            commission = request.get('commission', 0.0)
+            commission = float(request.get('commission', 0.0) or 0.0) + float(request.get('slippage', 0.0) or 0.0)
 
             symbols = request.get('symbols', [])
             if not symbols:
@@ -505,7 +522,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
                 return self._create_error_result(f'wfTrainRatio must be between 0.1 and 0.95 (got {train_ratio})')
 
             symbol = symbols[0] if symbols else 'SPY'
-            full_data = self._load_data(symbol, start_date, end_date)
+            full_data = self._load_data(symbol, start_date, end_date, request.get('interval', '1d'))
             if full_data is None or len(full_data) < n_splits * 20:
                 return self._create_error_result(
                     f'Need at least {n_splits * 20} bars for {n_splits} folds; got {0 if full_data is None else len(full_data)}'
@@ -529,6 +546,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
             last_test_data = None
 
             for i in range(n_splits):
+                check_cancelled(request)
                 fold_start = i * fold_size
                 fold_end = (i + 1) * fold_size if i < n_splits - 1 else n
                 window = full_data.iloc[fold_start:fold_end]
@@ -784,27 +802,50 @@ class BacktestingPyProvider(BacktestingProviderBase):
     # Helper Methods
     # ========================================================================
 
-    def _load_benchmark(self, symbol: str, start_date: str, end_date: str, target_len: int, initial_capital: float = None) -> Optional[np.ndarray]:
-        """Load benchmark equity series.
+    def _load_benchmark(self, symbol: str, start_date: str, end_date: str, target_index) -> Optional[np.ndarray]:
+        """Benchmark closes aligned BY DATE to the strategy equity index, normalised to 1.0.
 
-        Returns normalized benchmark (starting at 1.0) for advanced_metrics calculations.
-        The caller scales this to initial_capital for benchmark equity display.
+        (It resampled by position whenever bar counts differed, shifting the benchmark
+        against the strategy for cross-exchange comparisons.)
         """
         try:
             import yfinance as yf
             bench_data = yf.Ticker(symbol).history(start=start_date, end=end_date, auto_adjust=True)
-            if bench_data is not None and len(bench_data) > 0:
-                close = bench_data['Close'].values.astype(float)
-                # Normalized: start at 1.0 (relative performance)
-                normalized = close / close[0]
-                # Resample to match target length if needed
-                if len(normalized) != target_len:
-                    indices = np.linspace(0, len(normalized) - 1, target_len).astype(int)
-                    normalized = normalized[indices]
-                return normalized
+            if bench_data is None or len(bench_data) == 0:
+                return None
+            bench = pd.Series(bench_data['Close'].values.astype(float),
+                              index=pd.DatetimeIndex(bench_data.index).tz_localize(None).normalize())
+            bench = bench[~bench.index.duplicated(keep='last')]
+            target = pd.DatetimeIndex(target_index)
+            if target.tz is not None:
+                target = target.tz_localize(None)
+            aligned = bench.reindex(target.normalize(), method='ffill').bfill().values.astype(float)
+            if len(aligned) == 0 or not np.isfinite(aligned[0]) or aligned[0] <= 0:
+                return None
+            return aligned / aligned[0]
         except Exception as e:
             self._error(f'Failed to load benchmark {symbol}', e)
         return None
+
+    def _assumptions(self, request, using_synthetic, index, trade_on_close):
+        """The result's assumptions block (see base_provider.build_assumptions)."""
+        req = request or {}
+        commission = float(req.get('commission', 0) or 0)
+        slippage = float(req.get('slippage', 0) or 0)
+        return build_assumptions(
+            f'backtesting.py {self.version}',
+            ('SAME-BAR CLOSE fills (trade_on_close requested)' if trade_on_close else
+             'Signals on bar close; orders fill at the NEXT bar open (backtesting.py default).'),
+            req,
+            costs=(f'commission {commission * 100:.3f}% + slippage {slippage * 100:.4f}% charged together '
+                   f'as a relative cost per fill'),
+            position_sizing='strategy code buys with ~100% of available equity',
+            annualization=(describe_annualization(periods_per_year(index)) +
+                           '; Sharpe = (annualised return - rf) / annualised volatility (backtesting.py)'),
+            data_source=('SYNTHETIC random-walk prices (user opted in) - results have NO market meaning'
+                         if using_synthetic else None),
+            ignored=ignored_request_settings(req, ['commission', 'slippage', 'leverage', 'interval']),
+        )
 
     def _has_real_data(self, symbol: str) -> bool:
         """Check if real data was actually used (not synthetic fallback).
@@ -814,73 +855,54 @@ class BacktestingPyProvider(BacktestingProviderBase):
         """
         return getattr(self, '_last_load_was_real', False)
 
-    def _load_data(self, symbol: str, start_date: str, end_date: str) -> Optional[pd.DataFrame]:
-        """Load or generate OHLCV data for backtesting.
+    def _load_data(self, symbol: str, start_date: str, end_date: str,
+                   interval: str = '1d') -> Optional[pd.DataFrame]:
+        """Load OHLCV data for backtesting (Yahoo Finance, split/dividend adjusted).
 
-        Sets self._last_load_was_real to track whether real or synthetic data was used.
+        Sets self._last_load_was_real. Synthetic prices are produced ONLY when the
+        user ticked "Allow synthetic data"; otherwise a failed download raises a
+        clear error. (GOOG/GOOGL used to be served from backtesting.py's bundled
+        2004-2013 sample file - stale, unadjusted, and empty for any recent range.)
         """
-        self._last_load_was_real = False  # Assume synthetic until proven otherwise
+        self._last_load_was_real = False
+        reason = 'no data returned'
         try:
-            # Try to use test data if available
-            if symbol == 'GOOG' or symbol == 'GOOGL':
-                try:
-                    from backtesting.test import GOOG
-                    data = GOOG.copy()
-
-                    # Filter by date if specified
-                    if start_date and start_date != '':
-                        try:
-                            start_ts = pd.Timestamp(start_date)
-                            data = data[data.index >= start_ts]
-                        except:
-                            pass
-
-                    if end_date and end_date != '':
-                        try:
-                            end_ts = pd.Timestamp(end_date)
-                            data = data[data.index <= end_ts]
-                        except:
-                            pass
-
-                    self._log(f'Loaded {len(data)} bars of GOOG test data (from {data.index[0]} to {data.index[-1]})')
-                    if len(data) > 0:
-                        self._last_load_was_real = True
-                        return data
-                    return None
-                except Exception as e:
-                    self._log(f'Could not load GOOG test data: {e}')
-                    # Fall through to yfinance / synthetic data
-
-            # Try to fetch real data using yfinance if available
             try:
                 import yfinance as yf
-                self._log(f'Fetching real market data for {symbol} via yfinance')
-                ticker = yf.Ticker(symbol)
-                data = ticker.history(
+                dl_interval = '1h' if interval == '4h' else (interval or '1d')
+                self._log(f'Fetching real market data for {symbol} ({dl_interval}) via yfinance')
+                data = yf.Ticker(symbol).history(
                     start=start_date or '2020-01-01',
                     end=end_date or None,
+                    interval=dl_interval,
                     auto_adjust=True
                 )
                 if data is not None and len(data) > 0:
-                    # Ensure column names match expected format
-                    data.columns = [c.capitalize() if c.lower() in ['open', 'high', 'low', 'close', 'volume'] else c for c in data.columns]
-                    # Keep only OHLCV columns
+                    data.columns = [c.capitalize() if c.lower() in ['open', 'high', 'low', 'close', 'volume'] else c
+                                    for c in data.columns]
                     ohlcv_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-                    available_cols = [c for c in ohlcv_cols if c in data.columns]
-                    data = data[available_cols]
-                    # Round to 4 decimal places to eliminate float32 rounding noise
+                    data = data[[c for c in ohlcv_cols if c in data.columns]]
+                    if interval == '4h':
+                        data = data.resample('4h').agg({'Open': 'first', 'High': 'max', 'Low': 'min',
+                                                        'Close': 'last', 'Volume': 'sum'}).dropna()
+                    # backtesting.py wants a tz-naive index
+                    if getattr(data.index, 'tz', None) is not None:
+                        data.index = data.index.tz_localize(None)
                     for col in ['Open', 'High', 'Low', 'Close']:
                         if col in data.columns:
                             data[col] = data[col].round(4)
                     self._log(f'Loaded {len(data)} bars of real data for {symbol}')
                     self._last_load_was_real = True
                     return data
-                else:
-                    self._log(f'No data returned from yfinance for {symbol}')
+                self._log(f'No data returned from yfinance for {symbol}')
             except ImportError:
-                self._log('yfinance not installed - falling back to synthetic data. Install with: pip install yfinance')
+                reason = 'yfinance is not installed'
             except Exception as e:
-                self._log(f'Failed to fetch real data for {symbol}: {e} - falling back to synthetic data')
+                reason = str(e) or type(e).__name__
+                self._log(f'Failed to fetch real data for {symbol}: {e}')
+
+            if not getattr(self, '_allow_synthetic', False):
+                refuse_synthetic([symbol], reason)
 
             # Fallback: Generate synthetic data with clear warning
             self._last_load_was_real = False
@@ -917,6 +939,8 @@ class BacktestingPyProvider(BacktestingProviderBase):
             return data
 
         except Exception as e:
+            if type(e).__name__ == 'SyntheticDataRefused':
+                raise
             self._error(f'Failed to load data for {symbol}', e)
             return None
 
@@ -948,8 +972,7 @@ class BacktestingPyProvider(BacktestingProviderBase):
         if code:
             validation_error = self._validate_strategy_code(code)
             if validation_error:
-                self._error(f'Strategy code validation failed: {validation_error}')
-                return _strat.STRATEGY_BUILDERS['sma_crossover'](params, opt_params)
+                raise ValueError(f'Strategy code rejected: {validation_error}')
             exec_globals = {
                 '__builtins__': {
                     'range': range, 'len': len, 'abs': abs, 'min': min, 'max': max,
@@ -973,10 +996,12 @@ class BacktestingPyProvider(BacktestingProviderBase):
                     if isinstance(obj, type) and issubclass(obj, Strategy) and obj is not Strategy:
                         return obj
             except Exception as e:
-                self._error('Failed to execute custom strategy code', e)
+                raise ValueError(f'Custom strategy code failed to load: {e}')
+            raise ValueError('Custom strategy code defines no backtesting.py Strategy subclass')
 
-        # Unknown id and no code -> sensible default so the run isn't a hard fail.
-        return _strat.STRATEGY_BUILDERS['sma_crossover'](params, opt_params)
+        # An unknown id used to run SMA crossover silently and report it under the
+        # requested strategy's name.
+        raise ValueError(f"Unknown strategy '{strategy_type}' for Backtesting.py")
 
 
     def _validate_strategy_code(self, code: str) -> Optional[str]:
@@ -1337,19 +1362,16 @@ class BacktestingPyProvider(BacktestingProviderBase):
 
 def main():
     """Main entry point for CLI execution"""
-    if len(sys.argv) < 3:
-        print(json_response({
-            'success': False,
-            'error': 'Usage: python backtestingpy_provider.py <command> <json_args>'
-        }))
+    try:
+        command, json_args = read_cli_args()
+    except ValueError as e:
+        print(json_response({'success': False, 'error': str(e)}))
         sys.exit(1)
-
-    command = sys.argv[1]
-    json_args = sys.argv[2]
 
     try:
         args = parse_json_input(json_args)
         provider = BacktestingPyProvider()
+        provider._allow_synthetic = synthetic_allowed(args)
 
         # Auto-initialize on every invocation since each CLI call is a fresh process.
         # This ensures the provider is always ready regardless of command order.

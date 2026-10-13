@@ -16,6 +16,7 @@
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -145,6 +146,11 @@ void AiChatScreen::build_sidebar() {
                                      .arg(fnt::SMALL)
                                      .arg(col::AMBER(), col::TEXT_PRIMARY(), col::BORDER_MED()));
     connect(session_list_, &QListWidget::currentRowChanged, this, &AiChatScreen::on_session_selected);
+    // Right-click: Rename / Export / Delete. Double-click or F2: rename. Del: delete.
+    session_list_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(session_list_, &QListWidget::customContextMenuRequested, this, &AiChatScreen::show_session_menu);
+    connect(session_list_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) { on_rename_session(); });
+    session_list_->installEventFilter(this);
     vl->addWidget(session_list_, 1);
 
     // ── Session actions ──────────────────────────────────────────────────
@@ -241,6 +247,20 @@ void AiChatScreen::build_chat_area() {
     welcome_panel_ = build_welcome();
     messages_layout_->insertWidget(0, welcome_panel_);
 
+    // Render window: only the newest messages are built (see render_limit_).
+    // This bar sits above them and loads the next older page on demand.
+    load_earlier_btn_ = new QPushButton;
+    load_earlier_btn_->setCursor(Qt::PointingHandCursor);
+    load_earlier_btn_->setFixedHeight(26);
+    load_earlier_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px dashed %2;"
+                                             "font-size:%3px;}QPushButton:hover{color:%4;border-color:%4;}")
+                                         .arg(col::TEXT_SECONDARY(), col::BORDER_MED())
+                                         .arg(fnt::SMALL)
+                                         .arg(col::AMBER()));
+    load_earlier_btn_->hide();
+    connect(load_earlier_btn_, &QPushButton::clicked, this, &AiChatScreen::on_load_earlier);
+    messages_layout_->insertWidget(0, load_earlier_btn_);
+
     scroll_area_->setWidget(messages_container_);
     vl->addWidget(scroll_area_, 1);
 
@@ -283,7 +303,49 @@ void AiChatScreen::build_chat_area() {
 
     // Typing indicator sits above input, inside chat area
     vl->addWidget(build_typing_indicator());
+    vl->addWidget(build_model_notice());
     vl->addWidget(build_input_area());
+}
+
+// "This conversation used X / Y" strip above the composer (hidden unless the
+// conversation's last answer came from a different provider/model than the
+// one now active). One stylesheet for the strip and its children.
+QWidget* AiChatScreen::build_model_notice() {
+    model_notice_ = new QWidget;
+    model_notice_->setObjectName(QStringLiteral("aiModelNotice"));
+    model_notice_->setStyleSheet(QString("QWidget#aiModelNotice{background:%1;border-top:1px solid %2;}"
+                                         "QLabel{color:%3;font-size:%4px;background:transparent;border:none;}"
+                                         "QPushButton{background:transparent;color:%5;border:1px solid %5;"
+                                         "font-size:%6px;font-weight:600;padding:2px 10px;}"
+                                         "QPushButton:hover{background:%5;color:%7;}"
+                                         "QPushButton#aiModelNoticeClose{color:%3;border:none;padding:2px 6px;}"
+                                         "QPushButton#aiModelNoticeClose:hover{background:transparent;color:%8;}")
+                                     .arg(col::BG_RAISED(), col::BORDER_DIM(), col::TEXT_SECONDARY())
+                                     .arg(fnt::SMALL)
+                                     .arg(col::AMBER())
+                                     .arg(fnt::TINY)
+                                     .arg(col::BG_BASE(), col::TEXT_PRIMARY()));
+    auto* hl = new QHBoxLayout(model_notice_);
+    hl->setContentsMargins(16, 6, 12, 6);
+    hl->setSpacing(10);
+    model_notice_lbl_ = new QLabel;
+    model_notice_lbl_->setWordWrap(true);
+    hl->addWidget(model_notice_lbl_, 1);
+    model_notice_btn_ = new QPushButton;
+    model_notice_btn_->setCursor(Qt::PointingHandCursor);
+    connect(model_notice_btn_, &QPushButton::clicked, this, &AiChatScreen::on_use_conversation_model);
+    hl->addWidget(model_notice_btn_);
+    auto* close = new QPushButton(QStringLiteral("✕"));
+    close->setObjectName(QStringLiteral("aiModelNoticeClose"));
+    close->setCursor(Qt::PointingHandCursor);
+    close->setToolTip(tr("Keep using the current model for this conversation"));
+    connect(close, &QPushButton::clicked, this, [this]() {
+        model_notice_dismissed_ = true;
+        update_model_notice();
+    });
+    hl->addWidget(close);
+    model_notice_->hide();
+    return model_notice_;
 }
 
 QWidget* AiChatScreen::build_header_bar() {
@@ -328,6 +390,29 @@ QWidget* AiChatScreen::build_header_bar() {
     hdr_tokens_lbl_ = new QLabel;
     hdr_tokens_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;").arg(col::TEXT_DIM()).arg(fnt::TINY));
     hl->addWidget(hdr_tokens_lbl_);
+
+    // Export: Markdown file or clipboard (menu).
+    export_btn_ = new QPushButton(tr("Export"));
+    export_btn_->setCursor(Qt::PointingHandCursor);
+    export_btn_->setFixedHeight(24);
+    export_btn_->setToolTip(tr("Save or copy this conversation as Markdown"));
+    export_btn_->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:1px solid %2;"
+                                       "font-size:%3px;padding:0 10px;}"
+                                       "QPushButton:hover{color:%4;border-color:%4;}"
+                                       "QPushButton:disabled{color:%5;border-color:%6;}")
+                                   .arg(col::TEXT_SECONDARY(), col::BORDER_MED())
+                                   .arg(fnt::TINY)
+                                   .arg(col::AMBER(), col::TEXT_DIM(), col::BORDER_DIM()));
+    connect(export_btn_, &QPushButton::clicked, this, [this]() {
+        auto* menu = new QMenu(export_btn_);
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        connect(menu->addAction(tr("Save as Markdown…")), &QAction::triggered, this,
+                &AiChatScreen::on_export_markdown);
+        connect(menu->addAction(tr("Copy as Markdown")), &QAction::triggered, this,
+                &AiChatScreen::on_copy_conversation_markdown);
+        menu->popup(export_btn_->mapToGlobal(QPoint(0, export_btn_->height())));
+    });
+    hl->addWidget(export_btn_);
 
     // Divider
     auto* div = new QFrame;
@@ -380,7 +465,24 @@ QWidget* AiChatScreen::build_typing_indicator() {
 
 QWidget* AiChatScreen::build_welcome() {
     auto* panel = new QWidget;
-    panel->setStyleSheet(QString("background:%1;").arg(col::BG_BASE()));
+    panel->setObjectName(QStringLiteral("aiWelcome"));
+    // One sheet for the panel and its six suggestion cards (they used to set
+    // three stylesheets each, inside the build loop).
+    panel->setStyleSheet(QString("QWidget#aiWelcome{background:%1;}"
+                                 "QPushButton#aiSuggest{background:%2;border:1px solid %3;border-radius:0px;"
+                                 "padding:12px 14px;text-align:left;}"
+                                 "QPushButton#aiSuggest:hover{background:%4;border-color:%5;}")
+                             .arg(col::BG_BASE(), col::BG_RAISED(), col::BORDER_DIM(), col::BG_HOVER(),
+                                  col::BORDER_BRIGHT()) +
+                         QString("QLabel#aiSuggestCat{font-size:%1px;font-weight:700;background:transparent;}"
+                                 "QLabel#aiSuggestCat[tone=\"cyan\"]{color:%2;}"
+                                 "QLabel#aiSuggestCat[tone=\"amber\"]{color:%3;}"
+                                 "QLabel#aiSuggestCat[tone=\"positive\"]{color:%4;}")
+                             .arg(fnt::TINY)
+                             .arg(col::CYAN(), col::AMBER(), col::POSITIVE()) +
+                         QString("QLabel#aiSuggestDesc{color:%1;font-size:%2px;background:transparent;}")
+                             .arg(col::TEXT_PRIMARY())
+                             .arg(fnt::SMALL));
     auto* vl = new QVBoxLayout(panel);
     vl->setContentsMargins(48, 36, 48, 28);
     vl->setSpacing(20);
@@ -404,52 +506,57 @@ QWidget* AiChatScreen::build_welcome() {
 
     struct Sug {
         QString cat;
-        const char* cat_color;
+        const char* tone; // QLabel#aiSuggestCat[tone=…] in the panel sheet
         QString text;
     };
     const Sug suggestions[] = {
-        {tr("Markets"), col::CYAN(), tr("Show me today's top market movers")},
-        {tr("News"), col::AMBER(), tr("Summarize the latest financial news")},
-        {tr("Portfolio"), col::POSITIVE(), tr("Analyze my portfolio performance")},
-        {tr("Analytics"), col::AMBER(), tr("Calculate valuation for AAPL")},
-        {tr("Economics"), col::CYAN(), tr("Current GDP and inflation data")},
-        {tr("Research"), col::POSITIVE(), tr("Tech sector market trends")},
+        {tr("Markets"), "cyan", tr("Show me today's top market movers")},
+        {tr("News"), "amber", tr("Summarize the latest financial news")},
+        {tr("Portfolio"), "positive", tr("Analyze my portfolio performance")},
+        {tr("Analytics"), "amber", tr("Calculate valuation for AAPL")},
+        {tr("Economics"), "cyan", tr("Current GDP and inflation data")},
+        {tr("Research"), "positive", tr("Tech sector market trends")},
     };
 
     for (int i = 0; i < 6; ++i) {
         auto* btn = new QPushButton;
+        btn->setObjectName(QStringLiteral("aiSuggest"));
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString("QPushButton{background:%1;border:1px solid %2;border-radius:0px;"
-                                   "padding:12px 14px;text-align:left;}"
-                                   "QPushButton:hover{background:%3;border-color:%4;}")
-                               .arg(col::BG_RAISED(), col::BORDER_DIM(), col::BG_HOVER(), col::BORDER_BRIGHT()));
 
         auto* bl = new QVBoxLayout(btn);
         bl->setContentsMargins(0, 0, 0, 0);
         bl->setSpacing(4);
 
         auto* cat = new QLabel(suggestions[i].cat);
-        cat->setStyleSheet(QString("color:%1;font-size:%2px;font-weight:700;background:transparent;")
-                               .arg(suggestions[i].cat_color)
-                               .arg(fnt::TINY));
+        cat->setObjectName(QStringLiteral("aiSuggestCat"));
+        cat->setProperty("tone", QString::fromLatin1(suggestions[i].tone));
         cat->setAttribute(Qt::WA_TransparentForMouseEvents);
         bl->addWidget(cat);
 
         auto* desc = new QLabel(suggestions[i].text);
-        desc->setStyleSheet(
-            QString("color:%1;font-size:%2px;background:transparent;").arg(col::TEXT_PRIMARY()).arg(fnt::SMALL));
+        desc->setObjectName(QStringLiteral("aiSuggestDesc"));
         desc->setWordWrap(true);
         desc->setAttribute(Qt::WA_TransparentForMouseEvents);
         bl->addWidget(desc);
 
         const QString prompt = suggestions[i].text;
         connect(btn, &QPushButton::clicked, this, [this, prompt]() {
+            if (streaming_)
+                return; // on_send() is Stop while a turn runs
             input_box_->setPlainText(prompt);
             on_send();
         });
         grid->addWidget(btn, i / 3, i % 3);
     }
     vl->addLayout(grid);
+
+    // One muted line for firms; the mention label styles itself.
+    auto* ent = ui::enterprise::make_mention_label(panel);
+    ent->setAlignment(Qt::AlignCenter);
+    ui::enterprise::set_mention_text(
+        ent, tr("Multi-agent research for firms, AI credits included:"), tr("Fincept Terminal Enterprise ↗"),
+        ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("ai")));
+    vl->addWidget(ent);
     return panel;
 }
 
@@ -463,7 +570,7 @@ QWidget* AiChatScreen::build_input_area() {
     hl->setSpacing(10);
 
     input_box_ = new QPlainTextEdit;
-    input_box_->setPlaceholderText(tr("Message Fincept AI..."));
+    input_box_->setPlaceholderText(tr("Message Fincept AI...  (Enter to send · Shift+Enter for a new line)"));
     input_box_->setFixedHeight(44);
     input_box_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     input_box_->setStyleSheet(QString("QPlainTextEdit{background:%1;color:%2;border:1px solid %3;"
@@ -475,7 +582,8 @@ QWidget* AiChatScreen::build_input_area() {
     input_box_->installEventFilter(this);
     input_box_->setAccessibleName(tr("Message Fincept AI"));
     input_box_->setAccessibleDescription(
-        tr("Enter sends, Shift+Enter inserts a new line, Ctrl+N or Ctrl+K starts a new session."));
+        tr("Enter sends, Shift+Enter inserts a new line, Esc stops a streaming answer, Ctrl+R regenerates the "
+           "last answer, Ctrl+N or Ctrl+K starts a new session."));
     connect(input_box_, &QPlainTextEdit::textChanged, this, [this]() {
         const int lines = input_box_->document()->blockCount();
         input_box_->setFixedHeight(qMin(qMax(lines, 1), 6) * 24 + 20);
@@ -507,7 +615,7 @@ QWidget* AiChatScreen::build_input_area() {
                                      .arg(col::AMBER(), "font-family:'Consolas',monospace;"));
     hl->addWidget(attach_badge_);
 
-    send_btn_ = new QPushButton(tr("Send  ↑"));
+    send_btn_ = new QPushButton(tr("Send"));
     send_btn_->setFixedSize(82, 44);
     send_btn_->setCursor(Qt::PointingHandCursor);
     send_btn_->setAccessibleName(tr("Send message"));

@@ -37,7 +37,8 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import ccxt
-from exchange_client import load_cached_markets, save_markets_cache, get_default_type
+from exchange_client import (load_cached_market_data, save_markets_cache, get_default_type,
+                             apply_cached_markets, install_get_retry)
 
 # Try orjson for faster serialization
 try:
@@ -95,9 +96,13 @@ def _get_exchange(exchange_id, need_auth=False):
     if exchange_id not in ccxt.exchanges:
         raise ValueError(f"Unknown exchange: {exchange_id}")
 
+    # 4.5 s per request with up to 3 attempts on a hung connection (see
+    # install_get_retry) stays inside the C++ caller's 15 s budget. A healthy
+    # exchange answers in well under a second, so this only bites on a stalled
+    # connection — which used to eat the whole budget and fail the call.
     config = {
         "enableRateLimit": True,
-        "timeout": 15000,
+        "timeout": 4500,
         "options": {"defaultType": get_default_type(exchange_id)},
     }
 
@@ -116,18 +121,17 @@ def _get_exchange(exchange_id, need_auth=False):
 
     exchange_class = getattr(ccxt, exchange_id)
     exchange = exchange_class(config)
+    install_get_retry(exchange)
 
-    # Try to load markets from disk cache (avoids 3-10s network call).
-    # Use load_markets(reload=False) with a pre-populated cache file — this lets
-    # ccxt rebuild all internal indexes (markets_by_id, currencies, ids) correctly
-    # rather than assigning exchange.markets directly which leaves indexes incomplete.
-    cached = load_cached_markets(exchange_id)
-    if cached is not None:
-        try:
-            exchange.markets = cached
-            exchange.set_markets(cached)
-        except Exception:
-            pass  # Fall through — will load on demand if needed
+    # Fresh disk cache → no network call before the first request. set_markets()
+    # rebuilds ccxt's indexes (markets_by_id, symbols, currencies).
+    markets, currencies = load_cached_market_data(exchange_id)
+    if markets:
+        apply_cached_markets(exchange, markets, currencies)
+    # Otherwise load now, through _ensure_markets, so the result is cached and an
+    # unreachable exchange can fall back to a stale list. Left to ccxt, the
+    # first fetch_* would load markets itself and do neither.
+    _ensure_markets(exchange, exchange_id)
 
     _exchange_pool[key] = exchange
     return exchange
@@ -136,8 +140,15 @@ def _get_exchange(exchange_id, need_auth=False):
 def _ensure_markets(exchange, exchange_id):
     """Load markets if not yet loaded."""
     if not exchange.markets:
-        exchange.load_markets()
-        save_markets_cache(exchange_id, exchange.markets)
+        try:
+            exchange.load_markets()
+            save_markets_cache(exchange_id, exchange.markets, exchange.currencies)
+        except Exception:
+            # Exchange unreachable: a stale market list still lets every
+            # symbol-level call proceed (and fail on its own if it must).
+            markets, currencies = load_cached_market_data(exchange_id, allow_stale=True)
+            if not (markets and apply_cached_markets(exchange, markets, currencies)):
+                raise
 
 
 # ── Method handlers ─────────────────────────────────────────────────────────

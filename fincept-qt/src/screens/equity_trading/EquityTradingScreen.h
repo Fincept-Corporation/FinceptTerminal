@@ -149,6 +149,13 @@ class EquityTradingScreen : public QWidget, public IGroupLinked, public IStatefu
     void on_stream_clock_fetched(const QString& account_id, const trading::MarketClock& clock);
 
   private:
+    // Multi-leg safety: a basket is sent leg by leg (not atomic). Confirm a LIVE
+    // strategy before sending; when it partially fails, show which legs went out
+    // and offer a one-click unwind of the placed legs.
+    bool confirm_live_basket(const QString& account_id, const trading::BasketOrderRequest& basket);
+    void offer_basket_unwind(const QString& account_id, const QString& strategy_name,
+                             const trading::BasketOrderResult& result);
+
     void setup_ui();
     void setup_timers();
     void retranslateUi();

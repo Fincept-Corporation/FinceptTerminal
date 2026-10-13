@@ -1,7 +1,7 @@
 """
 Climate TRACE Data Fetcher
-GHG emissions for 350M+ assets globally, country/sector level, 2015-2025.
-No API key required (beta).
+GHG emissions for 350M+ assets globally, country/sector level, 2015-2024.
+No API key required (Climate TRACE API v6).
 """
 import sys
 import json
@@ -9,7 +9,11 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
-BASE_URL = "https://api.climatetrace.org/v4"
+# v4 was removed; v6 is the current public (keyless) API.
+BASE_URL = "https://api.climatetrace.org/v6"
+# Sector names accepted by the API are the top-level sectors (see `sectors`); map common aliases.
+SECTOR_ALIASES = {"electricity-generation": "power", "electricity": "power", "oil-and-gas-production": "fossil-fuel-operations",
+                  "shipping": "transportation", "aviation": "transportation"}
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
@@ -33,26 +37,28 @@ def _make_request(endpoint: str, params: Dict = None) -> Any:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
-def get_country_emissions(country: str, year: int = 2022) -> Any:
+def get_country_emissions(country: str, year: int = 2024) -> Any:
     """Get GHG emissions by country and year.
     country: ISO 3166-1 alpha-3 code (e.g. USA, CHN, DEU, IND, GBR).
-    year: 2015-2023.
+    year: 2015-2024.
     """
     params = {"countries": country.upper(), "since": year, "to": year}
     data = _make_request("country/emissions", params=params)
+    if isinstance(data, list):
+        data = data[0] if data else {}
     if isinstance(data, dict) and "error" not in data:
         return {"country": country.upper(), "year": year, "emissions": data}
     return data
 
 
-def get_sector_emissions(sector: str, year: int = 2022) -> Any:
+def get_sector_emissions(sector: str, year: int = 2024) -> Any:
     """Get GHG emissions by sector and year.
     sector: agriculture, buildings, electricity-generation, fossil-fuel-operations,
             forestry-and-land-use, manufacturing, mineral-extraction, shipping,
             transportation, waste, oil-and-gas-production, etc.
     """
-    params = {"sector": sector, "since": year, "to": year}
-    data = _make_request("sector/emissions", params=params)
+    params = {"sectors": SECTOR_ALIASES.get(sector, sector), "since": year, "to": year}
+    data = _make_request("country/emissions", params=params)
     if isinstance(data, dict) and "error" not in data:
         return {"sector": sector, "year": year, "emissions": data}
     return data
@@ -60,26 +66,29 @@ def get_sector_emissions(sector: str, year: int = 2022) -> Any:
 
 def get_asset_emissions(asset_id: str) -> Any:
     """Get detailed emissions data for a specific tracked asset by ID."""
-    data = _make_request(f"asset/{asset_id}/emissions")
+    data = _make_request(f"assets/{asset_id}")
     if isinstance(data, dict) and "error" not in data:
         return {"asset_id": asset_id, "data": data}
     return data
 
 
-def search_assets(name: str = None, country: str = None, sector: str = None, limit: int = 50) -> Any:
-    """Search for emissions assets by name, country, and/or sector."""
+def search_assets(country: str = None, sector: str = None, limit: int = 50) -> Any:
+    """List tracked emission sources (largest first) filtered by country (ISO-3) and/or sector."""
     params = {"limit": min(limit, 100)}
-    if name:
-        params["name"] = name
     if country:
         params["countries"] = country.upper()
     if sector:
-        params["sector"] = sector
+        params["sectors"] = SECTOR_ALIASES.get(sector, sector)
     data = _make_request("assets", params=params)
-    if isinstance(data, list):
-        return {"assets": data, "count": len(data)}
-    elif isinstance(data, dict) and "assets" in data:
-        return {"assets": data["assets"], "count": len(data["assets"]), "total": data.get("total")}
+    if isinstance(data, dict) and "assets" in data:
+        assets = []
+        for a in data["assets"]:
+            summ = {e.get("Gas"): e.get("EmissionsQuantity") for e in a.get("EmissionsSummary") or []}
+            assets.append({"id": a.get("Id"), "name": a.get("Name"), "country": a.get("Country"),
+                           "sector": a.get("Sector"), "asset_type": a.get("AssetType"),
+                           "emissions_co2e_100yr_t": summ.get("co2e_100yr"),
+                           "centroid": a.get("Centroid", {}).get("Geometry") if isinstance(a.get("Centroid"), dict) else None})
+        return {"assets": assets, "count": len(assets)}
     return data
 
 
@@ -93,7 +102,7 @@ def get_sectors() -> Any:
     return data
 
 
-def get_summary(year: int = 2022) -> Any:
+def get_summary(year: int = 2024) -> Any:
     """Get global emissions summary for a given year across all countries."""
     params = {"since": year, "to": year}
     data = _make_request("country/emissions", params=params)
@@ -133,13 +142,13 @@ def main(args=None):
         if len(args) < 2:
             result = {"error": "Usage: country <iso3_code> [year] (e.g. country USA 2022)"}
         else:
-            year = int(args[2]) if len(args) > 2 else 2022
+            year = int(args[2]) if len(args) > 2 else 2024
             result = get_country_emissions(args[1], year)
     elif command == "sector":
         if len(args) < 2:
             result = {"error": "Usage: sector <sector_name> [year]"}
         else:
-            year = int(args[2]) if len(args) > 2 else 2022
+            year = int(args[2]) if len(args) > 2 else 2024
             result = get_sector_emissions(args[1], year)
     elif command == "asset":
         if len(args) < 2:
@@ -147,14 +156,14 @@ def main(args=None):
         else:
             result = get_asset_emissions(args[1])
     elif command == "search":
-        name = args[1] if len(args) > 1 else None
-        country = args[2] if len(args) > 2 else None
-        sector = args[3] if len(args) > 3 else None
-        result = search_assets(name, country, sector)
+        country = args[1] if len(args) > 1 else None
+        sector = args[2] if len(args) > 2 else None
+        limit = int(args[3]) if len(args) > 3 else 50
+        result = search_assets(country, sector, limit)
     elif command == "sectors":
         result = get_sectors()
     elif command == "summary":
-        year = int(args[1]) if len(args) > 1 else 2022
+        year = int(args[1]) if len(args) > 1 else 2024
         result = get_summary(year)
     elif command == "countries":
         result = get_country_list()

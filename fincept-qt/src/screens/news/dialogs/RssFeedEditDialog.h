@@ -7,16 +7,14 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
 #include <QPushButton>
 #include <QSpinBox>
 
 namespace fincept::screens {
 
 /// Small modal for adding a new feed or editing an existing one.
-/// Includes an async "Test URL" button that fetches the URL and reports
-/// whether the response looks like RSS/Atom XML.
+/// Includes an async "Test URL" button (RssFeedProbeService) that reports whether
+/// the URL serves RSS/Atom, how many items, and how fresh the newest one is.
 class RssFeedEditDialog : public QDialog {
     Q_OBJECT
   public:
@@ -41,13 +39,9 @@ class RssFeedEditDialog : public QDialog {
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
 
-    /// One QNetworkAccessManager for the whole dialog (P10) instead of a fresh
-    /// one per test request. Created lazily on first use.
-    QNetworkAccessManager* nam();
-    /// Build the shared feed-probe request for `url`.
-    QNetworkRequest probe_request(const QString& url) const;
-
-    QNetworkAccessManager* nam_ = nullptr;
+    /// Show `text` in the status line; `state` ("ok" / "warn" / "err" / "busy")
+    /// picks its colour from the dialog's stylesheet.
+    void set_status(const QString& text, const char* state);
 
     services::RSSFeed initial_;
     bool is_builtin_id_;

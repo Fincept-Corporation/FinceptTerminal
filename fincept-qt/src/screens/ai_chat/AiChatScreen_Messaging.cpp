@@ -1,9 +1,12 @@
 // src/screens/ai_chat/AiChatScreen_Messaging.cpp
 //
-// Message lifecycle: typing indicator, on_send, streaming chunk/done,
-// provider change, bubble construction, scroll/input helpers, update_stats.
+// Message lifecycle: typing indicator, on_send / start_request, streaming
+// chunks, Stop (cancel → grace → detach), finish_turn, Regenerate / Retry, the
+// Fincept credits notice, bubble construction, scroll/input helpers,
+// update_stats.
 //
-// Part of the partial-class split of AiChatScreen.cpp.
+// Part of the partial-class split of AiChatScreen.cpp. The Thinking / Tools
+// cards live in AiChatScreen_Tools.cpp.
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
@@ -12,39 +15,27 @@
 #include "mcp/McpService.h"
 #include "screens/ai_chat/AiChatScreen.h"
 #include "screens/ai_chat/ChatBubbleFactory.h"
+#include "services/llm/LlmErrors.h"
 #include "services/llm/LlmService.h"
 #include "storage/repositories/ChatRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
-#include <QClipboard>
 #include <QDateTime>
-#include <QDialog>
-#include <QDialogButtonBox>
 #include <QFile>
-#include <QFileDialog>
 #include <QFileInfo>
-#include <QFrame>
-#include <QGridLayout>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
-#include <QInputDialog>
-#include <QKeyEvent>
 #include <QLabel>
-#include <QMenu>
-#include <QPalette>
+#include <QLocale>
 #include <QPointer>
-#include <QRandomGenerator>
-#include <QResizeEvent>
+#include <QRegularExpression>
 #include <QScrollBar>
-#include <QShowEvent>
-#include <QSizePolicy>
-#include <QTextStream>
 #include <QTimer>
-#include <QToolButton>
 #include <QtConcurrent/QtConcurrent>
 
-#include <cmath>
 #include <memory>
 
 namespace fincept::screens {
@@ -77,14 +68,12 @@ void AiChatScreen::show_typing(bool show) {
     }
 }
 
-// ── Session management ────────────────────────────────────────────────────────
+// ── Sending ──────────────────────────────────────────────────────────────────
 
 void AiChatScreen::on_send() {
     if (streaming_) {
-        // While a reply is streaming the Send button is the Stop button (see
-        // set_input_enabled). Only the streaming path can be interrupted.
-        if (stoppable_)
-            ai_chat::LlmService::instance().cancel_active_request(pending_req_session_);
+        // While a reply is streaming the Send button is the Stop button.
+        on_stop_requested();
         return;
     }
     const QString raw_text = input_box_->toPlainText().trimmed();
@@ -97,8 +86,14 @@ void AiChatScreen::on_send() {
         return;
     }
     if (!ai_chat::LlmService::instance().is_configured()) {
+        // System bubbles render Markdown and follow https links (ChatBubbleFactory).
+        const QString ent_url =
+            ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("ai"));
         add_message_bubble("system",
-                           tr("No LLM provider configured. Go to Settings > LLM Configuration to set up a provider."));
+                           tr("No LLM provider configured. Go to Settings > LLM Configuration to set up a provider.") +
+                               QStringLiteral("\n\n") +
+                               tr("Or use Fincept Terminal Enterprise — AI credits included.") +
+                               QStringLiteral(" [%1](%2)").arg(tr("See Enterprise ↗"), ent_url));
         return;
     }
 
@@ -168,34 +163,63 @@ void AiChatScreen::on_send() {
         linked_context_pending_ = false; // one-shot: the history now carries the context
     }
 
-    // Capture request‑time context for correct persistence
-    const QString req_session = active_session_id_;
-    const QString req_provider = ai_chat::LlmService::instance().active_provider();
-    const QString req_model = ai_chat::LlmService::instance().active_model();
-    // Store in member variables so on_streaming_done can use them
-    pending_req_session_ = req_session;
-    pending_req_provider_ = req_provider;
-    pending_req_model_ = req_model;
     input_box_->clear();
     input_box_->setFixedHeight(44);
-    // Only the streaming path can be interrupted (cancel_active_request); it turns the
-    // Send button into Stop for the duration of the reply.
-    stoppable_ = ai_chat::provider_supports_streaming(req_provider);
-    set_input_enabled(false);
-    streaming_ = true;
     show_welcome(false);
+    retire_answer_action();
     // Display only raw_text in bubble (not full file dump)
     add_message_bubble("user", raw_text.isEmpty() ? tr("[File attached — see context]") : raw_text);
     total_messages_++;
-    ChatRepository::instance().add_message(active_session_id_, "user", text,
-                                           ai_chat::LlmService::instance().active_provider(),
-                                           ai_chat::LlmService::instance().active_model());
+    auto& llm = ai_chat::LlmService::instance();
+    ChatRepository::instance().add_message(active_session_id_, "user", text, llm.active_provider(),
+                                           llm.active_model());
     // Snapshot BEFORE appending the new turn: every request builder appends
     // `text` as the trailing user message itself, so including it in the history
     // too sent the same turn twice (and, on the Fincept flat-prompt path, printed
     // "User: …" twice in a row).
     std::vector<ai_chat::ConversationMessage> hist_copy = history_;
     history_.push_back({"user", text});
+    start_request(text, std::move(hist_copy));
+}
+
+// The history the model sees. Two cleanups the stored transcript needs:
+//  * a failed turn leaves a user message with no answer, so the next turn would
+//    send two consecutive user messages — several providers require strictly
+//    alternating roles and reject that with a 400;
+//  * consecutive assistant messages cannot occur here (regenerate replaces the
+//    superseded answer), but are merged defensively for the same reason.
+std::vector<ai_chat::ConversationMessage>
+AiChatScreen::wire_history(const std::vector<ai_chat::ConversationMessage>& h) {
+    std::vector<ai_chat::ConversationMessage> out;
+    out.reserve(h.size());
+    for (const auto& m : h) {
+        if (!out.empty() && out.back().role == m.role) {
+            out.back().content += QStringLiteral("\n\n") + m.content;
+            continue;
+        }
+        out.push_back(m);
+    }
+    return out;
+}
+
+// Common tail of on_send / on_regenerate: the user turn is already in the
+// transcript; `snapshot` is the history BEFORE it.
+void AiChatScreen::start_request(const QString& wire_text, std::vector<ai_chat::ConversationMessage> snapshot) {
+    auto& llm = ai_chat::LlmService::instance();
+    const QString req_session = active_session_id_;
+    pending_req_session_ = req_session;
+    pending_req_provider_ = llm.active_provider();
+    pending_req_model_ = llm.active_model();
+    const quint64 gen = ++request_gen_;
+    stop_requested_ = false;
+    stop_grace_timer_->stop();
+
+    // The streaming entry point is cancellable (session lane); the blocking
+    // chat() fallback is used only for providers that cannot stream.
+    stoppable_ = ai_chat::provider_supports_streaming(pending_req_provider_);
+    streaming_ = true;
+    set_input_enabled(false);
+    update_model_notice(); // hidden while a turn runs
 
     // Show typing indicator while waiting for first chunk
     show_typing(true);
@@ -205,17 +229,33 @@ void AiChatScreen::on_send() {
     // lazily by on_stream_chunk when their channel first produces a chunk).
     reset_thinking_state();
     reset_tools_state();
+    streaming_bubble_ = nullptr;
+    streaming_row_ = nullptr;
+    streaming_role_lbl_ = nullptr;
 
+    std::vector<ai_chat::ConversationMessage> wire = wire_history(snapshot);
+    // A turn that failed (credits, network, Stop before any answer) leaves its
+    // user message unanswered. Sending the next one after it would put two user
+    // turns back to back, which providers that require alternating roles reject
+    // with a 400. Fold the unanswered message into this one instead — it is
+    // usually the context the new message refers to ("try again").
+    QString outgoing = wire_text;
+    if (!wire.empty() && wire.back().role == QLatin1String("user")) {
+        outgoing = wire.back().content + QStringLiteral("\n\n") + wire_text;
+        wire.pop_back();
+    }
+    QPointer<AiChatScreen> self = this;
     if (stoppable_) {
-        QPointer<AiChatScreen> self = this;
         auto first_chunk = std::make_shared<bool>(true);
-        ai_chat::LlmService::instance().chat_streaming(
-            text, hist_copy,
-            [self, first_chunk](const QString& chunk, bool done) {
+        llm.chat_streaming(
+            outgoing, wire,
+            [self, first_chunk, gen](const QString& chunk, bool done) {
                 QMetaObject::invokeMethod(
                     qApp,
-                    [self, chunk, done, first_chunk]() {
-                        if (!self)
+                    [self, chunk, done, first_chunk, gen]() {
+                        // A stopped-and-detached request keeps streaming until it
+                        // notices the cancel; its chunks must not paint anything.
+                        if (!self || self->request_gen_ != gen || !self->streaming_)
                             return;
                         // On first chunk: hide the typing indicator. The answer
                         // bubble and Thinking card are created lazily inside
@@ -229,19 +269,19 @@ void AiChatScreen::on_send() {
                     },
                     Qt::QueuedConnection);
             },
-            ai_chat::LlmService::ToolPolicy::All, active_session_id_);
+            ai_chat::LlmService::ToolPolicy::All, req_session);
     } else {
-        QPointer<AiChatScreen> self = this;
-        (void)QtConcurrent::run([self, text, hist_copy, req_session]() {
-            auto resp = ai_chat::LlmService::instance().chat(text, hist_copy);
+        (void)QtConcurrent::run([self, outgoing, wire, req_session, gen]() {
+            auto resp = ai_chat::LlmService::instance().chat(outgoing, wire);
             // on_streaming_done() only accepts a response that carries this request's
             // session id (the signal path stamps it itself; this direct path must too).
             resp.origin_session_id = req_session;
             QMetaObject::invokeMethod(
                 qApp,
-                [self, resp]() {
-                    if (self)
-                        self->on_streaming_done(resp);
+                [self, resp, gen]() {
+                    // Generation-matched: a detached request's late answer is dropped.
+                    if (self && self->request_gen_ == gen && self->streaming_)
+                        self->finish_turn(resp);
                 },
                 Qt::QueuedConnection);
         });
@@ -256,12 +296,10 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
     const QString think_prefix = ai_chat::think_stream_prefix();
     if (chunk.startsWith(think_prefix)) {
         append_thinking_chunk(chunk.mid(think_prefix.size()));
-        scroll_to_bottom();
         return;
     }
 
-    // Tool-progress chunk → its own collapsible Tools card, never the answer
-    // bubble. Keeps plumbing (tool_list / tool_describe) out of the reply.
+    // Tool activity → its own collapsible Tools card, never the answer bubble.
     const QString tool_prefix = ai_chat::tool_stream_prefix();
     if (chunk.startsWith(tool_prefix)) {
         append_tool_chunk(chunk.mid(tool_prefix.size()));
@@ -269,12 +307,18 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
         return;
     }
 
-    // Tool-call clear sentinel: reset bubble content (removes partial XML).
+    // Tool-call clear sentinel: the model switched to tool calls mid-stream, so
+    // what streamed so far is aborted markup. Drop that bubble entirely — the
+    // answer is re-created after the Tools card, in reading order — and show
+    // the typing indicator until the first tool line arrives.
     if (chunk.startsWith("\x01__TOOL_CALL_CLEAR__")) {
-        if (!streaming_bubble_)
-            streaming_bubble_ = add_streaming_bubble();
-        fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, tr("Calling tool..."));
-        scroll_to_bottom();
+        if (streaming_row_ && streaming_bubble_)
+            streaming_row_->deleteLater();
+        streaming_bubble_ = nullptr;
+        streaming_row_ = nullptr;
+        streaming_role_lbl_ = nullptr;
+        if (!tools_card_)
+            show_typing(true);
         return;
     }
 
@@ -285,11 +329,26 @@ void AiChatScreen::on_stream_chunk(const QString& chunk, bool done) {
     // below any Thinking card that arrived first.
     if (!streaming_bubble_)
         streaming_bubble_ = add_streaming_bubble();
+    // Buffered: the factory paints at most ~15 times a second.
     fincept::ai_chat::ChatBubbleFactory::append_streaming_chunk(streaming_bubble_, chunk);
     scroll_to_bottom();
 }
 
 void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
+    // A request the user stopped and we stopped waiting for: its answer is the
+    // first one to arrive for that session afterwards (the session lane runs one
+    // request at a time, in order), so it is swallowed here — even if a newer
+    // request for the same session is already waiting behind it.
+    if (!response.origin_session_id.isEmpty()) {
+        auto it = abandoned_responses_.find(response.origin_session_id);
+        if (it != abandoned_responses_.end()) {
+            if (--it.value() <= 0)
+                abandoned_responses_.erase(it);
+            LOG_INFO("AiChat", QString("Discarded the late reply of a stopped request (%1)")
+                                   .arg(response.cancelled ? "cancelled" : response.success ? "completed" : "failed"));
+            return;
+        }
+    }
     // finished_streaming() is a process-wide signal and the floating Quick Chat bubble
     // listens to the same one. Without this check every Quick Chat answer landed here
     // too — rendered into this tab's transcript, appended to its history and written
@@ -298,130 +357,339 @@ void AiChatScreen::on_streaming_done(ai_chat::LlmResponse response) {
     // id, while we are waiting for one) is ours.
     if (!streaming_ || response.origin_session_id != pending_req_session_)
         return;
+    finish_turn(response);
+}
 
+QString AiChatScreen::answer_footer_meta(const QString& provider, const QString& model, int tokens) const {
+    QStringList parts;
+    if (provider.compare(QLatin1String("fincept"), Qt::CaseInsensitive) == 0)
+        parts << tr("Fincept LLM");
+    else if (!provider.isEmpty())
+        parts << (model.isEmpty() ? provider : provider + QStringLiteral(" / ") + model);
+    if (tokens > 0)
+        parts << tr("%1 tok").arg(QLocale().toString(tokens));
+    return parts.join(QStringLiteral("  ·  "));
+}
+
+void AiChatScreen::finish_turn(const ai_chat::LlmResponse& response) {
     streaming_ = false;
     stoppable_ = false;
+    stop_requested_ = false;
+    stop_grace_timer_->stop();
     show_typing(false);
 
     // Lock in the Thinking and Tools cards (swap their live headers for final
-    // labels) and stop tracking them so the next message starts fresh ones.
+    // labels). The tool steps are captured first: they are persisted with the
+    // answer so a reloaded conversation still shows which tools produced it.
     finalize_thinking_card();
+    const QString trailer = tool_trailer();
     finalize_tools_card();
 
-    // Ensure a bubble exists for any terminal state (success + content,
-    // failure with an error message, or success-but-empty). Without this,
-    // a kimi/openai response that arrives via the non-streaming fallback
-    // with no per-chunk emission, or fails before any chunk lands, would
-    // be silently dropped — the typing indicator hides and the input is
-    // re-enabled but nothing is shown.
-    const bool need_bubble = !streaming_bubble_ && ((response.success && !response.content.isEmpty()) ||
-                                                    !response.success || response.content.isEmpty());
-    if (need_bubble)
-        streaming_bubble_ = add_streaming_bubble();
-
     set_input_enabled(true);
+    const QString session = pending_req_session_;
+    const QString provider = pending_req_provider_;
+    const QString model = pending_req_model_;
+    pending_req_session_.clear();
+    pending_req_provider_.clear();
+    pending_req_model_.clear();
 
+    namespace cbf = fincept::ai_chat;
     if (!response.success) {
         // Text that streamed before the failure / Stop stays on screen. Replacing the
         // bubble with the error used to discard it — up to minutes of generated answer.
-        QString partial = streaming_bubble_ ? streaming_bubble_->property("acc").toString() : QString();
-        if (partial == tr("Calling tool...") || partial == QLatin1String("Calling tool..."))
-            partial.clear();
-        partial = partial.trimmed();
+        const QString partial =
+            streaming_bubble_ ? cbf::ChatBubbleFactory::streaming_text(streaming_bubble_).trimmed() : QString();
 
         if (response.cancelled) {
             LOG_INFO("AiChat", QString("LLM request stopped by user (%1 chars kept)").arg(partial.size()));
-            if (streaming_bubble_) {
-                if (partial.isEmpty())
-                    fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, tr("Stopped."));
-                else
-                    fincept::ai_chat::ChatBubbleFactory::finalize_streaming(
-                        streaming_bubble_, partial + QStringLiteral("\n\n*") + tr("(stopped)") + QStringLiteral("*"));
-            }
-            if (!partial.isEmpty()) {
+            if (partial.isEmpty()) {
+                if (!streaming_bubble_)
+                    streaming_bubble_ = add_streaming_bubble();
+                cbf::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, tr("Stopped."));
+                cbf::ChatBubbleFactory::finalize_streaming(streaming_bubble_, tr("*Stopped.*"));
+                add_answer_action(streaming_bubble_, /*failed=*/true);
+            } else {
                 // Keep the partial answer in the transcript (and tell the model it was cut off
                 // on the next turn) so reloading the session shows what the user saw.
                 const QString saved = partial + QStringLiteral("\n\n*(stopped)*");
+                cbf::ChatBubbleFactory::finalize_streaming(
+                    streaming_bubble_, partial + QStringLiteral("\n\n*") + tr("(stopped)") + QStringLiteral("*"),
+                    answer_footer_meta(provider, model, response.total_tokens));
                 history_.push_back({"assistant", saved});
                 total_messages_++;
+                total_tokens_ += response.total_tokens;
                 update_stats();
-                ChatRepository::instance().add_message(pending_req_session_, "assistant", saved, pending_req_provider_,
-                                                       pending_req_model_, response.total_tokens);
+                ChatRepository::instance().add_message(session, "assistant", saved + trailer, provider, model,
+                                                       response.total_tokens);
+                add_answer_action(streaming_bubble_, /*failed=*/false);
             }
         } else {
-            const QString err =
-                response.error.isEmpty() ? tr("Error: request failed") : tr("Error: %1").arg(response.error);
-            if (streaming_bubble_) {
-                if (partial.isEmpty())
-                    fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, err);
-                else
-                    fincept::ai_chat::ChatBubbleFactory::finalize_streaming(
-                        streaming_bubble_, partial + QStringLiteral("\n\n**") + err + QStringLiteral("**"));
-            }
             LOG_WARN("AiChat", QString("LLM request failed: %1").arg(response.error));
+            const auto kind = ai_chat::classify_llm_error(response.error);
+            if (kind != ai_chat::LlmErrorKind::Other) {
+                // Out of credits / sign-in rejected: an actionable notice, not a red error line.
+                if (streaming_bubble_ && !partial.isEmpty())
+                    cbf::ChatBubbleFactory::finalize_streaming(streaming_bubble_, partial);
+                else if (streaming_row_)
+                    streaming_row_->deleteLater();
+                streaming_bubble_ = nullptr;
+                show_fincept_notice(response);
+            } else {
+                const QString err =
+                    response.error.isEmpty() ? tr("Error: request failed") : tr("Error: %1").arg(response.error);
+                if (!streaming_bubble_)
+                    streaming_bubble_ = add_streaming_bubble();
+                if (partial.isEmpty()) {
+                    cbf::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, err);
+                    cbf::ChatBubbleFactory::finalize_streaming(streaming_bubble_, QStringLiteral("**") + err +
+                                                                                        QStringLiteral("**"));
+                } else {
+                    cbf::ChatBubbleFactory::finalize_streaming(
+                        streaming_bubble_, partial + QStringLiteral("\n\n**") + err + QStringLiteral("**"));
+                }
+                add_answer_action(streaming_bubble_, /*failed=*/true);
+            }
         }
         streaming_bubble_ = nullptr;
-        pending_req_session_.clear();
-        pending_req_provider_.clear();
-        pending_req_model_.clear();
         scroll_to_bottom();
         return;
     }
 
-    // Success but empty body — surface a hint instead of silently doing nothing.
-    if (response.content.isEmpty()) {
-        if (streaming_bubble_) {
-            const QString hint = tr("(empty response — model returned no content)");
-            fincept::ai_chat::ChatBubbleFactory::replace_streaming_text(streaming_bubble_, hint);
-        }
+    // Success. The service's content is the cleaned answer (think blocks and
+    // tool markup removed) — shown AND persisted, so screen and database agree.
+    // The streamed text covers a provider that streams but returns no body.
+    const QString acc = streaming_bubble_ ? cbf::ChatBubbleFactory::streaming_text(streaming_bubble_) : QString();
+    const QString content = !response.content.trimmed().isEmpty() ? response.content : acc;
+    if (content.trimmed().isEmpty()) {
+        if (!streaming_bubble_)
+            streaming_bubble_ = add_streaming_bubble();
+        cbf::ChatBubbleFactory::replace_streaming_text(streaming_bubble_,
+                                                       tr("(empty response — model returned no content)"));
+        cbf::ChatBubbleFactory::finalize_streaming(streaming_bubble_);
+        add_answer_action(streaming_bubble_, /*failed=*/true);
         LOG_WARN("AiChat", "LLM returned success with empty content");
         streaming_bubble_ = nullptr;
+        scroll_to_bottom();
         return;
     }
 
-    const QString content = response.content;
-    if (streaming_bubble_) {
-        // Use accumulated streamed text if present, else fall back to the
-        // response body (non-streaming path). finalize_streaming swaps the
-        // label to MarkdownText and reveals the copy button.
-        const QString acc = streaming_bubble_->property("acc").toString();
-        const QString final_text = acc.isEmpty() ? content : acc;
-        fincept::ai_chat::ChatBubbleFactory::finalize_streaming(streaming_bubble_, final_text);
-        streaming_bubble_ = nullptr;
-    }
-    if (!content.isEmpty()) {
-        history_.push_back({"assistant", content});
-        total_messages_++;
-        total_tokens_ += response.total_tokens;
-        update_stats();
-        // Use request‑time captured context to persist the assistant message
-        ChatRepository::instance().add_message(pending_req_session_, "assistant", content, pending_req_provider_,
-                                               pending_req_model_, response.total_tokens);
-        // Clear pending request context to avoid accidental reuse
-        pending_req_session_.clear();
-        pending_req_provider_.clear();
-        pending_req_model_.clear();
-    }
-    scroll_to_bottom();
-    input_box_->setFocus();
-}
-
-void AiChatScreen::on_provider_changed() {
+    if (!streaming_bubble_)
+        streaming_bubble_ = add_streaming_bubble();
+    // finalize_streaming swaps the label to MarkdownText, fills the footer
+    // (time · provider / model · tokens) and reveals Copy / Copy code.
+    cbf::ChatBubbleFactory::finalize_streaming(streaming_bubble_, content,
+                                               answer_footer_meta(provider, model, response.total_tokens));
+    history_.push_back({"assistant", content});
+    total_messages_++;
+    total_tokens_ += response.total_tokens;
+    conv_provider_ = provider;
+    conv_model_ = model;
     update_stats();
+    // Request-time context: the provider/model that actually produced this answer.
+    ChatRepository::instance().add_message(session, "assistant", content + trailer, provider, model,
+                                           response.total_tokens);
+    add_answer_action(streaming_bubble_, /*failed=*/false);
+    streaming_bubble_ = nullptr;
+    trim_rendered_rows();
+    scroll_to_bottom();
+    if (input_box_->isEnabled())
+        input_box_->setFocus();
 }
 
-// ── Message bubbles ───────────────────────────────────────────────────────────
+// ── Stop ─────────────────────────────────────────────────────────────────────
 
-void AiChatScreen::add_message_bubble(const QString& role, const QString& content, const QString& timestamp) {
+void AiChatScreen::on_stop_requested() {
+    if (!streaming_ || stop_requested_)
+        return;
+    stop_requested_ = true;
+    if (!stoppable_) {
+        // The blocking chat() fallback has no cancel hook — stop waiting now.
+        detach_stopped_request();
+        return;
+    }
+    ai_chat::LlmService::instance().cancel_active_request(pending_req_session_);
+    send_btn_->setText(tr("Stopping…"));
+    send_btn_->setEnabled(false);
+    hdr_status_lbl_->setText(tr("Stopping"));
+    // Most turns unwind within ~100 ms. One blocked inside a tool cannot be
+    // interrupted — stop waiting for it after the grace period.
+    stop_grace_timer_->start();
+}
+
+void AiChatScreen::detach_stopped_request() {
+    if (!streaming_ || !stop_requested_)
+        return;
+    LOG_WARN("AiChat", "Stopped request did not finish within the grace period (blocked in a tool) — detaching");
+    // Its chunks are dropped by generation; its finished_streaming() is the next
+    // one for this session and is swallowed (non-streaming requests are dropped
+    // by generation alone).
+    if (stoppable_ && !pending_req_session_.isEmpty())
+        abandoned_responses_[pending_req_session_] += 1;
+    ++request_gen_;
+    ai_chat::LlmResponse stopped;
+    stopped.cancelled = true;
+    stopped.error = QStringLiteral("Request cancelled");
+    stopped.origin_session_id = pending_req_session_;
+    finish_turn(stopped);
+}
+
+// ── Regenerate / Retry ───────────────────────────────────────────────────────
+
+void AiChatScreen::on_regenerate() {
+    if (streaming_ || history_.empty() || active_session_id_.isEmpty())
+        return;
+    if (!ai_chat::LlmService::instance().is_configured())
+        return;
+    // Regenerate: the newest answer is superseded — dropped from what the model
+    // sees, kept (dimmed) on screen and in the database. On reload, the last of
+    // consecutive answers wins (see load_messages).
+    if (history_.back().role == QLatin1String("assistant")) {
+        history_.pop_back();
+        if (last_answer_row_) {
+            // Dimmed, not disabled: its Copy buttons must keep working.
+            auto* fx = new QGraphicsOpacityEffect(last_answer_row_);
+            fx->setOpacity(0.5);
+            last_answer_row_->setGraphicsEffect(fx);
+        }
+        if (last_answer_role_lbl_)
+            last_answer_role_lbl_->setText(tr("AI · superseded — regenerated below"));
+    }
+    // Retry (after a failed / stopped turn) and regenerate both resend the
+    // newest user message — already in the transcript and the database.
+    if (history_.empty() || history_.back().role != QLatin1String("user"))
+        return;
+    retire_answer_action();
+    const QString text = history_.back().content;
+    std::vector<ai_chat::ConversationMessage> snapshot(history_.begin(), history_.end() - 1);
+    show_welcome(false);
+    start_request(text, std::move(snapshot));
+}
+
+void AiChatScreen::add_answer_action(QLabel* body, bool failed) {
+    retire_answer_action();
+    QWidget* footer = fincept::ai_chat::ChatBubbleFactory::footer_of(body);
+    auto* fhl = footer ? qobject_cast<QHBoxLayout*>(footer->layout()) : nullptr;
+    if (!fhl)
+        return;
+    auto* btn = fincept::ai_chat::ChatBubbleFactory::make_footer_button(
+        failed ? tr("↻ Retry") : tr("↻ Regenerate"),
+        failed ? tr("Send the last message again (Ctrl+R)") : tr("Generate a new answer to the last message (Ctrl+R)"));
+    connect(btn, &QPushButton::clicked, this, &AiChatScreen::on_regenerate);
+    fhl->addWidget(btn);
+    answer_action_btn_ = btn;
+    if (!failed) {
+        // Row + role label of the newest real answer: regenerate dims them.
+        last_answer_row_ = streaming_row_;
+        last_answer_role_lbl_ = streaming_role_lbl_;
+    } else {
+        last_answer_row_ = nullptr;
+        last_answer_role_lbl_ = nullptr;
+    }
+}
+
+void AiChatScreen::retire_answer_action() {
+    if (answer_action_btn_)
+        answer_action_btn_->deleteLater();
+    answer_action_btn_ = nullptr;
+}
+
+// ── Fincept credits / sign-in notice ─────────────────────────────────────────
+
+void AiChatScreen::show_fincept_notice(const ai_chat::LlmResponse& response) {
+    const bool credits = ai_chat::classify_llm_error(response.error) == ai_chat::LlmErrorKind::FinceptOutOfCredits;
+    QString text = credits ? tr("**You're out of Fincept credits.**") : tr("**Fincept did not accept your sign-in.**");
+    // The service's sentence carries the cost/balance figures when known.
+    static const QRegularExpression rx_figures(QStringLiteral("This request needs ([^;]+); your balance is ([^.]+)\\."));
+    const auto m = rx_figures.match(response.error);
+    if (credits && m.hasMatch())
+        text += QStringLiteral("\n\n") + tr("This request needs %1; your balance is %2.").arg(m.captured(1), m.captured(2));
+    text += QStringLiteral("\n\n") +
+            (credits ? tr("Top up your credits, or add your own provider API key in **Settings → LLM Configuration** "
+                          "to keep chatting.")
+                     : tr("Sign in again (or check your Fincept API key), or add your own provider API key in "
+                          "**Settings → LLM Configuration**."));
+
     fincept::ai_chat::ChatBubbleFactory::Options opts;
-    opts.role = role;
-    opts.content = content;
-    opts.timestamp_iso = timestamp;
+    opts.role = "system";
+    opts.content = text;
     opts.show_footer = true;
     opts.user_col_max_width = kUserColMaxWidth;
     opts.ai_col_max_width = kAiColMaxWidth;
     auto b = fincept::ai_chat::ChatBubbleFactory::build(opts);
-    messages_layout_->insertWidget(messages_layout_->count() - 1, b.row);
+    if (b.footer_layout) {
+        if (credits) {
+            auto* plans = fincept::ai_chat::ChatBubbleFactory::make_footer_button(tr("View plans"),
+                                                                                  tr("Open Plans & Pricing"));
+            connect(plans, &QPushButton::clicked, this, [this]() { ui::billing::open_plans(this); });
+            b.footer_layout->addWidget(plans);
+        }
+        auto* settings = fincept::ai_chat::ChatBubbleFactory::make_footer_button(
+            tr("LLM settings"), tr("Open Settings to add your own provider API key"));
+        connect(settings, &QPushButton::clicked, this, []() {
+            EventBus::instance().publish(QStringLiteral("nav.switch_screen"),
+                                         QVariantMap{{"screen_id", QStringLiteral("settings")}});
+        });
+        b.footer_layout->addWidget(settings);
+        auto* retry = fincept::ai_chat::ChatBubbleFactory::make_footer_button(
+            tr("↻ Retry"), tr("Send the last message again (Ctrl+R)"));
+        connect(retry, &QPushButton::clicked, this, &AiChatScreen::on_regenerate);
+        b.footer_layout->addWidget(retry);
+        retire_answer_action();
+        answer_action_btn_ = retry;
+        b.footer_layout->addStretch();
+    }
+    insert_row(b.row);
+}
+
+// ── Message bubbles ───────────────────────────────────────────────────────────
+
+void AiChatScreen::insert_row(QWidget* row, Qt::Alignment align) {
+    // Before the trailing stretch.
+    messages_layout_->insertWidget(messages_layout_->count() - 1, row, 0, align);
+    rendered_rows_.append(row);
+}
+
+// Bounded memory for long live sessions: past kMaxLiveRows rendered rows the
+// oldest are destroyed (they remain in history_ and the database) and the
+// "show earlier" bar offers to rebuild them.
+void AiChatScreen::trim_rendered_rows() {
+    rendered_rows_.removeIf([](const QPointer<QWidget>& p) { return p.isNull(); });
+    if (rendered_rows_.size() <= kMaxLiveRows)
+        return;
+    const int drop = rendered_rows_.size() - kMaxLiveRows * 2 / 3;
+    for (int i = 0; i < drop; ++i) {
+        QWidget* w = rendered_rows_.takeFirst();
+        if (!w)
+            continue;
+        messages_layout_->removeWidget(w);
+        w->deleteLater();
+    }
+    // Rows ≠ messages (tool / thinking cards), so offer a full reload rather
+    // than a count we cannot state exactly.
+    hidden_message_count_ = std::max(hidden_message_count_, 1);
+    load_earlier_btn_->setText(tr("Show earlier messages"));
+    load_earlier_btn_->show();
+}
+
+QLabel* AiChatScreen::add_message_bubble(const QString& role, const QString& content, const QString& timestamp,
+                                         const QString& footer_meta) {
+    fincept::ai_chat::ChatBubbleFactory::Options opts;
+    opts.role = role;
+    opts.content = content;
+    opts.timestamp_iso = timestamp;
+    opts.footer_meta = footer_meta;
+    opts.show_footer = true;
+    opts.user_col_max_width = kUserColMaxWidth;
+    opts.ai_col_max_width = kAiColMaxWidth;
+    auto b = fincept::ai_chat::ChatBubbleFactory::build(opts);
+    insert_row(b.row);
+    if (role == QLatin1String("assistant")) {
+        last_answer_row_ = b.row;
+        last_answer_role_lbl_ = b.role_lbl;
+        streaming_row_ = b.row; // add_answer_action() reads these for the newest answer
+        streaming_role_lbl_ = b.role_lbl;
+    }
+    return b.body;
 }
 
 QLabel* AiChatScreen::add_streaming_bubble() {
@@ -431,226 +699,38 @@ QLabel* AiChatScreen::add_streaming_bubble() {
     opts.user_col_max_width = kUserColMaxWidth;
     opts.ai_col_max_width = kAiColMaxWidth;
     auto b = fincept::ai_chat::ChatBubbleFactory::build_streaming(opts);
-    messages_layout_->insertWidget(messages_layout_->count() - 1, b.row);
+    insert_row(b.row);
+    streaming_row_ = b.row;
+    streaming_role_lbl_ = b.role_lbl;
     return b.body;
-}
-
-// ── Thinking (chain-of-thought) card ────────────────────────────────────────────
-// Reasoning models stream their thoughts on a separate channel (see
-// think_stream_prefix()). We collect them into a collapsed dropdown shown ABOVE
-// the answer bubble so the answer itself stays clean and unmixed.
-
-void AiChatScreen::create_thinking_card() {
-    if (thinking_card_)
-        return;
-
-    auto* card = new QWidget;
-    card->setMaximumWidth(kAiColMaxWidth);
-    card->setStyleSheet(QString("background:%1;border:1px solid %2;").arg(col::BG_SURFACE(), col::BORDER_DIM()));
-    auto* vl = new QVBoxLayout(card);
-    vl->setContentsMargins(10, 6, 10, 6);
-    vl->setSpacing(4);
-
-    // Collapsed by default — header toggles the body. The leading chevron (▸/▾)
-    // reflects expanded state; the body holds the dimmed, selectable reasoning.
-    auto* header = new QPushButton(
-        QChar(0x25B8) + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) +
-        tr("Thinking…"));
-    header->setCursor(Qt::PointingHandCursor);
-    header->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
-                                  "font-size:%2px;font-weight:600;text-align:left;padding:0;}"
-                                  "QPushButton:hover{color:%3;}")
-                              .arg(col::TEXT_TERTIARY())
-                              .arg(fnt::SMALL)
-                              .arg(col::TEXT_SECONDARY()));
-    vl->addWidget(header);
-
-    auto* body = new QLabel;
-    body->setWordWrap(true);
-    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    body->setVisible(false);
-    body->setStyleSheet(QString("QLabel{color:%1;font-size:%2px;font-style:italic;background:transparent;}")
-                            .arg(col::TEXT_DIM())
-                            .arg(fnt::SMALL));
-    vl->addWidget(body);
-
-    // Capture raw pointers (not the QPointer members, which get nulled when the
-    // stream finishes) so the finished card stays toggleable.
-    QObject::connect(header, &QPushButton::clicked, card, [header, body]() {
-        const bool show = !body->isVisible();
-        body->setVisible(show);
-        QString t = header->text();
-        if (!t.isEmpty())
-            t.replace(0, 1, show ? QChar(0x25BE) : QChar(0x25B8));
-        header->setText(t);
-    });
-
-    // Insert just before the trailing stretch so it sits above the answer bubble
-    // (which is created lazily on the first answer chunk and lands below it).
-    messages_layout_->insertWidget(messages_layout_->count() - 1, card, 0, Qt::AlignLeft);
-    thinking_card_ = card;
-    thinking_header_ = header;
-    thinking_body_ = body;
-}
-
-void AiChatScreen::append_thinking_chunk(const QString& text) {
-    if (text.isEmpty())
-        return;
-    show_typing(false); // the card now signals activity
-    if (!thinking_card_)
-        create_thinking_card();
-    thinking_text_ += text;
-    if (thinking_body_)
-        thinking_body_->setText(thinking_text_);
-}
-
-void AiChatScreen::finalize_thinking_card() {
-    if (thinking_header_) {
-        const bool expanded = thinking_body_ && thinking_body_->isVisible();
-        const QChar chev = expanded ? QChar(0x25BE) : QChar(0x25B8);
-        thinking_header_->setText(chev +
-                                  (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x92\xAD") + QStringLiteral(" ")) +
-                                  tr("Thoughts"));
-    }
-    reset_thinking_state();
-}
-
-void AiChatScreen::reset_thinking_state() {
-    // Stops tracking the current card (the widget itself remains in the
-    // transcript); the next message creates a fresh one.
-    thinking_card_ = nullptr;
-    thinking_header_ = nullptr;
-    thinking_body_ = nullptr;
-    thinking_text_.clear();
-}
-
-// ── Tools card ──────────────────────────────────────────────────────────────────
-// Same shape as the Thinking card, different channel (tool_stream_prefix()).
-// Starts EXPANDED — unlike chain-of-thought, tool progress is the only signal the
-// user has that a long multi-round turn is advancing — and collapses on finish
-// into a one-line "N tools used" summary.
-
-void AiChatScreen::create_tools_card() {
-    if (tools_card_)
-        return;
-
-    auto* card = new QWidget;
-    card->setMaximumWidth(kAiColMaxWidth);
-    card->setStyleSheet(QString("background:%1;border:1px solid %2;").arg(col::BG_SURFACE(), col::BORDER_DIM()));
-    auto* vl = new QVBoxLayout(card);
-    vl->setContentsMargins(10, 6, 10, 6);
-    vl->setSpacing(4);
-
-    auto* header = new QPushButton(QChar(0x25BE) + (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x94\xA7") +
-                                                    QStringLiteral(" ")) +
-                                   tr("Using tools…"));
-    header->setCursor(Qt::PointingHandCursor);
-    header->setStyleSheet(QString("QPushButton{background:transparent;color:%1;border:none;"
-                                  "font-size:%2px;font-weight:600;text-align:left;padding:0;}"
-                                  "QPushButton:hover{color:%3;}")
-                              .arg(col::TEXT_TERTIARY())
-                              .arg(fnt::SMALL)
-                              .arg(col::TEXT_SECONDARY()));
-    vl->addWidget(header);
-
-    auto* body = new QLabel;
-    body->setWordWrap(true);
-    body->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    body->setVisible(true); // expanded while the turn runs
-    body->setStyleSheet(QString("QLabel{color:%1;font-size:%2px;background:transparent;}")
-                            .arg(col::TEXT_DIM())
-                            .arg(fnt::SMALL));
-    vl->addWidget(body);
-
-    // Raw pointers, not the QPointer members — those are nulled when the stream
-    // finishes, and the finished card must stay toggleable.
-    QObject::connect(header, &QPushButton::clicked, card, [header, body]() {
-        const bool show = !body->isVisible();
-        body->setVisible(show);
-        QString t = header->text();
-        if (!t.isEmpty())
-            t.replace(0, 1, show ? QChar(0x25BE) : QChar(0x25B8));
-        header->setText(t);
-    });
-
-    messages_layout_->insertWidget(messages_layout_->count() - 1, card, 0, Qt::AlignLeft);
-    tools_card_ = card;
-    tools_header_ = header;
-    tools_body_ = body;
-}
-
-void AiChatScreen::append_tool_chunk(const QString& text) {
-    if (text.isEmpty())
-        return;
-    show_typing(false); // the card now signals activity
-    if (!tools_card_)
-        create_tools_card();
-
-    for (const QString& raw : text.split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        const QString line = raw.trimmed();
-        if (line.isEmpty())
-            continue;
-        ++tools_count_;
-
-        // Collapse a consecutive run of the same tool into "name ×N". Writing a
-        // spreadsheet is ~45 back-to-back set_excel_cell calls; listing each is a
-        // wall of noise that buries the steps that actually differ.
-        const QString base = line.section(QStringLiteral(" · "), 0, 0);
-        if (base == tools_run_base_ && !tools_lines_.isEmpty()) {
-            ++tools_run_count_;
-            tools_lines_.last() = base + QStringLiteral(" ×") + QString::number(tools_run_count_);
-        } else {
-            tools_run_base_ = base;
-            tools_run_count_ = 1;
-            tools_lines_.append(line);
-        }
-    }
-
-    tools_text_ = QStringLiteral("• ") + tools_lines_.join(QStringLiteral("\n• "));
-    if (tools_body_)
-        tools_body_->setText(tools_text_);
-}
-
-void AiChatScreen::finalize_tools_card() {
-    if (tools_header_) {
-        // Collapse once the answer is in — the detail stays one click away.
-        if (tools_body_)
-            tools_body_->setVisible(false);
-        tools_header_->setText(QChar(0x25B8) +
-                               (QStringLiteral("  ") + QString::fromUtf8("\xF0\x9F\x94\xA7") + QStringLiteral(" ")) +
-                               tr("%n tool step(s)", "", tools_count_));
-    }
-    reset_tools_state();
-}
-
-void AiChatScreen::reset_tools_state() {
-    tools_card_ = nullptr;
-    tools_header_ = nullptr;
-    tools_body_ = nullptr;
-    tools_text_.clear();
-    tools_lines_.clear();
-    tools_run_base_.clear();
-    tools_run_count_ = 0;
-    tools_count_ = 0;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 void AiChatScreen::clear_messages() {
     streaming_bubble_.clear();
+    streaming_row_.clear();
+    streaming_role_lbl_.clear();
+    last_answer_row_.clear();
+    last_answer_role_lbl_.clear();
+    answer_action_btn_.clear();
     reset_thinking_state(); // card widgets are deleted by the loop below
     reset_tools_state();
-    // Skip the welcome panel — it is a permanent fixture reused across sessions
-    // (it is only shown/hidden). Everything else is a message row.
+    rendered_rows_.clear();
+    // Skip the welcome panel and the "earlier messages" bar — permanent fixtures
+    // reused across sessions (only shown/hidden). Everything else is a message row.
     for (int i = messages_layout_->count() - 1; i >= 0; --i) {
         QLayoutItem* item = messages_layout_->itemAt(i);
         QWidget* w = item ? item->widget() : nullptr;
-        if (!w || w == welcome_panel_)
+        if (!w || w == welcome_panel_ || w == load_earlier_btn_)
             continue; // trailing stretch has no widget
         QLayoutItem* taken = messages_layout_->takeAt(i);
         w->deleteLater();
         delete taken;
     }
+    hidden_message_count_ = 0;
+    if (load_earlier_btn_)
+        load_earlier_btn_->hide();
 }
 
 void AiChatScreen::scroll_to_bottom() {
@@ -678,16 +758,22 @@ void AiChatScreen::scroll_to_bottom() {
 }
 
 void AiChatScreen::set_input_enabled(bool enabled) {
-    input_box_->setEnabled(enabled);
-    // While a streamed reply is running the send button stays live as "Stop"
-    // (on_send() routes the click to cancel_active_request()).
-    send_btn_->setEnabled(enabled || stoppable_);
+    // The composer stays editable while an answer streams, so the next question
+    // can be drafted; Enter only sends once the turn is over (eventFilter).
+    input_box_->setEnabled(true);
+    // While a reply is running the send button is "Stop" (on_send() routes the
+    // click to on_stop_requested()). Every request can be stopped: streamed ones
+    // are cancelled, the blocking fallback is detached.
+    send_btn_->setEnabled(true);
     new_btn_->setEnabled(enabled);
     search_edit_->setEnabled(enabled);
     session_list_->setEnabled(enabled);
     delete_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
     rename_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
-    send_btn_->setText(enabled ? tr("Send") : (stoppable_ ? tr("Stop") : QStringLiteral("···")));
+    if (export_btn_)
+        export_btn_->setEnabled(enabled && !active_session_id_.isEmpty());
+    send_btn_->setText(enabled ? tr("Send") : tr("Stop"));
+    send_btn_->setToolTip(enabled ? tr("Send (Enter)") : tr("Stop the answer (Esc)"));
 
     // Status dot + label
     const QString status_color = enabled ? col::POSITIVE() : col::AMBER();
@@ -695,6 +781,10 @@ void AiChatScreen::set_input_enabled(bool enabled) {
     hdr_status_lbl_->setText(enabled ? tr("Ready") : tr("Streaming"));
     hdr_status_lbl_->setStyleSheet(
         QString("color:%1;font-size:%2px;font-weight:600;").arg(status_color).arg(fnt::SMALL));
+}
+
+void AiChatScreen::on_provider_changed() {
+    update_stats();
 }
 
 void AiChatScreen::update_stats() {
@@ -706,12 +796,17 @@ void AiChatScreen::update_stats() {
     else
         hdr_session_lbl_->setText(tr("New Conversation"));
 
-    // Token count in header
+    // Token count in header — every round of every turn in this conversation,
+    // as reported by the provider (tool loops included).
     if (total_tokens_ > 0) {
         hdr_tokens_lbl_->setText(total_tokens_ < 1000 ? tr("%1 tokens").arg(total_tokens_)
                                                       : tr("%1k tokens").arg(total_tokens_ / 1000.0, 0, 'f', 1));
+        hdr_tokens_lbl_->setToolTip(tr("%1 tokens used in this conversation (prompt + completion, all tool rounds, "
+                                       "as reported by the provider)")
+                                        .arg(QLocale().toString(total_tokens_)));
     } else {
         hdr_tokens_lbl_->clear();
+        hdr_tokens_lbl_->setToolTip(QString());
     }
 
     auto& llm = ai_chat::LlmService::instance();
@@ -753,6 +848,7 @@ void AiChatScreen::update_stats() {
         model_lbl_->setStyleSheet(QString("color:%1;font-size:%2px;").arg(col::TEXT_DIM()).arg(fnt::TINY));
         hdr_model_lbl_->setText(tr("No model"));
     }
+    update_model_notice();
 }
 
 } // namespace fincept::screens

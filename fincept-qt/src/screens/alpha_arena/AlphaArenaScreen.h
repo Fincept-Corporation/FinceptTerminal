@@ -9,6 +9,7 @@
 
 #include <QHash>
 #include <QMetaObject>
+#include <QPointF>
 #include <QVariantMap>
 #include <QVector>
 #include <QWidget>
@@ -54,16 +55,23 @@ class AlphaArenaScreen : public QWidget, public IStatefulScreen {
     void update_ticker();       // mids ticker (every marks tick)
     void rebuild_board_light(); // board from cached agents + live account_view
     void on_new_competition();
+    void on_pause_resume();
+    void on_kill_all();
+    void set_killing(bool on); // KILL ALL in flight: controls disabled, "KILLING…"
     void update_badges(const QString& status);
     void maybe_offer_crash_recovery(); // Resume-or-End prompt (signal + showEvent)
+    void restore_pending_approvals();  // re-show the engine's queued HITL approvals
 
     QString competition_id_;
+    QString competition_status_; // status of the viewed competition (badges / RESUME)
     QVector<QMetaObject::Connection> conns_;
     QTimer* countdown_ = nullptr;
+    bool killing_ = false;
     // Light-refresh caches (filled by refresh_dashboard; used on marks ticks).
     QVector<fincept::arena::AgentRow> agents_cache_;
     QHash<QString, qint64> tokens_cache_;
-    QHash<QString, double> last_mids_; // previously displayed mids (ticker arrows)
+    QHash<QString, QVector<QPointF>> series_cache_; // agent → equity snapshots (ts, equity)
+    QHash<QString, double> last_mids_;              // previously displayed mids (ticker arrows)
     double cap_ = 0;
     // live_mode of the competition currently on screen — gates the extra
     // confirmation on header actions that trigger real order flow.

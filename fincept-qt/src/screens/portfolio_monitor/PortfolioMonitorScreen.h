@@ -10,6 +10,7 @@
 #include <QWidget>
 
 class QLabel;
+class QPoint;
 class QPushButton;
 class QTabWidget;
 class QTreeWidget;
@@ -57,6 +58,9 @@ class PortfolioMonitorScreen : public QWidget {
     void confirm_exit_child(const QString& account_id, const QString& broker_label, const QString& symbol,
                             const QString& exchange, const QString& product, double qty);
     void confirm_exit_symbol(const QString& symbol, const QString& exchange, bool holdings, int n_accounts);
+    /// Right-click on a row: "Open in …" (nav.open_symbol), copy, CSV export.
+    void show_row_menu(QTreeWidget* tree, bool holdings, const QPoint& pos);
+    void export_csv(bool holdings);
 
     // Summary bar
     QPushButton* mode_btn_ = nullptr;  // PAPER ⇄ LIVE (checked == LIVE)

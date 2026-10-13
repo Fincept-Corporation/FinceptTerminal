@@ -1,13 +1,16 @@
 #include "screens/fno/FnoHeaderBar.h"
 
+#include "core/events/EventBus.h"
 #include "storage/repositories/IvHistoryRepository.h"
 #include "ui/theme/Theme.h"
 
 #include <QDate>
 #include <QDateTime>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHideEvent>
 #include <QLocale>
+#include <QMenu>
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QStyle>
@@ -51,6 +54,46 @@ QWidget* make_kv(QWidget* parent, QLabel*& value_out, QLabel*& key_out, const QS
     return wrap;
 }
 
+/// Where an F&O underlying goes in the rest of the terminal. Equity Research and News work on
+/// yfinance symbols / free text; Equity Trading takes the broker's own symbol. Empty = not offered.
+struct FnoUnderlyingTargets {
+    QString research; // yfinance symbol
+    QString news;     // news search text
+    QString trading;  // broker symbol (stock underlyings only — an index has no order ticket)
+    QString exchange;
+};
+
+FnoUnderlyingTargets fno_underlying_targets(const QString& broker_id, const QString& underlying) {
+    const QString u = underlying.trimmed().toUpper();
+    if (u.isEmpty())
+        return {};
+    if (broker_id == QLatin1String("databento")) // US listed options: the underlying is a US ticker
+        return {u, u, u, QStringLiteral("US")};
+    struct IndexTarget {
+        const char* research;
+        const char* news;
+    };
+    static const QHash<QString, IndexTarget> kIndices = {
+        {QStringLiteral("NIFTY"), {"^NSEI", "Nifty"}},
+        {QStringLiteral("BANKNIFTY"), {"^NSEBANK", "Bank Nifty"}},
+        {QStringLiteral("FINNIFTY"), {"NIFTY_FIN_SERVICE.NS", "Fin Nifty"}},
+        {QStringLiteral("MIDCPNIFTY"), {"NIFTY_MID_SELECT.NS", "Midcap Nifty"}},
+        {QStringLiteral("SENSEX"), {"^BSESN", "Sensex"}},
+        {QStringLiteral("BANKEX"), {"", "Bankex"}},
+    };
+    const auto it = kIndices.constFind(u);
+    if (it != kIndices.constEnd())
+        return {QString::fromLatin1(it->research), QString::fromLatin1(it->news), {}, QStringLiteral("NSE")};
+    return {u + QStringLiteral(".NS"), u, u, QStringLiteral("NSE")};
+}
+
+void fno_open_symbol(const QString& screen_id, const QString& symbol, const QString& exchange = {}) {
+    QVariantMap payload{{QStringLiteral("screen_id"), screen_id}, {QStringLiteral("symbol"), symbol}};
+    if (!exchange.isEmpty())
+        payload[QStringLiteral("exchange")] = exchange;
+    EventBus::instance().publish(QStringLiteral("nav.open_symbol"), payload);
+}
+
 } // namespace
 
 FnoHeaderBar::FnoHeaderBar(QWidget* parent) : QWidget(parent) {
@@ -71,7 +114,11 @@ FnoHeaderBar::FnoHeaderBar(QWidget* parent) : QWidget(parent) {
             "selection-background-color:%2; }"
             "#fnoRefreshBtn { background:%2; color:%7; border:none; padding:5px 12px; font-size:9px; "
             "                 font-weight:700; letter-spacing:0.5px; }"
-            "#fnoRefreshBtn:hover { background:%4; color:%7; }")
+            "#fnoRefreshBtn:hover { background:%4; color:%7; }"
+            "#fnoOpenBtn { background:transparent; color:%2; border:1px solid %8; padding:4px 10px; font-size:9px; "
+            "              font-weight:700; letter-spacing:0.5px; }"
+            "#fnoOpenBtn:hover { border-color:%2; }"
+            "#fnoOpenBtn::menu-indicator { image:none; width:0px; }")
             .arg(colors::BG_RAISED(), colors::AMBER(), colors::TEXT_SECONDARY(), colors::TEXT_PRIMARY(),
                  colors::POSITIVE(), colors::NEGATIVE(), colors::BG_BASE(), colors::BORDER_DIM()));
 
@@ -105,6 +152,16 @@ void FnoHeaderBar::setup_ui() {
     picker_lay->addSpacing(6);
     picker_lay->addWidget(lbl_under_field_);
     picker_lay->addWidget(under_combo_);
+    // Take the underlying to the rest of the terminal (research / chart / news).
+    open_btn_ = new QPushButton(tr("OPEN ▾"), this);
+    open_btn_->setObjectName("fnoOpenBtn");
+    open_btn_->setCursor(Qt::PointingHandCursor);
+    open_btn_->setToolTip(tr("Open the underlying in Equity Research, Equity Trading or News"));
+    open_btn_->setAccessibleName(tr("Open underlying in another screen"));
+    auto* open_menu = new QMenu(open_btn_);
+    connect(open_menu, &QMenu::aboutToShow, this, [this, open_menu]() { populate_open_menu(open_menu); });
+    open_btn_->setMenu(open_menu);
+    picker_lay->addWidget(open_btn_);
     picker_lay->addSpacing(6);
     picker_lay->addWidget(lbl_expiry_field_);
     picker_lay->addWidget(expiry_combo_);
@@ -372,9 +429,39 @@ void FnoHeaderBar::changeEvent(QEvent* event) {
     QWidget::changeEvent(event);
 }
 
+void FnoHeaderBar::populate_open_menu(QMenu* menu) {
+    menu->clear();
+    const QString under = underlying();
+    const FnoUnderlyingTargets t = fno_underlying_targets(broker_id(), under);
+    if (under.isEmpty()) {
+        menu->addAction(tr("Select an underlying first"))->setEnabled(false);
+        return;
+    }
+    if (!t.research.isEmpty()) {
+        const QString sym = t.research;
+        connect(menu->addAction(tr("Open %1 in Equity Research").arg(sym)), &QAction::triggered, this,
+                [sym]() { fno_open_symbol(QStringLiteral("equity_research"), sym); });
+    }
+    if (!t.trading.isEmpty()) {
+        const QString sym = t.trading;
+        const QString exch = t.exchange;
+        connect(menu->addAction(tr("Open %1 chart in Equity Trading").arg(sym)), &QAction::triggered, this,
+                [sym, exch]() { fno_open_symbol(QStringLiteral("equity_trading"), sym, exch); });
+    }
+    if (!t.news.isEmpty()) {
+        const QString query = t.news;
+        connect(menu->addAction(tr("Open %1 in News").arg(query)), &QAction::triggered, this,
+                [query]() { fno_open_symbol(QStringLiteral("news"), query); });
+    }
+}
+
 void FnoHeaderBar::retranslateUi() {
     if (refresh_btn_)
         refresh_btn_->setText(tr("REFRESH"));
+    if (open_btn_) {
+        open_btn_->setText(tr("OPEN ▾"));
+        open_btn_->setToolTip(tr("Open the underlying in Equity Research, Equity Trading or News"));
+    }
     if (lbl_broker_field_)
         lbl_broker_field_->setText(tr("Broker:"));
     if (lbl_under_field_)

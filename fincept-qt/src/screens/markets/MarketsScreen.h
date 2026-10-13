@@ -1,4 +1,5 @@
 #pragma once
+#include "core/symbol/IGroupLinked.h"
 #include "screens/markets/MarketPanel.h"
 #include "screens/markets/MarketPanelConfig.h"
 
@@ -19,10 +20,20 @@ namespace fincept::screens {
 /// Markets terminal — workstation with QSplitter panel layout.
 /// Panels fill screen height; horizontal and vertical handles are user-resizable.
 /// Splitter state is persisted to SettingsRepository.
-class MarketsScreen : public QWidget {
+///
+/// Symbol-group linked: clicking a row publishes its ticker to the screen's link group, and a
+/// symbol arriving from the group is highlighted in every panel that lists it.
+class MarketsScreen : public QWidget, public fincept::IGroupLinked {
     Q_OBJECT
+    Q_INTERFACES(fincept::IGroupLinked)
   public:
     explicit MarketsScreen(QWidget* parent = nullptr);
+
+    // IGroupLinked
+    void set_group(fincept::SymbolGroup g) override;
+    fincept::SymbolGroup group() const override { return link_group_; }
+    void on_group_symbol_changed(const fincept::SymbolRef& ref) override;
+    fincept::SymbolRef current_symbol() const override;
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -58,6 +69,18 @@ class MarketsScreen : public QWidget {
 
     // Refresh
     void refresh_all();
+
+    // Symbol-group link. MarketPanel exposes no row API, so the screen works on each panel's
+    // table through the public QTableWidget interface (column 0 carries the raw ticker in
+    // Qt::UserRole — the same contract MarketPanel's own context menu relies on).
+    void publish_row_symbol(const QString& ticker);
+    void apply_link_highlight();
+    void schedule_link_highlight();
+    fincept::SymbolGroup link_group_ = fincept::SymbolGroup::None;
+    QString linked_symbol_;      // ticker highlighted in the panels (from the group or a click)
+    QString clicked_symbol_;     // last row the user clicked
+    bool link_highlight_pending_ = false;
+    bool applying_link_highlight_ = false;
 
     // Data
     QVector<MarketPanelConfig> configs_;

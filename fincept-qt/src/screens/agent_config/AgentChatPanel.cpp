@@ -7,7 +7,6 @@
 #include "services/llm/LlmService.h"
 #include "storage/repositories/LlmConfigRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
-#include "storage/repositories/SettingsRepository.h"
 #include "ui/markdown/MarkdownRenderer.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -493,9 +492,7 @@ void AgentChatPanel::setup_connections() {
 
     // Visibility of the "RUN AS TASK" toggle follows the Agentic Mode setting.
     auto apply_agentic_visibility = [this]() {
-        auto r = fincept::SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"),
-                                                             QStringLiteral("false"));
-        const bool on = r.is_ok() && r.value() == QStringLiteral("true");
+        const bool on = services::AgentService::agentic_mode_enabled();
         run_as_task_toggle_->setVisible(on);
         if (!on) {
             run_as_task_toggle_->setChecked(false);

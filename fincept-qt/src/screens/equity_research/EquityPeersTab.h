@@ -21,6 +21,10 @@ class EquityPeersTab : public QWidget {
     QString peers_text() const;
     void set_peers_text(const QString& text);
 
+  signals:
+    /// A peer row asked to be researched in this screen (`show_chart` → open its Overview chart).
+    void research_requested(QString symbol, bool show_chart);
+
   protected:
     void changeEvent(QEvent* event) override;
 
@@ -32,6 +36,8 @@ class EquityPeersTab : public QWidget {
     void build_ui();
     void retranslateUi();
     void populate_table(const QVector<services::equity::PeerData>& peers);
+    void show_row_menu(const QPoint& pos);
+    QString symbol_at_row(int row) const;
     QStringList default_peers(const QString& symbol) const;
 
     QString current_symbol_;
@@ -44,6 +50,8 @@ class EquityPeersTab : public QWidget {
     QTableWidget* peer_table_ = nullptr;
     QPushButton* load_btn_ = nullptr;
     QList<QLabel*> legend_text_lbls_; ///< Legend captions for retranslate
+    QLabel* units_lbl_ = nullptr;
+    QString pending_peers_; ///< restored peer list, applied on the first set_symbol()
     QVector<services::equity::PeerData> cached_peers_;
     bool peers_loaded_ = false;
 

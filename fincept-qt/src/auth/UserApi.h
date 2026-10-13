@@ -28,6 +28,8 @@ class UserApi : public QObject {
     void update_user_profile(const QJsonObject& data, Callback cb, const QObject* context = nullptr);
     void regenerate_api_key(Callback cb, const QObject* context = nullptr);
     void get_user_usage(int days, Callback cb, const QObject* context = nullptr);
+    /// Credit fields of GET /user/profile, reshaped to {"success":true,"data":{credit_balance,
+    /// credit_balance_display, account_type, effective_plan, credits_expire_at}}.
     void get_user_credits(Callback cb, const QObject* context = nullptr);
     void delete_user_account(const QString& confirm_email, const QString& password, Callback cb,
                              const QObject* context = nullptr);
@@ -39,10 +41,10 @@ class UserApi : public QObject {
     void enable_mfa(Callback cb, const QObject* context = nullptr);
     void disable_mfa(Callback cb, const QObject* context = nullptr);
 
-    // Subscriptions
+    // Subscriptions — GET /cashfree/subscription (plan, credits, expiry, support type)
     void get_user_subscription(Callback cb, const QObject* context = nullptr);
 
-    // Payment
+    // Payment — GET /cashfree/payments (plan purchases, paginated)
     void get_payment_history(int page, int limit, Callback cb, const QObject* context = nullptr);
 
     // Support

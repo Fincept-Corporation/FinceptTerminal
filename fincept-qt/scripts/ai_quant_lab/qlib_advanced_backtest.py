@@ -831,9 +831,17 @@ def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
             "win_rate_pct":       round(win_rate * 100, 2),
             "trading_days":       len(dates),
         },
+        # commission_bps used to carry the MARKET IMPACT estimate, so the panel's
+        # "Commission" line showed impact and the real commission was never reported.
+        # Each cost now has its own field; commission is the effective rate the sample
+        # order paid (includes the minimum ticket charge).
         "execution_cost_estimate": {
-            "commission_bps":        round(sample_execution.get("market_impact_bps", 0), 2),
+            "commission_bps": round(
+                (sample_execution.get("commission", 0.0) / sample_execution["total_cost"] * 10000)
+                if sample_execution.get("total_cost") else engine.commission_bps, 2),
+            "market_impact_bps":     round(sample_execution.get("market_impact_bps", 0), 2),
             "expected_slippage_bps": round(sample_execution.get("expected_slippage_bps", 0), 2),
+            "sample_order_shares":   1000,
         },
         "equity_curve": equity_curve,
     }

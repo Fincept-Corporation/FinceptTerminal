@@ -31,13 +31,19 @@ namespace fincept::screens::panels {
 ///
 /// Subscribes (visibility-driven, P3):
 ///   - `wallet:balance:<pubkey>`     for AVAILABLE
+///   - `market:price:fncpt`          for $FNCPT → USD conversion
+/// and, only while `StakingService::staking_live()`:
 ///   - `wallet:vefncpt:<pubkey>`     for current weight (tier preview)
 ///   - `treasury:revenue`            for EST. YIELD (terminal-wide)
-///   - `market:price:fncpt`          for $FNCPT → USD conversion
 ///   - `billing:tier:<pubkey>`       for current tier
 ///
-/// LOCK click:
-///   1. Calls `StakingService::build_lock_tx(...)` — fails fast in mock mode.
+/// While staking is not live (this build) the panel is a calculator: WEIGHT
+/// and the planned tier for the typed amount are shown, EST. YIELD reads
+/// "n/a", and LOCK is disabled and labelled COMING SOON — no number on the
+/// panel is presented as the wallet's own staking position.
+///
+/// LOCK click (live mode):
+///   1. Calls `StakingService::build_lock_tx(...)`.
 ///   2. On success, opens `WalletActionConfirmDialog` with decoded summary.
 ///   3. On confirm, forwards to `WalletService::sign_and_send`.
 ///   4. Polls `getSignatureStatuses` (`start_status_poll`, same cadence as
@@ -45,9 +51,6 @@ namespace fincept::screens::panels {
 ///      attempt cap is hit. The panel stays busy for the duration so a second
 ///      lock can't be queued behind an unconfirmed one; on confirmation the
 ///      balance and the locks / veFNCPT topics are force-refreshed.
-///
-/// In mock mode the LOCK button is disabled with status "DEMO — fincept_lock
-/// not deployed yet" and clicking it shows the explanation in the error strip.
 class LockPanel : public QWidget {
     Q_OBJECT
   public:
@@ -136,11 +139,6 @@ class LockPanel : public QWidget {
     bool revenue_is_mock_ = false;
     quint64 current_user_weight_raw_ = 0;
     fincept::wallet::TierStatus::Tier current_tier_ = fincept::wallet::TierStatus::Tier::Free;
-    /// True when the veFNCPT weight / tier the TIER preview is built from came
-    /// from the staking producer's demo positions (fincept_lock not deployed),
-    /// not from the wallet's on-chain locks.
-    bool vefncpt_is_mock_ = false;
-    bool tier_is_mock_ = false;
 
     bool busy_ = false;
 };

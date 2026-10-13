@@ -4,6 +4,7 @@ BaoStock Data Wrapper
 Provides a CLI-style endpoint interface with JSON output for Fincept Terminal.
 """
 
+import contextlib
 import io
 import json
 import sys
@@ -41,7 +42,9 @@ class BaoStockWrapper:
     def _login(self) -> None:
         if self._logged_in:
             return
-        lg = bs.login()
+        # baostock prints "login success!" to stdout, which would corrupt the JSON contract
+        with contextlib.redirect_stdout(sys.stderr):
+            lg = bs.login()
         if lg.error_code != "0":
             raise RuntimeError(f"BaoStock login failed: {lg.error_msg}")
         self._logged_in = True
@@ -49,7 +52,8 @@ class BaoStockWrapper:
     def _logout(self) -> None:
         if self._logged_in:
             try:
-                bs.logout()
+                with contextlib.redirect_stdout(sys.stderr):
+                    bs.logout()
             finally:
                 self._logged_in = False
 

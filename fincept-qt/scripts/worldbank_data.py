@@ -95,7 +95,9 @@ def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dic
                     "per_page": metadata.get("per_page", 50) if isinstance(metadata, dict) else 50,
                     "total": metadata.get("total", 0) if isinstance(metadata, dict) else 0,
                     "source": metadata.get("source", "World Bank") if isinstance(metadata, dict) else "World Bank",
-                    "last_updated": metadata.get("lastupdated", datetime.now().isoformat()) if isinstance(metadata, dict) else datetime.now().isoformat()
+                    # The WDI revision date, or None when the API omits it — never "now", which made
+                    # every response claim it had just been updated.
+                    "last_updated": metadata.get("lastupdated") if isinstance(metadata, dict) else None
                 },
                 "error": None
             }

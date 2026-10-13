@@ -130,7 +130,7 @@ void WorldBankPanel::load_countries() {
 
 void WorldBankPanel::build_controls(QHBoxLayout* thl) {
     years_lbl_ = new QLabel(tr("YEARS"));
-    years_lbl_->setStyleSheet(ctrl_label_style());
+    years_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
     date_preset_ = new QComboBox;
     date_preset_->addItem(tr("5 Years"), 5);
     date_preset_->addItem(tr("10 Years"), 10);
@@ -193,12 +193,13 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
             auto* item = new QListWidgetItem(n, country_list_);
             item->setData(Qt::UserRole, id);
         }
-        // Default select United States
+        // Default select United States, then the country remembered from the last session (if any).
         const auto hits = country_list_->findItems("United States", Qt::MatchExactly);
         if (!hits.isEmpty()) {
             country_list_->setCurrentItem(hits.first());
             selected_country_ = "US";
         }
+        reapply_pending_inputs();
         show_empty(tr("Select a country and indicator, then click FETCH"));
         LOG_INFO("WorldBankPanel", QString("Loaded %1 countries").arg(arr.size()));
         return;
@@ -213,8 +214,32 @@ void WorldBankPanel::on_result(const QString& request_id, const services::Econom
             if (!obj["value"].isNull())
                 clean.append(obj);
         }
-        auto* ind = indicator_list_->currentItem();
-        display(clean, (ind ? ind->text() : selected_indicator_) + " — " + selected_country_);
+        // Label from the request ("wb_data_<ISO2>_<indicator code>"), not the widgets: the user may have
+        // picked another country / indicator while this request was in flight.
+        const QString tail = request_id.mid(QStringLiteral("wb_data_").size());
+        const int cut = static_cast<int>(tail.indexOf(QLatin1Char('_')));
+        const QString country = cut > 0 ? tail.left(cut) : selected_country_;
+        const QString code = cut > 0 ? tail.mid(cut + 1) : selected_indicator_;
+        QString label = code;
+        for (const auto& pair : kWbIndicators) {
+            if (pair.second == code) {
+                label = pair.first;
+                break;
+            }
+        }
+        QString country_name = country;
+        for (int i = 0; i < country_list_->count(); ++i) {
+            if (country_list_->item(i)->data(Qt::UserRole).toString() == country) {
+                country_name = country_list_->item(i)->text();
+                break;
+            }
+        }
+        SeriesMeta meta;
+        meta.frequency = tr("Annual");
+        meta.last_updated = result.data["metadata"].toObject()["last_updated"].toString();
+        meta.note = code; // the WDI indicator code, for reproducibility
+        set_series_meta(meta);
+        display(clean, label + " — " + country_name);
         LOG_INFO("WorldBankPanel", QString("Displayed %1 data points").arg(clean.size()));
     }
 }

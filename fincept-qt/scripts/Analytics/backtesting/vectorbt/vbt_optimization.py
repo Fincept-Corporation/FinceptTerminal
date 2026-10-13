@@ -12,6 +12,7 @@ Features:
 - Results Analysis: Heatmaps, parameter sensitivity, robustness checks
 """
 
+from base.base_provider import check_cancelled
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Optional, Tuple
@@ -159,6 +160,7 @@ def walk_forward_optimize(
     results = []
 
     for i in range(n_splits):
+        check_cancelled(request)
         start_idx = i * window_size
         end_idx = min(start_idx + window_size, n)
 
@@ -256,6 +258,32 @@ def _parse_parameter_ranges(
     return result
 
 
+def _signals_and_portfolio(vbt, close_series, strategy_type, params, initial_capital, request):
+    """Signals + simulated portfolio for one parameter set on one window.
+
+    Uses the real OHLC the provider loaded (request['_ohlc_frame'], a Python-only
+    key) so optimisation fills at the next bar's open and H/L strategies see real
+    highs/lows - exactly like a single backtest. Without it the optimiser and the
+    backtest disagreed on the same parameters.
+    """
+    import vbt_strategies as strat
+    import vbt_portfolio as pf
+
+    frame = (request or {}).get('_ohlc_frame')
+    o_s = h_s = l_s = v_s = None
+    if frame is not None:
+        f = frame.reindex(close_series.index)
+        o_s = f['Open'] if 'Open' in f.columns else None
+        h_s = f['High'] if 'High' in f.columns else None
+        l_s = f['Low'] if 'Low' in f.columns else None
+        v_s = f['Volume'] if 'Volume' in f.columns else None
+    entries, exits = strat.build_strategy_signals(
+        vbt, strategy_type, close_series, params,
+        high_series=h_s, low_series=l_s, volume_series=v_s,
+    )
+    return pf.build_portfolio(vbt, close_series, entries, exits, initial_capital, request, open_series=o_s)
+
+
 def _run_vectorized_optimization(
     vbt, close_series, strategy_type, param_names,
     combinations, objective, initial_capital, request
@@ -267,25 +295,15 @@ def _run_vectorized_optimization(
     - For indicator-based strategies, compute indicators once with broadcast parameters
     - For each combination, build portfolio and extract objective metric
     """
-    import vbt_strategies as strat
-    import vbt_portfolio as pf
 
     results = []
 
     for combo in combinations:
         params = dict(zip(param_names, [_to_python_type(v) for v in combo]))
 
+        check_cancelled(request)
         try:
-            # Build signals for this parameter set
-            entries, exits = strat.build_strategy_signals(
-                vbt, strategy_type, close_series, params
-            )
-
-            # Build portfolio
-            portfolio = pf.build_portfolio(
-                vbt, close_series, entries, exits,
-                initial_capital, request
-            )
+            portfolio = _signals_and_portfolio(vbt, close_series, strategy_type, params, initial_capital, request)
 
             # Extract objective metric
             obj_value = _get_objective_value(portfolio, objective)
@@ -363,17 +381,9 @@ def _evaluate_params(
     initial_capital, request
 ) -> Dict[str, float]:
     """Evaluate a single parameter set and return performance metrics."""
-    import vbt_strategies as strat
-    import vbt_portfolio as pf
 
     try:
-        entries, exits = strat.build_strategy_signals(
-            vbt, strategy_type, close_series, params
-        )
-        portfolio = pf.build_portfolio(
-            vbt, close_series, entries, exits,
-            initial_capital, request
-        )
+        portfolio = _signals_and_portfolio(vbt, close_series, strategy_type, params, initial_capital, request)
 
         total_return = float(portfolio.total_return())
         stats = portfolio.stats()

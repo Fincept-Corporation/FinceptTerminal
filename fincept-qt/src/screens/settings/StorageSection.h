@@ -1,14 +1,19 @@
 #pragma once
-// StorageSection.h — disk usage, data categories, file management, SQL console,
-// and danger zone for clearing all user data.
+// StorageSection.h — disk usage, data categories, file management, a read-only
+// SQL console, and the danger zone for clearing all user data.
 
 #include <QComboBox>
 #include <QEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QTableWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+namespace fincept::storage_sql_runner {
+struct Result;
+}
 
 namespace fincept::screens {
 
@@ -27,9 +32,22 @@ class StorageSection : public QWidget {
   private:
     void build_ui();
 
+    /// One stylesheet for the whole section, keyed by object names; re-run on
+    /// theme change. Replaces ~70 per-widget setStyleSheet() calls.
+    void apply_theme();
+
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.
     void retranslateUi();
+
+    // ── SQL console ──────────────────────────────────────────────────────────
+    /// Validate the statement (read-only, no credential tables) and run it off
+    /// the UI thread on a private read-only connection.
+    void run_sql();
+    void show_sql_result(const storage_sql_runner::Result& result);
+    /// `state` is "ok" / "error" / "warn" / "idle" — colours live in apply_theme().
+    void set_sql_status(const QString& text, const char* state);
+    void copy_sql_result();
 
     // Stat boxes
     QLabel* storage_count_ = nullptr;
@@ -44,7 +62,9 @@ class StorageSection : public QWidget {
     QLineEdit* sql_input_ = nullptr;
     QComboBox* sql_db_selector_ = nullptr;
     QLabel* sql_status_ = nullptr;
-    QVBoxLayout* sql_results_layout_ = nullptr;
+    QTableWidget* sql_table_ = nullptr;
+    QPushButton* sql_copy_btn_ = nullptr;
+    bool sql_running_ = false;
 
     // ── Fixed text widgets / panel titles (captured for retranslateUi) ────────
     QLabel* page_title_ = nullptr;

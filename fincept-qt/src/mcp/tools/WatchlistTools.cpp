@@ -23,7 +23,7 @@
 
 namespace fincept::mcp::tools {
 
-static constexpr const char* TAG = "WatchlistTools";
+static constexpr const char* kWatchlistToolsTag = "WatchlistTools";
 
 std::vector<ToolDef> get_watchlist_tools() {
     std::vector<ToolDef> tools;
@@ -108,7 +108,7 @@ std::vector<ToolDef> get_watchlist_tools() {
                         w.description = description;
                         auto u = repo.update(w);
                         if (u.is_err())
-                            LOG_WARN(TAG, "Created watchlist but could not save its description: " +
+                            LOG_WARN(kWatchlistToolsTag, "Created watchlist but could not save its description: " +
                                               QString::fromStdString(u.error()));
                     }
                 }
@@ -118,7 +118,7 @@ std::vector<ToolDef> get_watchlist_tools() {
                 return ToolResult::fail(error);
 
             EventBus::instance().publish("watchlist.created", QVariantMap{{"id", new_id}, {"name", name}});
-            LOG_INFO(TAG, "Created watchlist: " + name);
+            LOG_INFO(kWatchlistToolsTag, "Created watchlist: " + name);
             return ToolResult::ok("Watchlist created", QJsonObject{{"id", new_id}, {"name", name}});
         };
         tools.push_back(std::move(t));
@@ -222,7 +222,7 @@ std::vector<ToolDef> get_watchlist_tools() {
             if (!error.isEmpty())
                 return ToolResult::fail(error);
 
-            LOG_INFO(TAG, "Added " + symbol + " to watchlist " + watchlist_id);
+            LOG_INFO(kWatchlistToolsTag, "Added " + symbol + " to watchlist " + watchlist_id);
             EventBus::instance().publish(
                 "watchlist.updated",
                 QVariantMap{{"watchlist_id", watchlist_id}, {"action", "add"}, {"symbol", symbol}});

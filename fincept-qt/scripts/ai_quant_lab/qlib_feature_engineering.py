@@ -245,10 +245,10 @@ class FeatureEngineer:
 
     def drawdown(self, data: pd.Series) -> pd.Series:
         """Calculate drawdown from peaks"""
-        cumulative = (1 + data.pct_change()).cumprod()
-        running_max = cumulative.expanding().max()
-        drawdown = (cumulative - running_max) / running_max
-        return drawdown
+        # Prices in, so drawdown is simply price / running peak - 1. Rebuilding a
+        # wealth index from pct_change() dropped the first observation (NaN), so a
+        # fall from the very first price was never measured.
+        return data / data.cummax() - 1.0
 
     # Feature Selection
     def select_features_by_ic(self,

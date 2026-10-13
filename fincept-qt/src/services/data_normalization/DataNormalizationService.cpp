@@ -20,7 +20,7 @@
 
 namespace fincept::services {
 
-static const QString TAG = "DataNormalization";
+static const QString kDataNormalizationTag = "DataNormalization";
 
 // ── Schema definitions ─────────────────────────────────────────────────────
 // Required fields per schema — used for validation.
@@ -265,9 +265,17 @@ QJsonValue dns_apply_transform(const QJsonValue& val, const QString& transform) 
     }
 
     if (transform == QLatin1String("to_number")) {
+        // An unparseable value ("N/A", "") becomes null, which schema validation
+        // reports as missing. It used to become 0 — a quote with price 0 that
+        // passed validation as a real number.
         bool ok = false;
-        const double d = dns_json_to_number(val, &ok);
-        return ok ? QJsonValue(d) : QJsonValue(0.0);
+        double d = dns_json_to_number(val, &ok);
+        if (!ok && val.isString()) {
+            QString s = val.toString().trimmed();
+            s.remove(QLatin1Char(','));
+            d = s.toDouble(&ok); // "1,234.50"
+        }
+        return ok ? QJsonValue(d) : QJsonValue(QJsonValue::Null);
     }
     if (transform == QLatin1String("to_string"))
         return QJsonValue(dns_json_to_text(val));
@@ -339,7 +347,7 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
             if (age_s >= 0 && age_s < mapping.cache_ttl && !edited_since && cached->errors.isEmpty()) {
                 NormalizedRecord rec = *cached;
                 rec.from_cache = true;
-                LOG_INFO(TAG, QString("Mapping '%1' served from cache (%2 s old, TTL %3 s)")
+                LOG_INFO(kDataNormalizationTag, QString("Mapping '%1' served from cache (%2 s old, TTL %3 s)")
                                   .arg(mapping.name)
                                   .arg(age_s)
                                   .arg(mapping.cache_ttl));
@@ -349,11 +357,11 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
         }
     }
 
-    const QString url = build_url(mapping);
+    const QString url = substitute_auth(build_url(mapping), mapping.auth_token, true);
     // Log the URL WITHOUT its query string: the shipped mapping templates put
     // `&apikey=`/`&token=` there, and this is LOG_INFO — the default level — so
     // the raw URL would write a live third-party credential into fincept.log.
-    LOG_INFO(TAG, QString("Fetching mapping '%1' from %2")
+    LOG_INFO(kDataNormalizationTag, QString("Fetching mapping '%1' from %2")
                       .arg(mapping.name, QUrl(url).adjusted(QUrl::RemoveQuery).toString()));
 
     // HttpClient resolves anything that is not http(s) against the Fincept API
@@ -365,7 +373,7 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
         failed.schema_name = mapping.schema_name;
         failed.errors << tr("Base URL must start with http:// or https:// (got \"%1\")")
                              .arg(QUrl(url).adjusted(QUrl::RemoveQuery).toString());
-        LOG_WARN(TAG, QString("Mapping '%1' rejected: URL is not absolute http(s)").arg(mapping.name));
+        LOG_WARN(kDataNormalizationTag, QString("Mapping '%1' rejected: URL is not absolute http(s)").arg(mapping.name));
         emit normalization_failed(mapping.id, failed.errors.join(QStringLiteral("; ")));
         cb(false, failed);
         return;
@@ -379,7 +387,7 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
 
         if (result.is_err()) {
             const QString err = QString::fromStdString(result.error());
-            LOG_ERROR(TAG, QString("Fetch failed for mapping '%1': %2").arg(mapping.name, err));
+            LOG_ERROR(kDataNormalizationTag, QString("Fetch failed for mapping '%1': %2").arg(mapping.name, err));
             emit self->normalization_failed(mapping.id, err);
             NormalizedRecord failed;
             failed.mapping_id = mapping.id;
@@ -399,11 +407,12 @@ void DataNormalizationService::fetch_and_normalize(const DataMapping& mapping, N
     // Auth + the HEADERS box ride on this request only. (They used to be applied
     // by mutating the shared HttpClient singleton, which leaked the third-party
     // token into Fincept API calls — see the git history of apply_auth().)
-    const auto headers = build_request_headers(mapping.headers, mapping.auth_type, mapping.auth_token);
+    const auto headers = build_request_headers(substitute_auth(mapping.headers, mapping.auth_token, false),
+                                               mapping.auth_type, mapping.auth_token);
 
     QJsonObject body;
     if (!mapping.body.trimmed().isEmpty())
-        body = QJsonDocument::fromJson(mapping.body.toUtf8()).object();
+        body = QJsonDocument::fromJson(substitute_auth(mapping.body, mapping.auth_token, false).toUtf8()).object();
 
     auto& http = HttpClient::instance();
     const QString method = mapping.method.trimmed().toUpper();
@@ -451,6 +460,16 @@ QMap<QByteArray, QByteArray> DataNormalizationService::build_request_headers(con
         headers.insert(name.toLatin1(), value.toUtf8()); // explicit lines win over the AUTH VALUE
     }
     return headers;
+}
+
+QString DataNormalizationService::substitute_auth(const QString& text, const QString& auth_token, bool url_encode) {
+    static const QString kPlaceholder = QStringLiteral("{AUTH}");
+    if (!text.contains(kPlaceholder))
+        return text;
+    const QString token = auth_token.trimmed();
+    QString out = text;
+    out.replace(kPlaceholder, url_encode ? QString::fromUtf8(QUrl::toPercentEncoding(token)) : token);
+    return out;
 }
 
 QString DataNormalizationService::join_url(const QString& base, const QString& endpoint) {
@@ -545,7 +564,7 @@ NormalizedRecord DataNormalizationService::normalize_raw(const DataMapping& mapp
     record.errors = validate_schema(normalized, mapping.schema_name);
 
     if (!record.errors.isEmpty()) {
-        LOG_WARN(TAG,
+        LOG_WARN(kDataNormalizationTag,
                  QString("Mapping '%1' produced %2 validation error(s)").arg(mapping.name).arg(record.errors.size()));
     }
 
@@ -556,7 +575,7 @@ std::optional<NormalizedRecord> DataNormalizationService::latest_for_mapping(con
     auto r = Database::instance().execute("SELECT id, mapping_id, source_id, schema_name, normalized_json, raw_json, "
                                           "       validation_errors, extracted_at "
                                           "FROM normalized_data WHERE mapping_id = ? "
-                                          "ORDER BY extracted_at DESC LIMIT 1",
+                                          "ORDER BY extracted_at DESC, rowid DESC LIMIT 1",
                                           {mapping_id});
 
     if (r.is_err() || !r.value().next())
@@ -618,7 +637,7 @@ QJsonValue DataNormalizationService::extract_jsonpath(const QJsonValue& root, co
 
     QVector<DnsPathToken> toks;
     if (!dns_tokenize_path(p, toks)) {
-        LOG_WARN(TAG, QString("Unsupported path expression: %1").arg(p));
+        LOG_WARN(kDataNormalizationTag, QString("Unsupported path expression: %1").arg(p));
         return QJsonValue(QJsonValue::Undefined);
     }
     return dns_eval_path(root, toks, 0);
@@ -667,7 +686,7 @@ void DataNormalizationService::persist(const DataMapping& mapping, const Normali
         {record.id, mapping.id, mapping.source_id, mapping.schema_name, norm_json, raw_json, err_json, hash});
 
     if (r.is_err()) {
-        LOG_ERROR(TAG, QString("Failed to persist normalized record: %1").arg(QString::fromStdString(r.error())));
+        LOG_ERROR(kDataNormalizationTag, QString("Failed to persist normalized record: %1").arg(QString::fromStdString(r.error())));
         return;
     }
 
@@ -680,7 +699,7 @@ void DataNormalizationService::persist(const DataMapping& mapping, const Normali
         "  SELECT id FROM normalized_data WHERE mapping_id = ? ORDER BY extracted_at DESC, rowid DESC LIMIT ?)",
         {mapping.id, mapping.id, kDnsKeepPerMapping});
     if (pruned.is_err()) {
-        LOG_WARN(TAG, QString("Could not prune old normalized records: %1").arg(QString::fromStdString(pruned.error())));
+        LOG_WARN(kDataNormalizationTag, QString("Could not prune old normalized records: %1").arg(QString::fromStdString(pruned.error())));
     }
 }
 

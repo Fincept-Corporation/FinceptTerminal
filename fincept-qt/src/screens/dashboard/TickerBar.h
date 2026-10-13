@@ -2,9 +2,12 @@
 #include <QColor>
 #include <QFont>
 #include <QFontMetrics>
+#include <QGlyphRun>
+#include <QHash>
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
 #include <QPushButton>
 #include <QShowEvent>
 #include <QTimer>
@@ -40,6 +43,11 @@ class TickerBar : public QWidget {
         int price_width = 0;
         int change_width = 0;
         int total_width = 0;
+        // Pre-shaped glyphs, positioned relative to the baseline: paintEvent
+        // draws these without re-shaping (see layout_runs()).
+        QList<QGlyphRun> symbol_runs{};
+        QList<QGlyphRun> price_runs{};
+        QList<QGlyphRun> change_runs{};
     };
 
     void set_data(const QVector<Entry>& entries);
@@ -51,6 +59,11 @@ class TickerBar : public QWidget {
 
     /// Returns the current symbol list (persisted user preference).
     QStringList symbols() const { return symbols_; }
+
+    /// Replace the symbol list programmatically (MCP tool, other screens) and
+    /// emit symbols_changed. An empty list is allowed and clears the strip.
+    /// `persist` = false when the caller already wrote the setting.
+    void set_symbols(const QStringList& symbols, bool persist = true);
 
   signals:
     /// Emitted when the user saves a new symbol list — caller should re-fetch.
@@ -89,6 +102,15 @@ class TickerBar : public QWidget {
     QFontMetrics ticker_fm_;
     QColor symbol_color_;
     QColor price_color_;
+    /// Text is shaped once into glyph runs and paintEvent only draws glyphs —
+    /// QPainter::drawText() re-shaped every visible segment 20x a second.
+    /// Runs by string, carried across set_data() calls so a price update only
+    /// shapes the segments whose text changed. Valid for run_cache_font_ /
+    /// run_cache_dir_ only.
+    QHash<QString, QList<QGlyphRun>> run_cache_;
+    QFont run_cache_font_;
+    Qt::LayoutDirection run_cache_dir_ = Qt::LeftToRight;
+    QList<QGlyphRun> runs_for(const QString& text, QHash<QString, QList<QGlyphRun>>& next_cache);
 
     // ── Symbol list ──
     QStringList symbols_;

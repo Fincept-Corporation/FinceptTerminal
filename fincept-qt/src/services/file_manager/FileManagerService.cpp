@@ -261,6 +261,26 @@ QString FileManagerService::register_file(const QString& stored_name, const QStr
     return id;
 }
 
+bool FileManagerService::rename_file(const QString& id, const QString& new_name) {
+    const QString name = new_name.trimmed();
+    if (name.isEmpty() || name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\')))
+        return false;
+    for (int i = 0; i < files_cache_.size(); ++i) {
+        QJsonObject obj = files_cache_[i].toObject();
+        if (obj["id"].toString() != id)
+            continue;
+        if (obj["originalName"].toString() == name)
+            return true;
+        obj["originalName"] = name;
+        files_cache_[i] = obj;
+        write_metadata(files_cache_);
+        LOG_INFO(kFileManagerTag, "Renamed file id=" + id);
+        emit files_changed();
+        return true;
+    }
+    return false;
+}
+
 bool FileManagerService::remove_file(const QString& id) {
     for (int i = 0; i < files_cache_.size(); ++i) {
         auto obj = files_cache_[i].toObject();

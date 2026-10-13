@@ -316,12 +316,15 @@ QString show_connection_config_dialog(QWidget* parent, const ConnectorConfig& co
     body_vl->addWidget(note);
 
     if (has_secret_field) {
-        // Be explicit about where the secret goes — the connection store is a
-        // local SQLite table, not an encrypted keychain, and EXPORT can carry
-        // these values off the machine.
-        auto* secret_note = new QLabel(
-            QObject::tr("Secrets are saved to the local connection database on this machine. "
-                        "EXPORT blanks them out unless you explicitly choose to include them."));
+        // Be explicit about where the secret goes. DataSourceRepository::save() moves every
+        // secret-looking field into SecureStorage (AES-256-GCM, machine-bound key) and blanks
+        // it in the connection table; a provider key the Python data connectors read is also
+        // copied to its Settings › Credentials slot when that slot is empty
+        // (ConnectorCredentialBridge). EXPORT can still carry secrets off the machine.
+        auto* secret_note =
+            new QLabel(QObject::tr("Secrets are stored encrypted on this machine. A market-data API key is also made "
+                                   "available to the Python data connectors if none is set in Settings › Credentials. "
+                                   "EXPORT blanks secrets out unless you explicitly choose to include them."));
         secret_note->setWordWrap(true);
         secret_note->setStyleSheet(
             QString("color:%1;font-size:11px;background:transparent;").arg(col::WARNING()));

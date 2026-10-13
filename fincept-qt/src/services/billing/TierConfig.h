@@ -7,10 +7,14 @@
 
 namespace fincept::billing {
 
-/// Tier thresholds + cross-screen gating config (Phase 3 §3.6).
+/// Tier thresholds (Phase 3 §3.6).
 ///
 /// Header-only — bumped to a config file by Phase 4 if thresholds need to
 /// vary by environment. For now they're pinned and the derivation is pure.
+///
+/// There is deliberately no "features unlocked by tier" table here: no screen
+/// gates on a tier, so publishing one implied benefits that do not exist. The
+/// planned benefits are display copy in TierPanel, labelled as planned.
 ///
 /// Atomic units (decimals = 6 to match $FNCPT). veFNCPT weight = locked
 /// $FNCPT × duration multiplier, so the thresholds compare apples to
@@ -23,9 +27,8 @@ struct TierConfig {
     static constexpr quint64 kSilverThresholdRaw = 1'000ULL * 1'000'000ULL; ///< 1,000 veFNCPT
     static constexpr quint64 kGoldThresholdRaw = 10'000ULL * 1'000'000ULL;  ///< 10,000 veFNCPT
 
-    /// Tier from atomic weight. Pure function — used by both `TierService`
-    /// (when publishing the topic) and any caller that needs a synchronous
-    /// view (cross-screen gating in `AI Quant Lab`, `Alpha Arena`).
+    /// Tier from atomic weight. Pure function — used by `TierService` (when
+    /// publishing the topic) and by LockPanel's tier-after-lock preview.
     static fincept::wallet::TierStatus::Tier tier_from_weight(quint64 weight_raw) noexcept {
         using Tier = fincept::wallet::TierStatus::Tier;
         if (weight_raw >= kGoldThresholdRaw)
@@ -66,27 +69,6 @@ struct TierConfig {
                 return QStringLiteral("SILVER");
             case Tier::Gold:
                 return QStringLiteral("GOLD");
-        }
-        return {};
-    }
-
-    /// Stable feature IDs that each tier unlocks. Consumed by gating
-    /// checks elsewhere in the terminal (AI Quant Lab, Alpha Arena, paid
-    /// screens). The exhaustive list below is the **plan §3.6 mapping**
-    /// — keep it tight; new gates require an explicit decision.
-    static QStringList features_unlocked_by(fincept::wallet::TierStatus::Tier t) {
-        using Tier = fincept::wallet::TierStatus::Tier;
-        switch (t) {
-            case Tier::Free:
-                return {};
-            case Tier::Bronze:
-                return {QStringLiteral("api-quota-basic")};
-            case Tier::Silver:
-                return {QStringLiteral("api-quota-basic"), QStringLiteral("premium-screens"),
-                        QStringLiteral("ai-quant-lab")};
-            case Tier::Gold:
-                return {QStringLiteral("api-quota-basic"), QStringLiteral("premium-screens"),
-                        QStringLiteral("ai-quant-lab"), QStringLiteral("alpha-arena"), QStringLiteral("all-agents")};
         }
         return {};
     }

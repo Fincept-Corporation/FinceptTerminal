@@ -36,7 +36,7 @@ namespace fincept::mcp::tools {
 
 namespace {
 
-static constexpr const char* TAG = "EquityResearchTools";
+constexpr const char* kEquityResearchToolsTag = "EquityResearchTools";
 
 // Most calls hit yfinance via Python; 90s default covers slow paths.
 static constexpr int kDefaultTimeoutMs = 90000;
@@ -536,7 +536,8 @@ std::vector<ToolDef> get_equity_research_tools() {
                 auto* holder = new QObject(svc);
                 QObject::connect(svc, &services::equity::EquityResearchService::financials_loaded, holder,
                                  [sym, resolve, holder](services::equity::FinancialsData f) {
-                                     if (f.symbol.toUpper() != sym)
+                                     // A stale cached replay is followed by the fresh copy (or an error).
+                                     if (f.symbol.toUpper() != sym || f.stale)
                                          return;
                                      resolve(ToolResult::ok_data(QJsonObject{
                                          {"symbol", f.symbol},
@@ -621,8 +622,15 @@ std::vector<ToolDef> get_equity_research_tools() {
             auto* svc = &services::equity::EquityResearchService::instance();
             AsyncDispatch::callback_to_promise(svc, std::move(ctx), promise, [svc, sym, peers](auto resolve) {
                 auto* holder = new QObject(svc);
+                // peers_loaded carries no request id: only accept a result whose rows all belong
+                // to THIS request (the Equity Research Peers tab broadcasts on the same signal).
+                QStringList wanted = peers;
+                wanted.prepend(sym);
                 QObject::connect(svc, &services::equity::EquityResearchService::peers_loaded, holder,
-                                 [resolve, holder](QVector<services::equity::PeerData> ps) {
+                                 [resolve, holder, wanted](QVector<services::equity::PeerData> ps) {
+                                     for (const auto& p : ps)
+                                         if (!wanted.contains(p.symbol, Qt::CaseInsensitive))
+                                             return;
                                      resolve(ToolResult::ok_data(peers_to_json(ps)));
                                      holder->deleteLater();
                                  });
@@ -726,7 +734,7 @@ std::vector<ToolDef> get_equity_research_tools() {
         tools.push_back(std::move(t));
     }
 
-    LOG_INFO(TAG, QString("Defined %1 equity-research tools").arg(tools.size()));
+    LOG_INFO(kEquityResearchToolsTag, QString("Defined %1 equity-research tools").arg(tools.size()));
     return tools;
 }
 

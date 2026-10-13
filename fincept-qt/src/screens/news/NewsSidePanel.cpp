@@ -3,8 +3,11 @@
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
+#include <QLocale>
 #include <QPushButton>
 #include <QScrollArea>
+
+#include <cmath>
 
 namespace fincept::screens {
 
@@ -34,10 +37,9 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     close_btn->setObjectName("newsDrawerCloseBtn");
     close_btn->setFixedSize(22, 22);
     close_btn->setCursor(Qt::PointingHandCursor);
-    connect(close_btn, &QPushButton::clicked, this, [this]() {
-        toggle_drawer();
-        emit close_requested();
-    });
+    // The screen owns open/close (it also syncs the INTEL button). Toggling here as
+    // well used to close the drawer and have the screen's handler reopen it at once.
+    connect(close_btn, &QPushButton::clicked, this, &NewsSidePanel::close_requested);
     header_layout->addWidget(close_btn);
     outer->addWidget(header);
 
@@ -84,8 +86,13 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     entities_section_ = build_hidden_section(tr("ENTITIES"), entities_layout_, &entities_title_);
     locations_section_ = build_hidden_section(tr("LOCATIONS"), locations_layout_, &locations_title_);
     signals_section_ = build_hidden_section(tr("SIGNALS"), signals_layout_, &signals_title_);
-    cii_section_ = build_hidden_section(tr("INSTABILITY"), cii_layout_, &cii_title_);
     predictions_section_ = build_hidden_section(tr("PREDICTIONS"), predictions_layout_, &predictions_title_);
+    // Say where the odds come from: polymarket.py serves Manifold Markets, a
+    // play-money site — not tradable real-money prices.
+    predictions_source_ = new QLabel(services::NewsCorrelationService::predictions_source_label(), predictions_section_);
+    predictions_source_->setObjectName("newsPredSource");
+    if (auto* inner = qobject_cast<QVBoxLayout*>(predictions_section_->layout()))
+        inner->insertWidget(1, predictions_source_);
     saved_section_ = build_hidden_section(tr("BOOKMARKS"), saved_layout_, &saved_title_);
 
     layout->addStretch();
@@ -116,10 +123,10 @@ void NewsSidePanel::retranslateUi() {
         locations_title_->setText(tr("LOCATIONS"));
     if (signals_title_)
         signals_title_->setText(tr("SIGNALS"));
-    if (cii_title_)
-        cii_title_->setText(tr("INSTABILITY"));
     if (predictions_title_)
         predictions_title_->setText(tr("PREDICTIONS"));
+    if (predictions_source_)
+        predictions_source_->setText(services::NewsCorrelationService::predictions_source_label());
     if (saved_title_)
         saved_title_->setText(tr("BOOKMARKS"));
     if (monitor_input_)
@@ -128,9 +135,9 @@ void NewsSidePanel::retranslateUi() {
     // live data on the next update — not re-applied here.
 }
 
-void NewsSidePanel::toggle_drawer() {
-    drawer_open_ = !drawer_open_;
-    setVisible(drawer_open_);
+void NewsSidePanel::set_drawer_open(bool open) {
+    drawer_open_ = open;
+    setVisible(open);
 }
 
 void NewsSidePanel::build_top_stories_section(QVBoxLayout* parent) {
@@ -236,15 +243,6 @@ void NewsSidePanel::build_deviations_section(QVBoxLayout* parent) {
 
 // ── Update methods ──────────────────────────────────────────────────────────
 
-void NewsSidePanel::update_stats(int /*feed_count*/, int /*article_count*/, int /*cluster_count*/,
-                                 int /*source_count*/) {
-    // Stats now shown in intel strip — no-op here for backward compat
-}
-
-void NewsSidePanel::update_sentiment(int /*bullish*/, int /*bearish*/, int /*neutral*/) {
-    // Sentiment now shown in intel strip — no-op here for backward compat
-}
-
 void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top) {
     // Clear existing
     while (top_stories_layout_->count() > 0) {
@@ -260,15 +258,14 @@ void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top
         btn->setObjectName("newsTopStoryBtn");
         btn->setCursor(Qt::PointingHandCursor);
 
-        QString pcolor = services::priority_color(article.priority);
         // '&' in a button label is a mnemonic marker ("AT&T" would render "ATT"
         // with an underlined T) — double it.
         QString label = QString("%1. %2").arg(i + 1).arg(article.headline.left(50).replace('&', "&&"));
         btn->setText(label);
         btn->setToolTip(article.headline);
 
-        // Priority dot via left border color
-        btn->setStyleSheet(QString("border-left: 3px solid %1;").arg(pcolor));
+        // Priority stripe (left border) — a rule per priority in the screen's sheet.
+        btn->setProperty("prio", services::priority_string(article.priority).toLower());
 
         connect(btn, &QPushButton::clicked, this, [this, article]() { emit article_clicked(article); });
 
@@ -374,8 +371,13 @@ void NewsSidePanel::update_deviations(const QVector<QPair<QString, double>>& dev
 
         hl->addStretch();
 
-        auto* score_label = new QLabel(QString("%1x").arg(z_score, 0, 'f', 1), this);
+        // A z-score, not a multiple: "+3.2σ" = 3.2 standard deviations above the
+        // category's hourly baseline (it used to read "3.2x").
+        auto* score_label = new QLabel(QString("+%1σ").arg(z_score, 0, 'f', 1), this);
         score_label->setObjectName("newsDeviationScore");
+        score_label->setToolTip(tr("Last-hour volume is %1 standard deviations above this category's hourly "
+                                   "baseline")
+                                    .arg(z_score, 0, 'f', 1));
         hl->addWidget(score_label);
 
         deviations_layout_->addWidget(row);
@@ -462,54 +464,13 @@ void NewsSidePanel::update_signals(const QVector<services::CorrelationSignal>& s
 
     for (int i = 0; i < std::min(8, static_cast<int>(sigs.size())); ++i) {
         const auto& sig = sigs[i];
-        // "critical" is red, everything else amber. The previous nested
-        // ternary had identical "high" and default branches wrapped in
-        // no-op "" + … + "" concatenations.
-        const QString color =
-            sig.severity == QLatin1String("critical") ? ui::colors::NEGATIVE() : ui::colors::WARNING();
+        // "critical" is red, everything else amber (rules in the screen's sheet).
         auto* lbl = new QLabel(sig.detail.left(40), this);
-        lbl->setObjectName("newsDeviationCategory");
+        lbl->setObjectName(sig.severity == QLatin1String("critical") ? "newsSignalCritical" : "newsSignalWarn");
         lbl->setTextFormat(Qt::PlainText);
-        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
-        lbl->setToolTip(sig.detail);
+        lbl->setToolTip(QString("[%1] %2").arg(sig.severity.toUpper(), sig.detail));
         signals_layout_->addWidget(lbl);
     }
-}
-
-void NewsSidePanel::update_instability(const QString& country, const services::InstabilityScore& score) {
-    cii_section_->show();
-
-    // CRITICAL → red, HIGH/ELEVATED → amber, otherwise green. Was a four-way
-    // nested ternary with two identical branches and no-op string concats.
-    auto level_color = [](const QString& level) -> QString {
-        if (level == QLatin1String("CRITICAL"))
-            return ui::colors::NEGATIVE();
-        if (level == QLatin1String("HIGH") || level == QLatin1String("ELEVATED"))
-            return ui::colors::WARNING();
-        return ui::colors::POSITIVE();
-    };
-
-    // Check if already exists
-    for (int i = 0; i < cii_layout_->count(); ++i) {
-        auto* w = cii_layout_->itemAt(i)->widget();
-        if (w && w->property("country").toString() == country) {
-            auto* lbl = qobject_cast<QLabel*>(w);
-            if (lbl) {
-                lbl->setText(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level));
-                lbl->setStyleSheet(
-                    QString("color: %1; font-weight: 700; background: transparent;").arg(level_color(score.level)));
-            }
-            return;
-        }
-    }
-
-    // New entry
-    const QString color = level_color(score.level);
-    auto* lbl = new QLabel(QString("%1  %2  %3").arg(country, -4).arg(score.cii_score, 3).arg(score.level), this);
-    lbl->setObjectName("newsDeviationScore");
-    lbl->setProperty("country", country);
-    lbl->setStyleSheet(QString("color: %1; font-weight: 700; background: transparent;").arg(color));
-    cii_layout_->addWidget(lbl);
 }
 
 void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>& predictions) {
@@ -528,14 +489,14 @@ void NewsSidePanel::update_predictions(const QVector<services::PredictionMarket>
 
     for (int i = 0; i < std::min(6, static_cast<int>(predictions.size())); ++i) {
         const auto& pm = predictions[i];
-        const int pct = static_cast<int>(pm.yes_price * 100);
-        const QString color =
-            pct >= 70 ? ui::colors::POSITIVE() : (pct <= 30 ? ui::colors::NEGATIVE() : ui::colors::WARNING());
-        auto* lbl = new QLabel(QString("%1%  %2").arg(pct).arg(pm.question.left(32)), this);
-        lbl->setObjectName("newsMonitorLabel");
+        const int pct = static_cast<int>(std::lround(pm.yes_price * 100.0));
+        auto* lbl = new QLabel(tr("YES %1%  %2").arg(pct, 2).arg(pm.question.left(30)), this);
+        lbl->setObjectName(pct >= 70 ? "newsPredHigh" : (pct <= 30 ? "newsPredLow" : "newsPredMid"));
         lbl->setTextFormat(Qt::PlainText);
-        lbl->setStyleSheet(QString("color: %1; background: transparent;").arg(color));
-        lbl->setToolTip(pm.question);
+        lbl->setToolTip(tr("%1\nYES %2% · volume %3 (play-money mana)")
+                            .arg(pm.question)
+                            .arg(pm.yes_price * 100.0, 0, 'f', 1)
+                            .arg(QLocale(QLocale::English).toString(pm.volume, 'f', 0)));
         predictions_layout_->addWidget(lbl);
     }
 }

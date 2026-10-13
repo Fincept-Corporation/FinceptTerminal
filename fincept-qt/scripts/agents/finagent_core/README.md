@@ -7,9 +7,7 @@ Single configurable agent system for the entire terminal.
 ```
 CoreAgent (single instance)
     ↓
-AgentFactory (creates Agno agent)
-    ↓
-Agno Agent (adapts to config)
+Agno Agent (built from config by CoreAgent)
 ```
 
 ## Components
@@ -34,18 +32,6 @@ config = {
 
 response = agent.run("Analyze AAPL", config)
 ```
-
-### 2. **AgentFactory** (`agent_factory.py`)
-Creates Agno agents from configuration.
-
-**Handles:**
-- Model creation (OpenAI, Anthropic, Google, Groq, Ollama, DeepSeek)
-- Tool loading (100+ Agno tools)
-- Knowledge base setup
-- Memory/storage configuration
-
-### 3. **ConfigLoader** (`config_loader.py`)
-Loads and validates tab configurations (for future use).
 
 ## Configuration Schema
 

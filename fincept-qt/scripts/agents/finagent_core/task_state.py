@@ -14,7 +14,8 @@ Storage format (SQLite):
   Table: agent_tasks
     id          TEXT PRIMARY KEY
     query       TEXT
-    config_json TEXT   -- agent config snapshot
+    config_json TEXT   -- agent config snapshot (policy only: no API keys, no
+                          per-run bridge tokens — see agentic/runner.py)
     steps_json  TEXT   -- list of completed steps with results
     status      TEXT   -- pending | running | completed | failed | paused
     current_step INT
@@ -28,12 +29,9 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
-# Default DB path — same directory as Agno's storage
-_DEFAULT_DB = str(Path(__file__).parent.parent.parent / "agent_tasks.db")
+from finagent_core.paths import agent_tasks_db_path
 
 
 # ─── Schema ──────────────────────────────────────────────────────────────────
@@ -63,8 +61,9 @@ class TaskStateManager:
     All state is stored in SQLite so it survives process restarts.
     """
 
-    def __init__(self, db_path: str = _DEFAULT_DB):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        # Per-profile agent data dir (finagent_core/paths.py) unless overridden.
+        self.db_path = db_path or agent_tasks_db_path()
         self._ensure_table()
 
     def _conn(self) -> sqlite3.Connection:
@@ -218,6 +217,30 @@ class TaskStateManager:
         with self._conn() as conn:
             conn.execute("DELETE FROM agent_tasks WHERE id = ?", (task_id,))
 
+    def recover_interrupted(self) -> int:
+        """Settle tasks orphaned by a terminal shutdown or crash.
+
+        Only valid when no runner process of the current session exists (the
+        terminal calls it once at startup): a task still marked running /
+        pending / pause_requested has nobody driving it and would otherwise sit
+        in that state forever with RESUME disabled. Those become 'paused' (so
+        RESUME continues from the last checkpoint); cancel_requested becomes
+        'cancelled'. Returns the number of tasks changed.
+        """
+        now = datetime.utcnow().isoformat()
+        with self._conn() as conn:
+            paused = conn.execute(
+                "UPDATE agent_tasks SET status = 'paused', updated_at = ? "
+                "WHERE status IN ('running', 'pending', 'pause_requested')",
+                (now,),
+            ).rowcount
+            cancelled = conn.execute(
+                "UPDATE agent_tasks SET status = 'cancelled', updated_at = ? "
+                "WHERE status = 'cancel_requested'",
+                (now,),
+            ).rowcount
+        return int(paused or 0) + int(cancelled or 0)
+
     def _row_to_dict(self, row: sqlite3.Row) -> Dict[str, Any]:
         d = dict(row)
         d["config"] = json.loads(d.pop("config_json", "{}"))
@@ -235,113 +258,18 @@ class TaskStateManager:
 
 class ResumableTaskRunner:
     """
-    Runs a multi-step agentic task and persists state at every step.
+    Planning / step-execution / synthesis base for agentic tasks.
 
-    The task is broken into steps via the shared ExecutionPlanner.generate_dynamic_plan,
-    so plan format is unified with the PLANNER tab and the agentic-mode runner. Each
-    step result is checkpointed. If the process is interrupted, call resume_task()
-    with the task_id to continue from the last checkpoint.
+    Plans come from the shared ExecutionPlanner.generate_dynamic_plan, so the
+    plan format is unified with the PLANNER tab. The task lifecycle itself —
+    start, resume from the last checkpoint, pause/cancel polling, events,
+    budgets — lives in finagent_core.agentic.runner.AgenticRunner, the only
+    runner the terminal drives (main.py agentic_* actions).
     """
 
-    def __init__(self, api_keys: Dict[str, str], db_path: str = _DEFAULT_DB):
+    def __init__(self, api_keys: Dict[str, str], db_path: Optional[str] = None):
         self.api_keys = api_keys
         self.state_mgr = TaskStateManager(db_path)
-
-    def start_task(self, query: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Start a new multi-step task:
-        1. Generate a structured ExecutionPlan via the shared planner
-        2. Persist plan + task state
-        3. Execute each step, checkpointing after each one
-        4. Return final synthesized result
-        """
-        task_id = self.state_mgr.create_task(query, config)
-        self.state_mgr.update_status(task_id, "running")
-
-        try:
-            plan = self._plan_steps(query, config)
-            self.state_mgr.save_plan(task_id, plan)
-            steps = plan.get("steps") or []
-            if not steps:
-                steps = [self._fallback_step(query)]
-
-            all_results = []
-            for i, step in enumerate(steps):
-                # Resume-safety: skip steps already checkpointed.
-                task = self.state_mgr.get_task(task_id)
-                if task and i < len(task["steps"]):
-                    all_results.append(task["steps"][i])
-                    continue
-
-                step_result = self._execute_step(step, query, config, i, all_results)
-                self.state_mgr.save_checkpoint(task_id, i, step_result)
-                all_results.append(step_result)
-
-            final = self._synthesize(query, all_results, config)
-            self.state_mgr.complete_task(task_id, final)
-
-            return {
-                "success": True,
-                "task_id": task_id,
-                "response": final,
-                "steps_completed": len(all_results),
-                "steps": all_results,
-            }
-
-        except Exception as e:
-            self.state_mgr.fail_task(task_id, str(e))
-            return {"success": False, "task_id": task_id, "error": str(e)}
-
-    def resume_task(self, task_id: str) -> Dict[str, Any]:
-        """
-        Resume a failed or paused task from its last checkpoint.
-        Skips already-completed steps and continues from where it left off.
-        Reuses the persisted plan if available; otherwise re-plans.
-        """
-        task = self.state_mgr.get_task(task_id)
-        if not task:
-            return {"success": False, "error": f"Task {task_id} not found"}
-
-        if task["status"] == "completed":
-            return {"success": True, "task_id": task_id, "response": task["result"], "already_completed": True}
-
-        query = task["query"]
-        config = task["config"]
-        completed_steps = task["steps"]
-
-        self.state_mgr.update_status(task_id, "running")
-
-        try:
-            plan = task.get("plan")
-            if not (plan and plan.get("steps")):
-                plan = self._plan_steps(query, config)
-                self.state_mgr.save_plan(task_id, plan)
-            steps = plan.get("steps") or [self._fallback_step(query)]
-
-            all_results = list(completed_steps)
-
-            for i, step in enumerate(steps):
-                if i < len(completed_steps):
-                    continue
-
-                step_result = self._execute_step(step, query, config, i, all_results)
-                self.state_mgr.save_checkpoint(task_id, i, step_result)
-                all_results.append(step_result)
-
-            final = self._synthesize(query, all_results, config)
-            self.state_mgr.complete_task(task_id, final)
-
-            return {
-                "success": True,
-                "task_id": task_id,
-                "response": final,
-                "resumed_from_step": len(completed_steps),
-                "steps_completed": len(all_results),
-            }
-
-        except Exception as e:
-            self.state_mgr.fail_task(task_id, str(e))
-            return {"success": False, "task_id": task_id, "error": str(e)}
 
     def _plan_steps(self, query: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -470,7 +398,7 @@ Synthesize all of the above into a single comprehensive, well-structured final a
 _state_mgr: Optional[TaskStateManager] = None
 
 
-def get_state_manager(db_path: str = _DEFAULT_DB) -> TaskStateManager:
+def get_state_manager(db_path: Optional[str] = None) -> TaskStateManager:
     global _state_mgr
     if _state_mgr is None:
         _state_mgr = TaskStateManager(db_path)

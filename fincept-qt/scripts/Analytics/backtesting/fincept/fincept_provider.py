@@ -30,7 +30,8 @@ sys.path.insert(0, str(BASE_DIR / "base"))
 sys.path.insert(0, str(BASE_DIR))
 
 from fincept_strategy_runner import FinceptStrategyRunner
-from base.base_provider import json_response, parse_json_input
+from base.base_provider import (json_response, parse_json_input, read_cli_args, check_cancelled,
+                                build_assumptions, periods_per_year, describe_annualization)
 
 
 def _log(msg: str) -> None:
@@ -213,7 +214,17 @@ def _enrich_metrics_from_equity(
             if dd > max_dd:
                 max_dd = dd
 
-    # Sharpe / Sortino — annualised (252 trading days).
+    # Annualisation basis from the bar spacing (252 for daily equities, 365 for 7-day
+    # markets such as crypto) rather than a hard-coded 252.
+    ppy = 252.0
+    try:
+        times = [pt.get('time') for pt in (equity_curve or []) if isinstance(pt, dict) and pt.get('time')]
+        if len(times) >= 3:
+            ppy = periods_per_year(times)
+    except Exception:
+        ppy = 252.0
+
+    # Sharpe / Sortino - annualised with ppy.
     sharpe = 0.0
     sortino = 0.0
     volatility = 0.0
@@ -222,9 +233,9 @@ def _enrich_metrics_from_equity(
         mean_r = sum(daily_returns) / n
         var = sum((r - mean_r) ** 2 for r in daily_returns) / max(1, n - 1)
         std = math.sqrt(var)
-        ann_factor = math.sqrt(252)
+        ann_factor = math.sqrt(ppy)
         if std > 1e-12:
-            sharpe = (mean_r * 252) / (std * ann_factor)
+            sharpe = (mean_r * ppy) / (std * ann_factor)
         volatility = std * ann_factor
 
         # Standard downside deviation: sqrt(mean(min(r, 0)^2)) over ALL bars. (It was the RMS
@@ -233,7 +244,7 @@ def _enrich_metrics_from_equity(
         d_var = sum(min(r, 0.0) ** 2 for r in daily_returns) / n
         d_std = math.sqrt(d_var)
         if d_std > 1e-12:
-            sortino = (mean_r * 252) / (d_std * ann_factor)
+            sortino = (mean_r * ppy) / (d_std * ann_factor)
 
     # Total return / annualised return — from the equity curve, as a FRACTION. The runner's
     # own `total_return` is already in PERCENT, and used here as a fraction it showed a +12.5%
@@ -241,8 +252,7 @@ def _enrich_metrics_from_equity(
     total_return = 0.0
     if initial_capital > 0 and eq_values:
         total_return = (eq_values[-1] - initial_capital) / initial_capital
-    days = max(1, len(eq_values))
-    years = days / 252.0
+    years = max(1, len(eq_values) - 1) / ppy
     if years > 0 and (1 + total_return) > 0:
         annualized_return = (1 + total_return) ** (1 / years) - 1
     else:
@@ -303,6 +313,7 @@ def _enrich_metrics_from_equity(
         'strategy_name': runner_perf.get('strategy_name'),
         'final_equity': _safe_float(runner_perf.get('final_equity', eq_values[-1] if eq_values else initial_capital)),
         'initial_cash': _safe_float(runner_perf.get('initial_cash', initial_capital)),
+        '_ppy': ppy,
     }
 
 
@@ -367,6 +378,7 @@ class FinceptProvider:
         end_date: str,
         initial_capital: float,
         strategy_params: Dict[str, Any],
+        request: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         strategy_info = self.runner.get_strategy_info(strategy_id)
         if not strategy_info:
@@ -412,6 +424,39 @@ class FinceptProvider:
         equity = _normalize_equity(raw_equity, initial_capital)
         trades = _build_round_trips(fills, inner.get('open_positions'))
         performance = _enrich_metrics_from_equity(runner_perf, raw_equity, trades, initial_capital)
+        ppy = performance.pop('_ppy', 252.0)
+        notes = []
+        if inner.get('non_market_orders'):
+            notes.append(f"{inner['non_market_orders']} limit/stop/other order(s) were placed but the Fincept "
+                         f"engine only simulates MARKET orders - they never filled.")
+        if inner.get('unfilled_orders'):
+            notes.append(f"{inner['unfilled_orders']} market order(s) placed on the last bar had no next bar "
+                         f"to fill on.")
+        req = request or {}
+        ignored = []
+        for key in ('commission', 'slippage'):
+            if float(req.get(key, 0) or 0) > 0:
+                ignored.append(key)
+        if float(req.get('stopLoss', 0) or 0) > 0 or float(req.get('takeProfit', 0) or 0) > 0:
+            ignored.append('stop-loss/take-profit (the strategy code manages its own exits)')
+        if (str(req.get('positionSizing', 'percent')) != 'percent'
+                or float(req.get('positionSizeValue', 100) or 100) < 100):
+            ignored.append('position sizing (the strategy code sizes its own orders)')
+        if bool(req.get('allowShort', False)):
+            ignored.append('allow short (the strategy code decides)')
+        if str(req.get('interval', '1d') or '1d') != '1d':
+            ignored.append(f"interval {req.get('interval')} (Fincept engine runs on daily bars)")
+        assumptions = build_assumptions(
+            'Fincept Engine (QCAlgorithm-compatible, market orders only)',
+            'Strategy sees each bar after it closes; MARKET orders fill at the NEXT bar open. '
+            'Limit/stop orders are not simulated.',
+            req,
+            costs='none - the Fincept engine charges no commission or slippage (gross results)',
+            position_sizing='decided by the strategy code (set_holdings / order quantities)',
+            annualization=describe_annualization(ppy) + '; Sharpe = mean/std of bar returns x sqrt(bars/yr)',
+            ignored=ignored,
+            notes=notes,
+        )
 
         # Build statistics block matching the dataclass other providers use.
         statistics = {
@@ -441,6 +486,8 @@ class FinceptProvider:
                 'fills': fills,
                 'equity': equity,
                 'statistics': statistics,
+                'assumptions': assumptions,
+                'using_synthetic_data': False,
                 'logs': [
                     f"Fincept Engine backtest of {strategy_info['name']} ({strategy_id})",
                     f"Symbols: {symbols}",
@@ -482,7 +529,7 @@ class FinceptProvider:
                 return {'success': False, 'error': 'No symbols specified'}
 
             return self._execute_one(strategy_id, symbols, start_date, end_date,
-                                     initial_capital, strategy_params)
+                                     initial_capital, strategy_params, request)
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -569,10 +616,11 @@ class FinceptProvider:
             all_results: List[Dict[str, Any]] = []
 
             for i, combo in enumerate(combos):
+                check_cancelled(request)
                 merged_params = {**strategy_params, **combo}
                 result = self._execute_one(
                     strategy_id, symbols, start_date, end_date,
-                    initial_capital, merged_params,
+                    initial_capital, merged_params, request,
                 )
                 if not result.get('success'):
                     all_results.append({'parameters': combo, 'score': None, 'error': result.get('error')})
@@ -664,6 +712,7 @@ class FinceptProvider:
             last_result: Optional[Dict[str, Any]] = None
 
             for i in range(n_splits):
+                check_cancelled(request)
                 fold_start = sd + timedelta(days=i * split_days)
                 fold_end = fold_start + timedelta(days=split_days)
                 train_end = fold_start + timedelta(days=int(split_days * train_ratio))
@@ -677,7 +726,7 @@ class FinceptProvider:
                     strategy_id, symbols,
                     test_start.strftime('%Y-%m-%d'),
                     test_end.strftime('%Y-%m-%d'),
-                    initial_capital, strategy_params,
+                    initial_capital, strategy_params, request,
                 )
                 if not result.get('success'):
                     folds.append({
@@ -749,17 +798,13 @@ class FinceptProvider:
 
 
 def main():
-    """CLI entry point. Stdout is reserved for the final JSON; everything
-    diagnostic must go to stderr (see _log)."""
-    if len(sys.argv) < 3:
-        print(json_response({
-            'success': False,
-            'error': 'Usage: fincept_provider.py <command> <args_json>',
-        }))
+    """CLI entry point. Stdout is reserved for the final JSON; diagnostics go to
+    stderr (see _log). Args come from stdin (--stdin, what the host sends) or argv."""
+    try:
+        command, args_json = read_cli_args()
+    except ValueError as e:
+        print(json_response({'success': False, 'error': str(e)}))
         sys.exit(1)
-
-    command = sys.argv[1]
-    args_json = sys.argv[2]
 
     try:
         args = parse_json_input(args_json)

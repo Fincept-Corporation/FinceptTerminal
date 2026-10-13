@@ -483,6 +483,8 @@ void QuantModulePanel::display_backtest_result(const QJsonObject& payload) {
 
     add_cost_item(tr("Commission"), tr("%1 bps").arg(costs["commission_bps"].toDouble(), 0, 'f', 2));
     add_cost_item(tr("Expected Slippage"), tr("%1 bps").arg(costs["expected_slippage_bps"].toDouble(), 0, 'f', 2));
+    if (costs.contains("market_impact_bps"))
+        add_cost_item(tr("Market Impact"), tr("%1 bps").arg(costs["market_impact_bps"].toDouble(), 0, 'f', 2));
     cost_h->addStretch();
     results_layout_->addWidget(cost_w);
 

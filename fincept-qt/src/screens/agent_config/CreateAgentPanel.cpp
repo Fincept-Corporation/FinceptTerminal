@@ -360,7 +360,8 @@ void CreateAgentPanel::retranslateUi() {
     if (terminal_dry_run_check_)
         terminal_dry_run_check_->setText(tr("Dry-run mode (return synthetic results — no real execution)"));
     if (terminal_cat_lbl_)
-        terminal_cat_lbl_->setText(tr("Category whitelist (none checked = all enabled categories except UI-only)"));
+        terminal_cat_lbl_->setText(tr("Category whitelist (none checked = essential research tools + tool search, "
+                                      "which reaches every non-UI tool)"));
     if (terminal_exclude_cats_edit_)
         terminal_exclude_cats_edit_->setPlaceholderText(
             tr("Exclude categories (comma-separated, on top of UI-only defaults)"));
@@ -369,7 +370,7 @@ void CreateAgentPanel::retranslateUi() {
     if (terminal_name_exclude_edit_)
         terminal_name_exclude_edit_->setPlaceholderText(tr("Tool name exclude regex (optional, e.g. ^delete_)"));
     if (terminal_max_lbl_)
-        terminal_max_lbl_->setText(tr("Max tools (0 = no cap)"));
+        terminal_max_lbl_->setText(tr("Max tools for a whitelist / regex selection (0 = no cap)"));
 
     // Feature toggles.
     if (reasoning_check_)

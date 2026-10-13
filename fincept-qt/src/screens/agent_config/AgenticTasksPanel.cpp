@@ -305,8 +305,9 @@ void AgenticTasksPanel::showEvent(QShowEvent* event) {
         first_show_ = false;
         stale_ = false;
         refresh_list();
-        // Saved schedules only fire while the service's tick timer is armed, and
-        // that used to happen only in the session that created them. Listing arms it.
+        // AgentService::initialize_deferred() arms saved schedules at startup;
+        // listing re-syncs the service's due-time timer with the DB as well
+        // (cheap insurance if Agentic Mode was switched on mid-session).
         services::AgentService::instance().schedule_list();
     } else if (stale_) {
         stale_ = false;
@@ -422,6 +423,9 @@ void AgenticTasksPanel::render_task_detail(const QJsonObject& task) {
     const QString id = task.value("id").toString();
     const QString status = task.value("status").toString();
     const QString query = task.value("query").toString();
+    // The task's own agent policy (tool filter, destructive opt-in, agent id) —
+    // handed back on RESUME / REPLY so the resumed run keeps the same rules.
+    selected_task_config_ = task.value("config").toObject();
     detail_header_->setText(query);
     detail_header_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:600;").arg(status_color_for(status)));
 
@@ -583,7 +587,7 @@ void AgenticTasksPanel::on_reply_clicked() {
     const QString answer = reply_edit_->text().trimmed();
     if (answer.isEmpty())
         return;
-    services::AgentService::instance().reply_to_question(selected_task_id_, answer);
+    services::AgentService::instance().reply_to_question(selected_task_id_, answer, selected_task_config_);
     clear_question();
     step_log_->appendPlainText(QString("[user reply] %1").arg(answer));
 }
@@ -912,7 +916,7 @@ void AgenticTasksPanel::on_pause_clicked() {
 void AgenticTasksPanel::on_resume_clicked() {
     if (selected_task_id_.isEmpty())
         return;
-    services::AgentService::instance().resume_task(selected_task_id_);
+    services::AgentService::instance().resume_task(selected_task_id_, selected_task_config_);
 }
 
 void AgenticTasksPanel::on_cancel_clicked() {
@@ -940,6 +944,7 @@ void AgenticTasksPanel::on_delete_clicked() {
     svc.cancel_task(id);
     svc.delete_task(id);
     selected_task_id_.clear();
+    selected_task_config_ = {};
     refresh_list();
     // delete_task is async — refresh once more after it has been applied so the row
     // actually disappears rather than reappearing from the pre-delete snapshot.

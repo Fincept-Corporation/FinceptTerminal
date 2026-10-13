@@ -22,7 +22,6 @@
 namespace fincept::screens {
 
 using namespace fincept::services::backtest;
-using fincept::screens::backtesting_internal::pill_qss;
 
 // ── Provider/Command/Strategy selection ──────────────────────────────────────
 
@@ -48,25 +47,10 @@ void BacktestingScreen::on_provider_changed(int index) {
 }
 
 void BacktestingScreen::update_provider_buttons() {
-    for (int i = 0; i < provider_buttons_.size(); ++i) {
-        const auto& p = providers_[i];
-        const bool active = (i == active_provider_);
-        const QString rgb = QString("%1,%2,%3").arg(p.color.red()).arg(p.color.green()).arg(p.color.blue());
-        const QString fg = active ? p.color.name() : ui::colors::TEXT_TERTIARY();
-        const QString bg = active ? QString("rgba(%1,0.12)").arg(rgb) : QString("transparent");
-        const QString border = active ? QString("rgba(%1,0.3)").arg(rgb) : ui::colors::BORDER_DIM();
-        const QString weight = active ? "700" : "400";
-
-        // Same pill template as the brand / RUN / status chips so geometry is
-        // identical regardless of selection state.
-        // P7: setStyleSheet always reparses + repolishes, even for an identical
-        // string. This runs for every provider on every provider change, so skip
-        // the 4 buttons whose skin didn't actually change.
-        const QString ss = pill_qss("QPushButton", fg, bg, border, ui::fonts::TINY, ui::fonts::DATA_FAMILY, weight) +
-                           QString("QPushButton:hover { background:rgba(%1,0.15); }").arg(rgb);
-        if (provider_buttons_[i]->styleSheet() != ss)
-            provider_buttons_[i]->setStyleSheet(ss);
-    }
+    // Colours come from per-slug rules in refresh_theme(); only the "active"
+    // property changes here (no stylesheet reparse per click).
+    for (int i = 0; i < provider_buttons_.size(); ++i)
+        backtesting_internal::set_style_prop(provider_buttons_[i], "active", i == active_provider_);
 }
 
 void BacktestingScreen::on_command_changed(int index) {
@@ -124,35 +108,9 @@ void BacktestingScreen::update_section_visibility() {
 void BacktestingScreen::update_command_buttons() {
     const auto& cmds = commands_;
     const auto& supported = providers_[active_provider_].commands;
-
     for (int i = 0; i < command_buttons_.size() && i < cmds.size(); ++i) {
-        const auto& cmd = cmds[i];
-        bool active = (i == active_command_);
-        bool enabled = supported.contains(cmd.id);
-        command_buttons_[i]->setEnabled(enabled);
-        // P7: only 2 of the 11 command pills change skin per command switch —
-        // skip the identical 9 rather than reparsing every stylesheet each time.
-        const QString cmd_ss =
-            QString("QPushButton { text-align:left; padding:6px 10px; border:none;"
-                    "border-left:1px solid %1; color:%2;"
-                    "font-size:%3px; font-family:%4; font-weight:%5; background:%6; }"
-                    "QPushButton:hover { background:rgba(%7,0.1); color:%8; }"
-                    "QPushButton:disabled { color:%9; border-left-color:transparent; }")
-                .arg(active ? cmd.color.name() : "transparent")
-                .arg(active ? cmd.color.name() : ui::colors::TEXT_SECONDARY())
-                .arg(ui::fonts::SMALL)
-                .arg(ui::fonts::DATA_FAMILY)
-                .arg(active ? "700" : "400")
-                .arg(active ? QString("rgba(%1,%2,%3,0.08)")
-                                  .arg(cmd.color.red())
-                                  .arg(cmd.color.green())
-                                  .arg(cmd.color.blue())
-                            : "transparent")
-                .arg(QString("%1,%2,%3").arg(cmd.color.red()).arg(cmd.color.green()).arg(cmd.color.blue()))
-                .arg(cmd.color.name())
-                .arg(ui::colors::TEXT_DIM());
-        if (command_buttons_[i]->styleSheet() != cmd_ss)
-            command_buttons_[i]->setStyleSheet(cmd_ss);
+        command_buttons_[i]->setEnabled(supported.contains(cmds[i].id));
+        backtesting_internal::set_style_prop(command_buttons_[i], "active", i == active_command_);
     }
 }
 // ── Gather args ──────────────────────────────────────────────────────────────
@@ -217,6 +175,8 @@ QJsonObject BacktestingScreen::gather_args() {
         args["interval"] = interval_combo_->currentText();
     if (!pending_weights_.isEmpty() && pending_weights_.size() == symbols.size())
         args["weights"] = pending_weights_;
+    // Providers refuse to run on synthetic prices unless this is explicitly ticked.
+    args["allowSyntheticData"] = allow_synthetic_check_ && allow_synthetic_check_->isChecked();
 
     // ── Command-specific args ──
     if (cmd_id == "backtest" || cmd_id == "optimize" || cmd_id == "walk_forward") {
@@ -501,13 +461,44 @@ void BacktestingScreen::on_run() {
     running_provider_ = provider_info.slug;
     running_command_ = command_id;
     run_button_->setEnabled(false);
-    set_status_state(tr("EXECUTING…  0s"), ui::colors::WARNING, "rgba(217,119,6,0.08)");
+    cancel_button_->setVisible(true);
+    set_status_state(tr("EXECUTING…  0s"), QStringLiteral("running"));
     start_run_ticker();
 
-    auto args = gather_args();
+    const auto args = gather_args();
+
+    // What was asked for, frozen at RUN time (the inputs may change before an export).
+    last_run_meta_ = QJsonObject{
+        {"provider", provider_info.display_name},
+        {"command", command_id},
+        {"symbols", args.value("symbols")},
+        {"startDate", args.value("startDate")},
+        {"endDate", args.value("endDate")},
+        {"interval", args.value("interval")},
+        {"strategy", args.value("strategy").toObject().value("name")},
+        {"initialCapital", args.value("initialCapital")},
+        {"commission", args.value("commission")},
+        {"slippage", args.value("slippage")},
+    };
 
     LOG_INFO("Backtesting", QString("Executing %1/%2").arg(provider_info.slug, command_id));
-    BacktestingService::instance().execute(provider_info.slug, command_id, args);
+    current_run_id_ = BacktestingService::instance().execute(provider_info.slug, command_id, args);
+}
+
+void BacktestingScreen::on_cancel() {
+    if (!is_running_ || current_run_id_ == 0)
+        return;
+    // run_cancelled (emitted synchronously) resets the UI - see on_run_cancelled.
+    if (!BacktestingService::instance().cancel(current_run_id_))
+        end_run(); // run already gone (raced with its result): just leave the running state
+}
+
+void BacktestingScreen::end_run() {
+    is_running_ = false;
+    current_run_id_ = 0;
+    stop_run_ticker();
+    run_button_->setEnabled(true);
+    cancel_button_->setVisible(false);
 }
 
 } // namespace fincept::screens

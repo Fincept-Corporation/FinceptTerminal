@@ -124,7 +124,7 @@ void FeeDiscountPanel::build_ui() {
     progress_->setFixedHeight(8);
     bl->addWidget(progress_);
 
-    skus_caption_ = new QLabel(tr("APPLIED TO"), body);
+    skus_caption_ = new QLabel(tr("PLANNED FOR"), body);
     skus_caption_->setObjectName(QStringLiteral("feeDiscountCaption"));
     bl->addWidget(skus_caption_);
     skus_value_ = new QLabel(QStringLiteral("—"), body);
@@ -143,9 +143,8 @@ void FeeDiscountPanel::build_ui() {
     bl->addWidget(savings_value_);
 
     hint_ = new QLabel(
-        tr("Hold ≥ %1 $FNCPT to qualify for the discount on premium screens, "
-           "AI reports, and deep backtests. Projected only — the discount is "
-           "not yet applied automatically at checkout.")
+        tr("Planned: holding ≥ %1 $FNCPT will qualify for a discount on premium screens, AI reports and deep "
+           "backtests. Not active yet — no purchase in the terminal applies it, so nothing is discounted today.")
             .arg(QLocale::system().toString(static_cast<double>(fincept::billing::FeeDiscountConfig::kThresholdRaw) /
                                                 std::pow(10.0, fincept::billing::FeeDiscountConfig::kThresholdDecimals),
                                             'f', 0)),
@@ -232,10 +231,14 @@ void FeeDiscountPanel::refresh_subscriptions() {
 
     balance_topic_ = QStringLiteral("wallet:balance:%1").arg(current_pubkey_);
     discount_topic_ = QStringLiteral("billing:fncpt_discount:%1").arg(current_pubkey_);
+    // subscribe() delivers the cached value and cold-starts a fetch when it is
+    // stale; force=false lets the hub's min_interval coalesce the HOLDINGS bar,
+    // HoldingsTable, SwapPanel and this panel into one RPC round-trip instead
+    // of one forced refetch per panel per tab switch.
     hub.subscribe(this, balance_topic_, [this](const QVariant& v) { on_balance_update(v); });
     hub.subscribe(this, discount_topic_, [this](const QVariant& v) { on_discount_update(v); });
-    hub.request(balance_topic_, /*force=*/true);
-    hub.request(discount_topic_, /*force=*/true);
+    hub.request(balance_topic_, /*force=*/false);
+    hub.request(discount_topic_, /*force=*/false);
 }
 
 void FeeDiscountPanel::on_balance_update(const QVariant& v) {
@@ -281,23 +284,25 @@ void FeeDiscountPanel::update_view() {
     }
     skus_value_->setText(sku_lines.join(QStringLiteral("\n")));
 
-    // Eligibility chip + savings
+    // Eligibility chip + savings. The discount is planned, not applied anywhere,
+    // so the copy says "would" / "planned" — "you save" read as money saved.
     const bool eligible = have_discount_ ? latest_.eligible : (fncpt_held_ >= threshold);
     if (eligible) {
-        heading_status_->setText(tr("● %1% OFF ELIGIBLE").arg(discount_pct));
+        heading_status_->setText(tr("● ELIGIBLE · NOT ACTIVE YET"));
         heading_status_->setObjectName(QStringLiteral("feeDiscountHeadStatusOk"));
         const double save = FeeDiscountConfig::kReferencePriceUsd * discount_pct / 100.0;
         const double net = FeeDiscountConfig::kReferencePriceUsd - save;
-        savings_value_->setText(QStringLiteral("%1 → %2  (you save %3)")
+        savings_value_->setText(tr("%1 → %2  (would save %3 once live)")
                                     .arg(format_usd(FeeDiscountConfig::kReferencePriceUsd))
                                     .arg(format_usd(net))
                                     .arg(format_usd(save)));
     } else {
-        heading_status_->setText(tr("LOCKED"));
+        heading_status_->setText(tr("PLANNED · NOT ELIGIBLE"));
         heading_status_->setObjectName(QStringLiteral("feeDiscountHeadStatus"));
         const double need = std::max(0.0, threshold - fncpt_held_);
-        savings_value_->setText(
-            tr("Acquire %1 more $FNCPT to unlock %2% off.").arg(format_token(need, 0)).arg(discount_pct));
+        savings_value_->setText(tr("%1 more $FNCPT needed to qualify for the planned %2% discount.")
+                                    .arg(format_token(need, 0))
+                                    .arg(discount_pct));
     }
     heading_status_->style()->unpolish(heading_status_);
     heading_status_->style()->polish(heading_status_);
@@ -331,14 +336,14 @@ void FeeDiscountPanel::retranslateUi() {
     if (threshold_caption_)
         threshold_caption_->setText(tr("THRESHOLD"));
     if (skus_caption_)
-        skus_caption_->setText(tr("APPLIED TO"));
+        skus_caption_->setText(tr("PLANNED FOR"));
     if (savings_caption_)
         savings_caption_->setText(tr("PROJECTED SAVINGS  ·  reference $%1 SKU")
                                       .arg(QLocale::system().toString(FeeDiscountConfig::kReferencePriceUsd, 'f', 2)));
     if (hint_)
-        hint_->setText(tr("Hold ≥ %1 $FNCPT to qualify for the discount on premium screens, "
-                          "AI reports, and deep backtests. Projected only — the discount is "
-                          "not yet applied automatically at checkout.")
+        hint_->setText(tr("Planned: holding ≥ %1 $FNCPT will qualify for a discount on premium screens, AI reports "
+                          "and deep backtests. Not active yet — no purchase in the terminal applies it, so nothing "
+                          "is discounted today.")
                            .arg(QLocale::system().toString(static_cast<double>(FeeDiscountConfig::kThresholdRaw) /
                                                                std::pow(10.0, FeeDiscountConfig::kThresholdDecimals),
                                                            'f', 0)));

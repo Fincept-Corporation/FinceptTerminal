@@ -365,23 +365,15 @@ struct ToolDef {
     /// delete_*, file ops). The Phase 6.12 modal triggers regardless of
     /// auth_required when this is set.
     bool is_destructive = false;
-
-    // ── Phase 6: Naming convention migration ────────────────────────────
-    /// Old names this tool used to have. Lets us migrate names without
-    /// breaking existing LLM workflows / saved chats — McpProvider's name
-    /// resolver tries each alias if the canonical name doesn't match.
-    /// New tools leave this empty.
-    QStringList legacy_aliases;
 };
 
 // ============================================================================
 // Tool Filter — Phase 6 catalogue subsetting
 // ============================================================================
 //
-// Today's `format_tools_for_openai()` returns ALL ~237 enabled tools on
-// every LLM request — ~100-150 KB of schema per turn. ToolFilter lets
-// callers (LlmService dispatch path, agent tooling, future settings UI)
-// scope the catalogue per-call so:
+// The full catalogue is ~900 tools — far too much schema to send on every
+// LLM request. ToolFilter lets callers (LlmService dispatch path, agent
+// tooling, settings UI) scope the catalogue per-call so:
 //
 //   • prompt cost shrinks for non-cached providers
 //   • the LLM has fewer distractors when picking a tool
@@ -403,9 +395,13 @@ struct ToolFilter {
     /// Regex exclude filter on tool name. Applied after include.
     QStringList exclude_name_patterns;
 
-    /// Hard cap on returned tool count. 0 = no cap.
-    /// Truncation happens after all other filters have run, in the order
-    /// tools were registered (effectively: most-recently-registered last).
+    /// Cap on returned tool count, applied after every other filter and after
+    /// the deterministic sort. What 0 means depends on the consumer:
+    ///   * agent catalogues (McpService::get_agent_tools) — 0 = every matching
+    ///     tool; the user's value is the only cap.
+    ///   * LLM provider formatters (format_tools_for_*, get_all_tools(filter))
+    ///     — 0 = the 50-tool safety cap, because those payloads ride on every
+    ///     request of a turn.
     int max_tools = 0;
 };
 

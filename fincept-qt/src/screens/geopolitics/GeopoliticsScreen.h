@@ -64,7 +64,13 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     QWidget* build_filter_panel();
     QWidget* build_status_bar();
     void connect_service();
+    /// Root stylesheet (background + credit / auto-refresh / plans state rules).
+    /// Called at build time and on theme change.
     void refresh_theme();
+    /// Show the remaining API credit balance (fractional) and, when it is low or
+    /// exhausted, the PLANS button. `remaining` < 0 = not reported (label unchanged).
+    void update_credits(double remaining, double used);
+    void set_auto_refresh(bool on);
     void retranslateUi();
     void rebuild_legend(const QVector<services::geo::UniqueCategory>& cats);
     /// Colour the status-bar label (one stylesheet for every state).
@@ -116,6 +122,8 @@ class GeopoliticsScreen : public QWidget, public IStatefulScreen {
     QLabel* event_count_label_ = nullptr;
     QLabel* status_label_ = nullptr;
     QLabel* credits_label_ = nullptr;
+    QPushButton* plans_btn_ = nullptr;        // Plans & Pricing — shown when credits run low / out
+    QPushButton* auto_refresh_btn_ = nullptr; // opt-in 5-min refresh (each fetch costs credits)
 
     // Events paging (the API returns pages; the screen used to show only page 1)
     QPushButton* prev_page_btn_ = nullptr;

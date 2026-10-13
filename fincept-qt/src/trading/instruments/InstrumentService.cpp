@@ -33,6 +33,7 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QUuid>
@@ -270,9 +271,8 @@ void InstrumentService::refresh(const QString& broker_id, const BrokerCredential
     // For AngelOne we need NSE equities to be present — check specifically for NSE count.
     // A partial cache (e.g. only NFO/MCX) means a previous download was incomplete.
     {
-        QMutexLocker lock(&mutex_);
-        if (caches_.contains(broker_id) && caches_[broker_id].loaded) {
-            const Cache& c = caches_[broker_id];
+        if (const CachePtr cp = cache_for(broker_id)) {
+            const Cache& c = *cp;
             // Count NSE equity entries (exchange == "NSE", no expiry = spot equity)
             int nse_count = 0;
             for (auto it = c.by_symbol.constBegin(); it != c.by_symbol.constEnd(); ++it) {
@@ -386,15 +386,18 @@ void InstrumentService::load_from_db_async(const QString& broker_id, std::functi
             return;
 
         const int count = all.size();
-        QVector<Instrument> instruments = std::move(all);
+        // Build the snapshot (three maps + search index over 100k+ rows) here on
+        // the worker; the UI thread only swaps the pointer in.
+        CachePtr snapshot = all.isEmpty() ? CachePtr() : build_cache_snapshot(all);
+        all = {};
 
         QMetaObject::invokeMethod(
             self,
-            [self, broker_id, instruments = std::move(instruments), count, callback]() mutable {
+            [self, broker_id, snapshot = std::move(snapshot), count, callback]() mutable {
                 if (!self)
                     return;
-                if (!instruments.isEmpty()) {
-                    self->build_cache(broker_id, instruments);
+                if (snapshot) {
+                    self->install_cache(broker_id, std::move(snapshot));
                     LOG_INFO("InstrumentService",
                              QString("load_from_db_async: loaded %1 instruments for %2").arg(count).arg(broker_id));
                 } else {
@@ -454,65 +457,60 @@ void InstrumentService::load_from_db_worker(const QString& broker_id) {
 
 std::optional<qint64> InstrumentService::instrument_token(const QString& symbol, const QString& exchange,
                                                           const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return std::nullopt;
     // Cache keys are stored upper-case; normalise so callers passing e.g.
     // "reliance"/"nse" still match.
-    auto jt = it->by_symbol.find({symbol.toUpper(), exchange.toUpper()});
-    if (jt == it->by_symbol.end())
+    auto jt = c->by_symbol.constFind({symbol.toUpper(), exchange.toUpper()});
+    if (jt == c->by_symbol.cend())
         return std::nullopt;
     return jt->instrument_token;
 }
 
 std::optional<QString> InstrumentService::to_brsymbol(const QString& symbol, const QString& exchange,
                                                       const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return std::nullopt;
     // Cache keys are stored upper-case; normalise so callers passing e.g.
     // "reliance"/"nse" still match.
-    auto jt = it->by_symbol.find({symbol.toUpper(), exchange.toUpper()});
-    if (jt == it->by_symbol.end())
+    auto jt = c->by_symbol.constFind({symbol.toUpper(), exchange.toUpper()});
+    if (jt == c->by_symbol.cend())
         return std::nullopt;
     return jt->brsymbol;
 }
 
 std::optional<QString> InstrumentService::from_brsymbol(const QString& brsymbol, const QString& brexchange,
                                                         const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return std::nullopt;
-    auto jt = it->by_brsymbol.find({brsymbol.toUpper(), brexchange.toUpper()});
-    if (jt == it->by_brsymbol.end())
+    auto jt = c->by_brsymbol.constFind({brsymbol.toUpper(), brexchange.toUpper()});
+    if (jt == c->by_brsymbol.cend())
         return std::nullopt;
     return jt->symbol;
 }
 
 std::optional<Instrument> InstrumentService::find(const QString& symbol, const QString& exchange,
                                                   const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return std::nullopt;
     // Cache keys are stored upper-case; normalise so callers passing e.g.
     // "reliance"/"nse" still match.
-    auto jt = it->by_symbol.find({symbol.toUpper(), exchange.toUpper()});
-    if (jt == it->by_symbol.end())
+    auto jt = c->by_symbol.constFind({symbol.toUpper(), exchange.toUpper()});
+    if (jt == c->by_symbol.cend())
         return std::nullopt;
     return *jt;
 }
 
 std::optional<Instrument> InstrumentService::find_by_token(quint32 instrument_token, const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return std::nullopt;
-    auto jt = it->by_token.find(qint64(instrument_token));
-    if (jt == it->by_token.end())
+    auto jt = c->by_token.constFind(qint64(instrument_token));
+    if (jt == c->by_token.cend())
         return std::nullopt;
     return *jt;
 }
@@ -533,59 +531,35 @@ QVector<Instrument> InstrumentService::search_all(const QString& query, const QS
     // SQL), and stays correct even when the on-disk catalog is empty (e.g. a
     // failed/partial persist). Fall back to the SQLite repository only for
     // brokers whose cache isn't loaded in this session.
-    auto type_rank = [](InstrumentType t) {
-        switch (t) {
-            case InstrumentType::EQ:
-                return 0;
-            case InstrumentType::INDEX:
-                return 1;
-            case InstrumentType::FUT:
-                return 2;
-            default:
-                return 3;
-        }
-    };
-
-    QVector<Instrument> out;
-    QStringList db_fallback;
+    //
+    // Broker order: explicit list (first = highest priority) else all cached.
+    // Snapshots are taken under the lock; the search itself runs without it.
+    QStringList order = broker_ids;
+    order.removeAll(QString());
+    QVector<CachePtr> snapshots;
     {
         QMutexLocker lock(&mutex_);
-        // Broker order: explicit list (first = highest priority) else all cached.
-        QStringList order = broker_ids;
-        order.removeAll(QString());
         if (order.isEmpty())
             for (auto it = caches_.cbegin(); it != caches_.cend(); ++it)
                 order << it.key();
+        snapshots.reserve(order.size());
+        for (const QString& bid : order)
+            snapshots.append(caches_.value(bid));
+    }
 
-        for (const QString& bid : order) {
-            auto cit = caches_.find(bid);
-            if (cit == caches_.end() || !cit->loaded) {
-                db_fallback << bid; // not in memory this session — try the DB below
-                continue;
-            }
-            QVector<Instrument> hits;
-            for (const auto& inst : cit->by_token) {
-                if (!exch.isEmpty() && inst.exchange.compare(exch, Qt::CaseInsensitive) != 0)
-                    continue;
-                if (inst.symbol.contains(q, Qt::CaseInsensitive) || inst.brsymbol.contains(q, Qt::CaseInsensitive) ||
-                    inst.name.contains(q, Qt::CaseInsensitive))
-                    hits.append(inst);
-            }
-            // Rank: symbol-prefix matches first, then EQ→INDEX→FUT→other, then A-Z.
-            std::sort(hits.begin(), hits.end(), [&](const Instrument& a, const Instrument& b) {
-                const bool ap = a.symbol.startsWith(q, Qt::CaseInsensitive);
-                const bool bp = b.symbol.startsWith(q, Qt::CaseInsensitive);
-                if (ap != bp)
-                    return ap;
-                const int ar = type_rank(a.instrument_type), br = type_rank(b.instrument_type);
-                if (ar != br)
-                    return ar < br;
-                return a.symbol < b.symbol;
-            });
-            out += hits;
-            if (out.size() >= limit)
-                break;
+    QVector<Instrument> out;
+    QStringList db_fallback;
+    for (qsizetype i = 0; i < order.size(); ++i) {
+        if (!snapshots[i]) {
+            db_fallback << order[i]; // not in memory this session — try the DB below
+            continue;
         }
+        // Each broker contributes its best hits in rank order, only as many as
+        // still fit — the result is the first `limit` of the per-broker ranked
+        // lists concatenated, exactly as when every hit was collected and sorted.
+        search_cache(*snapshots[i], q, exch, limit - static_cast<int>(out.size()), out);
+        if (out.size() >= limit)
+            break;
     }
 
     if (out.size() < limit && !db_fallback.isEmpty())
@@ -599,12 +573,11 @@ QVector<Instrument> InstrumentService::search_all(const QString& query, const QS
 // ── F&O / Options chain helpers ─────────────────────────────────────────────
 
 QStringList InstrumentService::list_underlyings(const QString& broker_id, const QString& exchange) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return {};
     QSet<QString> seen;
-    for (const auto& inst : it->by_token) {
+    for (const auto& inst : c->by_token) {
         if (inst.exchange != exchange)
             continue;
         if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE &&
@@ -620,16 +593,15 @@ QStringList InstrumentService::list_underlyings(const QString& broker_id, const 
 
 QStringList InstrumentService::list_expiries(const QString& broker_id, const QString& underlying,
                                              const QString& exchange) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return {};
     // Use a map keyed by parsed date so we can sort chronologically. Display
     // string ("DD-MMM-YY") sorts lexically wrong (e.g. "01-DEC-25" lex-before
     // "01-NOV-25"). The map's value collapses duplicates automatically.
     QMap<QDate, QString> by_date;
     int match_count = 0, empty_expiry = 0;
-    for (const auto& inst : it->by_token) {
+    for (const auto& inst : c->by_token) {
         if (inst.exchange != exchange || inst.name != underlying)
             continue;
         if (inst.instrument_type != InstrumentType::CE && inst.instrument_type != InstrumentType::PE &&
@@ -691,13 +663,12 @@ QStringList InstrumentService::list_expiries(const QString& broker_id, const QSt
 QVector<Instrument> InstrumentService::find_options_for_underlying(const QString& broker_id, const QString& underlying,
                                                                    const QString& expiry,
                                                                    const QString& exchange) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
+    const CachePtr c = cache_for(broker_id);
+    if (!c)
         return {};
     QVector<Instrument> options; // CE/PE
     QVector<Instrument> futures; // FUT (appended last)
-    for (const auto& inst : it->by_token) {
+    for (const auto& inst : c->by_token) {
         if (inst.exchange != exchange || inst.name != underlying || inst.expiry != expiry)
             continue;
         if (inst.instrument_type == InstrumentType::CE || inst.instrument_type == InstrumentType::PE)
@@ -716,17 +687,13 @@ QVector<Instrument> InstrumentService::find_options_for_underlying(const QString
 }
 
 int InstrumentService::cached_count(const QString& broker_id) const {
-    QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    if (it == caches_.end())
-        return 0;
-    return it->by_symbol.size();
+    const CachePtr c = cache_for(broker_id);
+    return c ? static_cast<int>(c->by_symbol.size()) : 0;
 }
 
 bool InstrumentService::is_loaded(const QString& broker_id) const {
     QMutexLocker lock(&mutex_);
-    auto it = caches_.find(broker_id);
-    return it != caches_.end() && it->loaded;
+    return caches_.contains(broker_id);
 }
 
 // ── Private ───────────────────────────────────────────────────────────────────
@@ -753,24 +720,239 @@ static int inst_token_collision_rank(const Instrument& i) {
     }
 }
 
-void InstrumentService::build_cache(const QString& broker_id, const QVector<Instrument>& instruments) {
-    QMutexLocker lock(&mutex_);
-    Cache& cache = caches_[broker_id];
-    cache.by_symbol.clear();
-    cache.by_token.clear();
-    cache.by_brsymbol.clear();
+// ── Search index ────────────────────────────────────────────────────────────
+// search_all() ranking — unchanged from the full scan + sort this replaces:
+//   a hit is any instrument whose symbol, brsymbol or name contains the query
+//   (case-insensitive); hits are ordered
+//     1. symbol starts with the query (case-insensitive) before every other hit,
+//     2. then EQ → INDEX → FUT → everything else,
+//     3. then by symbol (QString operator<).
+// Ties on all three (one ticker listed on two exchanges, say) now come out in
+// by_token order; the old std::sort left their order unspecified.
+//
+// The index makes that cheap per keystroke: prefix hits are one binary-searched
+// range per rank bucket (stopping after the first `k`), and the substring scan
+// for the remainder runs only when the prefix hits don't fill the request,
+// walking the buckets in result order and stopping at `k`, with a folded
+// character-set mask rejecting most rows before any string comparison.
+namespace instrument_search_detail {
+
+int type_rank(InstrumentType t) {
+    switch (t) {
+        case InstrumentType::EQ:
+            return 0;
+        case InstrumentType::INDEX:
+            return 1;
+        case InstrumentType::FUT:
+            return 2;
+        default:
+            return 3;
+    }
+}
+
+// One bit per case-folded ASCII character in `s`. Folds the way QString's
+// case-insensitive comparisons do, so a non-ASCII character that folds to ASCII
+// (KELVIN SIGN → 'k') still sets its bit: a row whose mask lacks any bit of the
+// query's mask cannot contain the query.
+quint64 folded_ascii_mask(const QString& s) {
+    quint64 m = 0;
+    for (const QChar c : s) {
+        const char16_t f = c.toCaseFolded().unicode();
+        if (f < 128)
+            m |= quint64(1) << (f & 63);
+    }
+    return m;
+}
+
+// Plain upper-case ASCII: for such a symbol a case-insensitive prefix match
+// with an ASCII query is exactly a case-sensitive prefix match with the query
+// upper-cased, i.e. a contiguous range of the sorted bucket.
+bool is_plain_upper_ascii(const QString& s) {
+    for (const QChar c : s) {
+        const char16_t u = c.unicode();
+        if (u >= 128 || (u >= u'a' && u <= u'z'))
+            return false;
+    }
+    return true;
+}
+
+bool exchange_matches(const Instrument& inst, const QString& exch) {
+    return exch.isEmpty() || inst.exchange.compare(exch, Qt::CaseInsensitive) == 0;
+}
+
+bool is_search_hit(const Instrument& inst, const QString& q) {
+    return inst.symbol.contains(q, Qt::CaseInsensitive) || inst.brsymbol.contains(q, Qt::CaseInsensitive) ||
+           inst.name.contains(q, Qt::CaseInsensitive);
+}
+
+} // namespace instrument_search_detail
+
+InstrumentService::CachePtr InstrumentService::build_cache_snapshot(const QVector<Instrument>& instruments) {
+    using namespace instrument_search_detail;
+    auto cache = std::make_shared<Cache>();
 
     for (const auto& inst : instruments) {
-        cache.by_symbol.insert({inst.symbol, inst.exchange}, inst);
+        cache->by_symbol.insert({inst.symbol, inst.exchange}, inst);
         // by_token is keyed on the bare numeric token; survive cross-segment token
         // collisions by keeping the higher-priority instrument (see ranker above).
-        auto existing = cache.by_token.find(inst.instrument_token);
-        if (existing == cache.by_token.end() ||
+        auto existing = cache->by_token.find(inst.instrument_token);
+        if (existing == cache->by_token.end() ||
             inst_token_collision_rank(inst) < inst_token_collision_rank(existing.value()))
-            cache.by_token.insert(inst.instrument_token, inst);
-        cache.by_brsymbol.insert({inst.brsymbol, inst.brexchange}, inst);
+            cache->by_token.insert(inst.instrument_token, inst);
+        cache->by_brsymbol.insert({inst.brsymbol, inst.brexchange}, inst);
     }
-    cache.loaded = true;
+
+    // Search index over by_token's values. Pointers into its nodes stay valid:
+    // the snapshot is never modified (or copied) after this function returns.
+    const QMap<qint64, Instrument>& by_token = cache->by_token;
+    cache->search_items.reserve(static_cast<std::size_t>(by_token.size()));
+    cache->search_masks.reserve(static_cast<std::size_t>(by_token.size()));
+    for (auto it = by_token.cbegin(); it != by_token.cend(); ++it) {
+        const Instrument& inst = it.value();
+        const int idx = static_cast<int>(cache->search_items.size());
+        cache->search_items.push_back(&inst);
+        cache->search_masks.push_back(folded_ascii_mask(inst.symbol) | folded_ascii_mask(inst.brsymbol) |
+                                      folded_ascii_mask(inst.name));
+        const int bucket = type_rank(inst.instrument_type);
+        cache->search_buckets[static_cast<std::size_t>(bucket)].push_back(idx);
+        if (!is_plain_upper_ascii(inst.symbol))
+            cache->search_irregular[static_cast<std::size_t>(bucket)].push_back(idx);
+    }
+    const std::vector<const Instrument*>& items = cache->search_items;
+    for (auto& bucket : cache->search_buckets) {
+        std::sort(bucket.begin(), bucket.end(), [&items](int a, int b) {
+            const int c = items[a]->symbol.compare(items[b]->symbol);
+            return c != 0 ? c < 0 : a < b;
+        });
+    }
+    return cache;
+}
+
+void InstrumentService::install_cache(const QString& broker_id, CachePtr cache) {
+    CachePtr previous;
+    {
+        QMutexLocker lock(&mutex_);
+        auto it = caches_.find(broker_id);
+        if (it != caches_.end()) {
+            previous = std::move(it.value());
+            it.value() = std::move(cache);
+        } else {
+            caches_.insert(broker_id, std::move(cache));
+        }
+    }
+    // Freeing a 100k-row snapshot takes a while; never on the UI thread and
+    // never under mutex_ (a reader still holding it frees it when done).
+    if (previous && previous.use_count() == 1) {
+        auto* app = QCoreApplication::instance();
+        if (app && QThread::currentThread() == app->thread())
+            (void)QtConcurrent::run([previous = std::move(previous)]() mutable { previous.reset(); });
+    }
+}
+
+InstrumentService::CachePtr InstrumentService::cache_for(const QString& broker_id) const {
+    QMutexLocker lock(&mutex_);
+    return caches_.value(broker_id);
+}
+
+void InstrumentService::build_cache(const QString& broker_id, const QVector<Instrument>& instruments) {
+    install_cache(broker_id, build_cache_snapshot(instruments));
+}
+
+void InstrumentService::search_cache(const Cache& cache, const QString& q, const QString& exch, int k,
+                                     QVector<Instrument>& out) {
+    using namespace instrument_search_detail;
+    if (k <= 0 || q.isEmpty())
+        return;
+    const std::vector<const Instrument*>& items = cache.search_items;
+    const auto by_symbol_then_index = [&items](int a, int b) {
+        const int c = items[a]->symbol.compare(items[b]->symbol);
+        return c != 0 ? c < 0 : a < b;
+    };
+
+    bool ascii_query = true;
+    for (const QChar c : q) {
+        if (c.unicode() >= 128) {
+            ascii_query = false;
+            break;
+        }
+    }
+
+    if (!ascii_query) {
+        // Rare (a non-ASCII query): the original full scan + sort, kept verbatim
+        // in behaviour so exotic case-folding stays exactly as it was.
+        std::vector<int> hits;
+        for (int i = 0; i < static_cast<int>(items.size()); ++i) {
+            if (exchange_matches(*items[i], exch) && is_search_hit(*items[i], q))
+                hits.push_back(i);
+        }
+        std::sort(hits.begin(), hits.end(), [&items, &q, &by_symbol_then_index](int a, int b) {
+            const bool ap = items[a]->symbol.startsWith(q, Qt::CaseInsensitive);
+            const bool bp = items[b]->symbol.startsWith(q, Qt::CaseInsensitive);
+            if (ap != bp)
+                return ap;
+            const int ar = type_rank(items[a]->instrument_type), br = type_rank(items[b]->instrument_type);
+            if (ar != br)
+                return ar < br;
+            return by_symbol_then_index(a, b);
+        });
+        for (std::size_t i = 0; i < hits.size() && static_cast<int>(i) < k; ++i)
+            out.append(*items[hits[i]]);
+        return;
+    }
+
+    const QString q_upper = q.toUpper(); // ASCII query → plain ASCII upper-casing
+    int taken = 0;
+
+    // Phase 1 — symbol-prefix hits, rank by rank, each rank in symbol order.
+    for (std::size_t b = 0; b < cache.search_buckets.size() && taken < k; ++b) {
+        const std::vector<int>& bucket = cache.search_buckets[b];
+        std::vector<int> picked;
+        auto it = std::lower_bound(bucket.begin(), bucket.end(), q_upper,
+                                   [&items](int idx, const QString& key) { return items[idx]->symbol < key; });
+        for (; it != bucket.end() && static_cast<int>(picked.size()) < k - taken; ++it) {
+            const Instrument& inst = *items[*it];
+            if (!inst.symbol.startsWith(q_upper))
+                break; // past the prefix range
+            if (exchange_matches(inst, exch))
+                picked.push_back(*it);
+        }
+        // Symbols with lower-case / non-ASCII characters can match
+        // case-insensitively without starting with q_upper verbatim.
+        bool merged = false;
+        for (const int idx : cache.search_irregular[b]) {
+            const Instrument& inst = *items[idx];
+            if (!inst.symbol.startsWith(q_upper) && inst.symbol.startsWith(q, Qt::CaseInsensitive) &&
+                exchange_matches(inst, exch)) {
+                picked.push_back(idx);
+                merged = true;
+            }
+        }
+        if (merged)
+            std::sort(picked.begin(), picked.end(), by_symbol_then_index);
+        for (const int idx : picked) {
+            if (taken >= k)
+                break;
+            out.append(*items[idx]);
+            ++taken;
+        }
+    }
+
+    // Phase 2 — every other hit (substring of symbol / brsymbol / name), only
+    // when the prefix hits did not fill the request; result order again.
+    const quint64 q_mask = folded_ascii_mask(q);
+    for (std::size_t b = 0; b < cache.search_buckets.size() && taken < k; ++b) {
+        for (const int idx : cache.search_buckets[b]) {
+            if ((cache.search_masks[static_cast<std::size_t>(idx)] & q_mask) != q_mask)
+                continue;
+            const Instrument& inst = *items[idx];
+            if (!exchange_matches(inst, exch) || inst.symbol.startsWith(q, Qt::CaseInsensitive) ||
+                !is_search_hit(inst, q))
+                continue;
+            out.append(inst);
+            if (++taken >= k)
+                break;
+        }
+    }
 }
 
 void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredentials& creds) {
@@ -822,13 +1004,14 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
         return;
     }
 
-    // DB write + cache build MUST happen on the main thread —
-    // QSqlDatabase connections are not thread-safe (Qt docs: use only from owning thread).
-    // Worker thread hands off instruments to the main thread here.
+    // The DB write MUST happen on the main thread — QSqlDatabase connections are
+    // not thread-safe (Qt docs: use only from owning thread). The in-memory
+    // snapshot is built here on the worker; the main thread only swaps it in.
     int count = instruments.size();
+    CachePtr snapshot = build_cache_snapshot(instruments);
     QMetaObject::invokeMethod(
         this,
-        [this, broker_id, instruments, count]() {
+        [this, broker_id, instruments, count, snapshot]() mutable {
             // Persist to DB (main thread — safe)
             auto r = InstrumentRepository::instance().replace_all(broker_id, instruments);
             if (r.is_err()) {
@@ -840,8 +1023,8 @@ void InstrumentService::do_refresh(const QString& broker_id, const BrokerCredent
                 emit refresh_failed(broker_id, err);
                 return;
             }
-            // Rebuild in-memory cache
-            build_cache(broker_id, instruments);
+            // Swap in the in-memory cache built on the worker.
+            install_cache(broker_id, std::move(snapshot));
             {
                 QMutexLocker lock(&mutex_);
                 refreshing_.remove(broker_id);

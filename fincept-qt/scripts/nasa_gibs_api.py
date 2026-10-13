@@ -65,6 +65,11 @@ GIBS_ENDPOINTS = {
     }
 }
 
+# Capabilities documents (layer catalogue) are read from the geographic WMTS endpoint.
+# list_layers()/layer_details() referenced BASE_URL without it ever being defined, so every
+# catalogue command failed with "name 'BASE_URL' is not defined".
+BASE_URL = GIBS_ENDPOINTS['wmts']['epsg4326']
+
 # Projection configurations
 PROJECTIONS = {
     'epsg3857': {

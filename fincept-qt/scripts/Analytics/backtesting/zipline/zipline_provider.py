@@ -51,6 +51,10 @@ from base.base_provider import (
     BacktestingProviderBase,
     json_response,
     parse_json_input,
+    build_assumptions,
+    check_cancelled,
+    ignored_request_settings,
+    synthetic_allowed,
 )
 
 
@@ -506,6 +510,14 @@ class MockContext:
         self.portfolio = _MockPortfolio(capital)
         self.account = _MockAccount(capital)
 
+        # Next-bar execution: orders placed while handling bar t are queued and
+        # filled at bar t+1's open by _fill_pending() (zipline also fills on the
+        # following bar). They used to fill instantly at the close of the bar whose
+        # data produced the signal.
+        self._defer_fills = True
+        self._filling = False
+        self._pending = []
+
     # ---- Order Functions ----
 
     def order(self, asset, amount, limit_price=None, stop_price=None, style=None):
@@ -567,9 +579,16 @@ class MockContext:
         return False
 
     def _execute_order(self, asset, amount, limit_price=None, stop_price=None, style=None):
-        """Execute an order with commission and slippage."""
+        """Execute an order with commission and slippage (queued for the next bar)."""
         if abs(amount) < 0.001:
             return None
+
+        if self._defer_fills and not self._filling:
+            order = MockOrder(asset, amount, style, limit_price, stop_price)
+            order.status = 'open'
+            self._orders[order.id] = order
+            self._pending.append(order)
+            return order
 
         # Determine execution price with slippage
         exec_price = self._slippage_model.calculate(self._current_price, amount)
@@ -613,8 +632,36 @@ class MockContext:
         order.filled = amount
         order.status = 'filled'
         order.commission = commission
-        self._orders[order.id] = order
+        order.fill_price = exec_price
+        if not self._filling:
+            self._orders[order.id] = order
         return order
+
+    def _fill_pending(self):
+        """Fill orders queued on the previous bar at the current price (the bar open).
+
+        Returns the orders that filled. Cancelled orders are skipped; orders whose
+        limit/stop/size checks fail are marked rejected.
+        """
+        filled = []
+        pending, self._pending = self._pending, []
+        self._filling = True
+        try:
+            for order in pending:
+                if order.status != 'open':
+                    continue
+                res = self._execute_order(order.asset, order.amount, order.limit, order.stop, order.style)
+                if res is None:
+                    order.status = 'rejected'
+                    continue
+                order.status = 'filled'
+                order.filled = order.amount
+                order.commission = res.commission
+                order.fill_price = res.fill_price
+                filled.append(order)
+        finally:
+            self._filling = False
+        return filled
 
     # ---- Commission & Slippage ----
 
@@ -979,24 +1026,19 @@ class ZiplineProvider(BacktestingProviderBase):
             price_df = data[primary_symbol]
             logs.append(f'Data loaded: {len(price_df)} bars')
 
-            # Try zipline.run_algorithm first, fall back to pure-numpy simulation
-            try:
-                results = self._run_with_zipline(
-                    init_fn, handle_fn, price_df, primary_symbol,
-                    start_date, end_date, initial_capital, commission_rate,
-                    logs,
-                )
-            except Exception as e:
-                print(f'[ZL-BT] Zipline run_algorithm failed: {e}, using numpy fallback', file=sys.stderr)
-                logs.append(f'Using numpy simulation (zipline unavailable: {e})')
-                results = self._run_numpy_simulation(
-                    init_fn, handle_fn, price_df, primary_symbol,
-                    initial_capital, commission_rate, slippage_bps,
-                    commission_model_type, slippage_model_type,
-                    long_only, max_leverage, benchmark,
-                    before_trading_start_fn, analyze_fn,
-                    logs,
-                )
+            # Always the in-house event-driven simulation. The old first attempt at
+            # zipline.run_algorithm() ignored the fetched prices, the user's
+            # commission/slippage and the symbol list (it reads an ingested bundle),
+            # so on a machine WITH a bundle the result came from different data at
+            # zero cost - and everywhere else it just failed into this path.
+            results = self._run_numpy_simulation(
+                init_fn, handle_fn, price_df, primary_symbol,
+                initial_capital, commission_rate, slippage_bps,
+                commission_model_type, slippage_model_type,
+                long_only, max_leverage, benchmark,
+                before_trading_start_fn, analyze_fn,
+                logs,
+            )
 
             # Extract metrics
             performance = extract_performance(results, initial_capital)
@@ -1026,6 +1068,21 @@ class ZiplineProvider(BacktestingProviderBase):
                 'statistics': statistics,
                 'logs': logs,
                 'using_synthetic_data': using_synthetic,
+                'assumptions': build_assumptions(
+                    'Fincept zipline-API simulator (event-driven, single primary symbol)',
+                    'handle_data sees each bar after it closes; orders fill at the NEXT bar open '
+                    '(limit/stop checked against that open).',
+                    request,
+                    costs=(f'{commission_model_type} commission {commission_rate * 100:.3f}%; '
+                           f'slippage {slippage_bps * 100:.4f}% of price per fill'),
+                    position_sizing='strategy code (order_target_percent etc.)',
+                    annualization='252 bars/year (daily bars)',
+                    data_source=('SYNTHETIC random-walk prices (user opted in) - results have NO market meaning'
+                                 if using_synthetic else None),
+                    ignored=ignored_request_settings(request, ['commission', 'slippage', 'sizing', 'short']) +
+                    ([f"symbols other than {primary_symbol} (only the first symbol is traded)"]
+                     if len(symbols) > 1 else []),
+                ),
             }
             if using_synthetic:
                 result_data['synthetic_data_warning'] = (
@@ -1059,56 +1116,6 @@ class ZiplineProvider(BacktestingProviderBase):
                     'error': str(e),
                 }
             }
-
-    def _run_with_zipline(self, init_fn, handle_fn, price_df, symbol,
-                          start_date, end_date, capital, commission, logs):
-        """Try running with actual Zipline library."""
-        import zipline
-        from zipline.api import (
-            order_target_percent, symbol as zl_symbol,
-            order, order_value, order_percent, order_target, order_target_value,
-            set_commission, set_slippage, set_long_only, set_benchmark,
-            schedule_function, record,
-        )
-        from zipline.finance.commission import PerShare as ZlPerShare
-        from zipline.finance.slippage import FixedSlippage as ZlFixedSlippage
-        import pandas as pd
-
-        start_dt = pd.Timestamp(start_date, tz='UTC')
-        end_dt = pd.Timestamp(end_date, tz='UTC')
-
-        # Wrap strategy functions for Zipline's API
-        def wrapped_init(context):
-            init_fn(context)
-            context.asset = zl_symbol(symbol)
-            # Inject all Zipline API functions into context
-            context.order = order
-            context.order_value = order_value
-            context.order_percent = order_percent
-            context.order_target = order_target
-            context.order_target_value = order_target_value
-            context.order_target_percent = order_target_percent
-            context.set_commission = set_commission
-            context.set_slippage = set_slippage
-            context.set_long_only = set_long_only
-            context.set_benchmark = set_benchmark
-            context.schedule_function = schedule_function
-            context.record = record
-
-        def wrapped_handle(context, data):
-            handle_fn(context, data)
-
-        results = zipline.run_algorithm(
-            start=start_dt,
-            end=end_dt,
-            initialize=wrapped_init,
-            handle_data=wrapped_handle,
-            capital_base=capital,
-            trading_calendar='XNYS',
-        )
-
-        logs.append('Executed via zipline.run_algorithm()')
-        return results
 
     def _run_numpy_simulation(self, init_fn, handle_fn, price_df, symbol,
                               capital, commission_rate, slippage_bps=0.0,
@@ -1149,7 +1156,9 @@ class ZiplineProvider(BacktestingProviderBase):
         elif slippage_model_type == 'fixed_basis_points':
             slip_model = FixedBasisPointsSlippage(slippage_bps * 10000 if slippage_bps < 1 else slippage_bps)
         else:
-            slip_model = FixedSlippage(slippage_bps)
+            # The UI's SLIPPAGE (%) is a per-fill price fraction. FixedSlippage applies
+            # spread/2 per side, which halved it; charge the full fraction per fill.
+            slip_model = FixedBasisPointsSlippage(slippage_bps * 10000.0)
 
         context = MockContext(capital, commission_rate, symbol)
         context._commission_model = comm_model
@@ -1177,9 +1186,27 @@ class ZiplineProvider(BacktestingProviderBase):
         recorded_series = []
         prev_value = capital
 
+        has_open = 'open' in price_df.columns
         for i in range(len(price_df)):
             mock_data._current_idx = i
             close_price = float(price_df['close'].iloc[i])
+
+            # Orders queued on the previous bar fill at this bar's open.
+            if context._pending:
+                open_price = float(price_df['open'].iloc[i]) if has_open else close_price
+                if not (open_price > 0):
+                    open_price = close_price
+                context._current_price = open_price
+                context._current_dt = price_df.index[i]
+                for o in context._fill_pending():
+                    transactions_log.append({
+                        'date_idx': i,
+                        'sid': symbol,
+                        'amount': o.amount,
+                        'price': o.fill_price,
+                        'commission': o.commission,
+                    })
+
             context._current_price = close_price
             context._current_dt = price_df.index[i]
             if 'volume' in price_df.columns:
@@ -1216,8 +1243,6 @@ class ZiplineProvider(BacktestingProviderBase):
                 except Exception:
                     pass
 
-            old_shares = context.shares
-
             # Execute scheduled functions
             for sf in scheduled:
                 if self._should_run_scheduled(sf, i, price_df):
@@ -1228,17 +1253,6 @@ class ZiplineProvider(BacktestingProviderBase):
 
             # Call handle_data
             handle_fn(context, mock_data)
-
-            # Record transactions
-            if context.shares != old_shares:
-                amount = context.shares - old_shares
-                transactions_log.append({
-                    'date_idx': i,
-                    'sid': symbol,
-                    'amount': amount,
-                    'price': close_price,
-                    'commission': context._commission_model.calculate(amount, close_price),
-                })
 
             # Update portfolio after trades
             context.portfolio_value = context.cash + context.shares * close_price
@@ -1355,6 +1369,7 @@ class ZiplineProvider(BacktestingProviderBase):
             all_results: List[Dict[str, Any]] = []
 
             for i, params in enumerate(combos):
+                check_cancelled(request)
                 # Use canonical `params` (zl_strategies builders read via params dict).
                 bt_request = {**request, 'strategy': {
                     'type': strategy_type,
@@ -1445,6 +1460,7 @@ class ZiplineProvider(BacktestingProviderBase):
             last_result = None
 
             for i in range(n_splits):
+                check_cancelled(request)
                 split_start = start_dt + pd.Timedelta(days=i * split_days)
                 split_end = split_start + pd.Timedelta(days=split_days)
                 train_end = split_start + pd.Timedelta(days=int(split_days * train_ratio))
@@ -2809,6 +2825,8 @@ def main():
         args = parse_json_input(json_args)
         print(f'[ZL-MAIN] parsed args keys: {sorted(args.keys()) if isinstance(args, dict) else type(args)}', file=sys.stderr)
         provider = ZiplineProvider()
+        from zl_data import set_allow_synthetic
+        set_allow_synthetic(synthetic_allowed(args))
 
         if command == 'test_import':
             result_str = json_response({'success': True, 'version': provider.version})

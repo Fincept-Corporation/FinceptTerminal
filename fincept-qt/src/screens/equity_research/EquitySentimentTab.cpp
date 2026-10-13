@@ -77,7 +77,25 @@ void EquitySentimentTab::set_symbol(const QString& symbol) {
 }
 
 void EquitySentimentTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    // The rows populate() builds (signal sources, headlines, distribution bar) are styled here
+    // by objectName / "tone" — they used to get a setStyleSheet() call per row per refresh.
+    setStyleSheet(QString("QWidget { background:%1; }"
+                          "QLabel#sentSrcName { color:%2; font-size:11px; font-weight:600; background:transparent; border:0; }"
+                          "QLabel#sentScore { font-size:11px; font-weight:700; background:transparent; border:0; }"
+                          "QLabel#sentScore[tone=\"up\"] { color:%3; } QLabel#sentScore[tone=\"down\"] { color:%4; }"
+                          "QLabel#sentMuted { color:%5; font-size:10px; background:transparent; border:0; }"
+                          "QLabel#sentMeta { color:%5; font-size:9px; background:transparent; border:0; }"
+                          "QLabel#sentHeadline { color:%2; font-size:11px; background:transparent; border:0; }"
+                          "QFrame#sentRow { background:%6; border:1px solid %7; }"
+                          "QLabel#sentChip { font-size:9px; font-weight:700; letter-spacing:1px; border:1px solid %5;"
+                          " color:%5; padding:2px 0; background:transparent; }"
+                          "QLabel#sentChip[tone=\"up\"] { color:%3; border-color:%3; }"
+                          "QLabel#sentChip[tone=\"down\"] { color:%4; border-color:%4; }"
+                          "QFrame#sentSeg { background:%7; border:0; }"
+                          "QFrame#sentSeg[tone=\"up\"] { background:%3; } QFrame#sentSeg[tone=\"down\"] { background:%4; }"
+                          "QWidget#sentSrcRow { background:transparent; }")
+                      .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(), ui::colors::NEGATIVE(),
+                           ui::colors::TEXT_TERTIARY(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
     loading_overlay_ = new ui::LoadingOverlay(this);
 
     auto* root = new QVBoxLayout(this);
@@ -237,23 +255,21 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
     // ── Distribution bar ─────────────────────────────────────────────────────
     clear_layout(dist_layout_);
     const int total = snapshot.bullish + snapshot.bearish + snapshot.neutral;
-    auto add_segment = [this](int count, const QString& color) {
+    auto add_segment = [this](int count, const char* tone) {
         if (count <= 0)
             return;
         auto* seg = new QFrame;
+        seg->setObjectName(QStringLiteral("sentSeg"));
+        seg->setProperty("tone", QString::fromLatin1(tone));
         seg->setFixedHeight(10);
-        seg->setStyleSheet(QString("background:%1; border:0; border-radius:2px;").arg(color));
         dist_layout_->addWidget(seg, count);
     };
     if (total > 0) {
-        add_segment(snapshot.bullish, ui::colors::POSITIVE());
-        add_segment(snapshot.neutral, ui::colors::BORDER_DIM());
-        add_segment(snapshot.bearish, ui::colors::NEGATIVE());
+        add_segment(snapshot.bullish, "up");
+        add_segment(snapshot.neutral, "");
+        add_segment(snapshot.bearish, "down");
     } else {
-        auto* seg = new QFrame;
-        seg->setFixedHeight(10);
-        seg->setStyleSheet(QString("background:%1; border:0; border-radius:2px;").arg(ui::colors::BORDER_DIM()));
-        dist_layout_->addWidget(seg, 1);
+        add_segment(1, "");
     }
     dist_counts_label_->setText(tr("%1 bullish · %2 neutral · %3 bearish  (%4 headlines)")
                                     .arg(snapshot.bullish)
@@ -265,30 +281,28 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
     clear_layout(sources_layout_);
     for (const auto& src : snapshot.sources) {
         auto* row = new QWidget;
+        row->setObjectName(QStringLiteral("sentSrcRow"));
         auto* row_layout = new QHBoxLayout(row);
         row_layout->setContentsMargins(0, 0, 0, 0);
         row_layout->setSpacing(8);
 
         auto* name = new QLabel(src.label);
-        name->setStyleSheet(QString("color:%1; font-size:11px; font-weight:600; background:transparent; border:0;")
-                                .arg(ui::colors::TEXT_PRIMARY()));
+        name->setObjectName(QStringLiteral("sentSrcName"));
         row_layout->addWidget(name);
         row_layout->addStretch();
 
         if (src.available) {
             auto* score = new QLabel(sentiment_fmt_score(src.score));
-            score->setStyleSheet(QString("color:%1; font-size:11px; font-weight:700; background:transparent; border:0;")
-                                     .arg(src.score >= 0.0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+            score->setObjectName(QStringLiteral("sentScore"));
+            score->setProperty("tone", src.score >= 0.0 ? QStringLiteral("up") : QStringLiteral("down"));
             row_layout->addWidget(score);
 
             auto* weight = new QLabel(tr("wt %1%").arg(QString::number(src.weight * 100.0, 'f', 0)));
-            weight->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;")
-                                      .arg(ui::colors::TEXT_TERTIARY()));
+            weight->setObjectName(QStringLiteral("sentMuted"));
             row_layout->addWidget(weight);
         } else {
             auto* na = new QLabel(tr("n/a"));
-            na->setStyleSheet(QString("color:%1; font-size:10px; background:transparent; border:0;")
-                                  .arg(ui::colors::TEXT_TERTIARY()));
+            na->setObjectName(QStringLiteral("sentMuted"));
             row_layout->addWidget(na);
         }
         sources_layout_->addWidget(row);
@@ -298,25 +312,23 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
     clear_layout(articles_layout_);
     if (snapshot.articles.isEmpty()) {
         auto* empty = new QLabel(tr("No headlines available for this symbol."));
-        empty->setStyleSheet(
-            QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        empty->setObjectName(QStringLiteral("sentMuted"));
         articles_layout_->addWidget(empty);
     }
     for (const auto& article : snapshot.articles) {
         auto* row = new QFrame;
-        row->setStyleSheet(QString("QFrame { background:%1; border:1px solid %2; border-radius:3px; }")
-                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        row->setObjectName(QStringLiteral("sentRow"));
         auto* row_layout = new QHBoxLayout(row);
         row_layout->setContentsMargins(8, 6, 8, 6);
         row_layout->setSpacing(8);
 
-        const QString chip_color = sentiment_label_color(article.label);
         auto* chip = new QLabel(article.label.left(4));
+        chip->setObjectName(QStringLiteral("sentChip"));
+        chip->setProperty("tone", article.label == QLatin1String("BULLISH")   ? QStringLiteral("up")
+                                  : article.label == QLatin1String("BEARISH") ? QStringLiteral("down")
+                                                                              : QString());
         chip->setAlignment(Qt::AlignCenter);
         chip->setFixedWidth(46);
-        chip->setStyleSheet(QString("color:%1; font-size:9px; font-weight:700; letter-spacing:1px; "
-                                    "border:1px solid %1; border-radius:3px; padding:2px 0; background:transparent;")
-                                .arg(chip_color));
         row_layout->addWidget(chip, 0, Qt::AlignTop);
 
         auto* text_col = new QVBoxLayout;
@@ -325,8 +337,7 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
 
         auto* headline = new QLabel(article.title);
         headline->setWordWrap(true);
-        headline->setStyleSheet(
-            QString("color:%1; font-size:11px; background:transparent; border:0;").arg(ui::colors::TEXT_PRIMARY()));
+        headline->setObjectName(QStringLiteral("sentHeadline"));
         // Every scored headline carries its article URL, but the rows were dead text. Make the
         // title open the article in the browser (http/https only — never hand a feed-supplied
         // file:/custom scheme to the OS).
@@ -349,8 +360,7 @@ void EquitySentimentTab::populate(const services::equity::EquitySentimentSnapsho
             meta = meta.isEmpty() ? date : QString("%1 · %2").arg(meta, date);
         if (!meta.isEmpty()) {
             auto* meta_lbl = new QLabel(meta);
-            meta_lbl->setStyleSheet(
-                QString("color:%1; font-size:9px; background:transparent; border:0;").arg(ui::colors::TEXT_TERTIARY()));
+            meta_lbl->setObjectName(QStringLiteral("sentMeta"));
             text_col->addWidget(meta_lbl);
         }
         row_layout->addLayout(text_col, 1);

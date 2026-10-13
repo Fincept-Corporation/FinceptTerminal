@@ -40,7 +40,6 @@ class PortItem : public QGraphicsObject {
 
   signals:
     void connection_started(PortItem* from);
-    void connection_finished(PortItem* from, PortItem* to);
 
   protected:
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;

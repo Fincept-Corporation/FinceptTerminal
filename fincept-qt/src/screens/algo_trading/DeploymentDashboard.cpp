@@ -297,7 +297,13 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
                fincept::ui::fonts::TITLE, &h.pnl);
     add_metric(tr("WIN RATE"), QString("%1%").arg(d.win_rate, 0, 'f', 1), fincept::ui::colors::TEXT_PRIMARY,
                fincept::ui::fonts::SMALL, &h.win_rate);
-    add_metric(tr("POSITION"), tr("FLAT"), fincept::ui::colors::TEXT_TERTIARY, fincept::ui::fonts::SMALL, &h.position);
+    // Seed from the persisted metrics row (it was always "FLAT" until the first live
+    // snapshot, which never comes for a stopped or errored deployment).
+    const QString pos_text =
+        d.position_qty != 0
+            ? QString("%1 %2 @ %3").arg(d.position_qty, 0, 'f', 0).arg(d.position_side.toUpper()).arg(d.position_entry, 0, 'f', 2)
+            : tr("FLAT");
+    add_metric(tr("POSITION"), pos_text, fincept::ui::colors::TEXT_TERTIARY, fincept::ui::fonts::SMALL, &h.position);
     add_metric(tr("TRADES"), QString::number(d.total_trades), fincept::ui::colors::TEXT_PRIMARY,
                fincept::ui::fonts::SMALL, &h.trades);
     // max_drawdown is an absolute P&L drawdown (peak realised P&L minus current, in the broker's
@@ -343,9 +349,27 @@ QWidget* DeploymentDashboard::build_deployment_card(const AlgoDeployment& d, QWi
     // Handles are complete now (win_bar was the last live-updated widget) — register them.
     cards_.insert(d.id, h);
 
-    // ── Error message if any ────────────────────────────────────────────────
-    if (!d.error_message.isEmpty()) {
-        auto* err = new QLabel(d.error_message, card);
+    // ── Error message / unmanaged position ──────────────────────────────────
+    // A stopped or errored deployment that still holds a position is the most
+    // dangerous state on this screen: nothing manages its stop-loss any more.
+    const bool active_status = (d.status == "running" || d.status == "starting");
+    QString alert = d.error_message;
+    if (!active_status && d.position_qty != 0) {
+        const QString unmanaged =
+            d.mode == QLatin1String("live")
+                ? tr("OPEN LIVE POSITION NO LONGER MANAGED: %1 %2 @ %3 - stop-loss/take-profit are not monitored. "
+                     "Close or protect it at the broker.")
+                      .arg(d.position_qty, 0, 'f', 0)
+                      .arg(d.position_side.toUpper())
+                      .arg(d.position_entry, 0, 'f', 2)
+                : tr("Paper position left open when the deployment stopped: %1 %2 @ %3.")
+                      .arg(d.position_qty, 0, 'f', 0)
+                      .arg(d.position_side.toUpper())
+                      .arg(d.position_entry, 0, 'f', 2);
+        alert = alert.isEmpty() ? unmanaged : alert + QLatin1Char('\n') + unmanaged;
+    }
+    if (!alert.isEmpty()) {
+        auto* err = new QLabel(alert, card);
         err->setWordWrap(true);
         err->setStyleSheet(QString("color: %1; font-size: %2px; %3 background: rgba(220,38,38,0.05);"
                                    " border: none; padding: 4px;")

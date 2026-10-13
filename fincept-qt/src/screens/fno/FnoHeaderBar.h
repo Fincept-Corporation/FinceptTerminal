@@ -71,6 +71,9 @@ class FnoHeaderBar : public QWidget {
     QComboBox* under_combo_ = nullptr;
     QComboBox* expiry_combo_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
+    /// "OPEN ▾" next to the underlying: hands it to Equity Research / Equity Trading / News.
+    QPushButton* open_btn_ = nullptr;
+    void populate_open_menu(class QMenu* menu);
 
     // Picker field labels (cached for retranslateUi)
     QLabel* lbl_broker_field_ = nullptr;

@@ -161,27 +161,33 @@ void IntradayOIChart::on_history(qint64 token, const QVariant& v) {
 }
 
 void IntradayOIChart::replot() {
-    ce_series_->clear();
-    pe_series_->clear();
-
     qint64 ts_min = std::numeric_limits<qint64>::max();
     qint64 ts_max = 0;
     double oi_max = 0;
 
+    // Build each series' points first and hand them over with ONE replace():
+    // clear() + a per-sample append() re-laid-out the whole line for every
+    // sample, on every OI history publish.
+    QList<QPointF> ce_points;
+    ce_points.reserve(ce_samples_.size());
     for (const auto& s : ce_samples_) {
         const qint64 ms = s.ts_minute * 1000;
-        ce_series_->append(double(ms), double(s.oi));
+        ce_points.append(QPointF(double(ms), double(s.oi)));
         ts_min = std::min(ts_min, ms);
         ts_max = std::max(ts_max, ms);
         oi_max = std::max(oi_max, double(s.oi));
     }
+    QList<QPointF> pe_points;
+    pe_points.reserve(pe_samples_.size());
     for (const auto& s : pe_samples_) {
         const qint64 ms = s.ts_minute * 1000;
-        pe_series_->append(double(ms), double(s.oi));
+        pe_points.append(QPointF(double(ms), double(s.oi)));
         ts_min = std::min(ts_min, ms);
         ts_max = std::max(ts_max, ms);
         oi_max = std::max(oi_max, double(s.oi));
     }
+    ce_series_->replace(ce_points);
+    pe_series_->replace(pe_points);
 
     if (ts_min < ts_max) {
         axis_x_->setRange(QDateTime::fromMSecsSinceEpoch(ts_min), QDateTime::fromMSecsSinceEpoch(ts_max));

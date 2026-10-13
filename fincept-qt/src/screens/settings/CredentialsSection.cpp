@@ -36,7 +36,6 @@ const QList<CredDef> CRED_KEYS = {
     {"BINANCE_SECRET_KEY", "Binance Secret Key"},
     {"KRAKEN_API_KEY", "Kraken API Key"},
     {"KRAKEN_SECRET_KEY", "Kraken Secret Key"},
-    {"IEX_CLOUD_TOKEN", "IEX Cloud Token"},
     {"FINNHUB_API_KEY", "Finnhub API Key"},
     {"TIINGO_API_KEY", "Tiingo API Key"},
     {"QUANDL_API_KEY", "Quandl"},
@@ -96,7 +95,8 @@ void CredentialsSection::build_ui() {
     vl->addWidget(title_);
     vl->addSpacing(4);
 
-    info_ = new QLabel(tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
+    info_ = new QLabel(tr("API keys are encrypted (AES-256-GCM) before they are stored on this machine and are never written "
+                          "to disk in plain text."));
     info_->setWordWrap(true);
     info_->setStyleSheet(QString("color:%1;background:transparent;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(info_);
@@ -209,7 +209,7 @@ void CredentialsSection::build_ui() {
                 if (had_key) {
                     const auto reply = QMessageBox::question(
                         this, tr("Remove Credential"),
-                        tr("Remove the stored %1 key from the OS keychain?\n\nYou will need to paste it "
+                        tr("Remove the stored %1 key from encrypted storage?\n\nYou will need to paste it "
                            "again to restore access.")
                             .arg(name),
                         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
@@ -219,7 +219,7 @@ void CredentialsSection::build_ui() {
                 const auto removed = SecureStorage::instance().remove(key);
                 if (removed.is_err()) {
                     // The result was ignored, so "Cleared" was shown even when the
-                    // key was still in the keychain and still being injected into
+                    // key was still stored and still being injected into
                     // every Python subprocess.
                     cred_set_status(status_lbl, tr("Clear failed"), ui::colors::NEGATIVE());
                     LOG_ERROR("Credentials", "Failed to clear " + key);
@@ -282,6 +282,19 @@ void CredentialsSection::reload() {
     }
 }
 
+void CredentialsSection::set_filter(const QString& text) {
+    if (filter_edit_)
+        filter_edit_->setText(text); // textChanged → apply_filter()
+}
+
+QStringList CredentialsSection::search_terms() {
+    QStringList out;
+    out.reserve(CRED_KEYS.size() * 2);
+    for (const auto& def : CRED_KEYS)
+        out << def.second << def.first;
+    return out;
+}
+
 void CredentialsSection::apply_filter(const QString& text) {
     const QString needle = text.trimmed();
     int visible = 0;
@@ -309,7 +322,8 @@ void CredentialsSection::retranslateUi() {
     if (title_)
         title_->setText(tr("API CREDENTIALS"));
     if (info_)
-        info_->setText(tr("Store API keys securely in the OS keychain. Keys are never written to disk in plain text."));
+        info_->setText(tr("API keys are encrypted (AES-256-GCM) before they are stored on this machine and are never written "
+                          "to disk in plain text."));
     if (filter_edit_) {
         filter_edit_->setPlaceholderText(tr("Filter providers..."));
         filter_edit_->setAccessibleName(tr("Filter credential providers"));

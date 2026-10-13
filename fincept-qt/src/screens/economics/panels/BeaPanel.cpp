@@ -131,7 +131,7 @@ BeaPanel::BeaPanel(QWidget* parent) : EconPanelBase(kBeaSourceId, kBeaColor, par
     auto* chl = new QHBoxLayout(cat_hdr);
     chl->setContentsMargins(8, 0, 8, 0);
     category_lbl_ = new QLabel(tr("CATEGORY"));
-    category_lbl_->setStyleSheet(ctrl_label_style());
+    category_lbl_->setStyleSheet(ctrl_label_style()); // sidebar: outside the panel_style() container
     category_combo_ = new QComboBox;
     for (const auto& c : kBeaCategories)
         category_combo_->addItem(c.label);
@@ -184,7 +184,7 @@ void BeaPanel::activate() {
 void BeaPanel::build_controls(QHBoxLayout* thl) {
     auto make_lbl = [](const QString& text) {
         auto* l = new QLabel(text);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 

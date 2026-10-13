@@ -27,15 +27,15 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
     vl->setSpacing(12);
 
     // ── Agentic Mode toggle ──────────────────────────────────────────────────
-    agentic_title_ = new QLabel(tr("Agentic Mode (Experimental)"));
+    agentic_title_ = new QLabel(tr("Agentic Mode"));
     agentic_title_->setStyleSheet(section_title_ss());
     vl->addWidget(agentic_title_);
 
-    agentic_desc_ = new QLabel(tr("Enable durable, long-running autonomous tasks. When on, AGENT STUDIO shows "
-                                  "an extra AGENTIC tab listing in-flight tasks (plan, step log, pause/resume/"
-                                  "cancel) and the chat panel offers a \"Run as background task\" checkbox. "
-                                  "All state is checkpointed to SQLite so tasks survive process restarts. "
-                                  "Leave off for standard chatbot behavior."));
+    agentic_desc_ = new QLabel(tr("Durable, long-running autonomous tasks (on by default). AGENT STUDIO shows an "
+                                  "AGENTIC tab listing tasks (plan, step log, pause/resume/cancel, recurring "
+                                  "schedules) and the agent chat offers a \"RUN AS TASK\" toggle. Task state is "
+                                  "checkpointed per profile, so tasks survive restarts and schedules keep firing. "
+                                  "Turn off to hide the tab and stop scheduled tasks."));
     agentic_desc_->setWordWrap(true);
     agentic_desc_->setStyleSheet(QString("color:%1;font-size:11px;").arg(ui::colors::TEXT_SECONDARY()));
     vl->addWidget(agentic_desc_);
@@ -85,7 +85,7 @@ DeveloperSection::DeveloperSection(QWidget* parent) : QWidget(parent) {
 void DeveloperSection::sync_agentic_toggle() {
     if (!agentic_toggle_)
         return;
-    const auto r = SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"), QStringLiteral("false"));
+    const auto r = SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"), QStringLiteral("true"));
     // A failed read is not "off": leave the checkbox as it is rather than showing
     // a state the stored value may contradict.
     if (r.is_err()) {
@@ -109,13 +109,13 @@ void DeveloperSection::changeEvent(QEvent* event) {
 
 void DeveloperSection::retranslateUi() {
     if (agentic_title_)
-        agentic_title_->setText(tr("Agentic Mode (Experimental)"));
+        agentic_title_->setText(tr("Agentic Mode"));
     if (agentic_desc_)
-        agentic_desc_->setText(tr("Enable durable, long-running autonomous tasks. When on, AGENT STUDIO shows "
-                                  "an extra AGENTIC tab listing in-flight tasks (plan, step log, pause/resume/"
-                                  "cancel) and the chat panel offers a \"Run as background task\" checkbox. "
-                                  "All state is checkpointed to SQLite so tasks survive process restarts. "
-                                  "Leave off for standard chatbot behavior."));
+        agentic_desc_->setText(tr("Durable, long-running autonomous tasks (on by default). AGENT STUDIO shows an "
+                                  "AGENTIC tab listing tasks (plan, step log, pause/resume/cancel, recurring "
+                                  "schedules) and the agent chat offers a \"RUN AS TASK\" toggle. Task state is "
+                                  "checkpointed per profile, so tasks survive restarts and schedules keep firing. "
+                                  "Turn off to hide the tab and stop scheduled tasks."));
     if (agentic_toggle_)
         agentic_toggle_->setText(tr("Enable Agentic Mode"));
     if (inspector_title_)

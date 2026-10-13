@@ -67,7 +67,14 @@ def fetch_company_news(query, max_results=10, period='7d', language='en', countr
                 "published_date": _to_iso_date(article.get('published date', '')),
                 "image_url": None  # GNews doesn't provide images directly
             }
+            # Google News RSS "descriptions" are usually just the headline + publisher again.
+            desc = (processed_article["description"] or "").strip()
+            if desc == "N/A" or desc.startswith(processed_article["title"][:40]):
+                processed_article["description"] = ""
             articles.append(processed_article)
+
+        # GNews returns relevance order; a research feed reads newest first (ISO dates sort lexically).
+        articles.sort(key=lambda a: a.get("published_date") or "", reverse=True)
 
         return json.dumps({
             "success": True,

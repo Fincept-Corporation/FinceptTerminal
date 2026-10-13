@@ -231,6 +231,7 @@ QWidget* SupportScreen::build_create_page() {
     subject_input_ = new QLineEdit;
     subject_input_->setPlaceholderText(tr("Brief summary of your issue"));
     subject_input_->setFixedHeight(38);
+    subject_input_->setMaxLength(200); // the API stores at most 500; long subjects failed server-side
     subject_input_->setStyleSheet(SS_INPUT());
     subject_input_->setAccessibleName(tr("Ticket subject"));
     add_field(tr("Subject"), subject_input_, true);
@@ -264,15 +265,16 @@ QWidget* SupportScreen::build_create_page() {
             rl->addLayout(fvl);
         };
 
+        // Fallback until GET /support/categories answers — exactly the set the
+        // API accepts. The old list also offered feature_request / account /
+        // other, which the server rejects (422), losing the user's ticket.
         make_combo_field(tr("Category"), category_combo_,
                          {{tr("Technical"), "technical"},
                           {tr("Billing"), "billing"},
-                          {tr("Feature Request"), "feature_request"},
-                          {tr("Bug Report"), "bug_report"},
-                          {tr("Account"), "account"},
-                          {tr("Other"), "other"}});
+                          {tr("General"), "general"},
+                          {tr("Bug Report"), "bug_report"}});
         make_combo_field(tr("Priority"), priority_combo_,
-                         {{tr("Low"), "low"}, {tr("Medium"), "medium"}, {tr("High"), "high"}},
+                         {{tr("Low"), "low"}, {tr("Medium"), "medium"}, {tr("High"), "high"}, {tr("Urgent"), "urgent"}},
                          /*def=*/1);
 
         cl->addWidget(row_w);
@@ -396,6 +398,7 @@ QWidget* SupportScreen::build_detail_page() {
         hl->addWidget(detail_id_lbl_);
 
         detail_subject_lbl_ = lbl("", ui::colors::TEXT_PRIMARY(), 14, true);
+        detail_subject_lbl_->setTextFormat(Qt::PlainText); // user-authored
         detail_subject_lbl_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         detail_subject_lbl_->setWordWrap(false);
         hl->addWidget(detail_subject_lbl_, 1);
@@ -466,27 +469,8 @@ QWidget* SupportScreen::build_detail_page() {
     detail_scroll_->setWidget(messages_container_);
     root_vl->addWidget(detail_scroll_, 1);
 
-    // ── Bottom area: reply / demo / closed notices ────────────────────────────
+    // ── Bottom area: reply / closed notices ───────────────────────────────────
     {
-        // Demo notice
-        demo_box_ = new QWidget(this);
-        demo_box_->setStyleSheet(
-            QString("background:%1;border-top:1px solid %2;").arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-        auto* dbl = new QHBoxLayout(demo_box_);
-        dbl->setContentsMargins(20, 12, 20, 12);
-        auto* di = lbl("ℹ", ui::colors::INFO(), 14);
-        dbl->addWidget(di);
-        auto* dt = lbl(tr("This is a demo ticket. Open a real ticket to get support from our team."),
-                       ui::colors::TEXT_SECONDARY(), 11, false, true);
-        dbl->addWidget(dt, 1);
-        auto* db = new QPushButton(tr("New Ticket"));
-        db->setFixedHeight(28);
-        db->setStyleSheet(SS_BTN_PRIMARY());
-        connect(db, &QPushButton::clicked, this, [this]() { content_stack_->setCurrentIndex(1); });
-        dbl->addWidget(db);
-        demo_box_->hide();
-        root_vl->addWidget(demo_box_);
-
         // Closed notice
         closed_box_ = new QWidget(this);
         closed_box_->setStyleSheet(

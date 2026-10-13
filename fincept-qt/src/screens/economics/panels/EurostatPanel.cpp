@@ -23,6 +23,8 @@
 #include <QLabel>
 #include <QMap>
 
+#include <algorithm>
+
 namespace fincept::screens {
 namespace {
 
@@ -66,29 +68,48 @@ QJsonArray EurostatPanel::flatten_sdmx(const QJsonObject& response) {
     const QJsonObject dims = response["dimension"].toObject();
     const QJsonObject vals = response["value"].toObject();
 
-    if (id_arr.isEmpty() || size_arr.isEmpty() || vals.isEmpty())
+    if (id_arr.isEmpty() || size_arr.isEmpty() || vals.isEmpty() || id_arr.size() != size_arr.size())
         return {};
 
-    // Time is always the last dimension
-    const int time_size = size_arr.last().toInt(1);
+    // JSON-stat: the flat value index is row-major over the dimensions in `id` order. Decode every
+    // coordinate (not just time) — when a non-time dimension holds several categories (several units
+    // or adjustments), each row must say which series it belongs to; the old "index % time_size"
+    // decoding interleaved them under identical periods.
+    struct Dim {
+        QString id;
+        int size = 1;
+        QStringList labels; // position -> category label
+    };
+    QVector<Dim> dim_list;
+    for (int d = 0; d < id_arr.size(); ++d) {
+        Dim dim;
+        dim.id = id_arr[d].toString();
+        dim.size = std::max(1, size_arr[d].toInt(1));
+        const QJsonObject cat = dims[dim.id].toObject()["category"].toObject();
+        const QJsonObject index = cat["index"].toObject();
+        const QJsonObject label = cat["label"].toObject();
+        dim.labels = QStringList(dim.size, QString());
+        for (auto it = index.constBegin(); it != index.constEnd(); ++it) {
+            const int pos = it.value().toInt(-1);
+            if (pos >= 0 && pos < dim.size)
+                dim.labels[pos] = dim.id == QLatin1String("time") ? it.key() : label.value(it.key()).toString(it.key());
+        }
+        dim_list.append(dim);
+    }
 
-    // Build reverse map: int_position -> period_string from time dimension index
-    // dimension.time.category.index = {"1953-01": 0, "1953-02": 1, ...}
-    const QJsonObject time_cat = dims["time"].toObject()["category"].toObject();
-    const QJsonObject time_index = time_cat["index"].toObject();
-
-    QMap<int, QString> pos_to_period;
-    for (auto it = time_index.constBegin(); it != time_index.constEnd(); ++it)
-        pos_to_period[it.value().toInt()] = it.key();
-
-    // Flatten: for each value entry, derive time position and look up period
     QJsonArray rows;
     for (auto it = vals.constBegin(); it != vals.constEnd(); ++it) {
-        const int flat_idx = it.key().toInt();
-        const int time_pos = flat_idx % time_size;
-        const QString period = pos_to_period.value(time_pos, QString::number(time_pos));
+        qint64 flat = it.key().toLongLong();
         QJsonObject row;
-        row["period"] = period;
+        for (int d = static_cast<int>(dim_list.size()) - 1; d >= 0; --d) {
+            const Dim& dim = dim_list[d];
+            const int pos = static_cast<int>(flat % dim.size);
+            flat /= dim.size;
+            if (dim.id == QLatin1String("time"))
+                row["period"] = dim.labels.value(pos, QString::number(pos));
+            else if (dim.size > 1)
+                row[dim.id] = dim.labels.value(pos);
+        }
         row["value"] = it.value().toDouble();
         rows.append(row);
     }
@@ -121,7 +142,7 @@ void EurostatPanel::activate() {
 void EurostatPanel::build_controls(QHBoxLayout* thl) {
     auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -172,10 +193,14 @@ void EurostatPanel::on_result(const QString& request_id, const services::Economi
         return;
     }
 
-    const int ds_idx = dataset_combo_->currentIndex();
-    if (ds_idx < 0 || ds_idx >= kEurostatDatasets.size())
+    // Dataset from the request id ("eurostat_<command>_<country>"), not the combo.
+    const EurostatDataset* found = nullptr;
+    for (const auto& d : kEurostatDatasets)
+        if (request_id.startsWith("eurostat_" + d.command + "_"))
+            found = &d;
+    if (!found)
         return;
-    const auto& dataset = kEurostatDatasets[ds_idx];
+    const auto& dataset = *found;
 
     // Try SDMX flatten first (raw Eurostat format)
     QJsonArray rows = flatten_sdmx(result.data);
@@ -191,7 +216,23 @@ void EurostatPanel::on_result(const QString& request_id, const services::Economi
         return;
     }
 
-    const QString title = "Eurostat: " + dataset.label + " — " + country_combo_->currentText();
+    // Eurostat states what the series is: a single-category unit / s_adj / freq dimension is the
+    // series' unit, seasonal adjustment and frequency; `updated` is the dataset's last revision.
+    const QJsonObject dims = result.data["dimension"].toObject();
+    auto single_label = [&dims](const char* id) -> QString {
+        const QJsonObject labels = dims.value(QLatin1String(id)).toObject()["category"].toObject()["label"].toObject();
+        return labels.size() == 1 ? labels.begin().value().toString() : QString();
+    };
+    SeriesMeta meta;
+    meta.units = single_label("unit");
+    meta.seasonal_adj = single_label("s_adj");
+    meta.frequency = single_label("freq");
+    meta.last_updated = result.data["updated"].toString().left(10);
+    const QString geo = single_label("geo");
+    const QString ds_label = result.data["label"].toString();
+    set_series_meta(meta);
+    const QString title = "Eurostat: " + (ds_label.isEmpty() ? dataset.label : ds_label) + " — " +
+                          (geo.isEmpty() ? country_combo_->currentText() : geo);
     display(rows, title);
     LOG_INFO("EurostatPanel", QString("Displayed %1 rows for %2").arg(rows.size()).arg(title));
 }

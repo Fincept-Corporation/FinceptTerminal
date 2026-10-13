@@ -11,40 +11,134 @@ import json
 import time
 import ccxt
 
-# Markets cache TTL — 30 minutes is a safe balance between freshness and speed.
-# Exchange market lists rarely change within a session.
-_MARKETS_CACHE_TTL = 1800
+# Markets cache. A market list changes rarely, so a cached copy younger than
+# a day is used as-is, and an older one is still used when the exchange cannot
+# be reached — a stale symbol list beats a dead trading screen.
+_MARKETS_CACHE_TTL = 24 * 3600
+_MARKETS_CACHE_VERSION = 2
+
+
+def _markets_cache_dir() -> str:
+    """User-writable cache directory.
+
+    The scripts tree is read-only in installed builds (Program Files, /opt,
+    an AppImage), so the cache lives under the app's data directory.
+    """
+    base = os.environ.get("FINCEPT_DATA_DIR")
+    if not base:
+        local = os.environ.get("LOCALAPPDATA")
+        base = (os.path.join(local, "com.fincept.terminal") if local
+                else os.path.join(os.path.expanduser("~"), ".cache", "fincept-terminal"))
+    candidates = [os.path.join(base, "cache", "exchange_markets"),
+                  os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache")]
+    for d in candidates:
+        try:
+            os.makedirs(d, exist_ok=True)
+            return d
+        except OSError:
+            continue
+    return candidates[-1]
 
 
 def get_markets_cache_path(exchange_id: str) -> str:
     """Return path to the per-exchange markets cache file."""
-    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache")
-    os.makedirs(cache_dir, exist_ok=True)
-    return os.path.join(cache_dir, f"markets_{exchange_id}.json")
+    return os.path.join(_markets_cache_dir(), f"markets_{exchange_id}.json")
 
 
-def load_cached_markets(exchange_id: str) -> dict | None:
-    """Return cached markets dict if still fresh (within TTL), else None."""
+def load_cached_market_data(exchange_id: str, allow_stale: bool = False):
+    """Return (markets, currencies) from the cache, or (None, None).
+
+    `currencies` may be None for a cache written before currencies were stored.
+    With allow_stale the TTL is ignored (offline fallback).
+    """
     path = get_markets_cache_path(exchange_id)
     try:
         if os.path.exists(path):
             age = time.time() - os.path.getmtime(path)
-            if age < _MARKETS_CACHE_TTL:
+            if allow_stale or age < _MARKETS_CACHE_TTL:
                 with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                if isinstance(data, dict) and data.get("version") == _MARKETS_CACHE_VERSION:
+                    return data.get("markets") or None, data.get("currencies") or None
+                if isinstance(data, dict) and data:
+                    return data, None  # legacy file: a bare markets dict
     except Exception:
         pass
-    return None
+    return None, None
 
 
-def save_markets_cache(exchange_id: str, markets: dict) -> None:
-    """Persist markets dict to disk so the next WS startup can skip load_markets()."""
+def load_cached_markets(exchange_id: str, allow_stale: bool = False) -> dict | None:
+    """Return cached markets dict if still fresh (within TTL), else None."""
+    return load_cached_market_data(exchange_id, allow_stale)[0]
+
+
+def save_markets_cache(exchange_id: str, markets: dict, currencies: dict | None = None) -> None:
+    """Persist markets (and currencies) so the next start can skip load_markets()."""
+    if not markets:
+        return
     path = get_markets_cache_path(exchange_id)
+    tmp = path + ".tmp"
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(markets, f)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"version": _MARKETS_CACHE_VERSION, "markets": markets,
+                       "currencies": currencies or {}}, f, default=str)
+        os.replace(tmp, path)
     except Exception:
-        pass
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+def apply_cached_markets(exchange, markets: dict, currencies: dict | None) -> bool:
+    """Install cached markets via set_markets() so ccxt rebuilds its indexes
+    (markets_by_id, symbols, currencies). Returns True on success."""
+    try:
+        exchange.set_markets(markets, currencies)
+        return bool(exchange.markets)
+    except Exception:
+        return False
+
+
+def _is_retryable(exc) -> bool:
+    # RequestTimeout: a connection that hung. A bare NetworkError (not one of
+    # its subclasses such as DDoSProtection / RateLimitExceeded /
+    # ExchangeNotAvailable) is a dropped or refused connection.
+    return isinstance(exc, ccxt.RequestTimeout) or type(exc) is ccxt.NetworkError
+
+
+def install_get_retry(exchange, attempts: int = 3) -> None:
+    """Retry idempotent GET requests that hit a hung or dropped connection.
+
+    Some networks lose a share of new connections to an exchange (seen with
+    Kraken: roughly half of fresh TLS connections stall until timeout). One
+    stalled connection must not fail a quote, a candle fetch or load_markets.
+    Only GET is retried: a POST may be an order, and retrying one could place
+    it twice. Works for both the sync and the async (ccxt.pro) classes.
+    """
+    original = exchange.fetch
+    import inspect
+    if inspect.iscoroutinefunction(original):
+        async def fetch(url, method="GET", headers=None, body=None):
+            if (method or "GET").upper() != "GET":
+                return await original(url, method, headers, body)
+            for i in range(attempts):
+                try:
+                    return await original(url, method, headers, body)
+                except Exception as e:
+                    if i == attempts - 1 or not _is_retryable(e):
+                        raise
+    else:
+        def fetch(url, method="GET", headers=None, body=None):
+            if (method or "GET").upper() != "GET":
+                return original(url, method, headers, body)
+            for i in range(attempts):
+                try:
+                    return original(url, method, headers, body)
+                except Exception as e:
+                    if i == attempts - 1 or not _is_retryable(e):
+                        raise
+    exchange.fetch = fetch
 
 
 def get_default_type(exchange_id: str) -> str:
@@ -83,6 +177,7 @@ def make_exchange(exchange_id: str, credentials: dict = None,
 
     exchange_class = getattr(ccxt, exchange_id)
     exchange = exchange_class(config)
+    install_get_retry(exchange)
 
     if sandbox:
         exchange.set_sandbox_mode(True)

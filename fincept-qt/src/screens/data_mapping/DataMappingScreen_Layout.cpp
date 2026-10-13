@@ -188,7 +188,7 @@ QWidget* DataMappingScreen::create_left_panel() {
     schemas_count_lbl_->setObjectName("dmInfoLabel");
     sl->addWidget(schemas_count_lbl_);
 
-    parsers_count_lbl_ = new QLabel(tr("Parsers: %1").arg(6));
+    parsers_count_lbl_ = new QLabel(tr("Parsers: %1").arg(1));
     parsers_count_lbl_->setObjectName("dmInfoLabel");
     sl->addWidget(parsers_count_lbl_);
 
@@ -231,13 +231,8 @@ QWidget* DataMappingScreen::create_right_panel() {
     // key paths and simple JMESPath-style paths use the same syntax, while JSONata,
     // JavaScript and Regex are selectable but never executed. Saying "READY" for all
     // six let a mapping with a Regex parser pass every test it was never evaluated by.
-    const QStringList parsers = {"JSONPath", "JSONata", "JMESPath", "Direct", "JavaScript", "Regex"};
-    for (const auto& p : parsers) {
-        const bool evaluated = p == QLatin1String("JSONPath") || p == QLatin1String("Direct");
-        const bool simple_paths = p == QLatin1String("JMESPath");
-        auto* lbl = new QLabel(evaluated      ? tr("%1 — READY").arg(p)
-                               : simple_paths ? tr("%1 — SIMPLE PATHS").arg(p)
-                                              : tr("%1 — NOT EXECUTED").arg(p));
+    {
+        auto* lbl = new QLabel(tr("%1 — READY").arg(QStringLiteral("JSONPath")));
         lbl->setObjectName("dmInfoLabel");
         il->addWidget(lbl);
     }
@@ -338,7 +333,9 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_auth_value_->setAccessibleName(tr("Auth value (secret)"));
     api_auth_value_->setToolTip(tr("Saved with the mapping and sent with TEST API REQUEST and RUN: Bearer Token / "
                                    "OAuth2 as Authorization: Bearer, API Key as X-API-Key, Basic Auth "
-                                   "(user:password) as Authorization: Basic. Lines in HEADERS override it."));
+                                   "(user:password) as Authorization: Basic. Lines in HEADERS override it.\n"
+                                   "APIs that take the key in the URL or a custom header: write {AUTH} there "
+                                   "(e.g. ?apikey={AUTH}) and it is replaced by this value when the request is sent."));
     api_auth_value_row_ = create_form_row(tr("AUTH VALUE"), api_auth_value_);
     bl->addWidget(api_auth_value_row_);
 
@@ -356,15 +353,6 @@ QWidget* DataMappingScreen::create_api_config_panel() {
     api_body_row_ = create_form_row(tr("REQUEST BODY (JSON)"), api_body_);
     bl->addWidget(api_body_row_);
 
-    api_timeout_ = new QSpinBox;
-    api_timeout_->setRange(1, 120);
-    api_timeout_->setValue(30);
-    api_timeout_->setSuffix(tr(" sec"));
-    api_timeout_->setAccessibleName(tr("Request timeout"));
-    api_timeout_->setToolTip(tr("Not applied yet: this value is not stored with the mapping, and requests "
-                                "(TEST API REQUEST and RUN) use the HTTP client's fixed 20 second timeout."));
-    api_timeout_row_ = create_form_row(tr("TIMEOUT"), api_timeout_);
-    bl->addWidget(api_timeout_row_);
 
     auto* test_row = new QWidget(this);
     auto* trl = new QHBoxLayout(test_row);
@@ -413,10 +401,6 @@ QWidget* DataMappingScreen::create_schema_panel() {
     bl->setContentsMargins(12, 12, 12, 12);
     bl->setSpacing(10);
 
-    schema_type_ = new QComboBox;
-    schema_type_->addItems({tr("Predefined Schema"), tr("Custom Schema")});
-    schema_type_row_ = create_form_row(tr("SCHEMA TYPE"), schema_type_);
-    bl->addWidget(schema_type_row_);
 
     schema_select_ = new QComboBox;
     for (const auto& s : schemas()) {
@@ -488,8 +472,12 @@ QWidget* DataMappingScreen::create_field_mapping_panel() {
     hl->addStretch(1);
 
     parser_engine_ = new QComboBox;
-    // Parser names matched by text against template configs — keep untranslated.
-    parser_engine_->addItems({"JSONPath", "JSONata", "JMESPath", "Direct", "JavaScript", "Regex"});
+    // Only the JSONPath engine exists. JSONata / JavaScript / Regex used to be
+    // offered here and were never executed. (Parser names are matched by text
+    // against saved mappings and templates — keep untranslated.)
+    parser_engine_->addItems({"JSONPath"});
+    parser_engine_->setToolTip(tr("Expressions are JSONPath: $.a.b, $[0], [-1], ['key with spaces'], [*] / .* "
+                                  "to take every element, and a trailing ~ for property names."));
     parser_label_ = new QLabel(tr("Parser:"));
     hl->addWidget(parser_label_);
     hl->addWidget(parser_engine_);

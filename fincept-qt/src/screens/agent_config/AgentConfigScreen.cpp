@@ -15,7 +15,6 @@
 #include "screens/agent_config/WorkflowsViewPanel.h"
 #include "services/agents/AgentService.h"
 #include "services/cloud/CloudSyncEngine.h"
-#include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
 
@@ -59,12 +58,9 @@ AgentConfigScreen::AgentConfigScreen(QWidget* parent) : QWidget(parent) {
 
     // Read the Agentic-Mode setting and apply visibility. The toggle widget
     // (DeveloperSection) publishes settings.agentic_mode_changed via EventBus
-    // on user change; we react in-place without restart.
-    {
-        auto r = fincept::SettingsRepository::instance().get(QStringLiteral("agentic_mode_enabled"),
-                                                             QStringLiteral("false"));
-        agentic_mode_enabled_ = r.is_ok() && r.value() == QStringLiteral("true");
-    }
+    // on user change; we react in-place without restart. One reader for the
+    // default (on) — AgentService owns it.
+    agentic_mode_enabled_ = services::AgentService::agentic_mode_enabled();
     connect(&fincept::EventBus::instance(), &fincept::EventBus::eventPublished, this,
             [this](const QString& event, const QVariantMap& data) {
                 if (event == QStringLiteral("settings.agentic_mode_changed")) {
@@ -437,6 +433,11 @@ void AgentConfigScreen::setup_service_connections() {
 
 void AgentConfigScreen::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    // Runs that finish while this screen is hidden raise a desktop notification.
+    if (!reported_visible_) {
+        reported_visible_ = true;
+        services::AgentService::instance().note_agents_screen_visible(true);
+    }
     if (first_show_) {
         first_show_ = false;
         // Build the default (AGENTS) panel and kick off discovery once
@@ -449,6 +450,16 @@ void AgentConfigScreen::showEvent(QShowEvent* event) {
 
 void AgentConfigScreen::hideEvent(QHideEvent* event) {
     QWidget::hideEvent(event);
+    if (reported_visible_) {
+        reported_visible_ = false;
+        services::AgentService::instance().note_agents_screen_visible(false);
+    }
+}
+
+AgentConfigScreen::~AgentConfigScreen() {
+    // A screen destroyed while shown never gets its hideEvent — balance the count.
+    if (reported_visible_)
+        services::AgentService::instance().note_agents_screen_visible(false);
 }
 
 // ── IStatefulScreen ──────────────────────────────────────────────────────────

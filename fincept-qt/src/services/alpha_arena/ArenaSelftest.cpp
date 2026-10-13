@@ -11,6 +11,7 @@
 #include "services/alpha_arena/ArenaIndicators.h"
 #include "services/alpha_arena/ArenaLlmClient.h"
 #include "services/alpha_arena/ArenaMarketData.h"
+#include "services/alpha_arena/ArenaMetrics.h"
 #include "services/alpha_arena/ArenaModelRegistry.h"
 #include "services/alpha_arena/ArenaPrompts.h"
 #include "services/alpha_arena/ArenaRisk.h"
@@ -29,11 +30,53 @@
 
 #include <cmath>
 #include <cstdio>
+#include <limits>
+#include <memory>
 
 namespace fincept::arena {
 namespace {
 bool approx(double a, double b, double eps = 0.01) {
     return std::fabs(a - b) <= eps;
+}
+
+// Kills are asynchronous (bounded marks refresh, no nested GUI event loop in
+// the engine). The headless self-test runs before QApplication::exec(), so it
+// may wait on a local loop for the outcome. State is shared so a late callback
+// can never touch a dead stack frame.
+struct ArenaKillWait {
+    Result<void> out = Result<void>::err("kill did not complete within 5 s");
+    bool finished = false;
+    QEventLoop loop;
+};
+
+Result<void> arena_wait_kill(const std::shared_ptr<ArenaKillWait>& st, Result<void> started) {
+    if (started.is_err())
+        return started;
+    if (!st->finished) {
+        QTimer::singleShot(5000, &st->loop, &QEventLoop::quit);
+        st->loop.exec();
+    }
+    return st->out;
+}
+
+Result<void> arena_kill_all_sync(ArenaEngine& eng) {
+    auto st = std::make_shared<ArenaKillWait>();
+    auto started = eng.kill_all([st](Result<void> r) {
+        st->out = r;
+        st->finished = true;
+        st->loop.quit();
+    });
+    return arena_wait_kill(st, started);
+}
+
+Result<void> arena_kill_agent_sync(ArenaEngine& eng, const QString& agent_id) {
+    auto st = std::make_shared<ArenaKillWait>();
+    auto started = eng.kill_agent(agent_id, [st](Result<void> r) {
+        st->out = r;
+        st->finished = true;
+        st->loop.quit();
+    });
+    return arena_wait_kill(st, started);
 }
 } // namespace
 
@@ -494,6 +537,74 @@ int run_arena_selftest() {
               candles.size() == 1 && approx(candles[0].c, 93858.0) && candles[0].t == 1765299600000LL);
     }
 
+    // ── Section 9b: leaderboard metrics / risk pyramiding / Fincept envelope ──
+    {
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        // Capital 10000 → 11000 → 9900 → 10500: return +5%, max DD = 10% off the 11000 peak.
+        const QVector<QPointF> s1 = {{0, 11000}, {3600000, 9900}, {7200000, 10500}};
+        const auto p1 = compute_arena_performance(s1, 10000, nan);
+        check("metrics: return from last snapshot", approx(p1.return_pct, 5.0, 1e-9));
+        check("metrics: max drawdown off the running peak", approx(p1.max_drawdown_pct, 10.0, 1e-9));
+        check("metrics: Sharpe withheld below the minimum sample", !p1.sharpe_valid && p1.returns_used == 2);
+        const auto p2 = compute_arena_performance(s1, 10000, 12000.0);
+        check("metrics: live equity drives the return", approx(p2.return_pct, 20.0, 1e-9));
+        check("metrics: loss-only run → drawdown from capital",
+              approx(compute_arena_performance({{0, 9000}}, 10000, nan).max_drawdown_pct, 10.0, 1e-9));
+        // 12 hourly snapshots alternating +1% / −0.5%: Sharpe defined, positive,
+        // annualised with sqrt(8760) from the 1 h spacing.
+        QVector<QPointF> s3;
+        double e = 10000;
+        for (int i = 0; i < 12; ++i) {
+            s3.append(QPointF(double(i) * 3600000.0, e));
+            e *= (i % 2 == 0) ? 1.01 : 0.995;
+        }
+        const auto p3 = compute_arena_performance(s3, 10000, nan);
+        double m = 0, v = 0;
+        QVector<double> rr;
+        for (int i = 1; i < s3.size(); ++i)
+            rr.append(s3[i].y() / s3[i - 1].y() - 1.0);
+        for (double r : rr)
+            m += r;
+        m /= rr.size();
+        for (double r : rr)
+            v += (r - m) * (r - m);
+        const double expect = m / std::sqrt(v / (rr.size() - 1)) * std::sqrt(8760.0);
+        check("metrics: Sharpe annualised from actual spacing", p3.sharpe_valid && approx(p3.sharpe, expect, 1e-6));
+        check("metrics: flat series → Sharpe undefined", !compute_arena_performance(
+                                                                QVector<QPointF>(12, QPointF(0, 10000)), 10000, nan)
+                                                                .sharpe_valid);
+
+        // Pyramiding: 4000 open + 2000 more on the same side breaches 50% of 10k.
+        AccountView acct;
+        acct.balance = 8000;
+        acct.equity = 10000;
+        PositionRow held;
+        held.coin = "BTC";
+        held.side = "long";
+        held.qty = 0.08;
+        held.entry_price = 50000; // 4000 notional
+        held.leverage = 2;
+        acct.positions = {held};
+        AgentAction add;
+        add.kind = ActionKind::Open;
+        add.coin = "BTC";
+        add.side = "long";
+        add.size_usd = 2000;
+        add.leverage = 2;
+        check("risk: adding past the per-position cap rejected", !evaluate(add, acct, RiskLimits{}, 0).approved);
+        add.side = "short"; // a flip replaces the position: only the new leg counts
+        check("risk: flip judged on the new leg only", evaluate(add, acct, RiskLimits{}, 0).approved);
+
+        // Fincept /research/chat envelope.
+        const auto fp = ArenaLlmClient::parse_response(
+            "fincept", R"({"success":true,"message":"Success","data":{"choices":[{"message":{"content":"ok"}}],)"
+                       R"("usage":{"prompt_tokens":11,"completion_tokens":2}}})");
+        check("llm: fincept envelope unwrapped", fp.success && fp.content == "ok" && fp.prompt_tokens == 11);
+        const auto fe = ArenaLlmClient::parse_response(
+            "fincept", R"({"success":false,"message":{"error":"insufficient_credits","message":"no credits"}})");
+        check("llm: fincept failure envelope surfaced", !fe.success && fe.error == "no credits");
+    }
+
     // ── Section 10: engine round (fakes; no network) ────────────────────────
     {
         auto* fake_md = new FakeMarketData(nullptr);
@@ -577,7 +688,27 @@ int run_arena_selftest() {
         // Crash-recovery surface + restart guard.
         check("engine: no phantom crash recoveries", eng.pending_crash_recoveries().isEmpty());
 
-        check("engine: kill_all + stop", eng.kill_all().is_ok());
+        {
+            // Asynchronous contract: kill_all returns before closing anything,
+            // refuses lifecycle calls meanwhile, then flattens + ends.
+            auto st = std::make_shared<ArenaKillWait>();
+            auto started = eng.kill_all([st](Result<void> r) {
+                st->out = r;
+                st->finished = true;
+                st->loop.quit();
+            });
+            const auto pos_now = store.positions_for(ecid, gpt_id);
+            check("kill: kill_all returns before closing (async, no nested loop)",
+                  started.is_ok() && !st->finished && pos_now.is_ok() && pos_now.value().size() == 1);
+            check("kill: lifecycle refused while killing", eng.kill_in_progress() && eng.pause().is_err() &&
+                                                                eng.start(ecid).is_err() && eng.stop().is_err());
+            check("kill: second kill refused while killing", eng.kill_all().is_err());
+            check("engine: kill_all + stop", arena_wait_kill(st, started).is_ok());
+            const auto pos_after = store.positions_for(ecid, gpt_id);
+            check("kill: kill_all flattened the book", pos_after.is_ok() && pos_after.value().isEmpty());
+            auto c_after = store.competition(ecid);
+            check("kill: competition ended", c_after.is_ok() && c_after.value().status == "ended");
+        }
         (void)store.delete_competition_cascade(ecid);
 
         // Restart guard: starting a new competition must end the previous one
@@ -595,7 +726,7 @@ int run_arena_selftest() {
         auto c3 = store.competition(ecid3);
         check("engine: second auto-ended on restart", c2.is_ok() && c2.value().status == "ended");
         check("engine: third running", c3.is_ok() && c3.value().status == "running");
-        (void)eng.kill_all(); // only the active (third) competition
+        (void)arena_kill_all_sync(eng); // only the active (third) competition
         (void)store.delete_competition_cascade(ecid2);
         (void)store.delete_competition_cascade(ecid3);
 
@@ -628,7 +759,7 @@ int run_arena_selftest() {
         const auto horders = store.orders_for(hcid, hagent, 10);
         check("hitl: order executed after approval",
               horders.is_ok() && horders.value().size() == 1 && horders.value()[0].status == "filled");
-        (void)eng.kill_all();
+        (void)arena_kill_all_sync(eng);
         (void)store.delete_competition_cascade(hcid);
 
         // Immediate halt (user-reported bug): an agent halted while its LLM
@@ -674,7 +805,7 @@ int run_arena_selftest() {
         loop.exec();
         auto kpos = store.positions_for(kcid, kaid);
         check("kill: setup round opened a position", completed_seq == 2 && kpos.is_ok() && kpos.value().size() == 1);
-        check("kill: kill_agent ok", eng.kill_agent(kaid).is_ok());
+        check("kill: kill_agent ok", arena_kill_agent_sync(eng, kaid).is_ok());
         kpos = store.positions_for(kcid, kaid);
         check("kill: positions flattened", kpos.is_ok() && kpos.value().isEmpty());
         bool kill_close = false;
@@ -709,7 +840,7 @@ int run_arena_selftest() {
         loop.exec();
         check("marks: marks_updated fired between rounds", marks_count >= 1);
 
-        (void)eng.kill_all();
+        (void)arena_kill_all_sync(eng);
         (void)store.delete_competition_cascade(kcid);
     }
 

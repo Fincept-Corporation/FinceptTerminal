@@ -7,10 +7,10 @@
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QInputDialog>
-#include <QJsonArray>
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QPointer>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace fincept::chat_mode {
@@ -777,42 +777,49 @@ void ChatAgentPanel::on_send_feedback() {
 // ── MCP Server actions ────────────────────────────────────────────────────────
 
 void ChatAgentPanel::on_add_mcp_server() {
+    // The cloud agent only accepts REMOTE MCP servers from users: an https URL over
+    // streamable-http or SSE. Local (stdio) servers run on this machine and are
+    // configured in the terminal's own MCP Servers screen, not here.
     bool ok = false;
-    const QString name = QInputDialog::getText(this, tr("Add MCP Server"), tr("Name:"), QLineEdit::Normal, {}, &ok);
+    const QString name = QInputDialog::getText(
+        this, tr("Add Remote MCP Server"),
+        tr("The cloud agent can use remote MCP servers reachable over https.\n"
+           "Local (stdio) servers such as uvx / npx commands run on your machine: add them in the\n"
+           "terminal's MCP Servers screen instead.\n\n"
+           "Server name (2-48 characters: lowercase letters, digits and '-'):"),
+        QLineEdit::Normal, {}, &ok);
     if (!ok || name.trimmed().isEmpty())
         return;
 
-    // Transport values are protocol identifiers passed to the service — not translated.
-    const QStringList transports = {"stdio", "sse"};
-    const QString transport = QInputDialog::getItem(this, tr("Transport"), tr("Type:"), transports, 0, false, &ok);
+    // Display labels are translated; the matching wire values are protocol identifiers.
+    const QStringList transport_labels = {tr("Streamable HTTP (recommended)"), tr("SSE (Server-Sent Events)")};
+    const QStringList transport_ids = {QStringLiteral("streamable-http"), QStringLiteral("sse")};
+    const QString picked =
+        QInputDialog::getItem(this, tr("Transport"), tr("Remote transport:"), transport_labels, 0, false, &ok);
     if (!ok)
         return;
+    const int transport_index = transport_labels.indexOf(picked);
+    if (transport_index < 0)
+        return;
+
+    const QString url_text =
+        QInputDialog::getText(this, tr("Server URL"), tr("https:// URL of the MCP server endpoint:"),
+                              QLineEdit::Normal, QStringLiteral("https://"), &ok)
+            .trimmed();
+    if (!ok || url_text.isEmpty() || url_text == QStringLiteral("https://"))
+        return;
+    const QUrl url(url_text, QUrl::StrictMode);
+    if (!url.isValid() || url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0 ||
+        url.host().isEmpty()) {
+        QMessageBox::warning(this, tr("MCP Server"),
+                             tr("Enter a full https:// URL (for example https://mcp.example.com/mcp).\n\n"
+                                "Local stdio servers are configured in the terminal's MCP Servers screen."));
+        return;
+    }
 
     QJsonObject config;
-    config["transport"] = transport;
-
-    if (transport == "stdio") {
-        const QString command =
-            QInputDialog::getText(this, tr("Command"), tr("Command (e.g. uvx, npx):"), QLineEdit::Normal, "uvx", &ok);
-        if (!ok || command.trimmed().isEmpty())
-            return;
-
-        const QString args_str =
-            QInputDialog::getText(this, tr("Arguments"), tr("Args (space-separated):"), QLineEdit::Normal, {}, &ok);
-        if (!ok)
-            return;
-
-        config["command"] = command.trimmed();
-        QJsonArray args;
-        for (const auto& a : args_str.split(' ', Qt::SkipEmptyParts))
-            args.append(a.trimmed());
-        config["args"] = args;
-    } else {
-        const QString url = QInputDialog::getText(this, tr("SSE URL"), tr("URL:"), QLineEdit::Normal, {}, &ok);
-        if (!ok || url.trimmed().isEmpty())
-            return;
-        config["url"] = url.trimmed();
-    }
+    config["transport"] = transport_ids.at(transport_index);
+    config["url"] = url_text;
 
     QPointer<ChatAgentPanel> self = this;
     ChatModeService::instance().add_mcp_server(
@@ -820,11 +827,15 @@ void ChatAgentPanel::on_add_mcp_server() {
             if (!self)
                 return;
             if (!added_ok) {
-                QMessageBox::warning(this, tr("MCP Server"), tr("Failed: %1").arg(err));
+                // err is the backend's own explanation (shown verbatim).
+                QMessageBox::warning(this, tr("MCP Server"), err);
                 return;
             }
-            if (srv.status == "error")
-                QMessageBox::warning(this, tr("MCP Server"), tr("'%1' added with errors.").arg(srv.name));
+            if (srv.status == "error") {
+                const QString reason = srv.error.isEmpty() ? tr("connection failed") : srv.error;
+                QMessageBox::warning(this, tr("MCP Server"),
+                                     tr("'%1' was added but could not be connected:\n\n%2").arg(srv.name, reason));
+            }
             refresh_mcp_servers();
         });
 }

@@ -78,7 +78,7 @@ void EconDbPanel::activate() {
 void EconDbPanel::build_controls(QHBoxLayout* thl) {
     auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -133,13 +133,20 @@ void EconDbPanel::on_result(const QString& request_id, const services::Economics
     }
 
     // Build descriptive title from metadata
-    const QJsonObject meta = result.data["metadata"].toObject();
-    const QString desc = meta["description"].toString();
-    const QString freq = meta["frequency"].toString();
-    const QString title = desc.isEmpty()
-                              ? "EconDB: " + indicator_combo_->currentText() + " — " + country_combo_->currentText()
-                              : "EconDB: " + desc + (freq.isEmpty() ? "" : " (" + freq + ")");
+    const QJsonObject md = result.data["metadata"].toObject();
+    const QString desc = md["description"].toString();
+    const QString freq = md["frequency"].toString();
+    const QString title = desc.isEmpty() ? "EconDB: " + request_id.mid(7)
+                                         : "EconDB: " + desc + (freq.isEmpty() ? "" : " (" + freq + ")");
 
+    SeriesMeta series_meta;
+    series_meta.frequency = freq;
+    series_meta.note = md["ticker"].toString();
+    const QString transform = result.data["transform"].toString();
+    if (!transform.isEmpty())
+        series_meta.note += (series_meta.note.isEmpty() ? QString() : QStringLiteral(" · ")) +
+                            tr("transform: %1").arg(transform);
+    set_series_meta(series_meta);
     display(obs, title);
     LOG_INFO("EconDbPanel", QString("Displayed %1 observations: %2").arg(obs.size()).arg(title));
 }

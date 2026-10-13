@@ -30,7 +30,7 @@ class AnalyticsSectorsView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
     /// Real Pearson correlation matrix keyed "SYMBOL_A|SYMBOL_B", supplied by
-    /// PortfolioService::correlation_computed. Triggers a redraw of the matrix.
+    /// PortfolioService::market_analytics_loaded (via the detail wrapper). Triggers a redraw of the matrix.
     void set_correlation(const QHash<QString, double>& matrix);
 
   protected:

@@ -2,14 +2,18 @@
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "storage/repositories/WatchlistRepository.h"
 
 #include <QApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QMenu>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QToolTip>
 #include <QUrl>
 
 #if defined(Q_OS_WIN)
@@ -381,20 +385,77 @@ void NewsFeedPanel::show_context_menu(const QPoint& pos) {
 
     if (!article.tickers.isEmpty()) {
         menu.addSeparator();
-        for (const QString& ticker : article.tickers) {
-            auto* eq_act = menu.addAction(tr("Open $%1 in Equity Research").arg(ticker));
-            connect(eq_act, &QAction::triggered, this, [ticker]() {
-                EventBus::instance().publish("nav.open_symbol",
-                                             QVariantMap{{"screen_id", "equity_research"}, {"symbol", ticker}});
-            });
-        }
-        menu.addSeparator();
-        for (const QString& ticker : article.tickers) {
-            auto* filter_act = menu.addAction(tr("Filter feed by $%1").arg(ticker));
-            connect(filter_act, &QAction::triggered, this, [this, ticker]() { emit ticker_filter_requested(ticker); });
+        QPointer<NewsFeedPanel> self = this;
+        auto filter_cb = [self](const QString& t) {
+            if (self)
+                emit self->ticker_filter_requested(t);
+        };
+        if (article.tickers.size() == 1) {
+            add_ticker_actions(&menu, article.tickers.first(), this, filter_cb);
+        } else {
+            // One submenu per ticker keeps a multi-ticker story's menu short.
+            for (const QString& ticker : article.tickers)
+                add_ticker_actions(menu.addMenu(QStringLiteral("$") + ticker), ticker, this, filter_cb);
         }
     }
     menu.exec(list_view_->viewport()->mapToGlobal(pos));
+}
+
+void NewsFeedPanel::add_ticker_actions(QMenu* menu, const QString& ticker, QWidget* host,
+                                       const std::function<void(const QString&)>& filter_cb) {
+    if (!menu || ticker.isEmpty())
+        return;
+    const QString shown = QStringLiteral("$") + ticker;
+    // nav.open_symbol navigates first (constructing the target screen when needed)
+    // and then hands it the ticker through IGroupLinked.
+    auto open_in = [ticker](const QString& screen_id) {
+        EventBus::instance().publish("nav.open_symbol", QVariantMap{{"screen_id", screen_id}, {"symbol", ticker}});
+    };
+    QObject::connect(menu->addAction(tr("Open %1 in Equity Research").arg(shown)), &QAction::triggered, host,
+                     [open_in]() { open_in(QStringLiteral("equity_research")); });
+    QObject::connect(menu->addAction(tr("Open %1 chart / order ticket (Equity Trading)").arg(shown)),
+                     &QAction::triggered, host, [open_in]() { open_in(QStringLiteral("equity_trading")); });
+    QObject::connect(menu->addAction(tr("Backtest %1").arg(shown)), &QAction::triggered, host,
+                     [open_in]() { open_in(QStringLiteral("backtesting")); });
+
+    // One entry per watchlist (same pattern as the Screener / Markets menus).
+    QMenu* wl_menu = menu->addMenu(tr("Add %1 to Watchlist").arg(shown));
+    const auto lists = fincept::WatchlistRepository::instance().list_all();
+    if (!lists.is_ok() || lists.value().isEmpty()) {
+        wl_menu->addAction(tr("No watchlists yet — create one on the Watchlist screen"))->setEnabled(false);
+    } else {
+        for (const auto& wl : lists.value()) {
+            QObject::connect(wl_menu->addAction(wl.name), &QAction::triggered, host,
+                             [host, ticker, list_id = wl.id, list_name = wl.name]() {
+                                 auto& repo = fincept::WatchlistRepository::instance();
+                                 if (const auto stocks = repo.get_stocks(list_id); stocks.is_ok()) {
+                                     for (const auto& st : stocks.value()) {
+                                         if (st.symbol.compare(ticker, Qt::CaseInsensitive) == 0) {
+                                             QToolTip::showText(QCursor::pos(),
+                                                                tr("%1 is already in %2").arg(ticker, list_name), host);
+                                             return;
+                                         }
+                                     }
+                                 }
+                                 const auto r = repo.add_stock(list_id, ticker);
+                                 QToolTip::showText(QCursor::pos(),
+                                                    r.is_ok() ? tr("Added %1 to %2").arg(ticker, list_name)
+                                                              : tr("Could not add %1 to %2").arg(ticker, list_name),
+                                                    host);
+                                 if (r.is_ok()) // an open Watchlist screen picks the change up
+                                     EventBus::instance().publish(
+                                         "watchlist.updated", QVariantMap{{"action", QStringLiteral("add")},
+                                                                          {"symbol", ticker}});
+                             });
+        }
+    }
+
+    menu->addSeparator();
+    if (filter_cb)
+        QObject::connect(menu->addAction(tr("Filter feed by %1").arg(shown)), &QAction::triggered, host,
+                         [filter_cb, ticker]() { filter_cb(ticker); });
+    QObject::connect(menu->addAction(tr("Copy %1").arg(ticker)), &QAction::triggered, host,
+                     [ticker]() { QApplication::clipboard()->setText(ticker); });
 }
 
 void NewsFeedPanel::check_scroll_position() {

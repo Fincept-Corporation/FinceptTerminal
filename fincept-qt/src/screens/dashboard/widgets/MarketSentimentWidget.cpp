@@ -106,7 +106,12 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget(tr("M
     };
 
     make_stat_row(tr("VIX (Fear Gauge)"), vix_title_label_, vix_label_);
-    make_stat_row(tr("Advance/Decline"), breadth_title_label_, breadth_label_);
+    // Not exchange Advance/Decline — up vs down among the tile's fixed basket.
+    make_stat_row(tr("Up / Down (%1 large caps)").arg(kSentimentSymbols.size() - 1), breadth_title_label_,
+                  breadth_label_);
+    banner_->setToolTip(tr("Composite of %1 US large caps: share moving more than ±0.5% today, "
+                           "adjusted by the VIX level. A basket indicator, not a market-wide index.")
+                            .arg(kSentimentSymbols.size() - 1));
 
     vl->addWidget(stats);
     vl->addStretch();
@@ -118,6 +123,9 @@ MarketSentimentWidget::MarketSentimentWidget(QWidget* parent) : BaseWidget(tr("M
 }
 
 void MarketSentimentWidget::apply_styles() {
+    for (QWidget* w : {static_cast<QWidget*>(score_label_), static_cast<QWidget*>(verdict_label_),
+                       static_cast<QWidget*>(vix_label_), static_cast<QWidget*>(breadth_label_)})
+        reset_css_cache(w);
     banner_->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
     arrow_label_->setStyleSheet(
         QString("font-size: 18px; background: transparent; color: %1;").arg(ui::colors::TEXT_TERTIARY()));
@@ -212,6 +220,7 @@ void MarketSentimentWidget::rebuild_from_cache() {
 
 void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes) {
     int bullish = 0, bearish = 0, neutral = 0;
+    int advancers = 0, decliners = 0;
     double vix_price = -1;
 
     for (const auto& q : quotes) {
@@ -225,6 +234,10 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
             ++bearish;
         else
             ++neutral;
+        if (q.change_pct > 0)
+            ++advancers;
+        else if (q.change_pct < 0)
+            ++decliners;
     }
 
     int total = bullish + bearish + neutral;
@@ -256,12 +269,12 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
                                     : tr("STRONGLY BEARISH");
 
     score_label_->setText(QString("%1%2").arg(score > 0 ? "+" : "").arg(score));
-    score_label_->setStyleSheet(
-        QString("color: %1; font-size: 24px; font-weight: bold; background: transparent;").arg(score_color));
+    set_css_cached(score_label_,
+                   QString("color: %1; font-size: 24px; font-weight: bold; background: transparent;").arg(score_color));
 
     verdict_label_->setText(verdict);
-    verdict_label_->setStyleSheet(
-        QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(score_color));
+    set_css_cached(verdict_label_,
+                   QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(score_color));
 
     // Update bar proportions
     auto* bar_layout = qobject_cast<QHBoxLayout*>(bull_bar_->parentWidget()->layout());
@@ -281,14 +294,17 @@ void MarketSentimentWidget::populate(const QVector<services::QuoteData>& quotes)
         QString vix_color = vix_price > 25   ? ui::colors::NEGATIVE()
                             : vix_price > 18 ? ui::colors::WARNING()
                                              : ui::colors::POSITIVE();
-        vix_label_->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(vix_color));
+        set_css_cached(vix_label_,
+                       QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(vix_color));
     }
 
-    // Breadth
-    breadth_label_->setText(QString("%1A / %2D").arg(bullish).arg(bearish));
-    breadth_label_->setStyleSheet(QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                                      .arg(bullish > bearish ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    // Up / down count (any move, not the ±0.5% buckets the score uses).
+    breadth_label_->setText(tr("%1 up / %2 down").arg(advancers).arg(decliners));
+    const QString breadth_color = advancers > decliners   ? ui::colors::POSITIVE()
+                                  : advancers < decliners ? ui::colors::NEGATIVE()
+                                                          : ui::colors::TEXT_PRIMARY();
+    set_css_cached(breadth_label_,
+                   QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(breadth_color));
 }
 
 void MarketSentimentWidget::retranslateUi() {

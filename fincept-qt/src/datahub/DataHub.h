@@ -263,6 +263,13 @@ class DataHub : public QObject {
     Producer* find_producer(const QString& topic) const;
     TopicPolicy resolve_policy(const QString& topic) const;
     TopicState& state_for(const QString& topic);
+    /// A topic pulled out of coalesce_pending_ before dispatch was never handed
+    /// to its producer, so no publish()/publish_error() will ever clear its
+    /// in_flight flag. Clear it here, or a re-subscribe inside the coalesce
+    /// window (unsubscribe + subscribe, as panels do on refresh) finds the
+    /// topic "in flight", skips the cold-start fetch, and the topic stays dark
+    /// until refresh_timeout_ms (30 s) expires. Caller holds mutex_.
+    void clear_undispatched_in_flight(const QString& topic);
     static bool pattern_matches(const QString& pattern, const QString& topic);
     void emit_to_subscribers(const QString& topic, const QVariant& value);
     void do_publish(const QString& topic, const QVariant& value, std::chrono::milliseconds ttl_override);

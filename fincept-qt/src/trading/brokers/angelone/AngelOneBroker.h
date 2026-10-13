@@ -3,6 +3,8 @@
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
 
+#include <cmath>
+
 namespace fincept::trading {
 
 class AngelOneBroker : public IBroker {
@@ -51,6 +53,25 @@ class AngelOneBroker : public IBroker {
     // Angel One JWTs expire ~2.5h; silent refresh replays the stored TOTP login.
     bool supports_silent_refresh() const override { return true; }
     TokenExchangeResponse refresh_session(const BrokerCredentials& creds) override;
+
+    // SmartAPI producttype on positions/orders: DELIVERY, CARRYFORWARD (NRML),
+    // MARGIN (= MTF on Angel One — ao_enum_map sends MTF as "MARGIN"), INTRADAY.
+    ProductType product_from_wire(const QString& wire_product) const override;
+
+    // Decimal places a price for this instrument must be sent with so it is not
+    // rounded off the exchange tick grid (CDS/BCD currency derivatives tick in
+    // ₹0.0025 → 4 dp; equity/F&O ticks of ₹0.05/0.01 stay at 2 dp).
+    static int price_decimals_for(const QString& symbol, const QString& exchange);
+    static int decimals_for_tick(double tick) {
+        if (!(tick > 0.0) || !std::isfinite(tick))
+            return 2;
+        for (int d = 0; d <= 6; ++d) {
+            const double scaled = tick * std::pow(10.0, d);
+            if (std::fabs(scaled - std::round(scaled)) < 1e-6)
+                return d;
+        }
+        return 6;
+    }
 
     OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) override;
     ApiResponse<QJsonObject> modify_order(const BrokerCredentials& creds, const QString& order_id,

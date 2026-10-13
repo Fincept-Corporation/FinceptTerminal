@@ -46,6 +46,11 @@ class FileManagerService : public QObject {
 
     bool remove_file(const QString& id);
 
+    /// Change a file's display name (the stored file keeps its id-based name,
+    /// so screens holding its path are unaffected). Returns false for an
+    /// unknown id or an empty / path-like name.
+    bool rename_file(const QString& id, const QString& new_name);
+
     // ── Paths ────────────────────────────────────────────────────────────
     QString storage_dir() const;
     QString full_path(const QString& stored_name) const;

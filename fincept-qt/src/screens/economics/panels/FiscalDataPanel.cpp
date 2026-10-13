@@ -49,7 +49,7 @@ void FiscalDataPanel::activate() {
 
 void FiscalDataPanel::build_controls(QHBoxLayout* thl) {
     dataset_lbl_ = new QLabel(tr("DATASET"));
-    dataset_lbl_->setStyleSheet(ctrl_label_style());
+    dataset_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_combo_ = new QComboBox;
     for (const auto& s : kFiscalDataSeries)

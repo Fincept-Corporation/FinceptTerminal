@@ -82,7 +82,7 @@ class FinceptOrchestrator:
             self._session.headers.update({"Authorization": f"Bearer {api_key}"})
 
     # ------------------------------------------------------------------
-    # Public API — matches cli.py expectations
+    # Public API — cli.py execute_task (non-tool-calling LLM fallback)
     # ------------------------------------------------------------------
 
     def execute(
@@ -143,72 +143,6 @@ class FinceptOrchestrator:
                 "files":   {},
                 "error":   str(exc),
             }
-
-    def create_plan(
-        self,
-        task: str,
-        agent_type: str,
-        subagent_names: list[str],
-    ) -> dict[str, Any]:
-        """
-        Create an execution plan without running it.
-
-        Returns dict with: success, todos, plan, error
-        """
-        try:
-            plan = self._create_plan(task, agent_type, subagent_names)
-            todos = [
-                {
-                    "id":         f"todo-{i + 1}",
-                    "task":       step["step"],
-                    "status":     "pending",
-                    "specialist": step["specialist"],
-                    "prompt":     step["prompt"],
-                    "subtasks":   [],
-                }
-                for i, step in enumerate(plan)
-            ]
-            return {"success": True, "todos": todos, "plan": plan, "error": None}
-
-        except Exception as exc:
-            logger.error("Orchestrator create_plan failed: %s", exc)
-            return {"success": False, "todos": [], "plan": [], "error": str(exc)}
-
-    def execute_step(
-        self,
-        task: str,
-        step_prompt: str,
-        specialist: str,
-        previous_results: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        """
-        Execute a single step.
-
-        Returns dict with: success, result, error
-        """
-        try:
-            result = self._execute_step(task, step_prompt, specialist, previous_results)
-            return {"success": True, "result": result, "error": None}
-        except Exception as exc:
-            logger.error("Orchestrator execute_step failed: %s", exc)
-            return {"success": False, "result": "", "error": str(exc)}
-
-    def synthesize(
-        self,
-        task: str,
-        step_results: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        """
-        Synthesize step results into final report.
-
-        Returns dict with: success, result, error
-        """
-        try:
-            result = self._synthesize(task, step_results)
-            return {"success": True, "result": result, "error": None}
-        except Exception as exc:
-            logger.error("Orchestrator synthesize failed: %s", exc)
-            return {"success": False, "result": "", "error": str(exc)}
 
     # ------------------------------------------------------------------
     # Internal helpers

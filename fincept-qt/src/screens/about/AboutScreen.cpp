@@ -3,6 +3,7 @@
 #include "core/config/AppPaths.h"
 #include "services/updater/UpdateService.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -288,17 +289,37 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
             auto* bvl = new QVBoxLayout(body);
             bvl->setContentsMargins(14, 10, 14, 10);
             bvl->setSpacing(6);
-            enterprise_bullets_ = {makeBullet(tr("41 modules · private & proprietary data")),
-                                   makeBullet(tr("Multi-agent research · live broker routing")),
-                                   makeBullet(tr("SSO, audit logs & SLA-backed support")),
-                                   makeBullet(tr("From $99/user/month · no copyleft"))};
+            // No prices in-app: the Enterprise price list lives on the website.
+            enterprise_bullets_ = {makeBullet(tr("41 modules · private & proprietary datasets")),
+                                   makeBullet(tr("Multi-agent research · AI credits included")),
+                                   makeBullet(tr("SSO/SAML, audit logs & SLA-backed support")),
+                                   makeBullet(tr("Separate product & account · no copyleft"))};
             for (auto* b : enterprise_bullets_)
                 bvl->addWidget(b);
             pvl->addWidget(body);
 
+            // Actions — a layout, not a container widget, so the panel's
+            // blanket sheet has nothing to box in; the buttons style themselves.
+            auto* cta_row = new QHBoxLayout;
+            cta_row->setContentsMargins(14, 2, 14, 12);
+            cta_row->setSpacing(16);
+            auto* see = ui::enterprise::make_cta_button(
+                tr("SEE ENTERPRISE ↗"), ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("about")),
+                ui::enterprise::CtaStyle::Primary, panel);
+            see->setObjectName("aboutEntSee");
+            cta_row->addWidget(see);
+            auto* compare = ui::enterprise::make_cta_button(
+                tr("COMPARE EDITIONS"),
+                ui::enterprise::url_with_ref(ui::enterprise::comparison_url(), QStringLiteral("about")),
+                ui::enterprise::CtaStyle::Link, panel);
+            compare->setObjectName("aboutEntCompare");
+            cta_row->addWidget(compare);
+            cta_row->addStretch();
+            pvl->addLayout(cta_row);
+
             // Footer link
             auto* foot = makeLinkLabel(QStringLiteral("fincept.in/enterprise"),
-                                       QStringLiteral("https://fincept.in/enterprise"),
+                                       ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("about")),
                                        QString("color: %1; font-size: 11px; background: transparent; "
                                                "padding: 6px 14px; border-top: 1px solid %2; "
                                                "font-family: 'Consolas','Courier New',monospace;")
@@ -442,7 +463,7 @@ AboutScreen::AboutScreen(QWidget* parent) : QWidget(parent) {
         const Link links[] = {
             {tr("GitHub Repository"), "https://github.com/Fincept-Corporation/FinceptTerminal"},
             {tr("License (AGPL-3.0)"), "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE"},
-            {tr("Fincept Enterprise"), "https://fincept.in/enterprise"},
+            {tr("Fincept Enterprise"), ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("about"))},
             {tr("Documentation"), "https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs"},
             {tr("Contributing Guide"),
              "https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CONTRIBUTING.md"},
@@ -556,11 +577,15 @@ void AboutScreen::retranslateUi() {
     // Enterprise (separate closed-source product)
     setPanelHeaderText(enterprise_header_, "★", tr("FINCEPT TERMINAL ENTERPRISE"));
     if (enterprise_bullets_.size() == 4) {
-        setBulletText(enterprise_bullets_[0], tr("41 modules · private & proprietary data"));
-        setBulletText(enterprise_bullets_[1], tr("Multi-agent research · live broker routing"));
-        setBulletText(enterprise_bullets_[2], tr("SSO, audit logs & SLA-backed support"));
-        setBulletText(enterprise_bullets_[3], tr("From $99/user/month · no copyleft"));
+        setBulletText(enterprise_bullets_[0], tr("41 modules · private & proprietary datasets"));
+        setBulletText(enterprise_bullets_[1], tr("Multi-agent research · AI credits included"));
+        setBulletText(enterprise_bullets_[2], tr("SSO/SAML, audit logs & SLA-backed support"));
+        setBulletText(enterprise_bullets_[3], tr("Separate product & account · no copyleft"));
     }
+    if (auto* see = findChild<QPushButton*>(QStringLiteral("aboutEntSee")))
+        see->setText(tr("SEE ENTERPRISE ↗"));
+    if (auto* compare = findChild<QPushButton*>(QStringLiteral("aboutEntCompare")))
+        compare->setText(tr("COMPARE EDITIONS"));
 
     // Diagnostics
     setPanelHeaderText(diag_header_, "⚙", tr("DIAGNOSTICS"));

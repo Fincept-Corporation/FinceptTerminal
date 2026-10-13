@@ -7,191 +7,129 @@ import sys
 import json
 import os
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
+
+from sdmx_json import flatten, compact
 
 BASE_URL = "https://stats.bis.org/api/v1"
+# stats.bis.org answers HTTP 406 to `format=jsondata`; SDMX-JSON is negotiated with this Accept header.
+DATA_ACCEPT = "application/vnd.sdmx.data+json;version=1.0.0"
+STRUCT_ACCEPT = "application/vnd.sdmx.structure+json;version=1.0.0"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
-session.headers.update({"Accept": "application/json"})
+session.headers.update({"User-Agent": "FinceptTerminal/4.5 (+https://fincept.in)"})
 
 
-def _make_request(endpoint: str, params: Dict = None) -> Any:
+def _make_request(endpoint: str, params: Dict = None, accept: str = DATA_ACCEPT) -> Any:
     """Make HTTP request with error handling."""
     url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
     try:
-        response = session.get(url, params=params, timeout=60)
+        response = session.get(url, params=params, headers={"Accept": accept}, timeout=60)
+        if response.status_code == 404:
+            return {"error": "No data for this query (HTTP 404) - check the country/series codes"}
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        return {"error": f"HTTP {e.response.status_code}: {e.response.text[:200] or str(e)}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
     except (json.JSONDecodeError, ValueError) as e:
         return {"error": f"JSON decode error: {str(e)}"}
 
 
-def _parse_sdmx_compact(data: Any, label: str = "data") -> Any:
-    """Extract time-series from BIS SDMX-JSON compact format."""
+def _fetch(flow: str, key: str, last_n: int, label: str) -> Any:
+    """Fetch one BIS dataflow slice and flatten it to {label: [series...], count}."""
+    data = _make_request(f"data/{flow}/{key}", params={"lastNObservations": last_n})
     if isinstance(data, dict) and "error" in data:
         return data
-    try:
-        datasets = data.get("dataSets", [])
-        if not datasets:
-            return {"error": "No dataSets in response", "keys": list(data.keys())}
-        dataset = datasets[0]
-        structure = data.get("structure", {})
-        dimensions = structure.get("dimensions", {})
-        series_dims = dimensions.get("series", [])
-        obs_dims = dimensions.get("observation", [])
-
-        time_periods = []
-        for dim in obs_dims:
-            if "TIME" in dim.get("id", ""):
-                time_periods = [v.get("id") for v in dim.get("values", [])]
-
-        series_list = []
-        for key, series_obj in dataset.get("series", {}).items():
-            parts = key.split(":")
-            dim_labels = {}
-            for i, dim in enumerate(series_dims):
-                if i < len(parts):
-                    try:
-                        idx = int(parts[i])
-                        vals = dim.get("values", [])
-                        if idx < len(vals):
-                            dim_labels[dim["id"]] = vals[idx].get("id", "")
-                    except ValueError:
-                        pass
-            obs_map = series_obj.get("observations", {})
-            observations = []
-            for obs_idx_str, obs_val in obs_map.items():
-                idx = int(obs_idx_str)
-                period = time_periods[idx] if idx < len(time_periods) else obs_idx_str
-                value = obs_val[0] if obs_val else None
-                observations.append({"period": period, "value": value})
-            series_list.append({"dimensions": dim_labels, "observations": observations})
-
-        return {label: series_list, "count": len(series_list)}
-    except Exception as e:
-        return {"error": f"Parse error: {str(e)}"}
+    series = compact(flatten(data))
+    if not series:
+        return {"error": "No series returned", "flow": flow, "key": key}
+    return {label: series, "count": len(series), "flow": flow, "key": key}
 
 
 def get_total_credit(country: str = "US", sector: str = "P") -> Any:
-    """Get BIS total credit to private non-financial sector.
+    """Get BIS total credit (WS_TC) to a borrowing sector, in % of GDP and in domestic currency.
     country: US, GB, DE, FR, JP, CN, KR, AU, CA, etc.
-    sector: P=private, C=corporations, H=households.
+    sector: P=private non-financial, C=non-financial sector, G=government, H=households, N=non-financial corporations.
     """
-    params = {"format": "jsondata", "lastNObservations": 80}
-    key = f"data/total-credit/Q.{sector.upper()}.A.M.770.{country.upper()}.A"
-    data = _make_request(key, params=params)
-    result = _parse_sdmx_compact(data, "credit_series")
+    key = f"Q.{country.upper()}.{sector.upper()}.A.M.770+XDC.A"
+    result = _fetch("WS_TC", key, 80, "credit_series")
     result.update({"country": country.upper(), "sector": sector.upper(), "dataset": "Total Credit"})
     return result
 
 
+ISSUER_CODES = {"C": "1", "A": "1", "G": "2", "F": "B", "N": "J"}
+
+
 def get_debt_securities(issuer_type: str = "C", currency: str = "USD") -> Any:
-    """Get BIS international debt securities statistics.
-    issuer_type: C=all, G=government, F=financial, N=non-financial.
-    currency: USD, EUR, GBP, JPY, CHF, etc.
+    """Get BIS international debt securities outstanding (WS_DEBT_SEC2_PUB), all issuer countries.
+    issuer_type: C=all, G=general government, F=financial corporations, N=non-financial corporations.
+    currency: USD, EUR, GBP, JPY, CHF, ... or TO1 for all currencies.
     """
-    params = {"format": "jsondata", "lastNObservations": 40}
-    key = f"data/debt-sec2/Q.N.{issuer_type.upper()}.A.{currency.upper()}.A.A.TO1.A"
-    data = _make_request(key, params=params)
-    result = _parse_sdmx_compact(data, "debt_securities")
-    result.update({"issuer_type": issuer_type, "currency": currency.upper(), "dataset": "Debt Securities"})
+    issuer = ISSUER_CODES.get(issuer_type.upper(), issuer_type.upper())
+    key = f"Q.3P.3P.{issuer}.1.C.A.A.{currency.upper()}.A.A.A.A.A.I"
+    result = _fetch("WS_DEBT_SEC2_PUB", key, 40, "debt_securities")
+    result.update({"issuer_type": issuer_type, "currency": currency.upper(), "dataset": "Debt Securities",
+                   "unit": "USD millions"})
     return result
 
 
 def get_effective_exchange_rates(country: str = "US", type_: str = "R") -> Any:
-    """Get BIS effective exchange rate indices (BIS EER).
+    """Get BIS effective exchange rate indices (WS_EER, broad basket, monthly).
     country: US, GB, DE, FR, JP, CN, KR, AU, CA, CH, SE, NO, etc.
     type_: R=real, N=nominal.
     """
-    params = {"format": "jsondata", "lastNObservations": 120}
     eer_type = "N" if type_.upper() == "N" else "R"
-    key = f"data/eer/M.{eer_type}.B.{country.upper()}"
-    data = _make_request(key, params=params)
-    result = _parse_sdmx_compact(data, "eer_series")
+    result = _fetch("WS_EER", f"M.{eer_type}.B.{country.upper()}", 120, "eer_series")
     result.update({"country": country.upper(), "type": eer_type, "dataset": "Effective Exchange Rates"})
     return result
 
 
 def get_property_prices(country: str = "US") -> Any:
-    """Get BIS residential property price statistics.
+    """Get BIS selected residential property prices (WS_SPP): real and nominal, index and y/y change.
     country: US, GB, DE, FR, JP, KR, AU, CA, SE, NL, ES, IT, CH, etc.
     """
-    params = {"format": "jsondata", "lastNObservations": 100}
-    key = f"data/pp-selected/Q.{country.upper()}.N.628"
-    data = _make_request(key, params=params)
-    result = _parse_sdmx_compact(data, "property_prices")
+    result = _fetch("WS_SPP", f"Q.{country.upper()}..", 100, "property_prices")
     result.update({"country": country.upper(), "dataset": "Property Prices"})
     return result
 
 
 def get_policy_rates(country: str = "US") -> Any:
-    """Get BIS central bank policy/target interest rates.
-    country: US, GB, DE, FR, JP, CN, AU, CA, SE, NO, CH, NZ, etc.
+    """Get BIS central bank policy rates (WS_CBPOL, monthly).
+    country: US, GB, XM (euro area), JP, CN, AU, CA, SE, NO, CH, NZ, etc.
     """
-    params = {"format": "jsondata", "lastNObservations": 120}
-    key = f"data/cb-policy-rates/M.{country.upper()}"
-    data = _make_request(key, params=params)
-    result = _parse_sdmx_compact(data, "policy_rates")
+    result = _fetch("WS_CBPOL", f"M.{country.upper()}", 120, "policy_rates")
     result.update({"country": country.upper(), "dataset": "Policy Rates"})
     return result
 
 
 def get_datasets() -> Any:
-    """Get list of available BIS statistical datasets."""
-    url = f"{BASE_URL}/dataflow/BIS"
-    params = {"detail": "allstubs", "format": "jsondata"}
-    try:
-        response = session.get(url, params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        flows = data.get("dataflows", data.get("Dataflows", []))
-        if isinstance(flows, list):
-            return {
-                "datasets": [
-                    {"id": df.get("id"), "name": df.get("name", {}).get("en", df.get("name", ""))}
-                    for df in flows
-                ],
-                "count": len(flows)
-            }
-        return {"raw_keys": list(data.keys())}
-    except Exception as e:
-        # Return known datasets
-        return {
-            "datasets": [
-                {"id": "total-credit", "name": "Total credit to the private non-financial sector"},
-                {"id": "debt-sec2", "name": "International debt securities"},
-                {"id": "eer", "name": "Effective exchange rates"},
-                {"id": "pp-selected", "name": "Residential property prices"},
-                {"id": "cb-policy-rates", "name": "Central bank policy rates"},
-                {"id": "lbs-by-residence", "name": "Locational banking statistics"},
-                {"id": "cbs-by-residence", "name": "Consolidated banking statistics"},
-                {"id": "dsr", "name": "Debt service ratios"},
-            ],
-            "note": f"Dataset list endpoint failed: {str(e)}"
-        }
+    """Get list of available BIS statistical datasets (dataflows)."""
+    data = _make_request("dataflow/BIS/all/latest", accept=STRUCT_ACCEPT)
+    if isinstance(data, dict) and "error" in data:
+        return data
+    flows = data.get("data", {}).get("dataflows", [])
+    return {"datasets": [{"id": f.get("id"), "name": f.get("name")} for f in flows], "count": len(flows)}
 
 
 def get_banking_stats(reporting_country: str = "US", counterpart_country: str = "ALL") -> Any:
-    """Get BIS locational banking statistics (cross-border claims/liabilities).
+    """Get BIS locational banking statistics (WS_LBS_D_PUB): cross-border total claims of banks
+    located in the reporting country on a counterpart country.
     reporting_country: US, GB, DE, FR, JP, CH, etc.
     counterpart_country: ALL or specific country code.
     """
-    params = {"format": "jsondata", "lastNObservations": 40}
-    cc = counterpart_country if counterpart_country != "ALL" else "5J"
-    key = f"data/lbs-by-residence/Q.S.A.A.TO.A.{cc}.{reporting_country.upper()}.USD"
-    data = _make_request(key, params=params)
-    result = _parse_sdmx_compact(data, "banking_stats")
+    cc = counterpart_country.upper() if counterpart_country.upper() != "ALL" else "5J"
+    key = f"Q.S.C.A.TO1.A.5J.A.{reporting_country.upper()}.A.{cc}.N"
+    result = _fetch("WS_LBS_D_PUB", key, 40, "banking_stats")
     result.update({
         "reporting_country": reporting_country.upper(),
         "counterpart_country": counterpart_country,
-        "dataset": "Locational Banking Statistics"
+        "dataset": "Locational Banking Statistics",
+        "unit": "USD millions"
     })
     return result
 

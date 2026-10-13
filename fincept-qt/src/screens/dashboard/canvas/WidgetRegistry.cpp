@@ -81,12 +81,15 @@ WidgetRegistry::WidgetRegistry() {
 
     register_widget({"top_movers", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Top Movers"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Markets"),
-                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Biggest gainers and losers today"), 6, 5, 3,
-                     4, [](const QJsonObject&) { return new widgets::TopMoversWidget; }});
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Biggest gainers and losers today within a configurable symbol list"),
+                     6, 5, 3, 4, [](const QJsonObject& cfg) { return new widgets::TopMoversWidget(cfg); }});
 
     register_widget({"sentiment", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Market Sentiment"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Markets"),
-                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Fear & greed, bull/bear indicators"), 4, 4,
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Breadth score of 24 large caps adjusted by VIX — not a market-wide index"),
+                     4, 4,
                      2, 3, [](const QJsonObject&) { return new widgets::MarketSentimentWidget; }});
 
     // ── Research ──────────────────────────────────────────────────────────────
@@ -124,7 +127,9 @@ WidgetRegistry::WidgetRegistry() {
     // ── Portfolio ─────────────────────────────────────────────────────────────
     register_widget({"watchlist", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Watchlist"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Portfolio"),
-                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Your saved symbols with live prices"), 6, 4,
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Editable symbol list with live prices (kept in this tile)"),
+                     6, 4,
                      2, 3, [](const QJsonObject& cfg) {
                          // The watchlist persists its user-edited symbol list
                          // through the tile config; seed it before first show.
@@ -153,14 +158,16 @@ WidgetRegistry::WidgetRegistry() {
 
     register_widget({"risk_metrics", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Risk Metrics"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Portfolio"),
-                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Volatility, beta, drawdown, Sharpe ratio"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "VIX regime, high-beta movers and relative-return spreads"),
                      4, 5, 3, 4, [](const QJsonObject&) { return new widgets::RiskMetricsWidget; }});
 
     // ── Trading ───────────────────────────────────────────────────────────────
     register_widget({"quick_trade", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Quick Trade"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Trading"),
-                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Fast order entry for crypto and equities"),
-                     4, 5, 2, 3, [](const QJsonObject&) { return new widgets::QuickTradeWidget; }});
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Quote lookup + order ticket preview — hands off to Equity Trading to place"),
+                     4, 5, 2, 3, [](const QJsonObject& cfg) { return new widgets::QuickTradeWidget(cfg); }});
 
     register_widget({"open_positions", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Open Positions"),
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Trading"),

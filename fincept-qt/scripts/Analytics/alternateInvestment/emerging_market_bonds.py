@@ -47,7 +47,7 @@ class EmergingMarketBondAnalyzer(AlternativeInvestmentBase):
         # Risk metrics
         self.credit_spread = parameters.credit_spread if hasattr(parameters, 'credit_spread') else Decimal('0.04')
 
-    def calculate_yield_metrics(self) -> Dict[str, Any]:
+    def calculate_yield_metrics(self, treasury_yield: Decimal = None) -> Dict[str, Any]:
         """
         Calculate yield to maturity and spreads
 
@@ -70,7 +70,8 @@ class EmergingMarketBondAnalyzer(AlternativeInvestmentBase):
         approximate_ytm = (annual_coupon + capital_gain_per_year) / average_price
 
         # Spread over Treasuries
-        treasury_yield = self.config.RISK_FREE_RATE
+        if treasury_yield is None:
+            treasury_yield = self.config.RISK_FREE_RATE  # assumption when no input is given
         spread_over_treasuries = approximate_ytm - treasury_yield
 
         return {

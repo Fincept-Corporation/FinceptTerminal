@@ -1,11 +1,10 @@
 #pragma once
-// WebScraperWidget — fully generic data scraper for the dashboard.
+// WebScraperWidget — generic table scraper tile for the dashboard.
 //
-// Fetches a URL and auto-detects the payload format (HTML tables, JSON
-// arrays, CSV/TSV, XML/RSS/Atom), then renders the result in a sortable
-// table. When the source has multiple tables the user picks which one via
-// a dropdown in the widget body. All work is pure C++ over
-// QNetworkAccessManager — no Python, no QtWebEngine dependency.
+// Fetching and format detection/parsing (HTML tables, JSON arrays, CSV/TSV,
+// XML/RSS/Atom) live in services::WebScrapeService — one shared, bounded
+// network stack with the parse off the GUI thread. This tile only holds the
+// configuration and renders the chosen table.
 //
 // Config (persisted):
 //   {
@@ -16,22 +15,20 @@
 //     "headers": { "K": "V", ... },   // optional extra HTTP headers
 //     "encoding": "utf-8",            // optional; falls back to Content-Type
 //     "json_path": "data.items",      // optional: dot path into a JSON root
-//     "force_format": ""              // "", "html", "json", "csv", "xml"
+//     "force_format": ""              // "", "html", "json", "csv", "tsv", "xml"
 //   }
 
 #include "screens/dashboard/widgets/BaseWidget.h"
+#include "services/web_scrape/WebScrapeService.h"
 
 #include <QHash>
 #include <QJsonObject>
-#include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
 class QComboBox;
 class QLabel;
-class QNetworkAccessManager;
-class QNetworkReply;
 class QTimer;
 
 namespace fincept::ui {
@@ -39,13 +36,6 @@ class DataTable;
 }
 
 namespace fincept::screens::widgets {
-
-/// A table of extracted data — one header row plus N data rows.
-struct ScrapedTable {
-    QString label; // "Table 1", "items[]", "RSS feed" etc.
-    QStringList headers;
-    QVector<QStringList> rows;
-};
 
 class WebScraperWidget : public BaseWidget {
     Q_OBJECT
@@ -72,17 +62,11 @@ class WebScraperWidget : public BaseWidget {
     void build_ui();
     void apply_styles();
     void start_fetch();
-    void handle_reply(QNetworkReply* reply);
-    void parse_payload(const QByteArray& body, const QString& content_type);
+    void cancel_fetch();
+    void on_result(const services::WebScrapeResult& result);
     void render_selected_table();
     void set_status(const QString& msg, bool error = false);
     void apply_timer_state();
-
-    // Per-format parsers (return 0..N tables).
-    QVector<ScrapedTable> parse_html_tables(const QString& html) const;
-    QVector<ScrapedTable> parse_json_tables(const QByteArray& body) const;
-    QVector<ScrapedTable> parse_csv_tables(const QString& text, QChar delim) const;
-    QVector<ScrapedTable> parse_xml_tables(const QByteArray& body) const;
 
     // Config
     QString url_;
@@ -101,11 +85,11 @@ class WebScraperWidget : public BaseWidget {
     ui::DataTable* table_ = nullptr;
 
     // Runtime
-    QNetworkAccessManager* net_ = nullptr;
-    QPointer<QNetworkReply> pending_reply_;
+    quint64 pending_id_ = 0; ///< WebScrapeService request id, 0 = idle
     QTimer* auto_timer_ = nullptr;
-    QVector<ScrapedTable> tables_;
+    QVector<services::ScrapedTable> tables_;
     QString last_format_;
+    bool has_result_ = false; ///< a fetch completed (successfully) since the URL was set
 };
 
 } // namespace fincept::screens::widgets

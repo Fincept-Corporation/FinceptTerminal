@@ -51,7 +51,7 @@ void EconomicCalendarPanel::activate() {
 void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
     auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -125,7 +125,14 @@ void EconomicCalendarPanel::on_result(const QString& request_id, const services:
     const int total = result.data["events_count"].toInt(events.size());
     const QString title = tr("Economic Calendar — %1  (%2 events)").arg(date_str).arg(total);
 
-    display(events, title);
+    SeriesMeta meta;
+    meta.note = tr("Times as shown on forexfactory.com for an anonymous session (its default time zone)");
+    set_series_meta(meta);
+    set_stats_visible(false); // a list of events, not a series
+    display(events, title, {QStringLiteral("time"), QStringLiteral("currency"), QStringLiteral("impact"),
+                            QStringLiteral("event"), QStringLiteral("actual"), QStringLiteral("forecast"),
+                            QStringLiteral("previous")},
+            /*keep_row_order=*/true);
     LOG_INFO("EconomicCalendarPanel", QString("Displayed %1 events for %2").arg(events.size()).arg(date_str));
 }
 

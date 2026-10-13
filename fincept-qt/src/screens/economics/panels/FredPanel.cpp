@@ -32,7 +32,7 @@ void FredPanel::activate() {
 
 void FredPanel::build_controls(QHBoxLayout* thl) {
     preset_lbl_ = new QLabel(tr("PRESET"));
-    preset_lbl_->setStyleSheet(ctrl_label_style());
+    preset_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     preset_combo_ = new QComboBox;
     for (const auto& p : fred_presets())
@@ -46,7 +46,7 @@ void FredPanel::build_controls(QHBoxLayout* thl) {
     });
 
     series_lbl_ = new QLabel(tr("SERIES ID"));
-    series_lbl_->setStyleSheet(ctrl_label_style());
+    series_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_input_ = new QLineEdit;
     series_input_->setPlaceholderText(tr("e.g. GDPC1"));
@@ -104,7 +104,8 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
     }
 
     if (request_id.startsWith("fred_")) {
-        // FRED returns: {observations: [{date, value}]}
+        // fred_data.py: {series_id, title, units, frequency, seasonal_adjustment, last_updated,
+        //                observations:[{date, value}]} — metadata missing when FRED's /series call failed.
         QJsonArray obs = result.data["observations"].toArray();
         if (obs.isEmpty())
             obs = result.data["data"].toArray();
@@ -131,25 +132,35 @@ void FredPanel::on_result(const QString& request_id, const services::EconomicsRe
         }
 
         const QString series = request_id.mid(5); // strip "fred_"
-        display(clean, "FRED: " + series);
+        // FRED states units / frequency / seasonal adjustment / revision date for every series — show
+        // them (the CHANGE card switches to percentage points for "Percent" series).
+        auto meta_text = [&result](const char* key) {
+            const QString v = result.data.value(QLatin1String(key)).toString().trimmed();
+            return v == QLatin1String("N/A") ? QString() : v;
+        };
+        SeriesMeta meta;
+        meta.units = meta_text("units");
+        meta.frequency = meta_text("frequency");
+        meta.seasonal_adj = meta_text("seasonal_adjustment");
+        meta.last_updated = meta_text("last_updated");
+        set_series_meta(meta);
+        const QString title = meta_text("title");
+        display(clean, title.isEmpty() ? "FRED: " + series : QStringLiteral("FRED: %1 (%2)").arg(title, series));
         LOG_INFO("FredPanel", QString("Displayed %1 observations").arg(clean.size()));
     }
 }
 
-QVariantMap FredPanel::save_panel_state() const {
-    QVariantMap s;
-    if (series_input_)
-        s["series"] = series_input_->text();
-    if (preset_combo_)
-        s["preset"] = preset_combo_->currentIndex();
-    return s;
-}
-
 void FredPanel::restore_panel_state(const QVariantMap& s) {
-    if (series_input_ && s.contains("series"))
-        series_input_->setText(s["series"].toString());
-    if (preset_combo_ && s.contains("preset"))
-        preset_combo_->setCurrentIndex(s["preset"].toInt());
+    if (!s.contains(QStringLiteral("series"))) {
+        EconPanelBase::restore_panel_state(s);
+        return;
+    }
+    // Pre-v4.5.1 format. The preset must be applied BEFORE the series text: selecting a preset rewrites
+    // the series field, which used to replace a custom series id with the preset's on every restart.
+    if (preset_combo_ && s.contains(QStringLiteral("preset")))
+        preset_combo_->setCurrentIndex(s.value(QStringLiteral("preset")).toInt());
+    if (series_input_)
+        series_input_->setText(s.value(QStringLiteral("series")).toString());
 }
 
 // ── i18n ──────────────────────────────────────────────────────────────────────

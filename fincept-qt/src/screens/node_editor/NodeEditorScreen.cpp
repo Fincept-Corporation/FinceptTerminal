@@ -15,6 +15,7 @@
 #include "screens/node_editor/toolbar/NodeEditorToolbar.h"
 #include "services/cloud/CloudSyncEngine.h"
 #include "services/workflow/NodeRegistry.h"
+#include "services/workflow/WorkflowExecutor.h"
 #include "services/workflow/WorkflowService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -25,7 +26,9 @@
 #include <QInputDialog>
 #include <QJsonDocument>
 #include <QKeyEvent>
+#include <QLineEdit>
 #include <QMessageBox>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QSet>
 #include <QSettings>
@@ -33,6 +36,8 @@
 #include <QTime>
 #include <QUuid>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace fincept::workflow {
 
@@ -113,6 +118,17 @@ void NodeEditorScreen::hideEvent(QHideEvent* event) {
 }
 
 void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
+        (event->modifiers() & Qt::ControlModifier)) {
+        on_execute(); // Ctrl+Enter — run (or stop a running workflow)
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Escape && WorkflowService::instance().is_executing()) {
+        on_stop(); // Esc — cancel the run
+        event->accept();
+        return;
+    }
     if (event->matches(QKeySequence::Undo)) {
         undo_stack_->undo();
         event->accept();
@@ -180,6 +196,7 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
                 selected_ids.insert(node->node_def().id);
             }
         }
+        paste_count_ = 0;
         // Copy edges that connect two selected nodes
         WorkflowDef wf = scene_->serialize();
         for (const auto& ed : wf.edges) {
@@ -198,13 +215,14 @@ void NodeEditorScreen::keyPressEvent(QKeyEvent* event) {
         QMap<QString, QString> id_remap;
         QVector<NodeDef> pasted_nodes;
         QVector<EdgeDef> pasted_edges;
+        const double offset = 40.0 * ++paste_count_; // repeated pastes cascade instead of stacking
         for (const auto& nd : clipboard_nodes_) {
             NodeDef copy = nd;
             QString new_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
             id_remap.insert(nd.id, new_id);
             copy.id = new_id;
-            copy.x += 40;
-            copy.y += 40;
+            copy.x += offset;
+            copy.y += offset;
             copy.name = nd.name + " (copy)";
             pasted_nodes.append(copy);
         }
@@ -324,46 +342,12 @@ void NodeEditorScreen::wire_signals() {
                     item->set_disabled(value);
                 else if (flag == QLatin1String("continue_on_fail"))
                     item->set_continue_on_fail(value);
+                mark_dirty();
             });
     connect(scene_, &NodeScene::node_execute_from_requested, this, [this](const QString& node_id) {
         if (WorkflowService::instance().is_executing())
             return; // a run is already in progress — Stop it first
-        WorkflowDef wf = scene_->serialize();
-        if (wf.nodes.isEmpty())
-            return;
-        wf.name = toolbar_->workflow_name();
-        if (current_workflow_id_.isEmpty())
-            current_workflow_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        wf.id = current_workflow_id_;
-
-        // "Execute from here" runs the start node and everything downstream of it —
-        // including any order nodes there. It used to skip the live-order
-        // confirmation that EXECUTE applies, so a live order was one right-click away.
-        QSet<QString> downstream{node_id};
-        QStringList frontier{node_id};
-        while (!frontier.isEmpty()) {
-            const QString cur = frontier.takeFirst();
-            for (const auto& ed : wf.edges) {
-                if (ed.source_node == cur && !downstream.contains(ed.target_node)) {
-                    downstream.insert(ed.target_node);
-                    frontier.append(ed.target_node);
-                }
-            }
-        }
-        WorkflowDef will_run = wf;
-        will_run.nodes.clear();
-        for (const auto& nd : wf.nodes) {
-            if (downstream.contains(nd.id))
-                will_run.nodes.append(nd);
-        }
-        if (!confirm_live_order_nodes(will_run, tr("Execute From Here")))
-            return;
-
-        // Reset all node states
-        for (auto* item : scene_->node_items())
-            item->set_execution_state("idle");
-
-        WorkflowService::instance().execute_from_node(wf, node_id);
+        start_run(node_id, false);
     });
 
     // ── Properties: parameter changes ──────────────────────────────
@@ -382,6 +366,7 @@ void NodeEditorScreen::wire_signals() {
     connect(toolbar_, &NodeEditorToolbar::execute_clicked, this, &NodeEditorScreen::on_execute);
     connect(toolbar_, &NodeEditorToolbar::templates_clicked, this, &NodeEditorScreen::on_show_templates);
     connect(toolbar_, &NodeEditorToolbar::deploy_clicked, this, &NodeEditorScreen::on_deploy);
+    connect(toolbar_, &NodeEditorToolbar::name_changed, this, [this]() { mark_dirty(); });
 
     // ── Undo stack state ───────────────────────────────────────────
     connect(undo_stack_, &QUndoStack::canUndoChanged, toolbar_, &NodeEditorToolbar::set_can_undo);
@@ -405,6 +390,11 @@ void NodeEditorScreen::wire_signals() {
         scene_->deserialize(wf);
         toolbar_->set_workflow_name(wf.name);
         current_workflow_id_ = wf.id;
+        current_description_ = wf.description;
+        static_data_ = wf.static_data;
+        static_data_.remove(QStringLiteral("parent_input")); // transient sub-workflow payload
+        set_live_mode(WorkflowExecutor::is_live_mode(wf));
+        dirty_ = false;
         properties_->clear();
         // The stack's commands reference nodes from the previous graph — undoing
         // into them after a load would resurrect foreign nodes / drop live ones.
@@ -432,6 +422,7 @@ void NodeEditorScreen::wire_signals() {
     // ── Execution signals ────────────────────────────────────────────
     connect(&svc, &WorkflowService::execution_started, this, [this](const QString& wf_id) {
         results_panel_->set_started(wf_id);
+        results_panel_->set_mode_banner(pending_banner_, pending_banner_live_);
         toolbar_->set_executing(true);
     });
     connect(&svc, &WorkflowService::node_execution_started, this, [this](const QString& node_id) {
@@ -439,12 +430,15 @@ void NodeEditorScreen::wire_signals() {
         if (item)
             item->set_execution_state("running");
         scene_->set_edges_animated(node_id, true);
+        results_panel_->add_node_running(node_id, item ? item->node_def().name : QString());
     });
     connect(&svc, &WorkflowService::node_execution_completed, this,
             [this](const QString& node_id, const NodeExecutionResult& result) {
                 auto* item = scene_->find_node(node_id);
+                const bool skipped = result.success && result.output.isObject() &&
+                                     result.output.toObject().value("_skipped").toBool(false);
                 if (item)
-                    item->set_execution_state(result.success ? "completed" : "error");
+                    item->set_execution_state(!result.success ? "error" : skipped ? "skipped" : "completed");
                 scene_->set_edges_animated(node_id, false);
                 results_panel_->add_node_result(result, item ? item->node_def().name : QString());
             });
@@ -568,6 +562,7 @@ void NodeEditorScreen::on_param_changed(const QString& node_id, const QString& k
     auto* node_item = scene_->find_node(node_id);
     if (node_item) {
         node_item->set_parameter(key, value);
+        mark_dirty();
     }
 }
 
@@ -575,6 +570,7 @@ void NodeEditorScreen::on_name_changed(const QString& node_id, const QString& ne
     auto* node_item = scene_->find_node(node_id);
     if (node_item) {
         node_item->set_name(new_name);
+        mark_dirty();
     }
 }
 
@@ -638,6 +634,11 @@ void NodeEditorScreen::on_import_workflow() {
     // make the next Save — or the 30 s auto-save — overwrite that workflow with the
     // imported graph.
     current_workflow_id_.clear();
+    current_description_ = wf.description;
+    // An imported file never arrives armed for LIVE trading (import drops static_data).
+    static_data_ = QJsonObject{};
+    set_live_mode(false);
+    dirty_ = true;
     toolbar_->set_status_text(tr("DRAFT"));
 
     const int loaded_nodes = static_cast<int>(scene_->node_items().size());
@@ -652,36 +653,61 @@ void NodeEditorScreen::on_import_workflow() {
 }
 
 void NodeEditorScreen::on_export_workflow() {
-    QString path = QFileDialog::getSaveFileName(this, tr("Export Workflow"), "workflow.json",
+    if (scene_->is_empty()) {
+        QMessageBox::information(this, tr("Export Workflow"), tr("There is nothing on the canvas to export."));
+        return;
+    }
+    QString suggested = toolbar_->workflow_name().trimmed();
+    suggested.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_\\- ]")), QStringLiteral("_"));
+    QString path = QFileDialog::getSaveFileName(this, tr("Export Workflow"),
+                                                (suggested.isEmpty() ? QStringLiteral("workflow") : suggested) + ".json",
                                                 tr("JSON Files (*.json);;All Files (*)"));
     if (path.isEmpty())
         return;
-
-    WorkflowDef wf = scene_->serialize();
-    wf.id = current_workflow_id_;
-    wf.name = toolbar_->workflow_name();
+    if (!path.endsWith(QLatin1String(".json"), Qt::CaseInsensitive))
+        path += QLatin1String(".json");
 
     // Same serializer the import uses, so every node setting (continue-on-fail,
-    // retry, version…) survives an export → import round trip.
-    auto res = WorkflowService::instance().export_to_json(wf, path);
+    // retry, version…) survives an export → import round trip. The execution mode is
+    // deliberately not exported — an imported workflow always starts in PAPER.
+    auto res = WorkflowService::instance().export_to_json(current_workflow(), path);
     if (res.is_err()) {
         const QString err = QString::fromStdString(res.error());
         LOG_ERROR("NodeEditor", QString("Export failed: %1").arg(err));
         QMessageBox::warning(this, tr("Export Workflow"), tr("Could not export the workflow:\n\n%1").arg(err));
         return;
     }
+    toolbar_->set_status_text(tr("EXPORTED %1").arg(QTime::currentTime().toString("HH:mm")));
     LOG_INFO("NodeEditor", QString("Exported workflow to: %1").arg(path));
 }
 
-void NodeEditorScreen::on_save_workflow() {
+WorkflowDef NodeEditorScreen::current_workflow() const {
     WorkflowDef wf = scene_->serialize();
-    if (current_workflow_id_.isEmpty())
-        current_workflow_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
     wf.id = current_workflow_id_;
     wf.name = toolbar_->workflow_name();
+    wf.description = current_description_;
+    wf.static_data = static_data_;
+    return wf;
+}
 
-    // save_workflow() is synchronous and reports a failure only through save_failed —
-    // which nothing listened to, so a failed Save looked exactly like a successful one.
+void NodeEditorScreen::set_live_mode(bool live) {
+    live_mode_ = live;
+    static_data_[QLatin1String(WorkflowExecutor::kExecutionModeKey)] = live ? QStringLiteral("live")
+                                                                            : QStringLiteral("paper");
+    toolbar_->set_live_mode(live);
+}
+
+void NodeEditorScreen::mark_dirty() {
+    dirty_ = true;
+    toolbar_->set_status_text(tr("UNSAVED"));
+}
+
+bool NodeEditorScreen::persist(bool interactive) {
+    if (current_workflow_id_.isEmpty())
+        current_workflow_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const WorkflowDef wf = current_workflow();
+
+    // save_workflow() is synchronous and reports a failure only through save_failed.
     auto& svc = WorkflowService::instance();
     QString save_error;
     const auto failed_conn =
@@ -690,12 +716,22 @@ void NodeEditorScreen::on_save_workflow() {
     disconnect(failed_conn);
 
     if (!save_error.isEmpty()) {
-        QMessageBox::warning(this, tr("Save Workflow"), tr("The workflow could not be saved:\n\n%1").arg(save_error));
-        return;
+        if (interactive)
+            QMessageBox::warning(this, tr("Save Workflow"),
+                                 tr("The workflow could not be saved:\n\n%1").arg(save_error));
+        else
+            toolbar_->set_status_text(tr("SAVE FAILED")); // no modal every 30 s
+        return false;
     }
+    dirty_ = false;
     undo_stack_->setClean();
     toolbar_->set_status_text(tr("SAVED %1").arg(QTime::currentTime().toString("HH:mm")));
     ScreenStateManager::instance().notify_changed(this);
+    return true;
+}
+
+void NodeEditorScreen::on_save_workflow() {
+    persist(true);
 }
 
 void NodeEditorScreen::on_load_workflow() {
@@ -745,96 +781,186 @@ void NodeEditorScreen::on_load_workflow() {
 }
 
 void NodeEditorScreen::on_auto_save() {
-    if (scene_->node_items().isEmpty())
+    if (scene_->is_empty())
         return; // nothing to save
-
-    WorkflowDef wf = scene_->serialize();
-    if (current_workflow_id_.isEmpty())
-        current_workflow_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    wf.id = current_workflow_id_;
-    wf.name = toolbar_->workflow_name();
-
-    auto& svc = WorkflowService::instance();
-    bool save_failed = false;
-    const auto failed_conn =
-        connect(&svc, &WorkflowService::save_failed, this, [&save_failed](const QString&) { save_failed = true; });
-    svc.save_workflow(wf);
-    disconnect(failed_conn);
-
-    if (save_failed) {
-        // Don't pop a modal every 30 s — flag it on the badge (the service already logged why).
-        toolbar_->set_status_text(tr("SAVE FAILED"));
+    // Only when something changed: re-saving an unchanged graph every 30 s also queued
+    // a cloud-sync upload each time.
+    if (!dirty_ && undo_stack_->isClean())
         return;
-    }
-    undo_stack_->setClean();
-    toolbar_->set_status_text(tr("SAVED %1").arg(QTime::currentTime().toString("HH:mm")));
-    LOG_DEBUG("NodeEditor", "Auto-saved workflow");
+    if (persist(false))
+        LOG_DEBUG("NodeEditor", "Auto-saved workflow");
+}
+
+void NodeEditorScreen::on_stop() {
+    if (!WorkflowService::instance().is_executing())
+        return;
+    WorkflowService::instance().stop_execution();
+    LOG_INFO("NodeEditor", "Execution stopped by user");
 }
 
 void NodeEditorScreen::on_execute() {
     if (WorkflowService::instance().is_executing()) {
-        WorkflowService::instance().stop_execution();
-        LOG_INFO("NodeEditor", "Execution stopped by user");
+        on_stop();
         return;
     }
+    start_run({}, false);
+}
 
-    WorkflowDef wf = scene_->serialize();
-    if (wf.nodes.isEmpty()) {
+void NodeEditorScreen::start_run(const QString& from_node_id, bool already_confirmed) {
+    if (scene_->is_empty()) {
         LOG_WARN("NodeEditor", "No nodes to execute");
         return;
     }
-
-    wf.name = toolbar_->workflow_name();
-    // Audit-log rows (workflow / node / order events) are keyed by workflow id; serialize()
-    // returns none, so every row of an unsaved run used to be written with an empty id.
+    // Audit-log rows (workflow / node / order events) are keyed by workflow id.
     if (current_workflow_id_.isEmpty())
         current_workflow_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    wf.id = current_workflow_id_;
+    const WorkflowDef wf = current_workflow();
 
-    // A workflow is not just a computation — trading.* nodes place, modify and
-    // cancel REAL orders. The algo tab gates live deployment behind an explicit
-    // confirmation; this path had none, so pressing EXECUTE on a graph
-    // containing a live order node sent it straight to the broker. Several
-    // shipped templates (Price Alert Trading, Mean Reversion, Portfolio
-    // Rebalancer, Pre-Trade Compliance) contain order nodes, so this is
-    // reachable by loading a template and pressing one button.
-    if (!confirm_live_order_nodes(wf, tr("Execute Workflow")))
+    // The part of the graph that will actually run: everything, or the start node
+    // and what is downstream of it ("Execute From Here").
+    WorkflowDef will_run = wf;
+    if (!from_node_id.isEmpty()) {
+        QSet<QString> downstream{from_node_id};
+        QStringList frontier{from_node_id};
+        while (!frontier.isEmpty()) {
+            const QString cur = frontier.takeFirst();
+            for (const auto& ed : wf.edges) {
+                if (ed.source_node == cur && !downstream.contains(ed.target_node)) {
+                    downstream.insert(ed.target_node);
+                    frontier.append(ed.target_node);
+                }
+            }
+        }
+        will_run.nodes.clear();
+        for (const auto& nd : wf.nodes) {
+            if (downstream.contains(nd.id))
+                will_run.nodes.append(nd);
+        }
+    }
+
+    if (!validate_before_run(will_run))
+        return;
+    if (!confirm_run(will_run, from_node_id.isEmpty() ? tr("Execute Workflow") : tr("Execute From Here"),
+                     already_confirmed))
         return;
 
-    // Reset all node states to idle before execution
+    // Run-log banner: say which mode this run is in and what that means.
+    if (live_mode_) {
+        const auto rows = WorkflowService::live_action_rows(will_run, true);
+        int money = 0;
+        for (const auto& r : rows)
+            money += r.moves_money ? 1 : 0;
+        pending_banner_ = money > 0 ? tr("MODE: LIVE — %n node(s) can send real orders", "", money)
+                                    : tr("MODE: LIVE — no order node is set to live; nothing reaches a broker");
+        pending_banner_live_ = money > 0;
+    } else {
+        const QStringList simulated = WorkflowService::simulated_live_rows(will_run);
+        pending_banner_ = simulated.isEmpty()
+                              ? tr("MODE: PAPER — every order is simulated")
+                              : tr("MODE: PAPER — %n order node(s) set to live will be simulated", "",
+                                   static_cast<int>(simulated.size()));
+        pending_banner_live_ = false;
+    }
+
     for (auto* item : scene_->node_items())
         item->set_execution_state("idle");
 
-    WorkflowService::instance().execute_workflow(wf);
+    if (from_node_id.isEmpty())
+        WorkflowService::instance().execute_workflow(wf);
+    else
+        WorkflowService::instance().execute_from_node(wf, from_node_id);
 }
 
-bool NodeEditorScreen::confirm_live_order_nodes(const WorkflowDef& wf, const QString& action) {
-    // The detection itself lives in WorkflowService so it can see through
-    // control.execute_workflow sub-workflows and destructive MCP tool nodes, and so
-    // it applies the same "only the exact string 'paper' is paper" rule the order
-    // executors use. Read-only nodes (get_quote, get_positions, …) are deliberately
-    // not reported — warning on those would make the prompt noise people click
-    // through.
-    const QStringList live_rows = WorkflowService::live_order_rows(wf);
-    if (live_rows.isEmpty())
-        return true; // nothing live — proceed silently
+bool NodeEditorScreen::validate_before_run(const WorkflowDef& wf) {
+    for (auto* item : scene_->node_items())
+        item->set_execution_state("idle");
 
-    QMessageBox box(this);
-    box.setIcon(QMessageBox::Warning);
-    box.setWindowTitle(action);
-    box.setText(tr("This workflow contains %n LIVE order node(s).", "", live_rows.size()));
-    box.setInformativeText(tr("Running it will place REAL orders with REAL money at your broker:\n\n%1\n\n"
-                              "Set each node's Mode to \"paper\" if you only meant to simulate.")
-                               .arg(live_rows.join(QLatin1Char('\n'))));
-    auto* proceed = box.addButton(tr("Run with LIVE orders"), QMessageBox::AcceptRole);
-    box.addButton(QMessageBox::Cancel);
-    box.setDefaultButton(QMessageBox::Cancel); // Enter must not fire live orders
-    box.exec();
+    const auto issues = WorkflowService::validate(wf);
+    if (issues.isEmpty())
+        return true;
 
-    const bool go = (box.clickedButton() == proceed);
-    LOG_WARN("NodeEditor", QString("%1: %2 live order node(s) — user %3")
-                               .arg(action)
-                               .arg(live_rows.size())
+    // Group messages per node and mark each offending node on the canvas.
+    QHash<QString, QStringList> per_node;
+    QStringList order;
+    for (const auto& is : issues) {
+        if (!per_node.contains(is.node_id))
+            order << is.node_id;
+        per_node[is.node_id] << is.message;
+    }
+    QStringList lines;
+    NodeItem* first = nullptr;
+    for (const auto& id : order) {
+        auto* item = scene_->find_node(id);
+        if (item) {
+            item->set_validation_error(per_node.value(id).join(QLatin1Char('\n')));
+            if (!first)
+                first = item;
+        }
+        const QString name = item ? item->node_def().name : (id.isEmpty() ? tr("Workflow") : id.left(8));
+        for (const auto& m : per_node.value(id))
+            lines << QStringLiteral("• %1: %2").arg(name, m);
+    }
+    if (first) {
+        scene_->clearSelection();
+        first->setSelected(true);
+        canvas_->centerOn(first);
+    }
+    const int shown = std::min<int>(static_cast<int>(lines.size()), 12);
+    QString text = lines.mid(0, shown).join(QLatin1Char('\n'));
+    if (lines.size() > shown)
+        text += QLatin1Char('\n') + tr("…and %n more", "", static_cast<int>(lines.size()) - shown);
+    QMessageBox::warning(this, tr("Workflow not ready"),
+                         tr("Fix these before running (offending nodes are outlined in red):\n\n%1").arg(text));
+    LOG_WARN("NodeEditor", QString("Run blocked by %1 validation issue(s)").arg(issues.size()));
+    return false;
+}
+
+bool NodeEditorScreen::confirm_run(const WorkflowDef& wf, const QString& action, bool already_confirmed) {
+    const auto rows = WorkflowService::live_action_rows(wf, live_mode_);
+    QStringList money_rows;
+    QStringList other_rows;
+    for (const auto& r : rows)
+        (r.moves_money ? money_rows : other_rows) << r.text;
+    if (rows.isEmpty())
+        return true; // nothing acts for real — proceed silently
+
+    auto cap = [](const QStringList& l) {
+        QStringList out = l.mid(0, 15);
+        if (l.size() > 15)
+            out << tr("  …and %n more", "", static_cast<int>(l.size()) - 15);
+        return out.join(QLatin1Char('\n'));
+    };
+
+    bool go = true;
+    if (!money_rows.isEmpty()) {
+        if (!already_confirmed) {
+            // Real orders: a click is not enough — the user types LIVE.
+            bool ok = false;
+            const QString typed = QInputDialog::getText(
+                this, action,
+                tr("LIVE MODE — this run sends REAL orders with REAL money:\n\n%1\n\nType LIVE to run, or Cancel.")
+                    .arg(cap(money_rows + other_rows)),
+                QLineEdit::Normal, QString(), &ok);
+            go = ok && typed.trimmed() == QLatin1String("LIVE");
+            if (ok && !go)
+                QMessageBox::information(this, action, tr("Not confirmed — nothing was run."));
+        }
+    } else {
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Warning);
+        box.setWindowTitle(action);
+        box.setText(tr("This workflow changes data outside the editor."));
+        box.setInformativeText(tr("These nodes call destructive tools:\n\n%1").arg(cap(other_rows)));
+        auto* proceed = box.addButton(tr("Run"), QMessageBox::AcceptRole);
+        box.addButton(QMessageBox::Cancel);
+        box.setDefaultButton(QMessageBox::Cancel); // Enter must not fire it
+        box.exec();
+        go = (box.clickedButton() == proceed);
+    }
+    LOG_WARN("NodeEditor", QString("%1 [%2]: %3 live order node(s), %4 destructive tool(s) — user %5")
+                               .arg(action, live_mode_ ? "LIVE" : "PAPER")
+                               .arg(money_rows.size())
+                               .arg(other_rows.size())
                                .arg(go ? "CONFIRMED" : "cancelled"));
     return go;
 }
@@ -861,7 +987,7 @@ void NodeEditorScreen::on_show_templates() {
         // Operations
         tr("13. Scheduled Report — Daily P&L report to email"),
         tr("14. Data Export Pipeline — Fetch → transform → CSV export"),
-        tr("15. Webhook Automation — External trigger → process → notify"),
+        tr("15. Signal Automation — Signal → validate → risk check → order"),
     };
 
     bool ok = false;
@@ -1100,7 +1226,8 @@ void NodeEditorScreen::on_show_templates() {
         toolbar_->set_workflow_name("Portfolio Rebalancer");
     } else if (idx == 8) {
         // ── 9. Daily Risk Monitor ───────────────────────────────────
-        auto n1 = make_node("trigger.schedule", "Daily 9:30 AM", 100, 200);
+        // No scheduler runs saved workflows yet: this runs when you press EXECUTE.
+        auto n1 = make_node("trigger.schedule", "Start (cron 9:30 Mon-Fri)", 100, 200);
         set_param(n1, "cron", "30 9 * * 1-5");
         auto n2 = make_node("trading.get_positions", "Open Positions", 400, 200);
         auto n3 = make_node("analytics.risk_analysis", "VaR Analysis", 700, 200);
@@ -1207,7 +1334,7 @@ void NodeEditorScreen::on_show_templates() {
         toolbar_->set_workflow_name("AI Research Agent");
     } else if (idx == 12) {
         // ── 13. Scheduled Report ────────────────────────────────────
-        auto n1 = make_node("trigger.schedule", "Daily 5 PM", 100, 200);
+        auto n1 = make_node("trigger.schedule", "Start (cron 17:00 Mon-Fri)", 100, 200);
         set_param(n1, "cron", "0 17 * * 1-5");
         auto n2 = make_node("trading.get_positions", "Positions", 400, 100);
         auto n3 = make_node("trading.get_balance", "Balance", 400, 300);
@@ -1252,13 +1379,16 @@ void NodeEditorScreen::on_show_templates() {
         make_edge(n6.id, "output_main", n7.id, "input_0");
         toolbar_->set_workflow_name("Data Export Pipeline");
     } else if (idx == 14) {
-        // ── 15. Webhook Automation ──────────────────────────────────
-        auto n1 = make_node("trigger.webhook", "Incoming Webhook", 100, 200);
-        set_param(n1, "path", "/trading-signal");
-        set_param(n1, "method", "POST");
-        auto n2 = make_node("format.json", "Parse Payload", 400, 200);
-        set_param(n2, "operation", "parse");
+        // ── 15. Signal Automation ───────────────────────────────────
+        // (Was driven by trigger.webhook, which needs the workflow scheduler and
+        // therefore never fires — the template was inert. Start it manually and put
+        // the signal in "Signal".)
+        auto n1 = make_node("trigger.manual", "Start", 100, 200);
+        auto n2 = make_node("core.set", "Signal", 400, 200);
+        set_param(n2, "key", "signal");
+        set_param(n2, "value", "BUY");
         auto n3 = make_node("control.if_else", "Valid Signal?", 700, 200);
+        set_param(n3, "condition", "signal == BUY");
         auto n4 = make_node("safety.risk_check", "Risk Check", 1000, 100);
         auto n5 = make_node("trading.place_order", "Execute Trade", 1300, 100);
         auto n6 = make_node("notify.discord", "Invalid Signal", 1000, 350);
@@ -1271,10 +1401,14 @@ void NodeEditorScreen::on_show_templates() {
         make_edge(n4.id, "output_pass", n5.id, "input_0");
         make_edge(n5.id, "output_main", n7.id, "input_0");
         make_edge(n6.id, "output_main", n8.id, "input_0");
-        toolbar_->set_workflow_name("Webhook Automation");
+        toolbar_->set_workflow_name("Signal Automation");
     }
 
     current_workflow_id_.clear();
+    current_description_.clear();
+    static_data_ = QJsonObject{};
+    set_live_mode(false); // a template is a new workflow — it always starts in PAPER
+    dirty_ = true;
     // The scene already holds the template; record the swap so Ctrl+Z restores
     // whatever was on the canvas before. (push() re-applies `after`, which
     // rebuilds an identical graph.)
@@ -1283,31 +1417,39 @@ void NodeEditorScreen::on_show_templates() {
 }
 
 void NodeEditorScreen::on_deploy() {
-    DeployDialog dlg(toolbar_->workflow_name(), this);
+    if (WorkflowService::instance().is_executing()) {
+        QMessageBox::information(this, tr("Save & Run"), tr("A run is in progress — stop it first."));
+        return;
+    }
+    const WorkflowDef preview = current_workflow();
+    QStringList live_rows;
+    for (const auto& r : WorkflowService::live_action_rows(preview, true)) {
+        if (r.moves_money)
+            live_rows << r.text;
+    }
+
+    DeployDialog dlg(toolbar_->workflow_name(), current_description_, live_mode_, live_rows, this);
     if (dlg.exec() != QDialog::Accepted)
         return;
 
-    WorkflowDef wf = scene_->serialize();
-    if (current_workflow_id_.isEmpty())
-        current_workflow_id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    wf.id = current_workflow_id_;
-    wf.name = dlg.workflow_name();
-    wf.description = dlg.workflow_description();
+    toolbar_->set_workflow_name(dlg.workflow_name());
+    current_description_ = dlg.workflow_description();
+    const bool live = dlg.live_mode();
+    if (live != live_mode_)
+        LOG_WARN("NodeEditor", QString("Workflow '%1' execution mode set to %2")
+                                   .arg(dlg.workflow_name(), live ? "LIVE" : "PAPER"));
+    set_live_mode(live);
     // There is no scheduler or webhook runtime, so a saved workflow is never a
-    // live deployment. Persist it as a Draft rather than an "idle" (active,
-    // waiting-for-trigger) deployment so listings don't imply it will run again.
-    wf.status = WorkflowStatus::Draft;
-
-    toolbar_->set_workflow_name(wf.name);
-    WorkflowService::instance().save_workflow(wf);
+    // live deployment: it is persisted as a Draft and runs once when asked.
+    if (!persist(true))
+        return;
 
     if (dlg.is_deploy()) {
-        LOG_INFO("NodeEditor", QString("Saved and ran workflow once: %1").arg(wf.name));
-        // "Deploy" is save + run once. There is no scheduler/webhook listener to
-        // fire trigger.* / schedule nodes again, so the workflow does not stay active.
-        on_execute();
+        LOG_INFO("NodeEditor", QString("Saved and ran workflow once: %1").arg(dlg.workflow_name()));
+        // The user typed LIVE in the dialog a moment ago — don't ask twice.
+        start_run({}, live);
     } else {
-        LOG_INFO("NodeEditor", QString("Saved draft: %1").arg(wf.name));
+        LOG_INFO("NodeEditor", QString("Saved draft: %1").arg(dlg.workflow_name()));
     }
 }
 

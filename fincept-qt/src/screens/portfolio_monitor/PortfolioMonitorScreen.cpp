@@ -1,21 +1,28 @@
 // PortfolioMonitorScreen.cpp — unified all-accounts positions & holdings.
 #include "screens/portfolio_monitor/PortfolioMonitorScreen.h"
 
+#include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/TradingTypes.h"
 #include "trading/UnifiedPortfolioService.h"
 #include "ui/theme/Theme.h"
 
+#include <QClipboard>
 #include <QComboBox>
+#include <QDate>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFile>
+#include <QFileDialog>
 #include <QFormLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
@@ -23,7 +30,9 @@
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QStyle>
 #include <QTabWidget>
+#include <QTextStream>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -157,7 +166,13 @@ void PortfolioMonitorScreen::hideEvent(QHideEvent* event) {
 QWidget* PortfolioMonitorScreen::build_summary_bar() {
     auto* bar = new QWidget;
     bar->setObjectName("pmSummaryBar");
-    bar->setStyleSheet("#pmSummaryBar{background:#0a0a0a;border:1px solid #1a1a1a;}");
+    // Value labels are coloured by a "sign" property (pos/neg/flat) matched
+    // here, instead of a setStyleSheet() per label on every summary tick.
+    bar->setStyleSheet(QString("#pmSummaryBar{background:#0a0a0a;border:1px solid #1a1a1a;}"
+                               "QLabel#pmStatValue{color:#e5e5e5;font-size:13px;font-weight:600;}"
+                               "QLabel#pmStatValue[sign=\"pos\"]{color:%1;}"
+                               "QLabel#pmStatValue[sign=\"neg\"]{color:%2;}")
+                           .arg(fincept::ui::colors::POSITIVE(), fincept::ui::colors::NEGATIVE()));
     auto* h = new QHBoxLayout(bar);
     h->setContentsMargins(10, 6, 10, 6);
     h->setSpacing(14);
@@ -194,7 +209,7 @@ QWidget* PortfolioMonitorScreen::build_summary_bar() {
         auto* cap = new QLabel(title);
         cap->setStyleSheet("color:#808080;font-size:10px;");
         auto* val = new QLabel(QStringLiteral("—"));
-        val->setStyleSheet("color:#e5e5e5;font-size:13px;font-weight:600;");
+        val->setObjectName("pmStatValue");
         box->addWidget(cap);
         box->addWidget(val);
         h->addLayout(box);
@@ -305,8 +320,17 @@ QTreeWidget* PortfolioMonitorScreen::make_tree(bool holdings) {
     tree->setColumnWidth(ColAction, 76);
     tree->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     tree->setMinimumWidth(0);
+    // EXIT / EXIT ALL buttons are styled here once (they are children of the
+    // tree's viewport) — rebuild_tree() used to call setStyleSheet per button,
+    // i.e. a CSS parse per row on every positions refresh.
     tree->setStyleSheet("QTreeWidget{background:#080808;border:1px solid #1a1a1a;font-size:12px;}"
-                        "QTreeWidget::item{height:26px;}");
+                        "QTreeWidget::item{height:26px;}"
+                        "QPushButton#pmExitBtn{background:transparent;border:1px solid #5c1f1f;"
+                        "color:#ef4444;font-size:10px;padding:2px 8px;}"
+                        "QPushButton#pmExitBtn:hover{background:#1a0a0a;}");
+    tree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(tree, &QTreeWidget::customContextMenuRequested, this,
+            [this, tree, holdings](const QPoint& pos) { show_row_menu(tree, holdings, pos); });
     return tree;
 }
 
@@ -342,6 +366,8 @@ void PortfolioMonitorScreen::rebuild_tree(QTreeWidget* tree, const QVector<AggRo
     for (const AggRow& row : rows) {
         auto* parent = new QTreeWidgetItem(tree);
         fill_parent(parent, row, holdings);
+        parent->setData(ColSymbol, Qt::UserRole, row.symbol);
+        parent->setData(ColSymbol, Qt::UserRole + 1, row.exchange);
         const QString key = row_key(row.symbol, row.exchange);
         index.insert(key, parent);
 
@@ -350,9 +376,7 @@ void PortfolioMonitorScreen::rebuild_tree(QTreeWidget* tree, const QVector<AggRo
         if (row.children.size() > 1) {
             auto* exit_all = new QPushButton(tr("EXIT ALL"));
             exit_all->setCursor(Qt::PointingHandCursor);
-            exit_all->setStyleSheet("QPushButton{background:transparent;border:1px solid #5c1f1f;"
-                                    "color:#ef4444;font-size:10px;padding:2px 8px;}"
-                                    "QPushButton:hover{background:#1a0a0a;}");
+            exit_all->setObjectName("pmExitBtn");
             const QString sym = row.symbol, exch = row.exchange;
             const int n = int(row.children.size());
             connect(exit_all, &QPushButton::clicked, this,
@@ -378,9 +402,7 @@ void PortfolioMonitorScreen::rebuild_tree(QTreeWidget* tree, const QVector<AggRo
 
             auto* exit_btn = new QPushButton(tr("EXIT"));
             exit_btn->setCursor(Qt::PointingHandCursor);
-            exit_btn->setStyleSheet("QPushButton{background:transparent;border:1px solid #5c1f1f;"
-                                    "color:#ef4444;font-size:10px;padding:2px 8px;}"
-                                    "QPushButton:hover{background:#1a0a0a;}");
+            exit_btn->setObjectName("pmExitBtn");
             const QString acct = c.account_id, label = c.broker_label, sym = row.symbol, exch = row.exchange,
                           product = c.product;
             const double qty = c.qty;
@@ -451,13 +473,19 @@ void PortfolioMonitorScreen::patch_holding(const QString& symbol) {
 
 void PortfolioMonitorScreen::update_summary() {
     const auto s = UnifiedPortfolioService::instance().summary();
-    auto set = [](QLabel* l, double v, bool color, bool signed_pfx = true) {
+    // Re-polish only when the sign flips; the colour rules live on #pmSummaryBar.
+    auto set_sign = [](QLabel* l, double v) {
+        const QString sign = v > 0 ? QStringLiteral("pos") : v < 0 ? QStringLiteral("neg") : QStringLiteral("flat");
+        if (l->property("sign").toString() == sign)
+            return;
+        l->setProperty("sign", sign);
+        l->style()->unpolish(l);
+        l->style()->polish(l);
+    };
+    auto set = [&set_sign](QLabel* l, double v, bool color, bool signed_pfx = true) {
         l->setText(fmt_money(v, signed_pfx));
         if (color)
-            l->setStyleSheet(QString("color:%1;font-size:13px;font-weight:600;")
-                                 .arg(v > 0   ? fincept::ui::colors::POSITIVE()
-                                      : v < 0 ? fincept::ui::colors::NEGATIVE()
-                                              : QStringLiteral("#e5e5e5")));
+            set_sign(l, v);
     };
     set(sum_positions_pnl_, s.positions_pnl, true);
     set(sum_day_pnl_, s.positions_day_pnl + s.holdings_day_pnl, true);
@@ -465,11 +493,8 @@ void PortfolioMonitorScreen::update_summary() {
     set(sum_invested_, s.invested, false, false);
     set(sum_current_, s.current, false, false);
     sum_return_->setText(QString::number(s.return_pct, 'f', 2) + "%");
-    sum_return_->setStyleSheet(QString("color:%1;font-size:13px;font-weight:600;")
-                                   .arg(s.return_pct > 0   ? fincept::ui::colors::POSITIVE()
-                                        : s.return_pct < 0 ? fincept::ui::colors::NEGATIVE()
-                                                           : QStringLiteral("#e5e5e5")));
-    sum_accounts_->setText(QString("%1/%2 LIVE").arg(s.accounts_live).arg(s.accounts_total));
+    set_sign(sum_return_, s.return_pct);
+    sum_accounts_->setText(tr("%1/%2 LIVE").arg(s.accounts_live).arg(s.accounts_total));
 }
 
 void PortfolioMonitorScreen::on_action_finished(bool ok, const QString& message) {
@@ -477,6 +502,98 @@ void PortfolioMonitorScreen::on_action_finished(bool ok, const QString& message)
     toast_->setStyleSheet(QString("color:%1;font-size:11px;")
                               .arg(ok ? fincept::ui::colors::POSITIVE() : fincept::ui::colors::NEGATIVE()));
     QTimer::singleShot(8000, toast_, [t = toast_]() { t->clear(); });
+}
+
+// ── Row menu ─────────────────────────────────────────────────────────────────
+
+void PortfolioMonitorScreen::show_row_menu(QTreeWidget* tree, bool holdings, const QPoint& pos) {
+    QTreeWidgetItem* item = tree->itemAt(pos);
+    while (item && item->parent())
+        item = item->parent(); // account rows act on their symbol
+    const QString symbol = item ? item->data(ColSymbol, Qt::UserRole).toString() : QString();
+    const QString exchange = item ? item->data(ColSymbol, Qt::UserRole + 1).toString() : QString();
+
+    QMenu menu(this);
+    if (!symbol.isEmpty()) {
+        // Equity Research / News / Watchlist / Backtesting key on Yahoo tickers;
+        // the broker symbol needs its exchange suffix for those.
+        const QString ex = exchange.toUpper();
+        const QString yahoo = ex == QLatin1String("NSE")   ? symbol + QStringLiteral(".NS")
+                              : ex == QLatin1String("BSE") ? symbol + QStringLiteral(".BO")
+                                                           : symbol;
+        QMenu* open_in = menu.addMenu(tr("Open %1 in").arg(symbol));
+        const struct {
+            const char* screen;
+            const char* label;
+            bool broker_symbol;
+        } kTargets[] = {
+            {"equity_trading", QT_TR_NOOP("Equity Trading"), true},
+            {"equity_research", QT_TR_NOOP("Equity Research"), false},
+            {"news", QT_TR_NOOP("News"), false},
+            {"watchlist", QT_TR_NOOP("Watchlist"), false},
+        };
+        for (const auto& t : kTargets) {
+            const QString screen = QString::fromLatin1(t.screen);
+            const QString sym = t.broker_symbol ? symbol : yahoo;
+            const QString exch = t.broker_symbol ? exchange : QString();
+            connect(open_in->addAction(tr(t.label)), &QAction::triggered, this, [screen, sym, exch]() {
+                QVariantMap payload{{"screen_id", screen}, {"symbol", sym}};
+                if (!exch.isEmpty())
+                    payload.insert("exchange", exch);
+                fincept::EventBus::instance().publish("nav.open_symbol", payload);
+            });
+        }
+        connect(menu.addAction(tr("Copy Symbol")), &QAction::triggered, this,
+                [symbol]() { QGuiApplication::clipboard()->setText(symbol); });
+        menu.addSeparator();
+    }
+    connect(menu.addAction(holdings ? tr("Export Holdings (CSV)…") : tr("Export Positions (CSV)…")),
+            &QAction::triggered, this, [this, holdings]() { export_csv(holdings); });
+    menu.exec(tree->viewport()->mapToGlobal(pos));
+}
+
+void PortfolioMonitorScreen::export_csv(bool holdings) {
+    const auto rows_src =
+        holdings ? UnifiedPortfolioService::instance().holdings() : UnifiedPortfolioService::instance().positions();
+    if (rows_src.isEmpty()) {
+        QMessageBox::information(this, tr("Export"), tr("Nothing to export."));
+        return;
+    }
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export CSV"),
+        QStringLiteral("%1_%2.csv")
+            .arg(holdings ? QStringLiteral("holdings") : QStringLiteral("positions"),
+                 QDate::currentDate().toString(Qt::ISODate)),
+        tr("CSV Files (*.csv)"));
+    if (path.isEmpty())
+        return;
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Export Failed"), tr("Could not write %1:\n%2").arg(path, f.errorString()));
+        return;
+    }
+    auto esc = [](QString v) {
+        if (v.contains(QLatin1Char(',')) || v.contains(QLatin1Char('"'))) {
+            v.replace(QLatin1String("\""), QLatin1String("\"\""));
+            v = QLatin1Char('"') + v + QLatin1Char('"');
+        }
+        return v;
+    };
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+    out.setGenerateByteOrderMark(true);
+    out << "symbol,exchange,account,product,side,quantity,avg_price,ltp,pnl,day_pnl\n";
+    for (const AggRow& row : rows_src) {
+        for (const AggChild& c : row.children) {
+            out << esc(row.symbol) << ',' << esc(row.exchange) << ',' << esc(c.broker_label) << ','
+                << esc(c.product) << ',' << esc(c.side) << ',' << QString::number(c.qty, 'f', 4) << ','
+                << QString::number(c.avg_price, 'f', 4) << ',' << QString::number(c.ltp, 'f', 4) << ','
+                << QString::number(c.pnl, 'f', 2) << ',' << QString::number(c.day_pnl, 'f', 2) << '\n';
+        }
+    }
+    out.flush();
+    on_action_finished(out.status() == QTextStream::Ok,
+                       out.status() == QTextStream::Ok ? tr("Exported to %1").arg(path) : tr("Write error: %1").arg(path));
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────────

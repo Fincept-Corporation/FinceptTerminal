@@ -1,4 +1,5 @@
-// MetaTools.cpp — Self-introspection tools (tool_list, tool_describe, mcp_health).
+// MetaTools.cpp — Self-introspection tools (tool_list, tool_describe, tool_invoke,
+// mcp_health).
 
 #include "mcp/tools/MetaTools.h"
 
@@ -6,17 +7,22 @@
 #include "datahub/DataHub.h"
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
+#include "mcp/McpService.h"
 #include "mcp/ToolRetriever.h"
 #include "mcp/ToolSchemaBuilder.h"
 
 #include <QDateTime>
+#include <QFuture>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QMutex>
+#include <QPromise>
 #include <QRegularExpression>
 
 #include <atomic>
+#include <memory>
+#include <optional>
 
 namespace fincept::mcp::tools {
 
@@ -166,34 +172,171 @@ std::vector<ToolDef> get_meta_tools() {
                              .string("name", "Bare tool name (without server_id__ prefix)")
                              .required()
                              .length(1, 128)
+                             .string("server_id", "Optional server id when the same name exists on several "
+                                                  "servers (as returned by an earlier tool_describe)")
+                             .length(0, 128)
                              .build();
         t.handler = [](const QJsonObject& args) -> ToolResult {
-            const QString name = args["name"].toString();
+            const QString name = args["name"].toString().trimmed();
+            const QString server_id = args["server_id"].toString().trimmed();
             telemetry::g_tool_describe_calls.fetch_add(1);
 
-            // O(1) snapshot lookup — previously linear-scanned the full
-            // catalog while re-serialising every input_schema (~3 ms p95).
-            if (auto tool = McpProvider::instance().find_tool(name)) {
-                QJsonObject out{
-                    {"name", tool->name},
-                    {"category", tool->category},
-                    {"description", tool->description},
-                    {"input_schema", tool->input_schema},
-                    {"server_id", tool->server_id},
-                };
-                // tool_list already flags these; tool_describe is the call a model makes right
-                // before using the tool, and a refused destructive call costs it a whole round.
-                // Tell it up front that this one needs the user's "destructive tools" grant.
-                if (tool->is_destructive) {
-                    out["destructive"] = true;
-                    out["note"] = QStringLiteral("State-changing tool: it only runs when the user has enabled "
-                                                 "destructive AI tools in Settings > Security; otherwise the call is "
-                                                 "refused. Tell the user what you intend to do before calling it.");
+            // Internal tools: O(1) snapshot lookup — previously linear-scanned
+            // the full catalog while re-serialising every input_schema (~3 ms p95).
+            std::optional<UnifiedTool> tool;
+            if (server_id.isEmpty() || server_id == QLatin1String(INTERNAL_SERVER_ID))
+                tool = McpProvider::instance().find_tool(name);
+
+            // External tools: tool_list surfaces them (the Tool RAG index covers
+            // the merged catalogue), so tool_describe has to resolve them too —
+            // otherwise the model finds a tool it can never learn to call.
+            QStringList other_servers;
+            if (!tool) {
+                for (const auto& u : McpService::instance().get_all_tools()) {
+                    if (u.is_internal || u.name != name)
+                        continue;
+                    if (!server_id.isEmpty() && u.server_id != server_id)
+                        continue;
+                    if (!tool)
+                        tool = u;
+                    else
+                        other_servers << u.server_id;
                 }
-                return ToolResult::ok_data(out);
             }
-            telemetry::g_tool_describe_misses.fetch_add(1);
-            return ToolResult::fail("Tool not found: " + name);
+
+            if (!tool) {
+                telemetry::g_tool_describe_misses.fetch_add(1);
+                return ToolResult::fail("Tool not found: " + name + ". Use tool_list to search for tools.");
+            }
+
+            QJsonObject out{
+                {"name", tool->name},
+                {"category", tool->category},
+                {"description", tool->description},
+                {"input_schema", tool->input_schema},
+                {"server_id", tool->server_id},
+            };
+            if (!tool->is_internal) {
+                out["server_name"] = tool->server_name;
+                out["external"] = true;
+                out["how_to_call"] = QStringLiteral("Call it through tool_invoke(tool='%1', server_id='%2', "
+                                                    "arguments={...}).")
+                                         .arg(tool->name, tool->server_id);
+                if (!other_servers.isEmpty()) {
+                    QJsonArray others;
+                    for (const auto& s : other_servers)
+                        others.append(s);
+                    out["also_on_servers"] = others;
+                }
+            }
+            // tool_list already flags these; tool_describe is the call a model makes right
+            // before using the tool, and a refused destructive call costs it a whole round.
+            // Tell it up front that this one needs the user's "destructive tools" grant.
+            if (tool->is_destructive && tool->is_internal) {
+                out["destructive"] = true;
+                out["note"] = QStringLiteral("State-changing tool: it only runs when the user has enabled "
+                                             "destructive AI tools in Settings > Security; otherwise the call is "
+                                             "refused. Tell the user what you intend to do before calling it.");
+            }
+            return ToolResult::ok_data(out);
+        };
+        tools.push_back(std::move(t));
+    }
+
+    // ── tool_invoke ──────────────────────────────────────────────────────
+    //
+    // Generic dispatcher. Agents and clients that are handed a small tool set
+    // (Tier-0 chat, the agent "essentials" catalogue, external MCP clients)
+    // discover the rest with tool_list / tool_describe; this is how they then
+    // CALL what they found without the tool having to be declared up front.
+    //
+    // Authorization is the INNER tool's: the inner call goes through
+    // McpProvider::call_tool_async on the calling thread, so the auth checker,
+    // the destructive capability gate, the agent-bridge flags and the
+    // user-approval marker (all thread-local / per-call) apply exactly as if
+    // the inner tool had been called directly. tool_invoke itself is therefore
+    // not destructive. Its 15-minute budget makes it job-eligible (§M1): in
+    // the interactive loop a slow inner tool comes back as a job receipt, and
+    // job_cancel / progress reach the inner call through the shared context.
+    {
+        ToolDef t;
+        t.name = "tool_invoke";
+        // Worded to stay out of Tool RAG's way: tool_invoke is indexed like any
+        // tool, so domain verbs (get / find / read / show) would let it compete
+        // with the real tools for ordinary intents.
+        t.description = "Generic dispatcher: invokes another tool by its exact name with a JSON arguments "
+                        "object. Discover tools with tool_list and their input schema with tool_describe "
+                        "before invoking. server_id is only needed for a tool on an external MCP server. "
+                        "Returns that tool's own result.";
+        t.category = "meta";
+        t.default_timeout_ms = 900000;
+        t.input_schema = ToolSchemaBuilder()
+                             .string("tool", "Exact bare tool name, as returned by tool_list")
+                             .required()
+                             .length(1, 128)
+                             .object("arguments", "Arguments object matching the tool's input schema "
+                                                  "(see tool_describe). Omit or {} when it takes none.")
+                             .string("server_id", "External server id from tool_describe; omit for "
+                                                  "built-in tools")
+                             .length(0, 128)
+                             .build();
+        t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
+            // Race the provider's own guard (watchdog / cancellation watch), not a
+            // private flag — see ToolContext::resolve_guard.
+            auto resolved = ctx.resolve_guard ? ctx.resolve_guard : std::make_shared<std::atomic<bool>>(false);
+            auto resolve = [promise, resolved](ToolResult r) {
+                bool expected = false;
+                if (!resolved->compare_exchange_strong(expected, true))
+                    return;
+                promise->addResult(std::move(r));
+                promise->finish();
+            };
+
+            const QString inner = args.value("tool").toString().trimmed();
+            const QString server_id = args.value("server_id").toString().trimmed();
+            const QJsonValue raw_args = args.value("arguments");
+            if (!raw_args.isUndefined() && !raw_args.isNull() && !raw_args.isObject()) {
+                resolve(ToolResult::fail("'arguments' must be a JSON object"));
+                return;
+            }
+            const QJsonObject inner_args = raw_args.toObject();
+
+            // No recursion: the dispatcher cannot dispatch itself, and the job
+            // tools manage the protocol tool_invoke runs under — wrapping them
+            // would start a job to watch a job.
+            if (inner == QLatin1String("tool_invoke") || inner.startsWith(QLatin1String("job_"))) {
+                resolve(ToolResult::fail(QStringLiteral("tool_invoke cannot call '%1'. Call it directly.").arg(inner)));
+                return;
+            }
+
+            const auto target = McpService::instance().resolve_tool_target(inner, server_id);
+            if (!target.error.isEmpty()) {
+                resolve(ToolResult::fail(target.error));
+                return;
+            }
+
+            // Inner context: progress and cancellation flow through; the timeout
+            // is left at the default so the provider applies the INNER tool's
+            // own budget (ours is only the outer ceiling).
+            ToolContext inner_ctx;
+            inner_ctx.on_progress = ctx.on_progress;
+            inner_ctx.is_cancelled = ctx.is_cancelled;
+
+            QFuture<ToolResult> f;
+            if (target.server_id == QLatin1String(INTERNAL_SERVER_ID)) {
+                f = McpProvider::instance().call_tool_async(inner, inner_args, inner_ctx);
+            } else {
+                // External server: the same dispatch the chat loop uses. It carries
+                // the agent-gating flags across its pool-thread hop and applies the
+                // external-tool authorization gate in execute_tool().
+                f = McpService::instance().execute_openai_function_async(
+                    target.server_id + QStringLiteral("__") + McpProvider::encode_tool_name_for_wire(inner),
+                    inner_args);
+            }
+            f.then([resolve, inner](QFuture<ToolResult> done) {
+                resolve(done.resultCount() > 0 ? done.result()
+                                               : ToolResult::fail("Tool '" + inner + "' produced no result"));
+            });
         };
         tools.push_back(std::move(t));
     }

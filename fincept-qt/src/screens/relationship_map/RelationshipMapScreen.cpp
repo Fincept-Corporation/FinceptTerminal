@@ -813,14 +813,23 @@ void RelationshipMapScreen::on_node_selected(const QString& label, const QString
                 };
                 add_prop(tr("Sector"), current_data_.company.sector);
                 add_prop(tr("Industry"), current_data_.company.industry);
-                add_prop(tr("Mkt Cap"), QString("$%1B").arg(current_data_.company.market_cap / 1e9, 0, 'f', 1));
-                add_prop(tr("Price"), QString("$%1").arg(current_data_.company.current_price, 0, 'f', 2));
+                const QString ccy = current_data_.company.currency;
+                add_prop(tr("Mkt Cap"), relmap::money(current_data_.company.market_cap, ccy, /*compact=*/true));
+                add_prop(tr("Price"), relmap::money(current_data_.company.current_price, ccy));
                 add_prop(tr("P/E"), QString::number(current_data_.company.pe_ratio, 'f', 1));
                 add_prop(tr("ROE"), QString("%1%").arg(current_data_.company.roe * 100, 0, 'f', 1));
                 add_prop(tr("Growth"), QString("%1%").arg(current_data_.company.revenue_growth * 100, 0, 'f', 1));
                 add_prop(tr("Margins"), QString("%1%").arg(current_data_.company.profit_margins * 100, 0, 'f', 1));
                 add_prop(tr("Employees"), QString::number(current_data_.company.employees));
-                add_prop(tr("Signal"), current_data_.valuation.action);
+                // A P/E-vs-peers heuristic — shown as a relative-value read, not BUY/SELL.
+                const auto& val = current_data_.valuation;
+                add_prop(tr("Rel. value"),
+                         val.pe_vs_peers > 0
+                             ? tr("%1 (P/E %2x peer median, %3 peers)")
+                                   .arg(val.status)
+                                   .arg(val.pe_vs_peers, 0, 'f', 2)
+                                   .arg(val.peer_count)
+                             : val.status);
             }
 
             // Try to match peer
@@ -832,8 +841,8 @@ void RelationshipMapScreen::on_node_selected(const QString& label, const QString
                             QString("color: %1; font-size: 10px; %2").arg(colors::TEXT_SECONDARY(), MF()));
                         layout->addWidget(row);
                     };
-                    add_prop(tr("Mkt Cap"), QString("$%1B").arg(p.market_cap / 1e9, 0, 'f', 1));
-                    add_prop(tr("Price"), QString("$%1").arg(p.current_price, 0, 'f', 2));
+                    add_prop(tr("Mkt Cap"), relmap::money(p.market_cap, p.currency, /*compact=*/true));
+                    add_prop(tr("Price"), relmap::money(p.current_price, p.currency));
                     add_prop(tr("P/E"), QString::number(p.pe_ratio, 'f', 1));
                     add_prop(tr("ROE"), QString("%1%").arg(p.roe * 100, 0, 'f', 1));
                     add_prop(tr("Growth"), QString("%1%").arg(p.revenue_growth * 100, 0, 'f', 1));

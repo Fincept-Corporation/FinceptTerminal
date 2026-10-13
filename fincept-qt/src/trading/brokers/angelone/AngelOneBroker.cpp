@@ -25,6 +25,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fincept::trading {
 
@@ -212,6 +213,37 @@ const BrokerEnumMap<QString>& AngelOneBroker::ao_enum_map() {
         return x;
     }();
     return m;
+}
+
+ProductType AngelOneBroker::product_from_wire(const QString& wire_product) const {
+    // Angel One's "MARGIN" is its MTF product (see ao_enum_map: MTF -> "MARGIN"),
+    // whereas Dhan/Fyers use "MARGIN" for NRML — so it cannot live in the shared
+    // product_from_broker_str(). Closing an MTF position as CARRYFORWARD would
+    // open a second position instead of flattening it.
+    if (wire_product.trimmed().compare(QLatin1String("MARGIN"), Qt::CaseInsensitive) == 0)
+        return ProductType::MTF;
+    return product_from_broker_str(wire_product); // DELIVERY / CARRYFORWARD / INTRADAY
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Price precision
+// SmartAPI (https://smartapi.angelbroking.com/docs/Orders) takes price /
+// triggerprice / stoploss as decimal STRINGS; the payload format is unchanged here,
+// only the number of decimals. A fixed 2 dp rounded currency-derivative prices:
+// NSE/BSE currency futures & options tick in ₹0.0025 (NSE Currency Derivatives
+// contract specifications), so a confirmed 83.1275 limit went out as "83.13".
+// The decimals now come from the instrument's own tick (Angel master tick_size,
+// parsed in InstrumentService), never fewer than 2, with a 4 dp floor for
+// CDS/BCD when the master is not loaded.
+// ─────────────────────────────────────────────────────────────────────────────
+
+int AngelOneBroker::price_decimals_for(const QString& symbol, const QString& exchange) {
+    const QString ex = exchange.trimmed().toUpper();
+    int dp = (ex == QLatin1String("CDS") || ex == QLatin1String("BCD")) ? 4 : 2;
+    auto inst = InstrumentService::instance().find(symbol, ex, QStringLiteral("angelone"));
+    if (inst.has_value() && inst->tick_size > 0.0)
+        dp = std::max(dp, decimals_for_tick(inst->tick_size));
+    return std::min(dp, 6);
 }
 
 QString AngelOneBroker::ao_variety(OrderType t, bool amo) {
@@ -404,6 +436,7 @@ OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds, c
         return {false, "", "Angel One: Bracket/Cover orders are not supported — place a regular order instead"};
 
     QString token = lookup_token(order.symbol, order.exchange);
+    const int px_dp = price_decimals_for(order.symbol, order.exchange);
 
     QJsonObject payload{
         {"variety", ao_variety(order.order_type, order.amo)},
@@ -414,11 +447,11 @@ OrderPlaceResponse AngelOneBroker::place_order(const BrokerCredentials& creds, c
         {"ordertype", ao_enum_map().order_type_or(order.order_type, "MARKET")},
         {"producttype", ao_enum_map().product_or(order.product_type, "INTRADAY")},
         {"duration", order.validity.isEmpty() ? "DAY" : order.validity},
-        {"price", QString::number(order.price, 'f', 2)},
-        {"triggerprice", QString::number(order.stop_price, 'f', 2)},
+        {"price", QString::number(order.price, 'f', px_dp)},
+        {"triggerprice", QString::number(order.stop_price, 'f', px_dp)},
         {"quantity", QString::number(static_cast<int>(order.quantity))},
         {"squareoff", "0"},
-        {"stoploss", order.stop_loss > 0 ? QString::number(order.stop_loss, 'f', 2) : "0"},
+        {"stoploss", order.stop_loss > 0 ? QString::number(order.stop_loss, 'f', px_dp) : "0"},
         {"disclosedquantity", "0"},
     };
 
@@ -483,11 +516,14 @@ ApiResponse<QJsonObject> AngelOneBroker::modify_order(const BrokerCredentials& c
         payload["tradingsymbol"] = pick("tradingsymbol");
         payload["symboltoken"] = pick("symboltoken");
         payload["exchange"] = pick("exchange");
+        // The order book's tradingsymbol is Angel's own; price_decimals_for() falls
+        // back to the exchange's floor (4 dp on CDS/BCD) when the master lookup misses.
+        const int px_dp = price_decimals_for(pick("tradingsymbol"), pick("exchange"));
 
         const double price = modify_fields::has_any(mods, modify_fields::kPrice)
                                  ? modify_fields::number(mods, modify_fields::kPrice)
                                  : ao_json_num(resting.value("price"));
-        payload["price"] = QString::number(price, 'f', 2);
+        payload["price"] = QString::number(price, 'f', px_dp);
         const double qty = modify_fields::has_any(mods, modify_fields::kQuantity)
                                ? modify_fields::number(mods, modify_fields::kQuantity)
                                : ao_json_num(resting.value("quantity"));
@@ -497,7 +533,7 @@ ApiResponse<QJsonObject> AngelOneBroker::modify_order(const BrokerCredentials& c
                                    ? modify_fields::number(mods, modify_fields::kTrigger)
                                    : ao_json_num(resting.value("triggerprice"));
         if (trigger > 0.0)
-            payload["triggerprice"] = QString::number(trigger, 'f', 2);
+            payload["triggerprice"] = QString::number(trigger, 'f', px_dp);
     }
     payload["orderid"] = order_id;
 

@@ -756,7 +756,11 @@ class CoreAgent:
             from agno.memory import AgentMemory
             from agno.memory.db.sqlite import SqliteMemoryDb
 
-            db_path = memory_config.get("db_path", "agent_memory.db")
+            # A bare relative name used to resolve against the process cwd —
+            # the scripts directory, which dev builds prune and installs keep
+            # read-only. Default into the per-profile agent data dir instead.
+            from finagent_core.paths import agent_data_dir
+            db_path = memory_config.get("db_path") or str(agent_data_dir() / "agent_memory.db")
             table_name = memory_config.get("table_name", "agent_memory")
 
             db = SqliteMemoryDb(
@@ -882,9 +886,11 @@ class CoreAgent:
 
             if storage_type == "sqlite":
                 from agno.storage.sqlite import SqliteStorage
+                from finagent_core.paths import agent_data_dir
                 return SqliteStorage(
                     table_name=storage_config.get("table_name", "agent_sessions"),
-                    db_file=storage_config.get("db_path", "agent_storage.db"),
+                    # Per-profile agent data dir, not the cwd (= scripts dir).
+                    db_file=storage_config.get("db_path") or str(agent_data_dir() / "agent_storage.db"),
                 )
             elif storage_type == "postgres":
                 from agno.storage.postgres import PostgresStorage

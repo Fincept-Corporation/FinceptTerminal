@@ -139,11 +139,20 @@ def get_money_supply(aggregate: str = "M3") -> Any:
     """Get ECB money supply aggregates.
     aggregate: M1, M2, M3.
     """
+    # BSI item codes: M10 = M1, M20 = M2, M30 = M3. The key used to be hard-coded to M20, so the
+    # "M3" series was really M2 (verified against the ECB series TITLE attribute).
+    item = {"M1": "M10", "M2": "M20", "M3": "M30"}.get(str(aggregate).upper())
+    if item is None:
+        return {"error": f"Unknown aggregate {aggregate!r}: use M1, M2 or M3"}
     params = {"format": "jsondata", "detail": "dataonly", "lastNObservations": 120}
-    key = f"BSI/M.U2.Y.V.M20.X.1.U2.2300.Z01.E"
+    key = f"BSI/M.U2.Y.V.{item}.X.1.U2.2300.Z01.E"
     data = _make_request(key, params=params)
     result = _parse_sdmx_json(data, "money_supply")
-    result["aggregate"] = aggregate
+    if isinstance(result, dict):
+        result["aggregate"] = str(aggregate).upper()
+        # Outstanding stocks, EUR millions, working-day and seasonally adjusted (ECB BSI attributes).
+        result["unit"] = "EUR millions"
+        result["seasonal_adjustment"] = "Working-day and seasonally adjusted"
     return result
 
 

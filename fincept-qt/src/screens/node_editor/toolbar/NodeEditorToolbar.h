@@ -25,6 +25,9 @@ class NodeEditorToolbar : public QWidget {
     /// Replace the status badge text ("DRAFT" by default) — e.g. "SAVED 14:32", "UNSAVED".
     void set_status_text(const QString& text);
 
+    /// Show the workflow's execution mode (PAPER / LIVE) next to the name.
+    void set_live_mode(bool live);
+
   signals:
     void undo_clicked();
     void redo_clicked();
@@ -49,6 +52,9 @@ class NodeEditorToolbar : public QWidget {
 
     QLineEdit* name_edit_ = nullptr;
     QLabel* status_badge_ = nullptr;
+    QLabel* mode_badge_ = nullptr;
+    bool live_mode_ = false;
+    bool running_ = false;
     QString status_override_; // custom badge text; empty = default "DRAFT"
     QPushButton* undo_btn_ = nullptr;
     QPushButton* redo_btn_ = nullptr;

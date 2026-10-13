@@ -1,43 +1,217 @@
 #include "services/workflow/WorkflowExecutor.h"
 
 #include "core/logging/Logger.h"
+#include "mcp/McpService.h"
 #include "services/workflow/AuditLogger.h"
-#include "services/workflow/ExecutionHooks.h"
 #include "services/workflow/ExpressionEngine.h"
 #include "services/workflow/NodeRegistry.h"
 
 #include <QDateTime>
 #include <QJsonArray>
 #include <QMetaObject>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QSet>
+#include <QUuid>
 
 #include <atomic>
-#include <functional>
 #include <memory>
 #include <stdexcept>
 
 namespace fincept::workflow {
 
+namespace wf_executor_detail {
+
+// The executor whose node is being launched right now. A WorkflowExecutor started
+// *during* that call is a sub-workflow (control.execute_workflow runs its child
+// synchronously inside the node's execute function): it inherits the parent's
+// execution mode, step budget and cancellation. Executors live on the GUI thread
+// only, so a plain pointer guarded by RAII is sufficient.
+WorkflowExecutor* g_launching_parent = nullptr;
+
+// Tokens of runs that are still going (is_run_active). Read from worker threads.
+QMutex g_active_runs_mutex;
+QSet<QString> g_active_runs;
+
+struct LaunchScope {
+    explicit LaunchScope(WorkflowExecutor* ex) : previous(g_launching_parent) { g_launching_parent = ex; }
+    ~LaunchScope() { g_launching_parent = previous; }
+    LaunchScope(const LaunchScope&) = delete;
+    LaunchScope& operator=(const LaunchScope&) = delete;
+    WorkflowExecutor* previous;
+};
+
+} // namespace wf_executor_detail
+
 WorkflowExecutor::WorkflowExecutor(QObject* parent) : QObject(parent) {}
 
-void WorkflowExecutor::execute(const WorkflowDef& workflow) {
-    if (running_) {
-        LOG_WARN("Executor", "Execution already in progress");
-        return;
-    }
+WorkflowExecutor::~WorkflowExecutor() {
+    release_run_token();
+}
 
+// ── Execution-mode helpers ─────────────────────────────────────────────
+
+bool WorkflowExecutor::is_live_mode(const WorkflowDef& wf) {
+    // Exact match only: an empty, misspelled or missing value must never arm LIVE.
+    return wf.static_data.value(QLatin1String(kExecutionModeKey)).toString() == QLatin1String("live");
+}
+
+bool WorkflowExecutor::is_moded_order_type(const QString& type) {
+    static const QSet<QString> k = {
+        QStringLiteral("trading.place_order"),   QStringLiteral("trading.cancel_order"),
+        QStringLiteral("trading.modify_order"),  QStringLiteral("trading.close_position"),
+        QStringLiteral("trading.bracket_order"), QStringLiteral("trading.trailing_stop"),
+        QStringLiteral("trading.scale_in"),
+    };
+    return k.contains(type);
+}
+
+bool WorkflowExecutor::is_moded_read_type(const QString& type) {
+    static const QSet<QString> k = {
+        QStringLiteral("trading.get_orders"),
+        QStringLiteral("trading.get_positions"),
+        QStringLiteral("trading.get_holdings"),
+        QStringLiteral("trading.get_balance"),
+    };
+    return k.contains(type);
+}
+
+bool WorkflowExecutor::is_live_only_order_type(const QString& type) {
+    static const QSet<QString> k = {
+        QStringLiteral("trading.smart_order"),
+        QStringLiteral("trading.cancel_all"),
+        QStringLiteral("trading.close_all"),
+    };
+    return k.contains(type);
+}
+
+bool WorkflowExecutor::node_requests_live(const QJsonObject& params) {
+    return params.value(QStringLiteral("mode"))
+               .toString()
+               .trimmed()
+               .compare(QLatin1String("live"), Qt::CaseInsensitive) == 0;
+}
+
+QString WorkflowExecutor::effective_mcp_tool(const QJsonObject& params, const QVector<QJsonValue>& inputs) {
+    QString tool = params.value(QStringLiteral("tool")).toString().trimmed();
+    if (tool.isEmpty() && !inputs.isEmpty() && inputs[0].isObject())
+        tool = inputs[0].toObject().value(QStringLiteral("tool")).toString().trimmed();
+    return tool;
+}
+
+bool WorkflowExecutor::mcp_tool_moves_money(const QString& tool) {
+    if (tool.isEmpty() || tool.contains(QLatin1String("__")))
+        return false; // external tools carry no category metadata
+    for (const auto& t : mcp::McpService::instance().get_all_tools()) {
+        if (t.is_internal && t.name == tool)
+            return t.is_destructive && t.category == QLatin1String("live-trading");
+    }
+    return false;
+}
+
+QStringList WorkflowExecutor::find_cycle(const QHash<QString, QVector<QString>>& adjacency) {
+    // Iterative three-colour DFS (a recursive one overflows the stack on long chains),
+    // keeping the current path so a back edge can be turned into the list of nodes on
+    // the loop.
+    enum Colour { White, Grey, Black };
+    QHash<QString, Colour> colour;
+    colour.reserve(adjacency.size());
+
+    struct Frame {
+        QString node;
+        int next_child = 0;
+    };
+
+    for (auto root = adjacency.constBegin(); root != adjacency.constEnd(); ++root) {
+        if (colour.value(root.key(), White) != White)
+            continue;
+        QVector<Frame> stack;
+        stack.append({root.key(), 0});
+        colour[root.key()] = Grey;
+        while (!stack.isEmpty()) {
+            Frame& top = stack.last();
+            const QVector<QString> children = adjacency.value(top.node);
+            if (top.next_child >= children.size()) {
+                colour[top.node] = Black;
+                stack.removeLast();
+                continue;
+            }
+            const QString child = children[top.next_child++];
+            const Colour c = colour.value(child, White);
+            if (c == Grey) {
+                // Back edge: the cycle is the stack from `child` to the top.
+                QStringList cycle;
+                bool in_cycle = false;
+                for (const Frame& f : stack) {
+                    if (f.node == child)
+                        in_cycle = true;
+                    if (in_cycle)
+                        cycle << f.node;
+                }
+                return cycle;
+            }
+            if (c == White) {
+                colour[child] = Grey;
+                stack.append({child, 0});
+            }
+        }
+    }
+    return {};
+}
+
+bool WorkflowExecutor::is_run_active(const QString& run_token) {
+    if (run_token.isEmpty())
+        return false;
+    QMutexLocker lock(&wf_executor_detail::g_active_runs_mutex);
+    return wf_executor_detail::g_active_runs.contains(run_token);
+}
+
+void WorkflowExecutor::release_run_token() {
+    if (run_token_.isEmpty())
+        return;
+    QMutexLocker lock(&wf_executor_detail::g_active_runs_mutex);
+    wf_executor_detail::g_active_runs.remove(run_token_);
+}
+
+// ── Run set-up ─────────────────────────────────────────────────────────
+
+bool WorkflowExecutor::prepare_run(const WorkflowDef& workflow) {
     workflow_ = workflow;
     running_ = true;
     stop_requested_ = false;
     pending_count_ = 0;
     completed_count_ = 0;
+    launches_ = 0;
     first_failure_.clear();
     abort_reason_.clear();
+    hard_abort_reason_.clear();
     in_flight_.clear();
     results_.clear();
     node_map_.clear();
     type_cache_.clear();
     in_degree_.clear();
+    children_.clear();
+
+    release_run_token();
+    run_token_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    {
+        QMutexLocker lock(&wf_executor_detail::g_active_runs_mutex);
+        wf_executor_detail::g_active_runs.insert(run_token_);
+    }
+
+    // Started from inside a parent's node launch → sub-workflow: inherit the
+    // parent's mode (never this workflow's own saved mode), budget and nesting.
+    WorkflowExecutor* launcher = wf_executor_detail::g_launching_parent;
+    if (launcher && launcher != this && launcher->running_) {
+        root_ = launcher->root_ ? launcher->root_.data() : launcher;
+        depth_ = launcher->depth_ + 1;
+        live_allowed_ = launcher->live_allowed_;
+        launcher->children_.append(QPointer<WorkflowExecutor>(this));
+    } else {
+        root_.clear();
+        depth_ = 0;
+        live_allowed_ = is_live_mode(workflow);
+    }
 
     const int n = workflow_.nodes.size();
     node_map_.reserve(n);
@@ -51,24 +225,34 @@ void WorkflowExecutor::execute(const WorkflowDef& workflow) {
         type_cache_.insert(nd.id, NodeRegistry::instance().find(nd.type));
     }
 
+    if (depth_ > kMaxSubworkflowDepth) {
+        const QString err = QString("Sub-workflows are nested more than %1 levels deep — the run was refused")
+                                .arg(kMaxSubworkflowDepth);
+        LOG_ERROR("Executor", err);
+        finish_early(false, err);
+        return false;
+    }
+
     build_graph();
 
-    // Cycle detection
-    if (has_cycle()) {
-        LOG_ERROR("Executor", "Workflow contains a cycle — aborting");
-        finish_early(false, "Workflow contains a cycle");
-        return;
+    const QStringList cycle = find_cycle(adjacency_);
+    if (!cycle.isEmpty()) {
+        QStringList names;
+        for (const auto& id : cycle)
+            names << QString("'%1'").arg(node_label(id));
+        names << QString("'%1'").arg(node_label(cycle.first()));
+        const QString err =
+            QString("Workflow contains a cycle: %1. Remove one of these connections — workflows must be acyclic.")
+                .arg(names.join(QStringLiteral(" → ")));
+        LOG_ERROR("Executor", err);
+        finish_early(false, err);
+        return false;
     }
+    return true;
+}
 
-    QVector<QString> order = topological_sort();
-
-    if (order.isEmpty()) {
-        LOG_WARN("Executor", "No executable nodes in workflow");
-        finish_early(true, {});
-        return;
-    }
-
-    // Build in-degree map from topological set
+void WorkflowExecutor::start_run(const QVector<QString>& order, const QString& audit_note) {
+    // Build in-degree map from the execution set
     QSet<QString> exec_set;
     exec_set.reserve(order.size());
     for (const auto& id : order)
@@ -84,16 +268,36 @@ void WorkflowExecutor::execute(const WorkflowDef& workflow) {
     }
 
     total_count_ = order.size();
-
     start_time_ms_ = QDateTime::currentMSecsSinceEpoch();
-    ExecutionHooks::instance().emit_workflow_start(workflow_.id);
     AuditLogger::instance().log(AuditAction::WorkflowStarted, workflow_.id, {}, {},
-                                QString("Started: %1 (%2 nodes)").arg(workflow_.name).arg(total_count_));
+                                QString("%1 [%2 mode]").arg(audit_note, live_allowed_ ? "LIVE" : "PAPER"), {},
+                                !live_allowed_);
     emit execution_started(workflow_.id);
 
-    LOG_INFO("Executor", QString("Starting execution: %1 (%2 nodes)").arg(workflow_.name).arg(total_count_));
+    LOG_INFO("Executor", QString("Starting execution: %1 (%2 nodes, %3 mode, depth %4)")
+                             .arg(workflow_.name)
+                             .arg(total_count_)
+                             .arg(live_allowed_ ? "LIVE" : "PAPER")
+                             .arg(depth_));
 
     launch_ready_nodes();
+}
+
+void WorkflowExecutor::execute(const WorkflowDef& workflow) {
+    if (running_) {
+        LOG_WARN("Executor", "Execution already in progress");
+        return;
+    }
+    if (!prepare_run(workflow))
+        return;
+
+    QVector<QString> order = topological_sort();
+    if (order.isEmpty()) {
+        LOG_WARN("Executor", "No executable nodes in workflow");
+        finish_early(true, {});
+        return;
+    }
+    start_run(order, QString("Started: %1 (%2 nodes)").arg(workflow_.name).arg(order.size()));
 }
 
 void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& start_node_id) {
@@ -101,39 +305,11 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
         LOG_WARN("Executor", "Execution already in progress");
         return;
     }
-
-    workflow_ = workflow;
-    running_ = true;
-    stop_requested_ = false;
-    pending_count_ = 0;
-    completed_count_ = 0;
-    first_failure_.clear();
-    abort_reason_.clear();
-    in_flight_.clear();
-    results_.clear();
-    node_map_.clear();
-    type_cache_.clear();
-    in_degree_.clear();
-
-    const int n = workflow_.nodes.size();
-    node_map_.reserve(n);
-    type_cache_.reserve(n);
-
-    for (const auto& nd : workflow_.nodes) {
-        node_map_.insert(nd.id, nd);
-        type_cache_.insert(nd.id, NodeRegistry::instance().find(nd.type));
-    }
-
-    build_graph();
-
-    if (has_cycle()) {
-        LOG_ERROR("Executor", "Workflow contains a cycle — aborting");
-        finish_early(false, "Workflow contains a cycle");
+    if (!prepare_run(workflow))
         return;
-    }
 
     // Get full topo order, then find start node and take only downstream
-    QVector<QString> full_order = topological_sort();
+    const QVector<QString> full_order = topological_sort();
 
     // Find descendants of start_node (BFS)
     QSet<QString> downstream;
@@ -162,42 +338,22 @@ void WorkflowExecutor::execute_from(const WorkflowDef& workflow, const QString& 
         finish_early(true, {});
         return;
     }
-
-    // Build in-degree map for the downstream subset
-    QSet<QString> exec_set;
-    exec_set.reserve(order.size());
-    for (const auto& id : order)
-        exec_set.insert(id);
-
-    in_degree_.reserve(order.size());
-    results_.reserve(order.size());
-    for (const auto& id : order) {
-        int deg = 0;
-        for (const auto& edge : incoming_edges_.value(id)) {
-            if (exec_set.contains(edge.source_node))
-                ++deg;
-        }
-        in_degree_.insert(id, deg);
-    }
-
-    total_count_ = order.size();
-
-    start_time_ms_ = QDateTime::currentMSecsSinceEpoch();
-    ExecutionHooks::instance().emit_workflow_start(workflow_.id);
-    AuditLogger::instance().log(AuditAction::WorkflowStarted, workflow_.id, {}, {},
-                                QString("Started from node %1: %2 (%3 nodes)")
-                                    .arg(start_node_id, workflow_.name)
-                                    .arg(total_count_));
-    emit execution_started(workflow_.id);
-
-    LOG_INFO("Executor", QString("Partial execution from %1: %2 nodes").arg(start_node_id).arg(total_count_));
-
-    launch_ready_nodes();
+    start_run(order, QString("Started from node %1: %2 (%3 nodes)")
+                         .arg(node_label(start_node_id), workflow_.name)
+                         .arg(order.size()));
 }
 
 void WorkflowExecutor::stop() {
     if (!running_)
         return;
+
+    // Cancel every sub-workflow this run started first — otherwise a nested
+    // workflow keeps placing orders after the user pressed STOP on the parent.
+    const auto children = children_;
+    for (const auto& child : children) {
+        if (child && child->is_running())
+            child->stop();
+    }
 
     // Second stop while nodes are still in flight: one of them is not reporting
     // back (slow agent, hung request, lost callback). Waiting for it again would
@@ -210,6 +366,7 @@ void WorkflowExecutor::stop() {
     }
 
     stop_requested_ = true;
+    release_run_token(); // a scale-in in progress places no further tranche
     LOG_INFO("Executor", "Stop requested");
 
     // If no nodes are in-flight, finish immediately.
@@ -221,6 +378,7 @@ void WorkflowExecutor::stop() {
 
 void WorkflowExecutor::finish_early(bool success, const QString& error) {
     running_ = false;
+    release_run_token();
     start_time_ms_ = QDateTime::currentMSecsSinceEpoch();
     // Open the UI's results panel first — it only shows itself on execution_started,
     // so without this a cycle error would be visible in the log only.
@@ -230,6 +388,8 @@ void WorkflowExecutor::finish_early(bool success, const QString& error) {
     wr.workflow_id = workflow_.id;
     wr.success = success;
     wr.error = error;
+    if (!success)
+        AuditLogger::instance().log(AuditAction::WorkflowFailed, workflow_.id, {}, {}, error);
     emit execution_finished(wr);
 }
 
@@ -247,6 +407,10 @@ bool WorkflowExecutor::feeds_error_handler(const QString& node_id) const {
             return true;
     }
     return false;
+}
+
+WorkflowExecutor* WorkflowExecutor::budget_owner() {
+    return root_ ? root_.data() : this;
 }
 
 // ── Graph construction ─────────────────────────────────────────────────
@@ -282,8 +446,7 @@ void WorkflowExecutor::build_graph() {
     // Bridge out disabled nodes. A disabled node does not run, but it must not
     // sever the graph either: its consumers should receive what the disabled
     // node would have received (pass-through), and must wait for the disabled
-    // node's producers. Previously the consumers lost the edge entirely, started
-    // immediately with no input and ran ahead of the nodes they depend on.
+    // node's producers.
     for (const auto& nd : workflow_.nodes) {
         if (!nd.disabled)
             continue;
@@ -329,34 +492,6 @@ void WorkflowExecutor::build_graph() {
     }
 }
 
-// ── Cycle detection (DFS with coloring) ────────────────────────────────
-
-bool WorkflowExecutor::has_cycle() const {
-    enum Color { White, Gray, Black };
-    QHash<QString, Color> color;
-    color.reserve(adjacency_.size());
-    for (auto it = adjacency_.constBegin(); it != adjacency_.constEnd(); ++it)
-        color[it.key()] = White;
-
-    std::function<bool(const QString&)> dfs = [&](const QString& u) -> bool {
-        color[u] = Gray;
-        for (const auto& v : adjacency_.value(u)) {
-            if (color.value(v) == Gray)
-                return true; // back edge = cycle
-            if (color.value(v) == White && dfs(v))
-                return true;
-        }
-        color[u] = Black;
-        return false;
-    };
-
-    for (auto it = color.constBegin(); it != color.constEnd(); ++it) {
-        if (it.value() == White && dfs(it.key()))
-            return true;
-    }
-    return false;
-}
-
 // ── Topological sort (Kahn's algorithm) ────────────────────────────────
 
 QVector<QString> WorkflowExecutor::topological_sort() const {
@@ -384,13 +519,11 @@ QVector<QString> WorkflowExecutor::topological_sort() const {
         QString u = queue[front++];
 
         // A disabled node does not execute, but we MUST still relax its outgoing
-        // edges. The old code `continue`d before the edge-relaxation loop, so every
-        // downstream node kept a permanently non-zero in-degree and was silently
-        // stranded — never added to `order`, excluded from total_count_, yet
-        // execution still reported success. (build_graph() already bridged
-        // disabled nodes out of the edge set; the only disabled nodes that can
-        // still have edges are input-less ones in skipped_roots_, which stay in
-        // the order and complete as "skipped".)
+        // edges, or every downstream node keeps a non-zero in-degree and is
+        // silently stranded. (build_graph() already bridged disabled nodes out of
+        // the edge set; the only disabled nodes that can still have edges are
+        // input-less ones in skipped_roots_, which stay in the order and complete
+        // as "skipped".)
         auto nd_it = node_map_.constFind(u);
         const bool disabled =
             (nd_it != node_map_.constEnd() && nd_it->disabled && !skipped_roots_.contains(u));
@@ -428,8 +561,11 @@ void WorkflowExecutor::launch_ready_nodes() {
         }
     }
 
-    for (const QString& node_id : ready)
+    for (const QString& node_id : ready) {
+        if (!running_ || stop_requested_)
+            break; // a node failed synchronously and aborted the run
         launch_single_node(node_id);
+    }
 }
 
 void WorkflowExecutor::settle_without_running(const QString& node_id, const QJsonObject& output) {
@@ -452,6 +588,58 @@ void WorkflowExecutor::settle_without_running(const QString& node_id, const QJso
         finish_execution();
     else
         QMetaObject::invokeMethod(this, &WorkflowExecutor::launch_ready_nodes, Qt::QueuedConnection);
+}
+
+void WorkflowExecutor::fail_without_running(const QString& node_id, const QString& error) {
+    emit node_started(node_id);
+    pending_count_++;
+    in_flight_.insert(node_id);
+    on_node_done(node_id, false, {}, error);
+}
+
+QString WorkflowExecutor::enforce_trading_mode(const NodeDef& node, QJsonObject& params,
+                                               const QVector<QJsonValue>& inputs) const {
+    const QString& type = node.type;
+    const QString label = node.name.isEmpty() ? type : node.name;
+
+    if (is_moded_order_type(type)) {
+        // The bridges treat any mode other than the exact string "paper" as live
+        // ("Paper", "", a typo...). Rewrite it to one of the two exact values so the
+        // only way to reach a broker is: run armed LIVE *and* node Mode = live.
+        const bool live = live_allowed_ && node_requests_live(params);
+        if (!live && node_requests_live(params))
+            LOG_INFO("Executor", QString("'%1' is set to live but the run is in PAPER mode — simulating").arg(label));
+        params[QStringLiteral("mode")] = live ? QStringLiteral("live") : QStringLiteral("paper");
+        return {};
+    }
+    if (is_moded_read_type(type)) {
+        // Reads move no money; keep the node's own choice but in canonical form.
+        params[QStringLiteral("mode")] = node_requests_live(params) ? QStringLiteral("live") : QStringLiteral("paper");
+        return {};
+    }
+    if (is_live_only_order_type(type)) {
+        if (!live_allowed_)
+            return QString("Blocked: '%1' always trades at the broker (it has no paper mode) and this workflow is "
+                           "running in PAPER mode. Arm LIVE in SAVE & RUN to use it.")
+                .arg(label);
+        return {};
+    }
+    if (type == QLatin1String("mcp.tool_call")) {
+        const QString tool = effective_mcp_tool(params, inputs);
+        if (mcp_tool_moves_money(tool)) {
+            if (!live_allowed_)
+                return QString("Blocked: MCP tool '%1' places or cancels real broker orders and this workflow is "
+                               "running in PAPER mode. Arm LIVE in SAVE & RUN to use it.")
+                    .arg(tool);
+            // A tool chosen at run time (Tool Picker / upstream data) was never shown in
+            // the LIVE confirmation — it may not trade. Name it in the node's Tool param.
+            if (params.value(QStringLiteral("tool")).toString().trimmed().isEmpty())
+                return QString("Blocked: the live-trading MCP tool '%1' was chosen at run time, not set on the node. "
+                               "Set the node's Tool parameter explicitly to allow it.")
+                    .arg(tool);
+        }
+    }
+    return {};
 }
 
 void WorkflowExecutor::launch_single_node(const QString& node_id) {
@@ -497,16 +685,23 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
         }
     }
 
+    // Step budget, shared with every sub-workflow of this run. A DAG runs each node
+    // once, so only runaway nesting (A → B → C → ...) can get here — stop it hard.
+    WorkflowExecutor* owner = budget_owner();
+    if (++owner->launches_ > kMaxNodeLaunches) {
+        hard_abort_reason_ = QString("Step limit reached: more than %1 node executions in one run (sub-workflows "
+                                     "included). The run was stopped to prevent a runaway workflow.")
+                                 .arg(kMaxNodeLaunches);
+        LOG_ERROR("Executor", hard_abort_reason_);
+        fail_without_running(node_id, hard_abort_reason_);
+        return;
+    }
+
     if (!type_def) {
-        // Unregistered node type (stale save, removed node). The old behaviour was a
-        // silent green "pass_through" success, which made a node that never ran look
-        // like it had — fail it so the user sees which node is the problem.
+        // Unregistered node type (stale save, removed node). Fail it so the user
+        // sees which node is the problem instead of a silent green pass-through.
         LOG_ERROR("Executor", QString("Unknown node type: %1").arg(nd.type));
-        ExecutionHooks::instance().emit_node_start(workflow_.id, node_id, nd.type);
-        emit node_started(node_id);
-        pending_count_++;
-        in_flight_.insert(node_id);
-        on_node_done(node_id, false, {}, QString("Unknown node type '%1'").arg(nd.type));
+        fail_without_running(node_id, QString("Unknown node type '%1'").arg(nd.type));
         return;
     }
 
@@ -517,7 +712,16 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
         return;
     }
 
-    ExecutionHooks::instance().emit_node_start(workflow_.id, node_id, nd.type);
+    QJsonObject node_params = resolved_parameters(nd, *type_def, inputs);
+    const QString refusal = enforce_trading_mode(nd, node_params, inputs);
+    if (nd.type.startsWith(QLatin1String("trading.")))
+        node_params[QStringLiteral("_run_token")] = run_token_;
+    if (!refusal.isEmpty()) {
+        LOG_WARN("Executor", refusal);
+        fail_without_running(node_id, refusal);
+        return;
+    }
+
     emit node_started(node_id);
 
     pending_count_++;
@@ -531,8 +735,9 @@ void WorkflowExecutor::launch_single_node(const QString& node_id) {
 
     // Execute asynchronously with QPointer guard (P8)
     QPointer<WorkflowExecutor> self = this;
-    const QJsonObject node_params = resolved_parameters(nd, *type_def, inputs);
     try {
+        // Anything the node starts synchronously (a sub-workflow) sees us as its parent.
+        wf_executor_detail::LaunchScope scope(this);
         type_def->execute(node_params, inputs,
                           [self, node_id, node_start, reported](bool success, QJsonValue output, QString error) {
                               if (reported->exchange(true))
@@ -569,7 +774,8 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success, const 
         LOG_WARN("Executor", QString("Node %1 reported %2 after the run ended")
                                  .arg(node_id, success ? QStringLiteral("success") : "failure: " + error));
         AuditLogger::instance().log(success ? AuditAction::NodeExecuted : AuditAction::NodeFailed, workflow_.id,
-                                    node_id, {}, QString("Finished after the run was stopped. %1").arg(error));
+                                    node_id, {}, QString("Finished after the run was stopped. %1").arg(error), {},
+                                    !live_allowed_);
         return;
     }
     if (!in_flight_.remove(node_id))
@@ -585,13 +791,10 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success, const 
 
     results_.insert(node_id, nr);
 
-    if (success) {
-        ExecutionHooks::instance().emit_node_end(workflow_.id, node_id, true, nr.duration_ms);
-        AuditLogger::instance().log(AuditAction::NodeExecuted, workflow_.id, node_id);
-    } else {
-        ExecutionHooks::instance().emit_node_error(workflow_.id, node_id, error);
-        AuditLogger::instance().log(AuditAction::NodeFailed, workflow_.id, node_id, {}, error);
-    }
+    if (success)
+        AuditLogger::instance().log(AuditAction::NodeExecuted, workflow_.id, node_id, {}, {}, {}, !live_allowed_);
+    else
+        AuditLogger::instance().log(AuditAction::NodeFailed, workflow_.id, node_id, {}, error, {}, !live_allowed_);
 
     emit node_completed(node_id, nr);
     completed_count_++;
@@ -604,21 +807,29 @@ void WorkflowExecutor::on_node_done(const QString& node_id, bool success, const 
 
         auto nd_it = node_map_.constFind(node_id);
         // A node wired into an Error Handler is "caught": the handler is the
-        // user's explicit instruction for what to do on failure.
+        // user's explicit instruction for what to do on failure. An exhausted step
+        // budget is never caught.
         const bool continue_on_fail =
-            (nd_it != node_map_.constEnd() && nd_it->continue_on_fail) || feeds_error_handler(node_id);
+            hard_abort_reason_.isEmpty() &&
+            ((nd_it != node_map_.constEnd() && nd_it->continue_on_fail) || feeds_error_handler(node_id));
 
         if (!continue_on_fail) {
             LOG_ERROR("Executor", QString("%1 — aborting").arg(failure));
             if (!stop_requested_)
                 abort_reason_ = failure; // a node (not the user) ended this run
             stop_requested_ = true;
+            release_run_token();
+            // Nested runs started by this one must stop too.
+            const auto children = children_;
+            for (const auto& child : children) {
+                if (child && child->is_running())
+                    child->stop();
+            }
             if (pending_count_ == 0)
                 finish_execution();
             return;
-        } else {
-            LOG_WARN("Executor", QString("%1 (continuing)").arg(failure));
         }
+        LOG_WARN("Executor", QString("%1 (continuing)").arg(failure));
     }
 
     // Propagate readiness to downstream nodes
@@ -641,6 +852,13 @@ void WorkflowExecutor::finish_execution() {
     if (!running_)
         return; // already finished (e.g. forced stop followed by a queued launch)
 
+    // A forced stop abandons nested runs as well.
+    const auto children = children_;
+    for (const auto& child : children) {
+        if (child && child->is_running())
+            child->stop();
+    }
+
     // Anything still in flight at this point was abandoned by a forced stop. Give
     // each a terminal result so the editor does not leave it spinning as "running".
     for (const QString& id : in_flight_) {
@@ -655,6 +873,7 @@ void WorkflowExecutor::finish_execution() {
     pending_count_ = 0;
 
     running_ = false;
+    release_run_token();
 
     WorkflowExecutionResult wr;
     wr.workflow_id = workflow_.id;
@@ -680,11 +899,11 @@ void WorkflowExecutor::finish_execution() {
     LOG_INFO("Executor",
              QString("Execution %1 in %2ms").arg(wr.success ? "completed" : "failed").arg(wr.total_duration_ms));
 
-    ExecutionHooks::instance().emit_workflow_end(workflow_.id, wr.success, wr.total_duration_ms);
-    AuditLogger::instance().log(
-        wr.success ? AuditAction::WorkflowCompleted : AuditAction::WorkflowFailed, workflow_.id, {}, {},
-        wr.success ? QString("Completed in %1ms").arg(wr.total_duration_ms)
-                   : QString("Failed in %1ms: %2").arg(wr.total_duration_ms).arg(wr.error));
+    AuditLogger::instance().log(wr.success ? AuditAction::WorkflowCompleted : AuditAction::WorkflowFailed, workflow_.id,
+                                {}, {},
+                                wr.success ? QString("Completed in %1ms").arg(wr.total_duration_ms)
+                                           : QString("Failed in %1ms: %2").arg(wr.total_duration_ms).arg(wr.error),
+                                {}, !live_allowed_);
 
     emit execution_finished(wr);
 }

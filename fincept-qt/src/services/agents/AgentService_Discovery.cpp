@@ -2,8 +2,8 @@
 //
 // Agent / tool / model discovery + active-config administration. discover_agents
 // populates AgentService's cached registry from the Python side; get_system_info,
-// list_tools, list_models and the save_/delete_/set_active_config methods round
-// out the read/edit surface for AgentConfigManager-backed records.
+// list_tools, list_models and the save_/delete_config methods round out the
+// read/edit surface for AgentConfigRepository-backed records.
 //
 // Part of the partial-class split of AgentService.cpp.
 
@@ -345,15 +345,6 @@ void AgentService::delete_config(const QString& id) {
         emit config_deleted();
     } else {
         emit error_occurred("delete_config", QString::fromStdString(result.error()));
-    }
-}
-
-void AgentService::set_active_config(const QString& id) {
-    auto result = AgentConfigRepository::instance().set_active(id);
-    if (result.is_ok()) {
-        LOG_INFO("AgentService", QString("Set active agent: %1").arg(id));
-    } else {
-        emit error_occurred("set_active_config", QString::fromStdString(result.error()));
     }
 }
 

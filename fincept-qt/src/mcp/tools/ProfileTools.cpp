@@ -286,10 +286,12 @@ std::vector<ToolDef> get_profile_tools() {
     {
         ToolDef t;
         t.name = "profile_get_credits";
-        t.description = "Get the current credit balance for the account.";
+        t.description = "Get the account's credit balance (fractional — a single AI call can cost 0.35 credits), "
+                        "plan (account_type / effective_plan) and when the credits expire (credits_expire_at).";
         t.category = "profile";
         t.input_schema.properties = QJsonObject{};
         t.handler = [](const QJsonObject&) -> ToolResult {
+            // Served from GET /user/profile (the API has no /user/credits route).
             return run_user_api([](auto cb) { UserApi::instance().get_user_credits(cb); });
         };
         tools.push_back(std::move(t));

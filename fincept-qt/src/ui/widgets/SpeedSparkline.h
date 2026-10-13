@@ -21,7 +21,6 @@ class SpeedSparkline : public QWidget {
 
     void set_line_color(const QColor& c);
     void set_fill_color(const QColor& c);
-    void set_capacity(int samples); // default 60 (=1 minute at 1 Hz)
 
   protected:
     void paintEvent(QPaintEvent* e) override;

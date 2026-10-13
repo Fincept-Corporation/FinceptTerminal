@@ -80,13 +80,15 @@ Two editions run on one data core. **[Enterprise](https://fincept.in/enterprise)
 
 Use the open build if you're a student, hobbyist or academic. Use Enterprise if you're a firm, or if the terminal is how you earn: AGPL copyleft won't apply, and the open build's real cost is your own data and LLM bills, charged per token with no ceiling.
 
+Fincept account (this terminal): Free, or Pro at $10/month for monthly cloud credits, higher API limits and priority support.
+
 | | Open Source | **Enterprise** |
 |---|---|---|
 | **Licence** | AGPL-3.0 — strong copyleft | Proprietary — no copyleft to manage |
-| **Cost** | Free, plus your own data and LLM bills | ~~$99 / $199 / $299~~ **$10 / $20 / $40** per user/month — launch pricing |
+| **Cost** | Free, plus your own data and LLM bills | **$15 / $30 / $45** per user/month |
 | **Data** | Free public feeds, your own API keys | Private datasets, deeper history, point-in-time |
 | **AI** | Bring your own LLM key | 400–5,000 credits included · multi-agent research · private dataroom |
-| **Trading** | Paper trading + broker integrations | Live broker routing + live algo deployment |
+| **Trading** | Paper + live trading via your broker | Managed live routing, execution analytics, priority SLA |
 | **Controls** | — | SSO/SAML, audit logs, RBAC, SLA-backed support |
 
 [**See Enterprise →**](https://fincept.in/enterprise) · [Full comparison](https://fincept.in/comparison) · [Pricing](https://fincept.in/pricing) · [FAQ](https://fincept.in/faq)
@@ -99,12 +101,12 @@ Use the open build if you're a student, hobbyist or academic. Use Enterprise if 
 
 | | **Exclusive** | **Exclusive+** | **Exclusive Pro** ★ |
 |---|---|---|---|
-| | ~~$99~~ **$10**/user/mo | ~~$199~~ **$20**/user/mo | ~~$299~~ **$40**/user/mo |
+| | **$15**/user/mo | **$30**/user/mo | **$45**/user/mo |
 | AI credits / month | 400 | 2,000 | 5,000 |
 | Deep research + agent teams | — | ✓ | ✓ |
 | Live broker trading + algo | — | — | ✓ |
 
-Monthly billing, no lock-in, no seat minimum, 10% off quarterly — at launch pricing that is **$120–$480 per user per year**, against roughly $27,000 for a Bloomberg seat. **Universities:** 5 Exclusive Pro seats for **$699/month**. These plans are the whole price list: no negotiated pricing, no separate commercial licence.
+Monthly billing, no annual lock-in, no seat minimum — **$180–$540 per user per year**, against roughly $27,000 for a Bloomberg seat. Quarterly and university terms are on the [pricing page](https://fincept.in/pricing). There is no negotiated pricing and no separate commercial licence.
 
 Enterprise needs its own account — free Fincept logins don't sign in to it.
 

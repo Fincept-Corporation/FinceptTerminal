@@ -6,6 +6,7 @@
 //
 // Part of the partial-class split of WindowFrame.cpp.
 
+#include "app/DockScreenRouter.h"
 #include "app/WindowFrame.h"
 #include "auth/AuthManager.h"
 #include "auth/InactivityGuard.h"
@@ -21,8 +22,10 @@
 #include "ui/navigation/DockStatusBar.h"
 #include "ui/navigation/DockToolBar.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QApplication>
+#include <QCryptographicHash>
 #include <QMessageBox>
 #include <QStackedWidget>
 
@@ -44,6 +47,41 @@ void wf_auth_apply_chat_bubble_setting(AiChatBubble* bubble) {
         bubble->reposition();
         bubble->raise();
     }
+}
+
+/// True once the post-sign-in work (layout restore, instrument warm-up, the
+/// free-plan pricing interstitial) has run for the current sign-in. It is
+/// process-wide because the PIN gate is: unlocking any window after an
+/// inactivity lock resumes the session instead of starting a new one, and must
+/// neither re-apply the saved layout over the live one nor redirect to pricing.
+/// Cleared on sign-out.
+bool& wf_auth_session_started() {
+    static bool started = false;
+    return started;
+}
+
+QString wf_auth_app_version() {
+    const QString v = QCoreApplication::applicationVersion();
+#ifdef FINCEPT_VERSION_STRING
+    return v.isEmpty() ? QStringLiteral(FINCEPT_VERSION_STRING) : v;
+#else
+    return v;
+#endif
+}
+
+/// SettingsRepository key holding the release in which this account last saw
+/// the Plans & Pricing interstitial. Keyed by a hash of the email so the raw
+/// address never ends up in a settings key.
+QString wf_auth_pricing_seen_key(const auth::SessionData& s) {
+    const QString email = s.user_info.email.trimmed().toLower();
+    QString who;
+    if (!email.isEmpty())
+        who = QString::fromLatin1(QCryptographicHash::hash(email.toUtf8(), QCryptographicHash::Sha256).toHex().left(16));
+    else if (s.user_info.id > 0)
+        who = QStringLiteral("id%1").arg(s.user_info.id);
+    else
+        who = QStringLiteral("unknown");
+    return QStringLiteral("billing.pricing_seen.") + who;
 }
 } // namespace
 
@@ -136,61 +174,37 @@ void WindowFrame::on_auth_state_changed() {
             }
         }
 
-        if (auth.session().has_paid_plan()) {
-            // Defensive: at this point the PIN gate above must have either
-            // routed us to the lock screen (and returned) or confirmed
-            // pin_gate_cleared_. If we are about to show the shell while
-            // still locked or ungated, log a warning so the regression is
-            // visible rather than leaking the dashboard for one frame.
-            if (locked_ || !pin_gate_cleared_) {
-                LOG_WARN("WindowFrame", QString("on_auth_state_changed: shell would become visible while "
-                                                "locked=%1 gate_cleared=%2 — forcing lock screen")
-                                            .arg(locked_)
-                                            .arg(pin_gate_cleared_));
-                if (auth::PinManager::instance().has_pin())
-                    lock_screen_->show_unlock();
-                else
-                    lock_screen_->show_setup();
-                locked_ = true;
-                set_shell_visible(false);
-                stack_->setCurrentIndex(3);
-                return;
-            }
-
-            // Paid user → straight to dashboard
-            set_shell_visible(true);
-            stack_->setCurrentIndex(1);
-            // Cold-boot restore: try last_loaded layout, then most recent
-            // auto snapshot, then no-op (first run).
-            layout::WorkspaceShell::load_last_or_default();
-            // Trigger silent update check after login (delayed so UI settles first).
-            // UpdateService de-dupes silent checks across the session, so the
-            // post-PIN-unlock path below won't fire a second request.
-            QTimer::singleShot(3000, this, [this]() {
-                services::UpdateService::instance().set_dialog_parent(this);
-                services::UpdateService::instance().check_for_updates(true);
-            });
-            // Warm instrument cache in background — only loaded if not already cached.
-            // Runs concurrently while the user reads the dashboard (3-5s head start).
-            // Load every registered broker (all 17 Indian brokers) so unified
-            // cross-broker search includes any broker whose master was already
-            // downloaded, without needing the user to focus each one first.
-            // instance() also registers all broker sources, so registered_brokers() is populated.
-            auto& isvc = fincept::trading::InstrumentService::instance();
-            for (const QString& bid : fincept::trading::SymbolResolver::instance().registered_brokers())
-                isvc.load_from_db_async(bid);
-        } else {
-            // Free/no plan → show pricing gate
+        // Defensive: at this point the PIN gate above must have either routed
+        // us to the lock screen (and returned) or confirmed pin_gate_cleared_.
+        // If we are about to show the shell while still locked or ungated,
+        // log a warning so the regression is visible rather than leaking the
+        // dashboard for one frame.
+        if (locked_ || !pin_gate_cleared_) {
+            LOG_WARN("WindowFrame", QString("on_auth_state_changed: shell would become visible while "
+                                            "locked=%1 gate_cleared=%2 — forcing lock screen")
+                                        .arg(locked_)
+                                        .arg(pin_gate_cleared_));
+            if (auth::PinManager::instance().has_pin())
+                lock_screen_->show_unlock();
+            else
+                lock_screen_->show_setup();
+            locked_ = true;
             set_shell_visible(false);
-            stack_->setCurrentIndex(0);
-            auth_stack_->setCurrentIndex(3);
+            stack_->setCurrentIndex(3);
+            return;
         }
+
+        // Every plan gets the terminal. Free accounts used to be parked on the
+        // pricing screen here and after every unlock, and skipped the layout
+        // restore / update check / instrument warm-up even after CONTINUE FREE.
+        enter_terminal_after_auth();
     } else {
         // Disable inactivity guard when logged out and drop the locked flag
         // so a subsequent login is not immediately router-blocked.
         auth::InactivityGuard::instance().set_enabled(false);
         auth::InactivityGuard::instance().set_terminal_locked(false);
         pin_gate_cleared_ = false;
+        wf_auth_session_started() = false; // the next sign-in is a new session
         set_shell_visible(false);
         stack_->setCurrentIndex(0);
         auth_stack_->setCurrentIndex(0);
@@ -218,7 +232,108 @@ void WindowFrame::show_forgot_password() {
     enter_auth_stack(2);
 }
 void WindowFrame::show_pricing() {
+    if (locked_)
+        return;
     enter_auth_stack(3);
+}
+
+void WindowFrame::leave_pricing() {
+    if (!auth::AuthManager::instance().is_authenticated()) {
+        show_login();
+        return;
+    }
+    set_shell_visible(true);
+    stack_->setCurrentIndex(chat_mode_ ? 2 : 1);
+    // apply_lock_state() skips windows on the auth stack, so an inactivity lock
+    // that fired while Plans & Pricing was open has not taken effect here yet.
+    // Honour it now instead of revealing the terminal.
+    if (auth::InactivityGuard::instance().is_terminal_locked()) {
+        apply_lock_state(true);
+        return;
+    }
+    if (!chat_mode_) {
+        wf_auth_apply_chat_bubble_setting(chat_bubble_);
+        // Never land on an empty dock (first run with nothing restored).
+        if (dock_router_ && dock_router_->current_screen_id().isEmpty() && dock_manager_ &&
+            dock_manager_->openedDockAreas().isEmpty())
+            dock_router_->navigate("dashboard");
+    }
+    update_window_title();
+}
+
+void WindowFrame::enter_terminal_after_auth() {
+    set_shell_visible(true);
+    stack_->setCurrentIndex(chat_mode_ ? 2 : 1); // locked from chat mode → back to chat mode
+    if (!chat_mode_)
+        wf_auth_apply_chat_bubble_setting(chat_bubble_);
+
+    const bool session_start = !wf_auth_session_started();
+    if (session_start) {
+        wf_auth_session_started() = true;
+        // Cold-boot restore: last loaded layout, then the most recent auto
+        // snapshot, then nothing (first run). Only at the start of a sign-in —
+        // after an inactivity lock the live layout is intact, and re-applying
+        // the saved one would discard everything opened since it was saved.
+        const int restored = layout::WorkspaceShell::load_last_or_default();
+        if (restored == 0) {
+            // First run / fresh profile: open the Dashboard. Deferred because
+            // DockScreenRouter refuses to navigate until the process-wide lock
+            // flag drops at the end of on_terminal_unlocked().
+            QTimer::singleShot(0, this, [this]() {
+                if (dock_router_ && dock_router_->current_screen_id().isEmpty() && dock_manager_ &&
+                    dock_manager_->openedDockAreas().isEmpty())
+                    dock_router_->navigate("dashboard");
+            });
+        }
+        // Warm the instrument cache in the background — only loaded if not
+        // already cached. Every registered broker (instance() registers all
+        // broker sources) so unified cross-broker search covers any broker
+        // whose master was already downloaded. A short delay lets the first
+        // paint and the layout restore finish before the thread-pool loads.
+        QTimer::singleShot(2000, this, []() {
+            auto& isvc = fincept::trading::InstrumentService::instance();
+            for (const QString& bid : fincept::trading::SymbolResolver::instance().registered_brokers())
+                isvc.load_from_db_async(bid);
+        });
+    }
+
+    // Silent update check once the UI has settled. UpdateService de-dupes
+    // silent checks across the session, so repeat unlocks don't re-request.
+    QTimer::singleShot(3000, this, [this]() {
+        services::UpdateService::instance().set_dialog_parent(this);
+        services::UpdateService::instance().check_for_updates(true);
+    });
+
+    // Fincept Terminal Enterprise reminder. maybe_show() applies the cadence
+    // (new release, or 72 h since last shown) and refuses to cover another
+    // modal or an inactive / minimised window; the guard here keeps it off the
+    // lock, login and pricing screens and out of chat mode.
+    QTimer::singleShot(8000, this, [this]() {
+        if (locked_ || chat_mode_ || !stack_ || stack_->currentIndex() != 1)
+            return;
+        ui::UpgradeDialog::maybe_show(this);
+    });
+
+    // Free accounts see Plans & Pricing once per account per release — over a
+    // terminal that is already fully initialised, so CONTINUE WITH FREE lands
+    // straight on it. Unlocks that resume a session never redirect here.
+    if (!session_start)
+        return;
+    auto& auth = auth::AuthManager::instance();
+    if (!auth.is_authenticated() || auth.session().has_paid_plan())
+        return;
+    auto& settings = SettingsRepository::instance();
+    const QString key = wf_auth_pricing_seen_key(auth.session());
+    const QString version = wf_auth_app_version();
+    const auto seen = settings.get(key);
+    if (seen.is_err() || seen.value() == version)
+        return; // unreadable → don't nag
+    const auto stored = settings.set(key, version, QStringLiteral("billing"));
+    if (stored.is_err())
+        LOG_WARN("WindowFrame", QString("Could not record the plans interstitial: %1")
+                                    .arg(QString::fromStdString(stored.error())));
+    LOG_INFO("WindowFrame", "Free plan — showing Plans & Pricing once for this release");
+    show_pricing();
 }
 void WindowFrame::show_info_contact() {
     info_stack_->setCurrentIndex(0);
@@ -375,27 +490,10 @@ void WindowFrame::on_terminal_unlocked() {
     // Reset PIN lockout on successful unlock
     auth::PinManager::instance().reset_lockout();
 
-    if (auth.session().has_paid_plan()) {
-        set_shell_visible(true);
-        stack_->setCurrentIndex(chat_mode_ ? 2 : 1); // locked from chat mode → back to chat mode
-        // Restore chat bubble based on setting (chat mode keeps it hidden)
-        if (!chat_mode_)
-            wf_auth_apply_chat_bubble_setting(chat_bubble_);
-        // Cold-boot restore via the new system (frame layouts, panels, dock
-        // state, monitor variants).
-        layout::WorkspaceShell::load_last_or_default();
-        // Silent update check — UpdateService de-dupes across call sites so
-        // the login path + this post-unlock path won't fire two requests.
-        QTimer::singleShot(3000, this, [this]() {
-            services::UpdateService::instance().set_dialog_parent(this);
-            services::UpdateService::instance().check_for_updates(true);
-        });
-    } else {
-        // Free/no plan → pricing gate
-        set_shell_visible(false);
-        stack_->setCurrentIndex(0);
-        auth_stack_->setCurrentIndex(3);
-    }
+    // Every plan lands in the terminal (dock UI, or chat mode if the lock
+    // caught the window there). The first unlock of a sign-in also restores
+    // the layout and may show a free account the plans once per release.
+    enter_terminal_after_auth();
 
     // Flip the process-wide locked flag LAST. Sibling MainWindows fan out
     // via terminal_locked_changed → apply_lock_state(false) and restore

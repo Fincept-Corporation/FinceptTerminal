@@ -78,7 +78,10 @@ void NotificationService::send(const NotificationRequest& req) {
     auto& repo = SettingsRepository::instance();
     auto get_bool = [&](const QString& key, bool def) -> bool {
         auto r = repo.get(key);
-        return r.is_ok() ? (r.value() == "1") : def;
+        // A trigger the user never saved reads as empty: use the default (the
+        // Settings UI shows it ON), not "off" — otherwise price-alert and order-fill
+        // notifications stay silent until the Notifications page is saved once.
+        return r.is_ok() && !r.value().isEmpty() ? (r.value() == "1") : def;
     };
 
     // Check trigger-level filter (in-app always on unless globally disabled)

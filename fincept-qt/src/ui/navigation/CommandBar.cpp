@@ -191,7 +191,6 @@ void CommandBar::build_commands() {
          {"settings", "prefs", "config"},
          "",
          {"settings", "preferences"}},
-        {"forum", tr("Forum"), "Community forum", {"forum", "community"}, "", {"forum", "community", "discuss"}},
         // Trading & Portfolio
         {"equity_trading",
          tr("Equity Trading"),
@@ -329,6 +328,12 @@ void CommandBar::build_commands() {
          {"agents", "agent", "config"},
          "",
          {"agents", "ai", "configuration"}},
+        {"agent_workbench",
+         tr("Agent Workbench"),
+         "Run Claude Code / Codex agents on live terminal data; schedules; connect external agents",
+         {"workbench", "claude", "codex", "awb"},
+         "",
+         {"agents", "claude", "codex", "mcp", "automation", "schedule"}},
         // Tools
         {"mcp_servers",
          tr("MCP Servers"),
@@ -695,15 +700,15 @@ bool CommandBar::eventFilter(QObject* obj, QEvent* event) {
     const int key = ke->key();
     const Qt::KeyboardModifiers mods = ke->modifiers() & ~Qt::KeypadModifier;
 
-    // Map raw key to the corresponding nav handler. We only handle the
-    // default bindings here; user rebindings via Settings → Keybindings
-    // currently can't fire either (same orphan-QAction issue), so the
-    // default bindings are the de-facto contract.
-    const bool is_down = (key == Qt::Key_Down) && mods == Qt::NoModifier;
-    const bool is_up = (key == Qt::Key_Up) && mods == Qt::NoModifier;
-    const bool is_tab = (key == Qt::Key_Tab) && mods == Qt::NoModifier;
+    // Match the pressed key against the user's bindings (Settings → Keybindings),
+    // so rebinding Next/Previous Suggestion, Autocomplete and Dismiss works.
+    const QKeySequence pressed(QKeyCombination(mods, Qt::Key(key)));
+    auto& km = KeyConfigManager::instance();
+    const bool is_down = pressed == km.key(KeyAction::NavNext);
+    const bool is_up = pressed == km.key(KeyAction::NavPrev);
+    const bool is_tab = pressed == km.key(KeyAction::NavAccept);
     const bool is_btab = (key == Qt::Key_Backtab); // Shift+Tab arrives as Backtab
-    const bool is_esc = (key == Qt::Key_Escape) && mods == Qt::NoModifier;
+    const bool is_esc = pressed == km.key(KeyAction::NavEscape);
 
     if (!is_down && !is_up && !is_tab && !is_btab && !is_esc)
         return QWidget::eventFilter(obj, event);

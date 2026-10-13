@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPalette>
+#include <QStyle>
 
 namespace fincept::workflow {
 
@@ -80,6 +81,19 @@ void NodeEditorToolbar::set_status_text(const QString& text) {
         status_badge_->setText(status_override_.isEmpty() ? tr("DRAFT") : status_override_);
 }
 
+void NodeEditorToolbar::set_live_mode(bool live) {
+    live_mode_ = live;
+    if (!mode_badge_)
+        return;
+    mode_badge_->setText(live ? tr("LIVE") : tr("PAPER"));
+    mode_badge_->setToolTip(live ? tr("This workflow is armed for LIVE trading: order nodes whose Mode is \"live\" "
+                                      "send real orders. Change it in SAVE & RUN.")
+                                 : tr("PAPER mode: every order node is simulated. Arm LIVE in SAVE & RUN."));
+    mode_badge_->setProperty("live", live);
+    mode_badge_->style()->unpolish(mode_badge_);
+    mode_badge_->style()->polish(mode_badge_);
+}
+
 void NodeEditorToolbar::set_can_undo(bool can) {
     undo_btn_->setEnabled(can);
 }
@@ -96,7 +110,10 @@ void NodeEditorToolbar::set_executing(bool running) {
                                  "QPushButton:hover { background: %2; color: %3; }")
                              .arg(ui::colors::NEGATIVE_BG(), ui::colors::NEGATIVE(), ui::colors::TEXT_PRIMARY());
 
+    running_ = running;
     execute_btn_->setText(running ? tr("STOP") : tr("EXECUTE"));
+    execute_btn_->setToolTip(running ? tr("Stop the run (press again to abandon nodes that do not report back)")
+                                     : tr("Run this workflow once now in its current mode (Ctrl+Enter)."));
     execute_btn_->setStyleSheet(running ? stop_style : accent_btn_style());
 }
 
@@ -137,13 +154,19 @@ void NodeEditorToolbar::retranslateUi() {
         templates_btn_->setText(tr("TEMPLATES"));
     if (deploy_btn_)
         deploy_btn_->setText(tr("SAVE & RUN"));
-    // Execute button text depends on running state; default to EXECUTE.
     if (execute_btn_)
-        execute_btn_->setText(tr("EXECUTE"));
+        execute_btn_->setText(running_ ? tr("STOP") : tr("EXECUTE"));
+    set_live_mode(live_mode_);
 }
 
 void NodeEditorToolbar::build_ui() {
-    setStyleSheet(QString("QWidget#nodeEditorToolbar { background: %1; }").arg(ui::colors::BG_HOVER()));
+    setStyleSheet(QString("QWidget#nodeEditorToolbar { background: %1; }"
+                          "QLabel#nodeEditorModeBadge { font-family: Consolas; font-size: 10px; font-weight: bold;"
+                          "  letter-spacing: 0.5px; padding: 1px 6px; color: %2; border: 1px solid %3; }"
+                          "QLabel#nodeEditorModeBadge[live=\"true\"] { color: %4; border: 1px solid %4;"
+                          "  background: %5; }")
+                      .arg(ui::colors::BG_HOVER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_MED(),
+                           ui::colors::NEGATIVE(), ui::colors::NEGATIVE_BG()));
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(10, 0, 10, 0);
@@ -169,6 +192,12 @@ void NodeEditorToolbar::build_ui() {
                                          "font-weight: bold; letter-spacing: 0.5px; padding: 0 6px;")
                                      .arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(status_badge_);
+
+    // ── Execution mode badge (PAPER / LIVE) ────────────────────────
+    mode_badge_ = new QLabel;
+    mode_badge_->setObjectName("nodeEditorModeBadge");
+    layout->addWidget(mode_badge_);
+    set_live_mode(false);
 
     layout->addStretch();
 
@@ -259,7 +288,7 @@ void NodeEditorToolbar::build_ui() {
     // ── Execute ────────────────────────────────────────────────────
     execute_btn_ = new QPushButton(tr("EXECUTE"));
     execute_btn_->setStyleSheet(accent_btn_style());
-    execute_btn_->setToolTip(tr("Run this workflow once now. Nodes that place orders WILL place them."));
+    execute_btn_->setToolTip(tr("Run this workflow once now in its current mode (Ctrl+Enter)."));
     execute_btn_->setAccessibleName(tr("Run the workflow"));
     layout->addWidget(execute_btn_);
     connect(execute_btn_, &QPushButton::clicked, this, &NodeEditorToolbar::execute_clicked);

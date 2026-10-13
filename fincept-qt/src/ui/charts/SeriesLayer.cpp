@@ -4,6 +4,7 @@
 #include <QGraphicsScene>
 #include <QLineSeries>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::ui {
@@ -70,8 +71,34 @@ void SeriesLayer::update_series_data(const QVector<int64_t>& timestamps, const Q
         if (!std::isnan(values[i]))
             points.append(QPointF(static_cast<qreal>(timestamps[i]), values[i]));
     }
-    series_->replace(points);
+    apply_points(series_, points);
     series_->setVisible(visible());
+}
+
+void SeriesLayer::apply_points(QLineSeries* series, const QList<QPointF>& points) {
+    if (!series)
+        return;
+    const QList<QPointF> current = series->points();
+    const qsizetype n_old = current.size();
+    const qsizetype n_new = points.size();
+    // Common prefix, compared exactly: QPointF::operator== is fuzzy and would let
+    // a genuinely different value survive.
+    qsizetype same = 0;
+    const qsizetype limit = std::min(n_old, n_new);
+    while (same < limit && current[same].x() == points[same].x() && current[same].y() == points[same].y())
+        ++same;
+
+    if (n_new == n_old && same == n_old)
+        return; // nothing moved — skip the repaint entirely
+    if (n_new == n_old && same == n_old - 1) {
+        series->replace(static_cast<int>(same), points[same]); // the forming bar's value moved
+        return;
+    }
+    if (n_new == n_old + 1 && same == n_old) {
+        series->append(points[same]); // one new bar
+        return;
+    }
+    series->replace(points);
 }
 
 } // namespace fincept::ui

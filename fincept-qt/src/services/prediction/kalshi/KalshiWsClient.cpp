@@ -16,6 +16,9 @@ namespace fincept::services::prediction::kalshi_ns {
 namespace pr = fincept::services::prediction;
 
 static constexpr int kPingIntervalMs = 20000;
+// Hub fan-out cap for price / orderbook. Both are latest-state payloads, so
+// latest-wins coalescing drops nothing. The trade topic is NOT coalesced.
+static constexpr int kKalshiHubCoalesceMs = 100;
 
 static double kalshi_fp_to_double(const QJsonValue& v) {
     if (v.isString())
@@ -265,6 +268,7 @@ void KalshiWsClient::ensure_registered_with_hub() {
     push_only.push_only = true;
     push_only.ttl_ms = 0;
     push_only.min_interval_ms = 0;
+    push_only.coalesce_within_ms = kKalshiHubCoalesceMs; // 10 Hz latest-wins fan-out
 
     hub.set_policy_pattern(QStringLiteral("prediction:kalshi:price:*"), push_only);
     hub.set_policy_pattern(QStringLiteral("prediction:kalshi:orderbook:*"), push_only);

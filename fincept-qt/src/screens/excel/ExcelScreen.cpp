@@ -14,6 +14,7 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QLocale>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
@@ -23,10 +24,15 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 #ifdef FINCEPT_HAS_QXLSX
+#    include <xlsxcell.h>
+#    include <xlsxcellformula.h>
 #    include <xlsxdocument.h>
 #    include <xlsxformat.h>
+#    include <xlsxrichstring.h>
+#    include <xlsxworksheet.h>
 #endif
 
 #include <QFutureWatcher>
@@ -50,6 +56,7 @@ static QString kAccent() {
 struct ExcelImportedSheet {
     QString name;
     QVector<QVector<QString>> cells;
+    QHash<qint64, QString> cached; // formula cells: the value the file stored (SpreadsheetWidget::cache_key)
 };
 struct ExcelImportResult {
     QVector<ExcelImportedSheet> sheets;
@@ -154,7 +161,7 @@ void ExcelScreen::build_ui() {
     // always re-asked for a filename.
     auto* save_sc = new QShortcut(QKeySequence::Save, this);
     save_sc->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(save_sc, &QShortcut::activated, this, &ExcelScreen::on_export);
+    connect(save_sc, &QShortcut::activated, this, &ExcelScreen::on_save);
 
     root->addWidget(sheet_tabs_, 1);
 
@@ -263,7 +270,7 @@ QWidget* ExcelScreen::build_toolbar() {
 // Split one CSV line honouring RFC-4180 quoting (""-escaped quotes inside a
 // quoted field). Kept local — the watchlist screen has its own copy but lives
 // in a different slice.
-static QStringList split_csv_line(const QString& line) {
+static QStringList split_csv_line(const QString& line, QChar delim = QLatin1Char(',')) {
     QStringList fields;
     QString cur;
     bool in_quotes = false;
@@ -276,7 +283,7 @@ static QStringList split_csv_line(const QString& line) {
             } else {
                 in_quotes = !in_quotes;
             }
-        } else if (c == ',' && !in_quotes) {
+        } else if (c == delim && !in_quotes) {
             fields.append(cur);
             cur.clear();
         } else {
@@ -300,6 +307,10 @@ bool ExcelScreen::import_csv(const QString& path) {
     // Hard cap so a pathological file can't allocate millions of table items
     // and freeze the UI thread.
     constexpr int kMaxRows = 20000;
+    // Delimiter: comma, or the semicolon / tab that European-locale Excel and
+    // TSV exports use — picked from whichever splits the first record most.
+    QChar delim = QLatin1Char(',');
+    bool delim_known = false;
     while (!in.atEnd() && cells.size() < kMaxRows) {
         // A quoted field may contain line breaks (RFC 4180). readLine() cuts there, which used to split one
         // record into several broken rows: keep appending lines until the quotes balance ("" escapes count as
@@ -307,11 +318,25 @@ bool ExcelScreen::import_csv(const QString& path) {
         QString record = in.readLine();
         while (record.count(QLatin1Char('"')) % 2 == 1 && !in.atEnd())
             record += QLatin1Char('\n') + in.readLine();
-        const QStringList fields = split_csv_line(record);
+        if (!delim_known) {
+            qsizetype best = 0;
+            for (const QChar cand : {QLatin1Char(','), QLatin1Char(';'), QLatin1Char('\t')}) {
+                const qsizetype n = split_csv_line(record, cand).size();
+                if (n > best) {
+                    best = n;
+                    delim = cand;
+                }
+            }
+            delim_known = true;
+        }
+        const QStringList fields = split_csv_line(record, delim);
         QVector<QString> row;
         row.reserve(fields.size());
+        // CSV is data: a field that starts with '=' stays text (CSV formula
+        // injection — it would otherwise become a live formula, and a live
+        // Excel formula once exported to .xlsx).
         for (const auto& v : fields)
-            row.append(v);
+            row.append(v.startsWith(QLatin1Char('=')) ? QLatin1Char('\'') + v : v);
         cells.append(row);
     }
     const bool truncated = !in.atEnd();
@@ -327,7 +352,7 @@ bool ExcelScreen::import_csv(const QString& path) {
         w->deleteLater();
     }
     sheet_tabs_->addTab(sheet, name);
-    connect(sheet, &SpreadsheetWidget::data_changed, this, &ExcelScreen::mark_dirty);
+    watch_sheet(sheet);
 
     file_name_ = QFileInfo(path).fileName();
     file_path_ = path;
@@ -377,6 +402,86 @@ void ExcelScreen::import_path(const QString& path) {
 [[maybe_unused]] static constexpr int kExcelMaxImportCols = 64;
 
 #ifdef FINCEPT_HAS_QXLSX
+// Text for a stored number, following the cell's number format closely enough
+// that the round trip keeps it: percentages stay "12.5%", grouped/currency
+// figures stay "1,234.50" / "$1,234.50", accounting negatives "(1,234.50)".
+// The formula engine reads all of these back as numbers.
+static QString xlsx_number_text(double v, const QXlsx::Format& fmt) {
+    QString code = fmt.numberFormat();
+    if (code.isEmpty()) {
+        switch (fmt.numberFormatIndex()) { // built-in formats carry no code string
+            case 3: code = QStringLiteral("#,##0"); break;
+            case 4: code = QStringLiteral("#,##0.00"); break;
+            case 9: code = QStringLiteral("0%"); break;
+            case 10: code = QStringLiteral("0.00%"); break;
+            case 37: case 38: code = QStringLiteral("#,##0;(#,##0)"); break;
+            case 39: case 40: code = QStringLiteral("#,##0.00;(#,##0.00)"); break;
+            default: break;
+        }
+    }
+    const QString positive = code.section(QLatin1Char(';'), 0, 0);
+    auto decimals = [&positive]() {
+        const int dot = static_cast<int>(positive.indexOf(QLatin1Char('.')));
+        if (dot < 0)
+            return 0;
+        int n = 0;
+        for (int i = dot + 1; i < positive.size() && (positive[i] == QLatin1Char('0') || positive[i] == QLatin1Char('#')); ++i)
+            ++n;
+        return n;
+    };
+    if (positive.contains(QLatin1Char('%')))
+        return QString::number(v * 100.0, 'f', decimals()) + QLatin1Char('%');
+    if (positive.contains(QLatin1String("#,##"))) {
+        QString s = QLocale::c().toString(std::fabs(v), 'f', decimals());
+        if (positive.contains(QLatin1Char('$')))
+            s.prepend(QLatin1Char('$'));
+        if (v < 0)
+            s = code.section(QLatin1Char(';'), 1, 1).contains(QLatin1Char('(')) ? QLatin1Char('(') + s + QLatin1Char(')')
+                                                                                  : QLatin1Char('-') + s;
+        return s;
+    }
+    return formula::export_text(formula::Value::num(v));
+}
+
+static QString xlsx_date_text(const QVariant& dt) {
+    if (dt.userType() == QMetaType::QDate)
+        return dt.toDate().toString(Qt::ISODate);
+    if (dt.userType() == QMetaType::QTime)
+        return dt.toTime().toString(QStringLiteral("HH:mm:ss"));
+    const QDateTime d = dt.toDateTime();
+    if (d.time() == QTime(0, 0))
+        return d.date().toString(Qt::ISODate);
+    return d.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+}
+
+// Plain-value text of a non-formula cell. Text that would otherwise READ as a
+// number, boolean, error or formula ("00123", "TRUE", "=x") keeps a leading
+// apostrophe so it stays text, as it was in the file.
+static QString xlsx_value_text(QXlsx::Cell* cell) {
+    if (cell->isDateTime())
+        return xlsx_date_text(cell->dateTime());
+    const QVariant v = cell->value();
+    switch (cell->cellType()) {
+        case QXlsx::Cell::NumberType:
+        case QXlsx::Cell::CustomType:
+            if (v.canConvert<double>() && v.userType() != QMetaType::QString)
+                return xlsx_number_text(v.toDouble(), cell->format());
+            break;
+        case QXlsx::Cell::BooleanType:
+            return v.toBool() ? QStringLiteral("TRUE") : QStringLiteral("FALSE");
+        case QXlsx::Cell::ErrorType:
+            return v.toString();
+        default:
+            break;
+    }
+    QString s = v.userType() == qMetaTypeId<QXlsx::RichString>() ? v.value<QXlsx::RichString>().toPlainString()
+                                                                 : v.toString();
+    const formula::Value lit = formula::literal_value(s);
+    if (!s.isEmpty() && (!lit.is_text() || s.startsWith(QLatin1Char('=')) || s.startsWith(QLatin1Char('\''))))
+        s.prepend(QLatin1Char('\''));
+    return s;
+}
+
 // Runs on a worker thread: QXlsx::Document is created, used and destroyed
 // entirely inside this call and the result is plain values.
 static ExcelImportResult read_xlsx_workbook(const QString& path) {
@@ -386,12 +491,13 @@ static ExcelImportResult read_xlsx_workbook(const QString& path) {
 
     for (const auto& name : sheet_names) {
         xlsx.selectSheet(name);
+        QXlsx::Worksheet* ws = xlsx.currentWorksheet();
+        if (!ws)
+            continue; // chart sheets have no cells
 
-        // Read the sheet's USED range only. Padding out to a minimum 100 × 26
-        // grid here meant every read loop did at least 2 600 xlsx.read() calls
-        // for cells the file doesn't have; SpreadsheetWidget pads the visible
-        // grid to that minimum itself, without touching the file.
-        const auto dim = xlsx.dimension();
+        // Read the sheet's USED range only; SpreadsheetWidget pads the visible
+        // grid to its minimum itself, without touching the file.
+        const auto dim = ws->dimension();
         const int data_rows = std::clamp(dim.lastRow(), 0, kExcelMaxImportRows);
         const int data_cols = std::clamp(dim.lastColumn(), 0, kExcelMaxImportCols);
         if (dim.lastRow() > kExcelMaxImportRows || dim.lastColumn() > kExcelMaxImportCols)
@@ -403,8 +509,22 @@ static ExcelImportResult read_xlsx_workbook(const QString& path) {
         for (int r = 0; r < data_rows; ++r) {
             sheet.cells[r].resize(data_cols);
             for (int c = 0; c < data_cols; ++c) {
-                const auto cell = xlsx.read(r + 1, c + 1); // QXlsx is 1-based
-                sheet.cells[r][c] = cell.isValid() ? cell.toString() : QString();
+                QXlsx::Cell* cell = ws->cellAt(r + 1, c + 1); // QXlsx is 1-based
+                if (!cell)
+                    continue;
+                if (cell->hasFormula()) {
+                    // read() resolves shared formulas to this cell's own text.
+                    sheet.cells[r][c] = ws->read(r + 1, c + 1).toString();
+                    // The value Excel stored: shown (marked) if the engine can't
+                    // evaluate the formula itself (functions it doesn't implement).
+                    const QVariant cv = cell->value();
+                    if (cv.isValid() && !cv.toString().isEmpty())
+                        sheet.cached.insert(SpreadsheetWidget::cache_key(r, c),
+                                            cv.userType() == QMetaType::QString ? cv.toString()
+                                                                                : xlsx_number_text(cv.toDouble(), cell->format()));
+                } else {
+                    sheet.cells[r][c] = xlsx_value_text(cell);
+                }
             }
         }
         result.sheets.append(std::move(sheet));
@@ -460,7 +580,7 @@ void ExcelScreen::finish_xlsx_import(const QString& path, const ExcelImportResul
         const int rows = static_cast<int>(imported.cells.size());
         const int cols = rows > 0 ? static_cast<int>(imported.cells.first().size()) : 0;
         auto* sheet = new SpreadsheetWidget(imported.name, std::max(rows, 100), std::max(cols, 26), sheet_tabs_);
-        sheet->set_data(imported.cells);
+        sheet->set_data(imported.cells, imported.cached);
         sheet_tabs_->addTab(sheet, imported.name);
         watch_sheet(sheet);
     }
@@ -511,15 +631,27 @@ void ExcelScreen::set_busy(bool busy, const QString& message) {
 
 struct ExcelSheetSnapshot {
     QString name;
-    QVector<QVector<QString>> cells;
+    QVector<QVector<QString>> cells; // used range, raw text (formulas included)
+    QHash<qint64, double> results;   // numeric results of formula cells (SpreadsheetWidget::cache_key)
 };
+
+static ExcelSheetSnapshot excel_snapshot(const SpreadsheetWidget* sheet) {
+    ExcelSheetSnapshot snap{sheet->sheet_name(), sheet->get_used_data(), {}};
+    for (int r = 0; r < snap.cells.size(); ++r)
+        for (int c = 0; c < snap.cells[r].size(); ++c)
+            if (snap.cells[r][c].startsWith(QLatin1Char('='))) {
+                const formula::Value v = sheet->value_at(r, c);
+                if (v.is_number())
+                    snap.results.insert(SpreadsheetWidget::cache_key(r, c), v.number);
+            }
+    return snap;
+}
 
 #ifdef FINCEPT_HAS_QXLSX
 
 // Excel sheet-name rules: 1-31 chars, none of []:*?/\, and unique per workbook.
 // A name that violates these makes addSheet/renameSheet fail, after which the
-// writes land on whatever sheet happened to be current — silently exporting one
-// sheet's data under another's name.
+// writes land on whatever sheet happened to be current.
 static QString excel_safe_sheet_name(QString name, QSet<QString>& taken) {
     static const QString kIllegal = QStringLiteral("[]:*?/\\");
     for (const QChar& ch : kIllegal)
@@ -538,57 +670,72 @@ static QString excel_safe_sheet_name(QString name, QSet<QString>& taken) {
     return candidate;
 }
 
-// Last row/col holding anything. get_data() pads every sheet to at least
-// 100x26, so without trimming a 12-row model exports as a 100-row sheet with
-// column widths and header styling stretched across empty space.
-static void excel_used_extent(const QVector<QVector<QString>>& cells, int& last_row, int& last_col) {
-    last_row = -1;
-    last_col = -1;
-    for (int r = 0; r < cells.size(); ++r) {
-        for (int c = 0; c < cells[r].size(); ++c) {
-            if (!cells[r][c].trimmed().isEmpty()) {
-                last_row = std::max(last_row, r);
-                last_col = std::max(last_col, c);
-            }
+// Number format that reproduces how a value was TYPED: "12.5%" -> 0.0%,
+// "$1,234.50" -> $#,##0.00, "(1,200)" -> #,##0;(#,##0), "1,234" -> #,##0.
+// Plain numbers stay General. (Formats used to be guessed from the row label:
+// a "Price" row got "$" even for rupee prices, and a "Growth" row typed as 5
+// meaning 5% exported as 500%.)
+static QString excel_format_for_typed(const QString& raw) {
+    const QString t = raw.trimmed();
+    const int dot = static_cast<int>(t.indexOf(QLatin1Char('.')));
+    int decimals = 0;
+    if (dot >= 0)
+        for (int i = dot + 1; i < t.size() && t[i].isDigit(); ++i)
+            ++decimals;
+    const QString frac = decimals > 0 ? QLatin1Char('.') + QString(decimals, QLatin1Char('0')) : QString();
+    if (t.endsWith(QLatin1Char('%')))
+        return QStringLiteral("0") + frac + QLatin1Char('%');
+    const bool grouped = t.contains(QLatin1Char(','));
+    const bool parens = t.startsWith(QLatin1Char('(')) && t.endsWith(QLatin1Char(')'));
+    QString currency;
+    for (const QChar ch : t) {
+        if (ch == QLatin1Char('$')) {
+            currency = QStringLiteral("$");
+            break;
+        }
+        if (ch == QChar(0x20AC) || ch == QChar(0x00A3) || ch == QChar(0x00A5) || ch == QChar(0x20B9)) {
+            currency = QStringLiteral("\"") + ch + QStringLiteral("\"");
+            break;
         }
     }
+    if (!grouped && !parens && currency.isEmpty())
+        return {};
+    const QString body = currency + QStringLiteral("#,##0") + frac;
+    return parens ? body + QStringLiteral(";(") + body + QLatin1Char(')') : body;
 }
 
 static bool write_snapshots_to_xlsx(QXlsx::Document& xlsx, const QVector<ExcelSheetSnapshot>& snapshots) {
     using QXlsx::Format;
 
-    // Header: white on the terminal's accent, bold, centred.
+    // Header row: bold, dark text on the terminal's amber accent. Numbers in it
+    // stay numbers (years used to be exported as text).
     Format header_fmt;
     header_fmt.setFontBold(true);
-    header_fmt.setFontColor(QColor(Qt::white));
-    header_fmt.setPatternBackgroundColor(QColor(kAccent()));
+    header_fmt.setFontColor(QColor(Qt::black));
+    header_fmt.setPatternBackgroundColor(QColor(QStringLiteral("#d97706")));
     header_fmt.setHorizontalAlignment(Format::AlignHCenter);
     header_fmt.setBorderStyle(Format::BorderThin);
 
-    // Row label / section heading: bold, left.
     Format label_fmt;
     label_fmt.setFontBold(true);
 
-    // Numbers: thousands separator, 2dp, negatives in parentheses — the
-    // convention finance reads by default.
-    Format num_fmt;
-    num_fmt.setNumberFormat(QStringLiteral("#,##0.00;(#,##0.00)"));
-    num_fmt.setHorizontalAlignment(Format::AlignRight);
+    Format date_fmt;
+    date_fmt.setNumberFormat(QStringLiteral("yyyy-mm-dd"));
+    Format datetime_fmt;
+    datetime_fmt.setNumberFormat(QStringLiteral("yyyy-mm-dd hh:mm:ss"));
 
-    // Rates are stored as decimals (0.105), so a percent format is what makes
-    // them readable — "10.5%" rather than "0.11".
-    Format pct_fmt;
-    pct_fmt.setNumberFormat(QStringLiteral("0.0%"));
-    pct_fmt.setHorizontalAlignment(Format::AlignRight);
-
-    Format price_fmt;
-    price_fmt.setNumberFormat(QStringLiteral("$#,##0.00"));
-    price_fmt.setHorizontalAlignment(Format::AlignRight);
-
-    // Counts (shares, years, periods) — no decimals, no currency.
-    Format count_fmt;
-    count_fmt.setNumberFormat(QStringLiteral("#,##0.##"));
-    count_fmt.setHorizontalAlignment(Format::AlignRight);
+    QHash<QString, Format> number_formats;
+    auto number_format = [&number_formats](const QString& code) -> Format {
+        if (code.isEmpty())
+            return Format();
+        auto it = number_formats.find(code);
+        if (it == number_formats.end()) {
+            Format f;
+            f.setNumberFormat(code);
+            it = number_formats.insert(code, f);
+        }
+        return it.value();
+    };
 
     QSet<QString> taken_names;
     bool wrote_any = false;
@@ -596,10 +743,6 @@ static bool write_snapshots_to_xlsx(QXlsx::Document& xlsx, const QVector<ExcelSh
     for (int s = 0; s < snapshots.size(); ++s) {
         const ExcelSheetSnapshot& snap = snapshots[s];
         const QString name = excel_safe_sheet_name(snap.name, taken_names);
-
-        // First sheet: rename the default one. Later sheets: add. Both are
-        // checked — a silent failure here is what sends writes to the wrong
-        // sheet. sheetNames() is never assumed non-empty.
         if (s == 0) {
             const QStringList names = xlsx.sheetNames();
             if (names.isEmpty()) {
@@ -611,110 +754,89 @@ static bool write_snapshots_to_xlsx(QXlsx::Document& xlsx, const QVector<ExcelSh
                     xlsx.renameSheet(names.first(), name);
             }
         } else if (!xlsx.addSheet(name)) {
-            LOG_WARN("ExcelScreen", "Export: could not add sheet " + name + " — skipped");
+            LOG_WARN("ExcelScreen", "Export: could not add sheet " + name + " - skipped");
             continue;
         }
-
-        int last_row = -1;
-        int last_col = -1;
-        excel_used_extent(snap.cells, last_row, last_col);
-        if (last_row < 0) {
-            wrote_any = true; // an empty sheet is still a valid sheet
+        QXlsx::Worksheet* ws = xlsx.currentWorksheet();
+        if (!ws)
             continue;
-        }
+        wrote_any = true;
 
-        // Header row = first row with content, if it is text rather than
-        // numbers (a numeric first row is data, not a header).
+        const int rows = static_cast<int>(snap.cells.size());
+        int cols = 0;
+        for (const auto& row : snap.cells)
+            cols = std::max(cols, static_cast<int>(row.size()));
+        if (rows == 0)
+            continue;
+
+        // Header = first row with content, when its first value is text.
         int header_row = -1;
-        for (int r = 0; r <= last_row && header_row < 0; ++r) {
-            for (int c = 0; c <= last_col; ++c) {
-                const QString v = (c < snap.cells[r].size()) ? snap.cells[r][c].trimmed() : QString();
-                if (v.isEmpty())
+        for (int r = 0; r < rows && header_row == -1; ++r) {
+            for (const QString& v : snap.cells[r]) {
+                if (v.trimmed().isEmpty())
                     continue;
-                bool numeric = false;
-                v.toDouble(&numeric);
-                header_row = (numeric || v.startsWith(QLatin1Char('='))) ? -2 : r;
+                header_row = (formula::literal_value(v).is_text() && !v.startsWith(QLatin1Char('='))) ? r : -2;
                 break;
             }
         }
 
-        QVector<int> col_width(last_col + 1, 10);
-
-        for (int r = 0; r <= last_row; ++r) {
-            // Row-level number format, chosen from the row's label in column A.
-            // A single blanket "#,##0.00" is wrong for half a financial model:
-            // a WACC of 0.105 rendered as "0.11" and a 3% terminal growth as
-            // "0.03", losing both precision and meaning. The label is the only
-            // signal available for what a row actually holds.
-            const QString label = (!snap.cells[r].isEmpty()) ? snap.cells[r][0].trimmed().toLower() : QString();
-            const Format* row_fmt = &num_fmt;
-            if (label.contains(QLatin1String("rate")) || label.contains(QLatin1String("growth")) ||
-                label.contains(QLatin1String("margin")) || label.contains(QLatin1String("wacc")) ||
-                label.contains(QLatin1String("yield")) || label.contains(QLatin1String("upside")) ||
-                label.contains(QLatin1String("downside")) || label.startsWith(QLatin1Char('%')) ||
-                label.contains(QLatin1String("% of"))) {
-                row_fmt = &pct_fmt;
-            } else if (label.contains(QLatin1String("price")) || label.contains(QLatin1String("per share"))) {
-                row_fmt = &price_fmt;
-            } else if (label.contains(QLatin1String("shares")) || label.contains(QLatin1String("years")) ||
-                       label.contains(QLatin1String("period"))) {
-                row_fmt = &count_fmt;
-            }
-
-            for (int c = 0; c <= last_col; ++c) {
-                const QString val = (c < snap.cells[r].size()) ? snap.cells[r][c] : QString();
-                if (val.trimmed().isEmpty())
+        QVector<int> col_width(cols, 10);
+        for (int r = 0; r < rows; ++r) {
+            for (int c = 0; c < snap.cells[r].size(); ++c) {
+                const QString& raw = snap.cells[r][c];
+                if (raw.isEmpty())
                     continue;
+                const bool header = r == header_row;
+                const int xr = r + 1;
+                const int xc = c + 1;
+                const bool is_formula = raw.startsWith(QLatin1Char('='));
+                col_width[c] = std::max(col_width[c], is_formula ? 12 : static_cast<int>(raw.size()) + 2);
 
-                // Width from what the cell DISPLAYS, not from its source. A
-                // formula's text is far longer than its result, so sizing on it
-                // pushed every column to the 52-char cap on a model whose widest
-                // visible value was six digits.
-                const int display_len =
-                    val.startsWith(QLatin1Char('=')) ? 12 : static_cast<int>(val.size()) + 2;
-                col_width[c] = std::max(col_width[c], display_len);
-
-                if (r == header_row) {
-                    xlsx.write(r + 1, c + 1, val, header_fmt);
-                    continue;
-                }
-
-                // Formula first — "=1+2" also parses as text, and a formula
-                // written as a string exports as a literal instead of a live cell.
-                if (val.startsWith(QLatin1Char('='))) {
-                    xlsx.write(r + 1, c + 1, val, *row_fmt);
-                    continue;
-                }
-
-                // Percentages authored as text ("12.5%") become real percentages.
-                if (val.endsWith(QLatin1Char('%'))) {
-                    bool pct_ok = false;
-                    const double pct = val.left(val.size() - 1).toDouble(&pct_ok);
-                    if (pct_ok) {
-                        xlsx.write(r + 1, c + 1, pct / 100.0, pct_fmt);
+                if (is_formula) {
+                    // A formula that doesn't parse would make Excel "repair" the
+                    // file and drop it - write it as text instead.
+                    if (!formula::compile(raw).program) {
+                        ws->writeString(xr, xc, raw, header ? header_fmt : Format());
                         continue;
                     }
+                    // Store our result as the cached value so readers that do not
+                    // recalculate (pandas, previewers) see the number, not 0.
+                    const double result = snap.results.value(SpreadsheetWidget::cache_key(r, c), 0.0);
+                    ws->writeFormula(xr, xc, QXlsx::CellFormula(formula::to_excel(raw)), header ? header_fmt : Format(),
+                                     result);
+                    continue;
                 }
 
-                bool ok = false;
-                const double d = val.toDouble(&ok);
-                // qIsFinite: "nan"/"inf" parse as doubles and would write XML
-                // Excel refuses to open.
-                if (ok && qIsFinite(d)) {
-                    xlsx.write(r + 1, c + 1, d, *row_fmt);
-                } else if (c == 0) {
-                    xlsx.write(r + 1, c + 1, val, label_fmt); // first column reads as labels
+                const formula::Value v = formula::literal_value(raw);
+                if (v.is_number()) {
+                    const QString code = excel_format_for_typed(raw);
+                    Format f = number_format(code);
+                    if (header) {
+                        f = header_fmt;
+                        if (!code.isEmpty())
+                            f.setNumberFormat(code);
+                    }
+                    ws->writeNumeric(xr, xc, v.number, f);
+                } else if (v.is_bool()) {
+                    ws->writeBool(xr, xc, v.boolean, header ? header_fmt : Format());
                 } else {
-                    xlsx.write(r + 1, c + 1, val);
+                    const bool forced_text = raw.startsWith(QLatin1Char('\''));
+                    const QString text = forced_text ? raw.mid(1) : raw;
+                    // ISO dates round-trip as real dates.
+                    const QDate d = QDate::fromString(text.trimmed(), Qt::ISODate);
+                    const QDateTime dt = QDateTime::fromString(text.trimmed(), QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+                    if (!forced_text && d.isValid())
+                        ws->writeDate(xr, xc, d, header ? header_fmt : date_fmt);
+                    else if (!forced_text && dt.isValid())
+                        ws->writeDateTime(xr, xc, dt, header ? header_fmt : datetime_fmt);
+                    else
+                        ws->writeString(xr, xc, text, header ? header_fmt : (c == 0 ? label_fmt : Format()));
                 }
             }
         }
-
-        for (int c = 0; c <= last_col; ++c)
+        for (int c = 0; c < cols; ++c)
             xlsx.setColumnWidth(c + 1, std::min(col_width[c], 52));
-        wrote_any = true;
     }
-
     return wrote_any;
 }
 
@@ -739,7 +861,7 @@ void ExcelScreen::on_export() {
             auto* sheet = qobject_cast<SpreadsheetWidget*>(sheet_tabs_->widget(i));
             if (!sheet)
                 continue;
-            snapshots.append({sheet->sheet_name(), sheet->get_data()});
+            snapshots.append(excel_snapshot(sheet));
         }
     }
     if (snapshots.isEmpty()) {
@@ -750,7 +872,12 @@ void ExcelScreen::on_export() {
     // `this` can still be destroyed while the modal dialog is open; every
     // member touched after it returns is guarded on the QPointer.
     QPointer<ExcelScreen> self = this;
-    QString path = QFileDialog::getSaveFileName(this, tr("Export as XLSX"), file_name_, tr("Excel Files (*.xlsx)"));
+    QString path;
+    const bool quick = std::exchange(quick_save_, false);
+    if (quick && file_path_.endsWith(QLatin1String(".xlsx"), Qt::CaseInsensitive) && QFileInfo(file_path_).isFile())
+        path = file_path_; // Ctrl+S on an open workbook: save in place
+    else
+        path = QFileDialog::getSaveFileName(this, tr("Export as XLSX"), file_name_, tr("Excel Files (*.xlsx)"));
     if (!self || path.isEmpty())
         return;
     // QFileDialog on Linux/macOS does not always append the filter suffix.
@@ -778,6 +905,12 @@ void ExcelScreen::on_export() {
                                 "This build was compiled without QXlsx support.\n\n"
                                 "CSV export is still available via the toolbar."));
 #endif
+}
+
+void ExcelScreen::on_save() {
+    quick_save_ = true;
+    on_export();
+    quick_save_ = false;
 }
 
 void ExcelScreen::finish_xlsx_export(const QString& path, int outcome) {
@@ -823,7 +956,18 @@ void ExcelScreen::on_export_csv() {
     // modal loop can run queued work that rebuilds the Excel dock and frees
     // `sheet`. Reading it afterwards is a use-after-free.
     const QString sheet_name = sheet->sheet_name();
-    const QVector<QVector<QString>> cells = sheet->get_data();
+    // CSV carries VALUES, as Excel's "Save as CSV" does: formula cells export
+    // their computed result (full precision), not "=SUM(...)" text that no
+    // CSV reader can evaluate.
+    QVector<QVector<QString>> cells = sheet->get_used_data();
+    for (int r = 0; r < cells.size(); ++r)
+        for (int c = 0; c < cells[r].size(); ++c) {
+            QString& v = cells[r][c];
+            if (v.startsWith(QLatin1Char('=')))
+                v = formula::export_text(sheet->value_at(r, c));
+            else if (v.startsWith(QLatin1Char('\'')))
+                v = v.mid(1);
+        }
 
     QPointer<ExcelScreen> self = this;
     QString path = QFileDialog::getSaveFileName(this, tr("Export CSV"), sheet_name + ".csv", tr("CSV Files (*.csv)"));
@@ -893,8 +1037,11 @@ void ExcelScreen::on_add_sheet() {
 // ── Dirty tracking ───────────────────────────────────────────────────────────
 
 void ExcelScreen::watch_sheet(SpreadsheetWidget* sheet) {
-    if (sheet)
-        connect(sheet, &SpreadsheetWidget::data_changed, this, &ExcelScreen::mark_dirty);
+    if (!sheet)
+        return;
+    connect(sheet, &SpreadsheetWidget::data_changed, this, &ExcelScreen::mark_dirty);
+    // Excel-style SUM / AVG / COUNT of the selection in the status bar.
+    connect(sheet, &SpreadsheetWidget::selection_changed, this, &ExcelScreen::update_status);
 }
 
 void ExcelScreen::mark_dirty() {
@@ -1007,6 +1154,9 @@ void ExcelScreen::update_status() {
                     .arg(sheet->sheet_name())
                     .arg(sheet->row_count())
                     .arg(sheet->col_count());
+        const QString summary = sheet->selection_summary();
+        if (!summary.isEmpty())
+            info += QStringLiteral("  |  ") + summary;
     }
     if (status_label_)
         status_label_->setText(info);

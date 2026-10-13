@@ -201,6 +201,12 @@ class WindowFrame : public QMainWindow {
     /// users see it where they're looking.
     void open_command_palette();
 
+    /// Show Plans & Pricing in this frame (the "billing.plans" action, the
+    /// toolbar plan badge and every "get more credits" prompt land here).
+    /// Works from the dock UI and from chat mode; the screen's BACK / CONTINUE
+    /// WITH FREE returns to wherever the user was. No-op while locked.
+    void show_pricing();
+
   protected:
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -281,6 +287,16 @@ class WindowFrame : public QMainWindow {
     /// Show the auth stack at the given index and hide the privileged shell.
     /// All login/register/forgot/pricing/info transitions go through here.
     void enter_auth_stack(int auth_index);
+    /// Bring the terminal up after sign-in or PIN unlock, for every plan. The
+    /// first call of a sign-in also restores the layout, warms the instrument
+    /// cache and shows free accounts Plans & Pricing once per release; later
+    /// unlocks only resume. Schedules the silent update check and the
+    /// cadence-gated Enterprise reminder.
+    void enter_terminal_after_auth();
+    /// Leave Plans & Pricing (its BACK / CONTINUE WITH FREE / Esc) and return
+    /// to the dock UI or chat mode — or to the lock screen if an inactivity
+    /// lock fired meanwhile.
+    void leave_pricing();
 
     // Info screens stack (Contact, Terms, Privacy, Trademarks, Help)
     QStackedWidget* info_stack_ = nullptr;
@@ -289,7 +305,6 @@ class WindowFrame : public QMainWindow {
     void show_login();
     void show_register();
     void show_forgot_password();
-    void show_pricing();
     void show_info_contact();
     void show_info_terms();
     void show_info_privacy();

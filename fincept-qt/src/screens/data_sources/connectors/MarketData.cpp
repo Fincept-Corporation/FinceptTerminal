@@ -1,4 +1,4 @@
-// Market Data connectors (19): Yahoo Finance, Alpha Vantage, Finnhub, IEX Cloud, Twelve Data,
+// Market Data connectors (18): Yahoo Finance, Alpha Vantage, Finnhub, Twelve Data,
 // Quandl, Binance, Coinbase, Kraken, CoinMarketCap, CoinGecko, EOD Historical, Tiingo,
 // Intrinio, Fincept, Reuters, Marketstack, Finage, Tradier
 #include "screens/data_sources/ConnectorRegistry.h"
@@ -51,18 +51,6 @@ static QVector<ConnectorConfig> market_configs() {
          true,
          true,
          {{"apiKey", "API Key", FieldType::Password, "your-api-key", true, "", {}}}},
-
-        {"iex-cloud",
-         "IEX Cloud",
-         "iex-cloud",
-         Category::MarketData,
-         "I",
-         "#1D7DF0",
-         "Financial data from IEX Exchange",
-         true,
-         true,
-         {{"token", "API Token", FieldType::Password, "pk_...", true, "", {}},
-          {"sandbox", "Use Sandbox", FieldType::Checkbox, "", false, "false", {}}}},
 
         {"twelve-data",
          "Twelve Data",

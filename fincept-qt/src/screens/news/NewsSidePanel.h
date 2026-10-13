@@ -16,15 +16,13 @@ namespace fincept::screens {
 
 /// Intelligence drawer — slides in from the left over the feed panel.
 /// Contains all advanced intelligence sections: monitors, top stories,
-/// categories, entities, signals, instability, predictions, bookmarks.
+/// categories, entities, places, signals, prediction markets, bookmarks.
 /// Toggled via the INTEL button in the command bar.
 class NewsSidePanel : public QWidget {
     Q_OBJECT
   public:
     explicit NewsSidePanel(QWidget* parent = nullptr);
 
-    void update_stats(int feed_count, int article_count, int cluster_count, int source_count);
-    void update_sentiment(int bullish, int bearish, int neutral);
     void update_top_stories(const QVector<services::NewsArticle>& top);
     void update_categories(const QMap<QString, int>& counts);
     void update_monitors(const QVector<services::NewsMonitor>& monitors,
@@ -33,12 +31,11 @@ class NewsSidePanel : public QWidget {
     void update_entities(const services::NerResult& ner);
     void update_locations(const QVector<services::ArticleGeo>& geo);
     void update_signals(const QVector<services::CorrelationSignal>& sigs);
-    void update_instability(const QString& country, const services::InstabilityScore& score);
     void update_predictions(const QVector<services::PredictionMarket>& predictions);
     void update_saved(const QVector<services::NewsArticle>& saved);
 
-    /// Toggle drawer visibility with animation
-    void toggle_drawer();
+    /// Show / hide the drawer (the screen keeps the INTEL button in sync).
+    void set_drawer_open(bool open);
     bool is_drawer_open() const { return drawer_open_; }
 
   protected:
@@ -50,6 +47,7 @@ class NewsSidePanel : public QWidget {
     void monitor_added(const QString& label, const QStringList& keywords);
     void monitor_toggled(const QString& id);
     void monitor_deleted(const QString& id);
+    /// The drawer's own close button was clicked (the screen closes it).
     void close_requested();
 
   private:
@@ -73,7 +71,6 @@ class NewsSidePanel : public QWidget {
     QLabel* entities_title_ = nullptr;
     QLabel* locations_title_ = nullptr;
     QLabel* signals_title_ = nullptr;
-    QLabel* cii_title_ = nullptr;
     QLabel* predictions_title_ = nullptr;
     QLabel* saved_title_ = nullptr;
 
@@ -103,13 +100,10 @@ class NewsSidePanel : public QWidget {
     QVBoxLayout* signals_layout_ = nullptr;
     QWidget* signals_section_ = nullptr;
 
-    // Country Instability
-    QVBoxLayout* cii_layout_ = nullptr;
-    QWidget* cii_section_ = nullptr;
-
     // Prediction markets
     QVBoxLayout* predictions_layout_ = nullptr;
     QWidget* predictions_section_ = nullptr;
+    QLabel* predictions_source_ = nullptr; // "Manifold Markets (play money)" disclosure
 
     // Saved / bookmarked articles
     QVBoxLayout* saved_layout_ = nullptr;

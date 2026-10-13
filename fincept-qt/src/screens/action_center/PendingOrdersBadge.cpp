@@ -6,6 +6,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QMouseEvent>
+#include <QStyle>
 
 namespace fincept::screens {
 
@@ -16,9 +17,14 @@ PendingOrdersBadge::PendingOrdersBadge(QWidget* parent) : QLabel(parent) {
     setObjectName("pendingOrdersBadge");
     setCursor(Qt::PointingHandCursor);
     setToolTip(tr("Orders awaiting approval — click to review"));
+    // Two looks from ONE stylesheet: amber pill while orders wait for approval,
+    // a muted outline when the queue is empty (the badge stays visible so the
+    // Action Center — and its kill switch — is always one click away).
     setStyleSheet(QString("#pendingOrdersBadge{color:#000;background:%1;font-weight:700;"
-                          "padding:1px 8px;border-radius:8px;}")
-                      .arg(ui::colors::AMBER()));
+                          "padding:1px 8px;border-radius:8px;}"
+                          "#pendingOrdersBadge[idle=\"true\"]{color:%2;background:transparent;font-weight:400;"
+                          "border:1px solid %3;}")
+                      .arg(ui::colors::AMBER(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER()));
 
     auto& ac = ActionCenter::instance();
     connect(&ac, &ActionCenter::pending_order_created, this, [this](const PendingOrder&) { refresh_count(); });
@@ -35,7 +41,15 @@ void PendingOrdersBadge::refresh_count() {
     // query is WHERE-filtered, so it only touches the handful of rows that matter.
     count_ = int(ActionCenter::instance().get_pending_orders().size());
     setText(QString::fromUtf8("\xe2\x8f\xb8 %1").arg(count_)); // ⏸ N
-    setVisible(count_ > 0);
+    const bool idle = (count_ == 0);
+    if (property("idle").toBool() != idle || !property("idle").isValid()) {
+        setProperty("idle", idle);
+        style()->unpolish(this);
+        style()->polish(this);
+    }
+    setToolTip(idle ? tr("Action Center — no orders awaiting approval. Click for history and the kill switch.")
+                    : tr("%1 order(s) awaiting approval — click to review").arg(count_));
+    setVisible(true);
 }
 
 void PendingOrdersBadge::mousePressEvent(QMouseEvent*) {

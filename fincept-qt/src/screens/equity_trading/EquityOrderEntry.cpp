@@ -1232,15 +1232,21 @@ void EquityOrderEntry::on_place_strategy() {
         status_label_->setStyleSheet(QString("color: %1;").arg(colors::NEGATIVE()));
         return;
     }
-    set_send_locked(true); // released by show_order_status() on the result
-
     // Product type from profile-driven combo (same mapping as on_submit)
     trading::ProductType product = trading::ProductType::Intraday;
     const int prod_idx = product_combo_->currentIndex();
     if (!product_types_.isEmpty() && prod_idx >= 0 && prod_idx < product_types_.size())
         product = product_types_[prod_idx].value;
 
-    trading::BasketOrderRequest basket = trading::OptionsStrategyBuilder::to_basket_order(strat, product, broker_id_);
+    // Every leg must resolve to a real contract in the broker's instrument master;
+    // otherwise nothing is sent (a placeholder symbol must never reach a broker).
+    trading::BasketOrderRequest basket;
+    QString build_error;
+    if (!trading::OptionsStrategyBuilder::to_basket_order(strat, product, broker_id_, basket, build_error)) {
+        show_order_status(build_error, false); // lock not armed yet — releasing it is a no-op
+        return;
+    }
+    set_send_locked(true); // released by show_order_status() on the result
     emit strategy_order_submitted(basket);
 }
 

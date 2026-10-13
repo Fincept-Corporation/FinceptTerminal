@@ -7,6 +7,8 @@
 #include <QEvent>
 #include <QJsonObject>
 #include <QLabel>
+#include <QList>
+#include <QPair>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStackedWidget>
@@ -17,13 +19,15 @@ namespace fincept::screens {
 /// Professional derivatives pricing screen.
 /// Supports: Bonds, Equity Options, FX Options, IR Swaps, Credit (CDS).
 /// Calculations run via PythonCliService (derivatives_pricing.py) — D1/P6 compliant.
+/// Inputs are entered in percent (rates/vols/yields) and passed to the script as
+/// such; the script documents each command's conventions and output units.
 class DerivativesScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit DerivativesScreen(QWidget* parent = nullptr);
 
-    // IStatefulScreen — persists which instrument the user last had open
-    // (bonds/equity/fx/swaps/credit).
+    // IStatefulScreen — persists the instrument the user last had open and the
+    // last inputs of every calculator (as-of dates excluded).
     QVariantMap save_state() const override;
     void restore_state(const QVariantMap& state) override;
     QString state_key() const override { return "derivatives"; }
@@ -65,9 +69,13 @@ class DerivativesScreen : public QWidget, public IStatefulScreen {
     // Python bridge
     void run_pricing(const QString& command, const QStringList& args);
 
+    /// Registers an input whose value is saved with the screen state.
+    void track_input(const QString& key, QWidget* input);
+
     // State
     int active_instrument_ = 0; // 0=bonds, 1=equity, 2=fx, 3=swaps, 4=credit
     bool loading_ = false;
+    QList<QPair<QString, QWidget*>> persisted_inputs_;
 
     // Layout
     QStackedWidget* panel_stack_ = nullptr;

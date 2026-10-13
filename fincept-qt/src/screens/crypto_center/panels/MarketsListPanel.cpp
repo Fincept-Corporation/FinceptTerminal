@@ -6,6 +6,7 @@
 #include "services/prediction/fincept_internal/FinceptInternalAdapter.h"
 #include "ui/theme/Theme.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QHBoxLayout>
@@ -114,8 +115,8 @@ void MarketsListPanel::build_ui() {
     footer_note_->setObjectName(QStringLiteral("marketsListFooter"));
     footer_note_->setWordWrap(true);
     footer_note_->setContentsMargins(12, 8, 12, 12);
-    footer_note_->setText(tr("Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
-                             "deploy the fincept_market Anchor program for live trading."));
+    footer_note_->setText(tr("SAMPLE MARKETS — illustrative questions and prices, not live and not tradable. "
+                             "Fincept prediction markets are not launched yet."));
     root->addWidget(footer_note_);
 }
 
@@ -129,8 +130,9 @@ void MarketsListPanel::apply_theme() {
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
                                       "QLabel#marketsListStatusLive { color:%6; font-family:%5; font-size:10px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
-                                      "QLabel#marketsListStatusDemo { color:%7; font-family:%5; font-size:10px;"
-                                      "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
+                                      "QLabel#marketsListStatusDemo { color:%4; font-family:%5; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:rgba(217,119,6,0.10);"
+                                      "  border:1px solid %4; padding:2px 8px; }"
                                       "QLabel#marketsListStatusError { color:%8; font-family:%5; font-size:10px;"
                                       "  font-weight:700; letter-spacing:1.2px; background:transparent; }"
                                       "QTableWidget#marketsListTable { background:%1; color:%9;"
@@ -202,8 +204,8 @@ void MarketsListPanel::retranslateUi() {
     // The footer is state-dependent (demo note / empty / order-entry hint) and is
     // only the fixed demo text while the pill reads DEMO.
     if (footer_note_ && status_pill_ && status_pill_->objectName() == QLatin1String("marketsListStatusDemo"))
-        footer_note_->setText(tr("Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
-                                 "deploy the fincept_market Anchor program for live trading."));
+        footer_note_->setText(tr("SAMPLE MARKETS — illustrative questions and prices, not live and not tradable. "
+                                 "Fincept prediction markets are not launched yet."));
     // Re-apply the status pill text using its objectName as the state flag so
     // the live DEMO/LIVE/ERROR state survives the locale switch.
     if (status_pill_) {
@@ -261,8 +263,8 @@ void MarketsListPanel::set_status_demo(bool demo) {
     if (demo) {
         status_pill_->setText(tr("DEMO"));
         status_pill_->setObjectName(QStringLiteral("marketsListStatusDemo"));
-        footer_note_->setText(tr("Demo dataset. Set `fincept.markets_endpoint` in SecureStorage and "
-                                 "deploy the fincept_market Anchor program for live trading."));
+        footer_note_->setText(tr("SAMPLE MARKETS — illustrative questions and prices, not live and not tradable. "
+                                 "Fincept prediction markets are not launched yet."));
         footer_note_->show();
     } else {
         status_pill_->setText(tr("● LIVE"));
@@ -284,19 +286,43 @@ void MarketsListPanel::set_status_error(const QString& message) {
 
 void MarketsListPanel::rebuild_table(const QVector<pr::PredictionMarket>& markets) {
     table_->setRowCount(markets.size());
+    const QDate today = QDate::currentDate();
     int row = 0;
     for (const auto& m : markets) {
-        auto* q = new QTableWidgetItem(m.question);
+        // The head pill alone is easy to miss next to a row of YES/NO prices:
+        // a sample market is labelled on the row itself, so a fabricated
+        // "Fed cuts … 0.62" can never be read as a live quote.
+        const bool is_demo = m.extras.value(QStringLiteral("is_demo")).toBool();
+        auto* q = new QTableWidgetItem(is_demo ? tr("SAMPLE · %1").arg(m.question) : m.question);
         q->setData(Qt::UserRole, m.key.market_id);
         table_->setItem(row, 0, q);
 
         const double yes = m.outcomes.size() >= 1 ? m.outcomes[0].price : 0.0;
         const double no = m.outcomes.size() >= 2 ? m.outcomes[1].price : (1.0 - yes);
 
-        table_->setItem(row, 1, new QTableWidgetItem(format_price(yes)));
-        table_->setItem(row, 2, new QTableWidgetItem(format_price(no)));
-        table_->setItem(row, 3, new QTableWidgetItem(format_volume(m.volume)));
-        table_->setItem(row, 4, new QTableWidgetItem(m.end_date_iso));
+        auto* yes_item = new QTableWidgetItem(format_price(yes));
+        auto* no_item = new QTableWidgetItem(format_price(no));
+        auto* vol_item = new QTableWidgetItem(format_volume(m.volume));
+        yes_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        no_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        vol_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        table_->setItem(row, 1, yes_item);
+        table_->setItem(row, 2, no_item);
+        table_->setItem(row, 3, vol_item);
+
+        // An expiry already in the past next to a quoted price is a stale
+        // market, whatever the source says about "active" — flag it.
+        const QDate end = QDate::fromString(m.end_date_iso.left(10), Qt::ISODate);
+        const bool expired = end.isValid() && end < today;
+        table_->setItem(row, 4, new QTableWidgetItem(expired ? tr("%1 · expired").arg(m.end_date_iso)
+                                                             : m.end_date_iso));
+        if (is_demo) {
+            for (int c = 0; c < table_->columnCount(); ++c) {
+                if (auto* cell = table_->item(row, c))
+                    cell->setToolTip(tr("Sample market — illustrative price and volume, not live data and "
+                                        "not tradable."));
+            }
+        }
         ++row;
     }
 }

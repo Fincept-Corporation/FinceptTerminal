@@ -20,7 +20,8 @@ class PortfolioDetailWrapper : public QWidget {
     void update_data(const portfolio::PortfolioSummary& summary, const QString& currency);
     void update_snapshots(const QVector<portfolio::PortfolioSnapshot>& snapshots);
     void update_metrics(const portfolio::ComputedMetrics& metrics);
-    void update_correlation(const QHash<QString, double>& matrix);
+    /// Market analytics (correlation matrix + per-holding ex-ante risk).
+    void update_analytics(const portfolio::MarketAnalytics& analytics);
     /// Pre-select the Optimization view's "Target Return" method at
     /// @p annual_return (a fraction, e.g. 0.08). Creates the view if needed.
     void set_optimization_target(double annual_return);
@@ -53,7 +54,7 @@ class PortfolioDetailWrapper : public QWidget {
     portfolio::ComputedMetrics current_metrics_;
     QString current_currency_;
     QVector<portfolio::PortfolioSnapshot> current_snapshots_;
-    QHash<QString, double> current_correlation_; // keyed "SYM_A|SYM_B"
+    portfolio::MarketAnalytics current_analytics_; // correlation keyed "SYM_A|SYM_B"
 };
 
 } // namespace fincept::screens

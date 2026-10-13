@@ -313,7 +313,7 @@ void BuybackBurnPanel::retranslateUi() {
     // epoch_window_ is data-driven once an epoch publishes; the placeholder
     // is only visible pre-publish, so it is not re-applied here.
     if (epoch_section_title_)
-        epoch_section_title_->setText(tr("THIS EPOCH"));
+        epoch_section_title_->setText(epoch_is_mock_ ? tr("THIS EPOCH · SAMPLE DATA") : tr("THIS EPOCH"));
     if (alltime_section_title_)
         alltime_section_title_->setText(burn_total_is_mock_ ? tr("ALL-TIME · SAMPLE DATA") : tr("ALL-TIME"));
     if (revenue_caption_)
@@ -360,6 +360,9 @@ void BuybackBurnPanel::on_epoch_update(const QVariant& v) {
     const QString window_text =
         QStringLiteral("epoch %1 · %2").arg(e.epoch_no).arg(format_window(e.start_ts_ms, e.end_ts_ms));
     epoch_window_->setText(e.is_mock ? tr("SAMPLE DATA · %1").arg(window_text) : window_text);
+    // Badge the section the dollar figures sit in, not only the head caption.
+    if (epoch_section_title_)
+        epoch_section_title_->setText(e.is_mock ? tr("THIS EPOCH · SAMPLE DATA") : tr("THIS EPOCH"));
 
     revenue_total_->setText(format_usd(e.revenue_total_usd));
     revenue_split_->setText(tr("subs %1 · pred-mkt %2 · misc %3")

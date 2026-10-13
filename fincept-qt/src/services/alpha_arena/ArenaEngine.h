@@ -11,6 +11,7 @@
 
 #include <QTimer>
 
+#include <functional>
 #include <memory>
 
 namespace fincept::arena {
@@ -21,15 +22,33 @@ class ArenaEngine : public QObject {
     static ArenaEngine& instance();
     void init(); // idempotent; crash-recovery scan (emits crash_recovery_pending)
 
+    /// Final outcome of an asynchronous kill (GUI thread).
+    using KillDone = std::function<void(Result<void>)>;
+
+    /// One queued HITL approval, as the UI shows it.
+    struct ApprovalView {
+        QString id, agent_id, summary;
+    };
+
     Result<QString> create_competition(const ArenaConfig& cfg); // persists; status "created"
     Result<void> start(const QString& competition_id);          // load + begin ticking
     Result<void> pause();                                       // status "paused", timer stops
     Result<void> resume();                                      // status "running"
-    Result<void> stop();     // status "ended"; positions stay; pending HITL rows persist
-    Result<void> kill_all(); // refresh marks, close every position, reject pending HITL + stop
-    /// Per-agent kill switch: close that agent's positions now, halt it
-    /// ("halted_user"), snapshot its equity. Competition keeps running.
-    Result<void> kill_agent(const QString& agent_id);
+    Result<void> stop(); // status "ended"; positions stay; pending HITL rows persist
+    /// Kill switch: stop the round timers NOW, refresh marks (bounded wait,
+    /// asynchronous — never a nested event loop), close every position at the
+    /// fresh marks, reject pending HITL approvals, end the competition.
+    /// Returns err immediately when there is nothing to kill or a kill is
+    /// already running; otherwise `done` receives the final outcome (an error
+    /// names positions that could not be closed).
+    Result<void> kill_all(KillDone done = {});
+    /// Per-agent kill switch: halt the agent NOW ("halted_user"), then close its
+    /// positions at refreshed marks and snapshot its equity (asynchronous, as
+    /// kill_all). Competition keeps running.
+    Result<void> kill_agent(const QString& agent_id, KillDone done = {});
+    /// True while a kill is closing positions (≤ ~2 s). Lifecycle calls are
+    /// refused meanwhile so nothing re-enters the engine mid-kill.
+    bool kill_in_progress() const { return kill_in_progress_; }
     Result<void> halt_agent(const QString& agent_id);
     Result<void> resume_agent(const QString& agent_id);
     Result<void> set_cadence(int seconds); // hot + persisted
@@ -40,6 +59,9 @@ class ArenaEngine : public QObject {
     /// persisted as "rejected_risk" orders with reason "HITL rejected".
     /// Pending approvals persist in the store and re-surface on start().
     void resume_after_hitl(const QString& approval_id, bool approved);
+    /// Approvals still waiting for a decision (active competition only) — lets
+    /// a view that was hidden or switched away re-show them.
+    QVector<ApprovalView> pending_approvals() const;
 
     // Crash recovery: competitions found "running" at init(); UI can resume or dismiss.
     QStringList pending_crash_recoveries() const { return crash_pending_; }
@@ -88,8 +110,9 @@ class ArenaEngine : public QObject {
     void record_failure(const AgentRow& agent, const QString& kind);
     bool agent_is_active(const QString& agent_id) const; // CURRENT status in agents_
     void run_marks_tick();                               // between-round live marks
-    void refresh_marks_blocking();                       // kill paths: bounded-wait marks
-                                                         // refresh + sweep → close fresh
+    /// Kill paths: one marks refresh + funding/liquidation sweep, then `then`
+    /// — on the reply or after kKillMarksTimeoutMs, whichever comes first.
+    void refresh_marks_async(std::function<void()> then);
 
     QString active_id_;
     CompetitionRow comp_;
@@ -100,6 +123,8 @@ class ArenaEngine : public QObject {
     QTimer* marks_timer_ = nullptr; // between-round live marks (Feature: realtime marks)
     int marks_interval_ms_ = 10000;
     bool inited_ = false, round_in_flight_ = false;
+    bool kill_in_progress_ = false; // any kill (all / agent) is closing positions
+    bool kill_all_pending_ = false; // kill_all specifically: every agent counts as halted
     int round_seq_ = 0, pending_agents_ = 0;
     qint64 last_mark_ts_ = 0; // ms of the PREVIOUS mark_all (round OR marks tick)
                               // — funding accrues on elapsed-since-last-mark

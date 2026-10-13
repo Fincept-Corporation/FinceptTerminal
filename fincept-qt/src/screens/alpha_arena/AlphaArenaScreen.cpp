@@ -5,9 +5,12 @@
 #include "screens/alpha_arena/LeaderboardCards.h"
 #include "screens/alpha_arena/NewCompetitionWizard.h"
 #include "services/alpha_arena/ArenaEngine.h"
+#include "services/alpha_arena/ArenaMetrics.h"
 #include "services/alpha_arena/ArenaStore.h"
 
 #include <QComboBox>
+#include <QPointer>
+#include <QStyle>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLocale>
@@ -20,6 +23,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <limits>
 
 namespace fincept::screens::alpha_arena {
 using fincept::arena::ArenaEngine;
@@ -29,6 +33,16 @@ namespace {
 QString fmt_mid(double v) {
     const int dp = v >= 1000 ? 1 : v >= 10 ? 2 : 4;
     return QLocale(QLocale::English, QLocale::UnitedStates).toString(v, 'f', dp);
+}
+
+// Badge tone via a dynamic property matched by the header sheet; re-polish so
+// the new selector applies (no per-state setStyleSheet).
+void aa_set_tone(QWidget* w, const char* tone) {
+    if (!w || w->property("tone").toString() == QLatin1String(tone))
+        return;
+    w->setProperty("tone", QString::fromLatin1(tone));
+    w->style()->unpolish(w);
+    w->style()->polish(w);
 }
 } // namespace
 
@@ -64,24 +78,36 @@ AlphaArenaScreen::AlphaArenaScreen(QWidget* parent) : QWidget(parent) {
 
 QWidget* AlphaArenaScreen::build_header() {
     auto* hdr = new QWidget;
+    hdr->setObjectName(QStringLiteral("aaHeader"));
     hdr->setFixedHeight(38);
-    hdr->setStyleSheet("background:#141414;border-bottom:1px solid #2A2A2A;");
+    // One sheet for the header and its children, scoped by object name (the old
+    // selector-less sheet cascaded its border-bottom onto every label in it).
+    hdr->setStyleSheet(
+        "QWidget#aaHeader{background:#111111;border-bottom:1px solid #222222;}"
+        "QLabel#aaTitle{color:#d97706;font-weight:700;font-size:12px;letter-spacing:1px;}"
+        "QLabel#aaBadge{background:#1a1a1a;color:#808080;padding:1px 7px;font-weight:700;font-size:10px;}"
+        "QLabel#aaBadge[tone=\"running\"]{background:#0A3A14;color:#16a34a;}"
+        "QLabel#aaBadge[tone=\"paper\"]{color:#16a34a;}"
+        "QLabel#aaBadge[tone=\"live\"]{background:#5C1F1F;color:#FFD;}"
+        "QLabel#aaMono{color:#e5e5e5;font-size:11px;font-family:'Consolas','Courier New',monospace;}"
+        "QLabel#aaMonoDim{color:#808080;font-size:11px;font-family:'Consolas','Courier New',monospace;}"
+        "QPushButton#aaKill{background:#dc2626;color:#FFF;font-weight:700;}"
+        "QPushButton#aaKill:disabled{background:#3a1414;color:#808080;}"
+        "QPushButton#aaNew{background:#d97706;color:#000;font-weight:700;}");
     auto* h = new QHBoxLayout(hdr);
     h->setContentsMargins(10, 0, 10, 0);
     h->setSpacing(8);
     auto* title = new QLabel(tr("ALPHA ARENA"));
-    title->setStyleSheet("color:#FF8800;font-weight:700;font-size:12px;border:none;");
+    title->setObjectName(QStringLiteral("aaTitle"));
     h->addWidget(title);
     venue_badge_ = new QLabel(tr("PAPER"));
     status_badge_ = new QLabel(tr("IDLE"));
     round_label_ = new QLabel(tr("ROUND 0"));
     countdown_label_ = new QLabel(QStringLiteral("--"));
-    for (auto* b : {venue_badge_, status_badge_})
-        b->setStyleSheet("background:#222;color:#888;padding:1px 7px;font-weight:700;font-size:10px;");
-    round_label_->setStyleSheet("color:#BBB;font-size:11px;border:none;"
-                                "font-family:'Consolas','Courier New',monospace;");
-    countdown_label_->setStyleSheet("color:#888;font-size:11px;border:none;"
-                                    "font-family:'Consolas','Courier New',monospace;");
+    venue_badge_->setObjectName(QStringLiteral("aaBadge"));
+    status_badge_->setObjectName(QStringLiteral("aaBadge"));
+    round_label_->setObjectName(QStringLiteral("aaMono"));
+    countdown_label_->setObjectName(QStringLiteral("aaMonoDim"));
     h->addWidget(venue_badge_);
     h->addWidget(status_badge_);
     h->addWidget(round_label_);
@@ -93,13 +119,7 @@ QWidget* AlphaArenaScreen::build_header() {
             [this](int idx) { show_competition(switcher_->itemData(idx).toString()); });
     h->addWidget(switcher_);
     pause_btn_ = new QPushButton(tr("⏸ PAUSE"));
-    connect(pause_btn_, &QPushButton::clicked, this, [this]() {
-        auto& e = ArenaEngine::instance();
-        const bool running = e.is_running();
-        auto r = running ? e.pause() : e.resume();
-        if (r.is_err())
-            QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
-    });
+    connect(pause_btn_, &QPushButton::clicked, this, &AlphaArenaScreen::on_pause_resume);
     force_btn_ = new QPushButton(tr("⚡ FORCE ROUND"));
     connect(force_btn_, &QPushButton::clicked, this, [this]() {
         // Forcing a round makes every agent decide and trade immediately. In
@@ -114,17 +134,11 @@ QWidget* AlphaArenaScreen::build_header() {
         ArenaEngine::instance().force_round();
     });
     kill_btn_ = new QPushButton(tr("✖ KILL ALL"));
-    kill_btn_->setStyleSheet("background:#C72020;color:#FFF;font-weight:700;");
-    connect(kill_btn_, &QPushButton::clicked, this, [this]() {
-        if (QMessageBox::question(this, tr("Alpha Arena"), tr("Close every position and end the competition?")) !=
-            QMessageBox::Yes)
-            return;
-        if (auto r = ArenaEngine::instance().kill_all(); r.is_err())
-            QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
-        reload_competitions();
-    });
+    kill_btn_->setObjectName(QStringLiteral("aaKill"));
+    kill_btn_->setToolTip(tr("Close every position at fresh marks and end the competition"));
+    connect(kill_btn_, &QPushButton::clicked, this, &AlphaArenaScreen::on_kill_all);
     auto* new_btn = new QPushButton(tr("+ NEW"));
-    new_btn->setStyleSheet("background:#FF8800;color:#000;font-weight:700;");
+    new_btn->setObjectName(QStringLiteral("aaNew"));
     for (auto* b : {pause_btn_, force_btn_, kill_btn_, new_btn})
         b->setFixedHeight(24);
     // Run controls act on the ENGINE's active competition; they stay disabled until
@@ -239,11 +253,13 @@ QWidget* AlphaArenaScreen::build_dashboard() {
     connect(cards_, &LeaderboardCards::agent_selected, this,
             [this](const QString& id) { grid_->set_agent_filter(id); });
     connect(cards_, &LeaderboardCards::halt_requested, this, [this](const QString& id) {
-        ArenaEngine::instance().halt_agent(id);
+        if (auto r = ArenaEngine::instance().halt_agent(id); r.is_err())
+            QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
         refresh_dashboard();
     });
     connect(cards_, &LeaderboardCards::resume_requested, this, [this](const QString& id) {
-        ArenaEngine::instance().resume_agent(id);
+        if (auto r = ArenaEngine::instance().resume_agent(id); r.is_err())
+            QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
         refresh_dashboard();
     });
     connect(cards_, &LeaderboardCards::kill_requested, this, [this](const QString& id) {
@@ -254,7 +270,23 @@ QWidget* AlphaArenaScreen::build_dashboard() {
         if (QMessageBox::question(this, tr("Alpha Arena"), tr("Close all positions of %1 and halt it?").arg(name)) !=
             QMessageBox::Yes)
             return;
-        if (auto r = ArenaEngine::instance().kill_agent(id); r.is_err())
+        // Asynchronous: the agent is halted at once; its positions close after a
+        // bounded marks refresh, and the outcome arrives here.
+        QPointer<AlphaArenaScreen> self = this;
+        auto r = ArenaEngine::instance().kill_agent(id, [self](Result<void> fin) {
+            if (!self)
+                return;
+            self->refresh_dashboard();
+            if (fin.is_err()) {
+                const QString err = QString::fromStdString(fin.error());
+                // Deferred: never open a modal inside the engine's callback.
+                QTimer::singleShot(0, self, [self, err]() {
+                    if (self)
+                        QMessageBox::warning(self, tr("Alpha Arena"), err);
+                });
+            }
+        });
+        if (r.is_err())
             QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
         refresh_dashboard();
     });
@@ -307,6 +339,10 @@ void AlphaArenaScreen::connect_engine() {
         reload_competitions();
     });
     conns_ << connect(&eng, &ArenaEngine::hitl_requested, this, [this](QString id, QString agent_id, QString summary) {
+        // Approvals belong to the engine's active competition; while another one is
+        // on screen they wait in the engine and re-surface when it is shown again.
+        if (ArenaEngine::instance().active_competition_id() != competition_id_)
+            return;
         QString label = agent_id.left(8);
         if (auto r = ArenaStore::instance().agents_for(competition_id_); r.is_ok())
             for (const auto& a : r.value())
@@ -423,12 +459,103 @@ void AlphaArenaScreen::show_competition(const QString& id) {
     cadence_spin_->setValue(comp.value().cadence_seconds);
     last_mids_.clear(); // fresh ticker baseline for the new competition
     venue_badge_->setText(comp.value().live_mode ? tr("HYPERLIQUID • LIVE") : tr("PAPER"));
-    venue_badge_->setStyleSheet(comp.value().live_mode
-                                    ? "background:#5C1F1F;color:#FFD;padding:1px 7px;font-weight:700;font-size:10px;"
-                                    : "background:#222;color:#0F0;padding:1px 7px;font-weight:700;font-size:10px;");
+    aa_set_tone(venue_badge_, comp.value().live_mode ? "live" : "paper");
     update_badges(comp.value().status);
+    restore_pending_approvals();
     refresh_dashboard();
     reload_competitions();
+}
+
+// set_competition() clears the approval banner; queued approvals live in the
+// engine (and the store), so re-show them — a hidden panel or a view switch
+// used to drop them from the UI until the next app start.
+void AlphaArenaScreen::restore_pending_approvals() {
+    auto& eng = ArenaEngine::instance();
+    if (competition_id_.isEmpty() || eng.active_competition_id() != competition_id_)
+        return;
+    const auto approvals = eng.pending_approvals();
+    if (approvals.isEmpty())
+        return;
+    QHash<QString, QString> names;
+    if (auto r = ArenaStore::instance().agents_for(competition_id_); r.is_ok())
+        for (const auto& a : r.value())
+            names.insert(a.id, a.display_name);
+    for (const auto& ap : approvals)
+        grid_->add_hitl(ap.id, names.value(ap.agent_id, ap.agent_id.left(8)), ap.summary);
+}
+
+void AlphaArenaScreen::on_pause_resume() {
+    auto& e = ArenaEngine::instance();
+    if (e.active_competition_id() == competition_id_) {
+        auto r = e.is_running() ? e.pause() : e.resume();
+        if (r.is_err())
+            QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
+        return;
+    }
+    // A paused competition that is not loaded in the engine (the app was restarted
+    // while it was paused) could never be resumed: RESUME is "start it again".
+    if (competition_status_ != QLatin1String("paused"))
+        return;
+    if (!e.active_competition_id().isEmpty()) {
+        QMessageBox::information(this, tr("Alpha Arena"),
+                                 tr("Another competition is running. Stop it (KILL ALL) before resuming this one."));
+        return;
+    }
+    auto comp = ArenaStore::instance().competition(competition_id_);
+    if (comp.is_err())
+        return;
+    if (comp.value().live_mode &&
+        QMessageBox::warning(this, tr("Alpha Arena — LIVE"),
+                             tr("\"%1\" is a LIVE competition. Resuming restarts automated order placement with "
+                                "real funds.\n\nResume now?")
+                                 .arg(comp.value().name),
+                             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+    if (auto r = e.start(competition_id_); r.is_err()) {
+        QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
+        return;
+    }
+    show_competition(competition_id_);
+}
+
+void AlphaArenaScreen::on_kill_all() {
+    if (QMessageBox::question(this, tr("Alpha Arena"), tr("Close every position and end the competition?")) !=
+        QMessageBox::Yes)
+        return;
+    // Asynchronous (bounded ~2 s marks refresh, no nested event loop): controls
+    // stay disabled until the engine reports the outcome.
+    QPointer<AlphaArenaScreen> self = this;
+    auto r = ArenaEngine::instance().kill_all([self](Result<void> fin) {
+        if (!self)
+            return;
+        self->set_killing(false);
+        self->reload_competitions();
+        self->refresh_dashboard();
+        if (fin.is_err()) {
+            const QString err = QString::fromStdString(fin.error());
+            QTimer::singleShot(0, self, [self, err]() {
+                if (self)
+                    QMessageBox::warning(self, tr("Alpha Arena"), err);
+            });
+        }
+    });
+    if (r.is_err()) {
+        QMessageBox::warning(this, tr("Alpha Arena"), QString::fromStdString(r.error()));
+        return;
+    }
+    if (ArenaEngine::instance().kill_in_progress())
+        set_killing(true);
+}
+
+void AlphaArenaScreen::set_killing(bool on) {
+    killing_ = on;
+    kill_btn_->setText(on ? tr("KILLING…") : tr("✖ KILL ALL"));
+    if (on) {
+        for (auto* b : {pause_btn_, force_btn_, kill_btn_})
+            b->setEnabled(false);
+    } else {
+        update_badges(competition_status_);
+    }
 }
 
 void AlphaArenaScreen::refresh_dashboard() {
@@ -457,6 +584,9 @@ void AlphaArenaScreen::refresh_dashboard() {
             if (by_agent.contains(snap.agent_id))
                 by_agent[snap.agent_id].points.append(QPointF(double(snap.ts), snap.equity));
     chart_->set_data(by_agent.values(), cap_);
+    series_cache_.clear();
+    for (auto it = by_agent.cbegin(); it != by_agent.cend(); ++it)
+        series_cache_.insert(it.key(), it.value().points);
 
     // Agent board.
     auto tokens = ArenaStore::instance().token_totals(competition_id_);
@@ -480,7 +610,13 @@ void AlphaArenaScreen::refresh_dashboard() {
         } else {
             c.equity = cap_;
         }
-        c.pnl_pct = cap_ > 0 ? (c.equity - cap_) / cap_ * 100.0 : 0;
+        const auto perf = fincept::arena::compute_arena_performance(
+            by_agent[a.id].points, cap_, is_active ? c.equity : std::numeric_limits<double>::quiet_NaN());
+        c.pnl_pct = perf.return_pct;
+        c.max_dd_pct = perf.max_drawdown_pct;
+        c.sharpe = perf.sharpe;
+        c.sharpe_valid = perf.sharpe_valid;
+        c.sharpe_returns = perf.returns_used;
         rows.append(c);
     }
     std::sort(rows.begin(), rows.end(),
@@ -536,7 +672,12 @@ void AlphaArenaScreen::rebuild_board_light() {
         c.open_positions = acct.positions.size();
         for (auto it = acct.upnl.cbegin(); it != acct.upnl.cend(); ++it)
             c.upnl += it.value();
-        c.pnl_pct = cap_ > 0 ? (c.equity - cap_) / cap_ * 100.0 : 0;
+        const auto perf = fincept::arena::compute_arena_performance(series_cache_.value(a.id), cap_, c.equity);
+        c.pnl_pct = perf.return_pct;
+        c.max_dd_pct = perf.max_drawdown_pct;
+        c.sharpe = perf.sharpe;
+        c.sharpe_valid = perf.sharpe_valid;
+        c.sharpe_returns = perf.returns_used;
         rows.append(c);
     }
     std::sort(rows.begin(), rows.end(),
@@ -566,23 +707,26 @@ void AlphaArenaScreen::on_new_competition() {
 }
 
 void AlphaArenaScreen::update_badges(const QString& status) {
+    competition_status_ = status;
     status_badge_->setText(status.isEmpty() ? tr("IDLE") : status.toUpper());
-    if (status == QLatin1String("running")) {
-        status_badge_->setStyleSheet("background:#0A4A18;color:#0F0;padding:1px 7px;font-weight:700;font-size:10px;");
-        pause_btn_->setText(tr("⏸ PAUSE"));
-    } else {
-        status_badge_->setStyleSheet("background:#222;color:#888;padding:1px 7px;font-weight:700;font-size:10px;");
-        pause_btn_->setText(tr("▶ RESUME"));
-    }
+    const bool running = status == QLatin1String("running");
+    aa_set_tone(status_badge_, running ? "running" : "");
+    pause_btn_->setText(running ? tr("⏸ PAUSE") : tr("▶ RESUME"));
     // PAUSE / FORCE ROUND / KILL ALL only make sense for the live engine competition.
     // Viewing an ended one (or another one while a different run is active) used to
     // leave them clickable: PAUSE→"no active competition" dialog, FORCE ROUND a silent
     // no-op, KILL ALL ending the competition the user was NOT looking at.
-    const bool controllable = (status == QLatin1String("running") || status == QLatin1String("paused")) &&
-                              !competition_id_.isEmpty() &&
-                              ArenaEngine::instance().active_competition_id() == competition_id_;
+    auto& eng = ArenaEngine::instance();
+    const bool is_active = !competition_id_.isEmpty() && eng.active_competition_id() == competition_id_;
+    const bool controllable = (running || status == QLatin1String("paused")) && is_active && !killing_;
     for (auto* b : {pause_btn_, force_btn_, kill_btn_})
         b->setEnabled(controllable);
+    // A paused competition left over from a previous session can be resumed
+    // (on_pause_resume starts it) when nothing else is running.
+    if (!is_active && status == QLatin1String("paused") && eng.active_competition_id().isEmpty() && !killing_)
+        pause_btn_->setEnabled(true);
+    if (cards_)
+        cards_->set_controls_enabled(is_active);
 }
 
 void AlphaArenaScreen::restore_state(const QVariantMap& state) {

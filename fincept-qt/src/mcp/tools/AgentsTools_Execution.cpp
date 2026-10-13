@@ -364,7 +364,9 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
     {
         ToolDef t;
         t.name = "run_agent_workflow";
-        t.description = "Execute a saved workflow by type with optional params.";
+        t.description = "Run a built-in agent workflow (stock analysis, portfolio rebalancing, risk assessment, "
+                        "macro / sector / options / sentiment scans, earnings brief, multi-agent or custom query) "
+                        "with optional params such as symbol or query.";
         t.category = "agents";
         t.is_destructive = true;
         t.default_timeout_ms = kDefaultAgentTimeoutMs;
@@ -376,8 +378,8 @@ void agents_internal::register_execution_tools(std::vector<ToolDef>& tools) {
         t.input_schema = ToolSchemaBuilder()
                              .string("workflow_type", "Workflow type identifier")
                              .required()
-                             .length(1, 128)
-                             .object("params", "Optional workflow params")
+                             .enums(services::AgentService::workflow_types())
+                             .object("params", "Optional workflow params (e.g. symbol, query)")
                              .build();
         t.async_handler = [](const QJsonObject& args, ToolContext ctx, std::shared_ptr<QPromise<ToolResult>> promise) {
             const QString type = args["workflow_type"].toString();

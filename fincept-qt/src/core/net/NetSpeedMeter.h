@@ -35,10 +35,6 @@ class NetSpeedMeter : public QObject {
     /// Stop sampling (safe to call if not running).
     void stop();
 
-    /// Last-measured down/up bytes per second (0 until first delta).
-    qint64 down_bps() const { return last_down_bps_; }
-    qint64 up_bps() const { return last_up_bps_; }
-
     /// Format a bytes/sec value as human-readable string, e.g. "3.2 MB/s".
     static QString format_bps(qint64 bytes_per_sec);
 

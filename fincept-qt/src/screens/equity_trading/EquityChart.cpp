@@ -700,6 +700,10 @@ void EquityChart::rebuild_chart() {
     double min_price = 1e18, max_price = 0;
     qint64 min_synth = INT64_MAX, max_synth = 0;
 
+    // Collect the sets and add them in ONE append() — one chart relayout
+    // instead of one per candle (this runs on every new bar).
+    QList<QCandlestickSet*> sets;
+    sets.reserve(candles_.size() - start);
     for (int i = start; i < candles_.size(); ++i) {
         const auto& c = candles_[i];
         if (c.open <= 0.0 || c.high <= 0.0 || c.low <= 0.0 || c.close <= 0.0 || c.timestamp <= 0)
@@ -708,7 +712,7 @@ void EquityChart::rebuild_chart() {
             continue;
 
         const int64_t synth = synth_ts_for(i);
-        series_->append(new QCandlestickSet(c.open, c.high, c.low, c.close, synth));
+        sets.append(new QCandlestickSet(c.open, c.high, c.low, c.close, synth));
         ++display_count_;
 
         min_price = std::min(min_price, c.low);
@@ -718,6 +722,8 @@ void EquityChart::rebuild_chart() {
         if (synth > max_synth)
             max_synth = synth;
     }
+    if (!sets.isEmpty())
+        series_->append(sets);
 
     if (min_price < max_price) {
         cached_min_price_ = min_price;
@@ -739,9 +745,10 @@ void EquityChart::update_last_price_marker() {
     const auto& last = candles_.last();
     const double price = last.close;
     const bool up = last.close >= last.open;
-    last_price_line_->clear();
-    last_price_line_->append(static_cast<qreal>(last_min_time_), price);
-    last_price_line_->append(static_cast<qreal>(last_max_time_), price);
+    // One replace() instead of clear() + 2x append(): each of those re-laid-out
+    // the line — three times per live tick (update_last_candle()).
+    last_price_line_->replace(QList<QPointF>{QPointF(static_cast<qreal>(last_min_time_), price),
+                                             QPointF(static_cast<qreal>(last_max_time_), price)});
 
     QPen pen = last_price_line_->pen();
     pen.setColor(QColor(up ? colors::POSITIVE() : colors::NEGATIVE()));

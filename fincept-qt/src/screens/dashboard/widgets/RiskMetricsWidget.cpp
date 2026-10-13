@@ -2,6 +2,7 @@
 
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QFrame>
@@ -111,9 +112,11 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget(tr("RISK METR
         vl->addWidget(row);
     };
 
-    make_spread_row(tr("SPY vs QQQ spread"), spy_qqq_spread_);
-    make_spread_row(tr("SPY vs IWM spread"), spy_iwm_spread_);
-    make_spread_row(tr("Equity/Bond (SPY-TLT)"), equity_bond_lbl_);
+    // Differences of two daily % returns — percentage points, not percent.
+    make_spread_row(tr("SPY − QQQ day return"), spy_qqq_spread_);
+    make_spread_row(tr("SPY − IWM day return"), spy_iwm_spread_);
+    make_spread_row(tr("SPY − TLT day return"), equity_bond_lbl_);
+    corr_hdr_->setToolTip(tr("Today's return of the first ETF minus the second, in percentage points (pp)."));
 
     vl->addStretch();
 
@@ -124,6 +127,13 @@ RiskMetricsWidget::RiskMetricsWidget(QWidget* parent) : BaseWidget(tr("RISK METR
 }
 
 void RiskMetricsWidget::apply_styles() {
+    // Theme change: the data-driven colours below must be re-applied next tick.
+    for (QWidget* w : {static_cast<QWidget*>(vix_value_), static_cast<QWidget*>(vix_regime_),
+                       static_cast<QWidget*>(vix_bar_fill_), static_cast<QWidget*>(spy_qqq_spread_),
+                       static_cast<QWidget*>(spy_iwm_spread_), static_cast<QWidget*>(equity_bond_lbl_)})
+        reset_css_cache(w);
+    for (const auto& sr : stock_rows_)
+        reset_css_cache(sr.chg_pct);
     vix_card_->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
     vix_header_lbl_->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
                                        .arg(ui::colors::TEXT_TERTIARY()));
@@ -258,18 +268,19 @@ void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
             regime = tr("EXTREME FEAR");
             color = ui::colors::NEGATIVE();
         }
-        vix_value_->setStyleSheet(
-            QString("color: %1; font-size: 22px; font-weight: bold; background: transparent;").arg(color));
+        set_css_cached(vix_value_,
+                       QString("color: %1; font-size: 22px; font-weight: bold; background: transparent;").arg(color));
         vix_regime_->setText(regime);
-        vix_regime_->setStyleSheet(
-            QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(color));
+        set_css_cached(vix_regime_,
+                       QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;").arg(color));
 
-        // Position indicator on 5-segment bar (0-40 range, 8 per segment)
-        double pct = qBound(0.0, vix / 40.0, 1.0);
-        int margin_left = static_cast<int>(pct * 140); // approx bar width
-        vix_bar_fill_->setStyleSheet(QString("color: %1; font-size: 8px; background: transparent; margin-left: %2px;")
-                                         .arg(color)
-                                         .arg(margin_left));
+        // Marker on the 5-segment 0-40 bar. Positioned with a contents margin
+        // from the bar's real width (was a hard-coded 140 px inside a
+        // stylesheet, re-parsed on every tick and wrong at any other size).
+        const double pct = qBound(0.0, vix / 40.0, 1.0);
+        const int bar_w = vix_bar_fill_->width() > 12 ? vix_bar_fill_->width() - 8 : 140;
+        vix_bar_fill_->setContentsMargins(static_cast<int>(pct * bar_w), 0, 0, 0);
+        set_css_cached(vix_bar_fill_, QString("color: %1; font-size: 8px; background: transparent;").arg(color));
     }
 
     // High-beta stocks
@@ -286,20 +297,17 @@ void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
                           : chg < 0 ? ui::colors::NEGATIVE()
                                     : ui::colors::TEXT_PRIMARY();
         stock_rows_[i].chg_pct->setText(chg_str);
-        stock_rows_[i].chg_pct->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(chg_col));
+        set_css_cached(stock_rows_[i].chg_pct,
+                       QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(chg_col));
 
-        // Hi/Lo as range: H/L
-        if (q.high > 0 && q.low > 0) {
-            stock_rows_[i].hi_lo->setText(QString("H%1 L%2").arg(q.high, 0, 'f', 0).arg(q.low, 0, 'f', 0));
-        }
+        // Day range. Was printed with 0 decimals ("H31 L29" for a $30 stock).
+        if (q.high > 0 && q.low > 0)
+            stock_rows_[i].hi_lo->setText(
+                QString("H %1  L %2").arg(dash_fmt::price(q.high, sym), dash_fmt::price(q.low, sym)));
     }
 
     // Spread proxies
-    auto spread_str = [](double a, double b) -> QString {
-        double diff = a - b;
-        return QString("%1%2%").arg(diff >= 0 ? "+" : "").arg(diff, 0, 'f', 2);
-    };
+    auto spread_str = [](double a, double b) -> QString { return dash_fmt::signed_pp(a - b); };
     auto spread_color = [](double a, double b) -> QString {
         double diff = a - b;
         return diff > 0 ? ui::colors::POSITIVE() : diff < 0 ? ui::colors::NEGATIVE() : ui::colors::TEXT_PRIMARY();
@@ -307,21 +315,18 @@ void RiskMetricsWidget::populate(const QVector<services::QuoteData>& quotes) {
 
     if (map.contains("SPY") && map.contains("QQQ")) {
         spy_qqq_spread_->setText(spread_str(map["SPY"]->change_pct, map["QQQ"]->change_pct));
-        spy_qqq_spread_->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                .arg(spread_color(map["SPY"]->change_pct, map["QQQ"]->change_pct)));
+        set_css_cached(spy_qqq_spread_, QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                                            .arg(spread_color(map["SPY"]->change_pct, map["QQQ"]->change_pct)));
     }
     if (map.contains("SPY") && map.contains("IWM")) {
         spy_iwm_spread_->setText(spread_str(map["SPY"]->change_pct, map["IWM"]->change_pct));
-        spy_iwm_spread_->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                .arg(spread_color(map["SPY"]->change_pct, map["IWM"]->change_pct)));
+        set_css_cached(spy_iwm_spread_, QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                                            .arg(spread_color(map["SPY"]->change_pct, map["IWM"]->change_pct)));
     }
     if (map.contains("SPY") && map.contains("TLT")) {
         equity_bond_lbl_->setText(spread_str(map["SPY"]->change_pct, map["TLT"]->change_pct));
-        equity_bond_lbl_->setStyleSheet(
-            QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
-                .arg(spread_color(map["SPY"]->change_pct, map["TLT"]->change_pct)));
+        set_css_cached(equity_bond_lbl_, QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;")
+                                             .arg(spread_color(map["SPY"]->change_pct, map["TLT"]->change_pct)));
     }
 }
 

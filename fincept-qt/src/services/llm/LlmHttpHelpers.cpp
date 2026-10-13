@@ -17,10 +17,38 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QString>
+#include <QThreadStorage>
 #include <QTimer>
 #include <QUrl>
 
 namespace fincept::ai_chat {
+
+// ── Per-thread QNetworkAccessManager ───────────────────────────────────────
+// Every request used to build (and tear down) its own QNAM — which means its
+// own internal HTTP thread and a fresh TCP + TLS handshake (~100-300 ms) for
+// every chat turn, every tool-loop round and every Fincept status poll. One QNAM
+// per thread keeps keep-alive connections across all of those: a tool loop
+// re-posts to the same host from the same worker thread round after round.
+//
+// QThreadStorage owns it: the QNAM is deleted on its own thread when that thread
+// exits, from QThreadPrivate::finish() BEFORE the thread's event dispatcher is
+// destroyed, so socket teardown happens while a dispatcher still exists (the
+// constraint the old heap-allocate + deleteLater + drain dance existed for).
+//
+// Cookies are neither sent nor stored on requests through it (see
+// prepare_thread_nam_request) — a fresh per-request QNAM never carried any, and
+// a shared jar must not start replaying cookies from earlier responses.
+QNetworkAccessManager* LlmService::thread_nam() {
+    static QThreadStorage<QNetworkAccessManager*> tls_nam;
+    if (!tls_nam.hasLocalData())
+        tls_nam.setLocalData(new QNetworkAccessManager);
+    return tls_nam.localData();
+}
+
+void LlmService::prepare_thread_nam_request(QNetworkRequest& req) {
+    req.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
+    req.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
+}
 
 // ── Provider error-body → message ──────────────────────────────────────────
 // Shared by the blocking (eventloop_request) and streaming (do_streaming_request)
@@ -105,20 +133,21 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
     HttpResult result;
 
     // ── Lifetime note ─────────────────────────────────────────────────────────
-    // The QNetworkAccessManager and its QNetworkReply MUST outlive the local
-    // QEventLoop *and* drain pending DeferredDelete events before this
-    // function returns. A stack-allocated QNAM here used to crash the main
-    // thread hours later (issue: KERN_INVALID_ADDRESS @ 0x3f inside
-    // QIODevice::channelReadyRead via qt_mac_socket_callback) — Qt's macOS
-    // CFSocket bridge fires runloop callbacks against socket QObjects whose
-    // d_ptr has been torn down with the NAM. Heap-allocate and explicitly
-    // process DeferredDelete so the socket-notifier teardown completes
-    // before the function returns.
-    auto* nam = new QNetworkAccessManager;
+    // The QNetworkReply MUST outlive the local QEventLoop *and* its
+    // DeferredDelete must be drained before this function returns. A
+    // stack-allocated QNAM here used to crash the main thread hours later
+    // (issue: KERN_INVALID_ADDRESS @ 0x3f inside QIODevice::channelReadyRead
+    // via qt_mac_socket_callback) — Qt's macOS CFSocket bridge fires runloop
+    // callbacks against socket QObjects whose d_ptr has been torn down with the
+    // NAM. The NAM is now the thread's long-lived one (thread_nam(), deleted at
+    // thread exit while the dispatcher still exists); the reply is still
+    // deleteLater'd and drained here.
+    QNetworkAccessManager* nam = thread_nam();
     QNetworkRequest req{QUrl(url)};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     for (auto it = headers.constBegin(); it != headers.constEnd(); ++it)
         req.setRawHeader(it.key().toUtf8(), it.value().toUtf8());
+    prepare_thread_nam_request(req);
 
     QNetworkReply* reply = (method == "GET") ? nam->get(req) : nam->post(req, body);
 
@@ -142,9 +171,8 @@ LlmService::HttpResult LlmService::eventloop_request(const QString& method, cons
 
     auto drain = [&]() {
         reply->deleteLater();
-        nam->deleteLater();
-        // Drain DeferredDelete events on the current thread so the NAM and
-        // its socket subscribers tear down while a dispatcher still exists.
+        // Drain DeferredDelete events on the current thread so the reply tears
+        // down while a dispatcher still exists.
         QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
     };
 
@@ -247,6 +275,14 @@ LlmService::SseDelta LlmService::parse_sse_chunk(const QString& data, const QStr
 
 // ── Token usage extraction ─────────────────────────────────────────────────
 void LlmService::parse_usage(LlmResponse& resp, const QJsonObject& rj, const QString& provider) {
+    if (rj.contains("usageMetadata")) { // Gemini generateContent
+        const QJsonObject g = rj["usageMetadata"].toObject();
+        resp.prompt_tokens = g["promptTokenCount"].toInt();
+        resp.completion_tokens = g["candidatesTokenCount"].toInt();
+        resp.total_tokens = g.contains("totalTokenCount") ? g["totalTokenCount"].toInt()
+                                                          : resp.prompt_tokens + resp.completion_tokens;
+        return;
+    }
     if (!rj.contains("usage"))
         return;
     QJsonObject u = rj["usage"].toObject();

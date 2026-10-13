@@ -269,16 +269,54 @@ inline bool product_is_delivery(const QString& product) {
     return product.compare("CNC", Qt::CaseInsensitive) == 0 || product.compare("delivery", Qt::CaseInsensitive) == 0;
 }
 
-/// Parse a broker product mnemonic (MIS/CNC/NRML/MTF) back to a ProductType.
-/// Inverse of product_to_broker_str; unknown/blank defaults to Intraday (MIS).
-inline ProductType product_from_broker_str(const QString& s) {
-    if (s.compare("CNC", Qt::CaseInsensitive) == 0 || s.compare("delivery", Qt::CaseInsensitive) == 0)
+/// Parse a broker product mnemonic back to a ProductType. Inverse of
+/// product_to_broker_str, plus the UNAMBIGUOUS native spellings brokers report
+/// on positions / orders. This matters on every close: Indian brokers net
+/// positions per product, so closing a carry-forward position with an intraday
+/// order opens a second position instead of flattening the first.
+///   Delivery : CNC, DELIVERY, LONGTERM (AliceBlue), C (Noren: Shoonya/Flattrade),
+///              CASH (ICICI Breeze equity delivery)
+///   Margin   : NRML, MARGIN (Dhan/Fyers), CARRYFORWARD (Angel One),
+///              NORMAL (Motilal), M (Noren)
+///   MTF      : MTF
+/// Angel One's "MARGIN" means MTF, not NRML — that per-broker meaning is handled
+/// by IBroker::product_from_wire(), not here. Unknown/blank defaults to Intraday.
+inline ProductType product_from_broker_str(const QString& raw) {
+    const QString s = raw.trimmed();
+    auto is = [&s](const char* v) { return s.compare(QLatin1String(v), Qt::CaseInsensitive) == 0; };
+    if (is("CNC") || is("delivery") || is("LONGTERM") || is("C") || is("CASH"))
         return ProductType::Delivery;
-    if (s.compare("NRML", Qt::CaseInsensitive) == 0 || s.compare("margin", Qt::CaseInsensitive) == 0)
+    if (is("NRML") || is("margin") || is("CARRYFORWARD") || is("NORMAL") || is("M"))
         return ProductType::Margin;
-    if (s.compare("MTF", Qt::CaseInsensitive) == 0)
+    if (is("MTF"))
         return ProductType::MTF;
     return ProductType::Intraday;
+}
+
+/// Direction of an open position, for closing it. `side` wins ("short"/"sell",
+/// any case, as a prefix); the sign of `quantity` is the fallback. MetaAPI, ICICI
+/// Direct and TickerAll report an UNSIGNED quantity plus a separate side, so the
+/// sign alone reads their shorts as longs; most Indian brokers report a signed
+/// quantity with a derived side. A close is the OPPOSITE side for |quantity|.
+inline bool position_is_short(const QString& side, double quantity) {
+    const QString d = side.trimmed().toLower();
+    return d.startsWith(QLatin1String("short")) || d.startsWith(QLatin1String("sell")) || quantity < 0;
+}
+
+/// The order side that closes a position (BUY to cover a short, SELL a long).
+inline OrderSide closing_side_for_position(const QString& side, double quantity) {
+    return position_is_short(side, quantity) ? OrderSide::Buy : OrderSide::Sell;
+}
+
+/// Parse a broker order-side string ("BUY"/"buy"/"B", "SELL"/"sell"/"S").
+/// nullopt when unrecognised — callers must not guess a direction.
+inline std::optional<OrderSide> order_side_from_str(const QString& raw) {
+    const QString s = raw.trimmed().toLower();
+    if (s == QLatin1String("b") || s.startsWith(QLatin1String("buy")))
+        return OrderSide::Buy;
+    if (s == QLatin1String("s") || s.startsWith(QLatin1String("sell")))
+        return OrderSide::Sell;
+    return std::nullopt;
 }
 
 struct UnifiedOrder {

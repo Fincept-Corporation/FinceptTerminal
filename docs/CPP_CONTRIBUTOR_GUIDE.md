@@ -70,7 +70,7 @@ fincept-qt/src/
 │   ├── widgets/                    # Card, SearchBar, StatusBadge, TabHeader, etc.
 │   ├── tables/DataTable.cpp/h      # Reusable data table
 │   ├── charts/ChartFactory.cpp/h   # Qt6 Charts factory
-│   └── navigation/                 # NavigationBar, StatusBar, FKeyBar, ToolBar
+│   └── navigation/                 # ToolBar (menus), StatusBar, FKeyBar (tab row), CommandBar
 │
 ├── network/
 │   ├── http/HttpClient.cpp/h       # QNetworkAccessManager wrapper
@@ -155,8 +155,8 @@ namespace fincept::auth {   // auth module
    - `YourService.h/.cpp` — data fetching/processing (if needed)
    - `YourTypes.h` — shared data types (if needed)
 3. Add `.cpp` files to `CMakeLists.txt` `SCREEN_SOURCES` list
-4. Register the screen in `src/app/MainWindow.cpp` via `ScreenRouter`
-5. Add navigation entry in `src/ui/navigation/NavigationBar.cpp`
+4. Register the screen in `src/app/WindowFrame_Setup.cpp` with `dock_router_->register_factory("your_id", ...)` (lazy construction — required for any screen that fetches data or starts timers)
+5. Add navigation entries: a menu item in `src/ui/navigation/ToolBar.cpp` and a command in `src/ui/navigation/CommandBar.cpp` (or an action in `src/core/actions/builtin_actions.cpp` so it appears in the Ctrl+K palette)
 6. Build and test
 
 ### Minimal Screen Template

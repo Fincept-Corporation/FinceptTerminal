@@ -308,6 +308,7 @@ struct PeerCompany {
     double price_to_book = 0;
     double week52_change = 0;
     QString recommendation;
+    QString currency; // quote currency (ISO; "GBp" = pence); empty = unknown
 };
 
 struct CorporateEvent {
@@ -323,10 +324,15 @@ struct SupplyChainEntity {
     double revenue_pct = 0;
 };
 
+/// Relative-value screen: the company's trailing P/E against the median of its
+/// peer set, nudged by revenue growth and margin. A heuristic, not a trade signal —
+/// the UI shows `status` + `pe_vs_peers`, never a BUY / SELL.
 struct ValuationSignal {
-    QString status;
-    QString action;
-    double score = 0; // -3 to +3
+    QString status;           // "UNDERVALUED", ..., "INSUFFICIENT DATA", "N/A — ..."
+    QString action;           // legacy BUY / HOLD / SELL (kept for the hub payload)
+    double score = 0;         // -3 to +3
+    double pe_vs_peers = 0;   // company P/E / peer-median P/E (0 = not computed)
+    int peer_count = 0;       // peers with a positive P/E behind the median
 };
 
 // ── Graph Node ───────────────────────────────────────────────────────────────
@@ -369,6 +375,9 @@ struct RelationshipData {
     QVector<PeerCompany> peers;
     QVector<CorporateEvent> events;
     QVector<SupplyChainEntity> supply_chain;
+    /// How the script picked peers: "industry:<key>" (curated US peer list) or
+    /// "generic_fallback" (mega-cap tech — not comparable for valuation).
+    QString peer_source;
     int data_quality = 0;
     QString timestamp;
 };

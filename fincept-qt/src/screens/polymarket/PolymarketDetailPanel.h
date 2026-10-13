@@ -133,6 +133,8 @@ class PolymarketDetailPanel : public QWidget {
     QLabel* last_trade_label_ = nullptr;
     QLabel* oi_label_ = nullptr;
     QLabel* status_label_ = nullptr;
+    QPushButton* news_btn_ = nullptr; // "NEWS ↗": searches the News screen for the market's subject
+    QString news_query_;              // subject derived from the question ("" = button disabled)
     QWidget* outcome_container_ = nullptr;
     QLabel* description_label_ = nullptr;
 

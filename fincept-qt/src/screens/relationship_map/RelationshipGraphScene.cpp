@@ -475,12 +475,13 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
 
     // ── Center node ──────────────────────────────────────────────────────────
     bool up = data.company.day_change_pct >= 0;
-    QString center_sub = QString("%1\n$%2  %3%4%\nMktCap $%5B")
+    const QString ccy = data.company.currency;
+    QString center_sub = QString("%1\n%2  %3%4%\nMktCap %5")
                              .arg(data.company.name.left(24))
-                             .arg(data.company.current_price, 0, 'f', 2)
+                             .arg(money(data.company.current_price, ccy))
                              .arg(up ? "+" : "")
                              .arg(data.company.day_change_pct, 0, 'f', 2)
-                             .arg(data.company.market_cap / 1e9, 0, 'f', 0);
+                             .arg(money(data.company.market_cap, ccy, /*compact=*/true));
 
     auto* center_node = new RelNode(data.company.ticker, center_sub, cAmber, kCenterW, kCenterH, RelNode::Role::Center);
     center_node->setPos(0, 0);
@@ -519,7 +520,7 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
             if (lv.size() >= 12)
                 break;
             QColor acc = (p.week52_change >= 0) ? cPeer : QColor("#dc2626");
-            lv.append({p.ticker, QString("$%1").arg(p.current_price, 0, 'f', 2), acc});
+            lv.append({p.ticker, money(p.current_price, p.currency), acc});
         }
         push_right(tr("Peers (%1/%2)").arg(lv.size()).arg(data.peers.size()), cPeer, std::move(lv), /*tickers=*/true);
     }
@@ -554,7 +555,7 @@ void RelationshipGraphScene::build_graph(const RelationshipData& data, const Fil
         if (data.company.analyst_count > 0) {
             QString rec = data.company.recommendation.toUpper();
             bool bull = rec.contains("BUY") || rec.contains("OUTPERFORM");
-            lv.append({rec, tr("PT $%1").arg(data.company.target_mean, 0, 'f', 0),
+            lv.append({rec, tr("PT %1").arg(money(data.company.target_mean, data.company.currency)),
                        bull ? QColor("#16a34a") : QColor("#dc2626")});
         }
         for (const auto& ud : data.upgrades_downgrades) {

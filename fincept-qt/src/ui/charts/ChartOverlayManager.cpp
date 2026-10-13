@@ -83,12 +83,17 @@ void ChartOverlayManager::set_candles(QVector<CandleData> candles) {
     recompute_all();
 }
 
-void ChartOverlayManager::append_candle(const CandleData& candle) {
-    if (!candles_.isEmpty() && candles_.last().timestamp == candle.timestamp) {
-        candles_.last() = candle;
-    } else {
-        candles_.append(candle);
+void ChartOverlayManager::append_candles(const QVector<CandleData>& candles) {
+    if (candles.isEmpty())
+        return;
+    for (const auto& candle : candles) {
+        if (!candles_.isEmpty() && candles_.last().timestamp == candle.timestamp)
+            candles_.last() = candle;
+        else
+            candles_.append(candle);
     }
+    // One indicator pass per batch — this used to run once per WS candle. The
+    // series layers then push only the points that changed into the chart.
     recompute_all();
 }
 

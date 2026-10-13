@@ -4,6 +4,7 @@
 #include "core/logging/Logger.h"
 #include "trading/AccountManager.h"
 #include "trading/BrokerRegistry.h"
+#include "trading/OrderValidator.h"
 #include "trading/auth/RedirectServer.h"
 #include "trading/brokers/fyers/FyersBroker.h"
 #include "trading/brokers/metaapi/MetaApiBroker.h"
@@ -12,6 +13,9 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QDesktopServices>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -392,13 +396,27 @@ void AccountManagementDialog::setup_ui() {
     approval_row->addWidget(approval_mode_combo_, 1);
     right_col->addLayout(approval_row);
 
-    // Auto is the default, and on a LIVE account it means the BUY/SELL button
-    // sends a real order with no confirmation at all. Say so, in place.
+    // One-click trading: OFF by default. While off, every LIVE order from the
+    // order ticket shows the confirmation dialog. Opting in is per account and
+    // itself confirmed.
+    one_click_cb_ = new QCheckBox(tr("One-click trading"));
+    one_click_cb_->setEnabled(false);
+    one_click_cb_->setAccessibleName(tr("One-click trading for the selected account"));
+    right_col->addWidget(one_click_cb_);
+    connect(one_click_cb_, &QCheckBox::toggled, this, &AccountManagementDialog::on_one_click_toggled);
+
+    // Warn in place whenever orders on this account can leave with no confirmation.
     approval_warning_ = new QLabel;
     approval_warning_->setWordWrap(true);
     approval_warning_->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;").arg(colors::NEGATIVE()));
     approval_warning_->setVisible(false);
     right_col->addWidget(approval_warning_);
+
+    risk_limits_btn_ = new QPushButton(tr("RISK LIMITS…"));
+    risk_limits_btn_->setToolTip(tr("Pre-trade limits applied to every order path (ticket, MCP, workflows, algos)"));
+    risk_limits_btn_->setCursor(Qt::PointingHandCursor);
+    connect(risk_limits_btn_, &QPushButton::clicked, this, &AccountManagementDialog::open_risk_limits_dialog);
+    right_col->addWidget(risk_limits_btn_, 0, Qt::AlignLeft);
 
     // Persist immediately on change (independent of the async CONNECT flow).
     connect(approval_mode_combo_, &QComboBox::currentIndexChanged, this, [this](int) {
@@ -412,8 +430,8 @@ void AccountManagementDialog::setup_ui() {
     root->addLayout(right_col, 2);
 }
 
-// Auto mode on a LIVE account means orders leave for the exchange with no
-// confirmation step anywhere in the UI. Make that explicit where the setting is.
+// LIVE orders from the ticket are confirmed unless the account opted into
+// one-click trading. Say so where the setting is whenever that is the case.
 void AccountManagementDialog::update_approval_warning() {
     if (!approval_warning_ || !approval_mode_combo_)
         return;
@@ -424,13 +442,128 @@ void AccountManagementDialog::update_approval_warning() {
     const auto account = AccountManager::instance().get_account(selected_account_id_);
     const bool is_live = account.trading_mode == QLatin1String("live");
     const bool is_auto = approval_mode_combo_->currentData().toString() == QLatin1String("auto");
-    if (is_live && is_auto) {
-        approval_warning_->setText(tr("\xe2\x9a\xa0  LIVE + Auto: BUY / SELL sends a real order immediately, with no "
-                                      "confirmation dialog. Choose Semi-Auto to review every order first."));
+    const bool one_click = one_click_cb_ && one_click_cb_->isChecked();
+    if (is_live && is_auto && one_click) {
+        approval_warning_->setText(tr("\xe2\x9a\xa0  LIVE + One-click: BUY / SELL on the order ticket sends a real "
+                                      "order immediately, with no confirmation dialog."));
         approval_warning_->setVisible(true);
     } else {
         approval_warning_->setVisible(false);
     }
+}
+
+void AccountManagementDialog::refresh_one_click() {
+    if (!one_click_cb_)
+        return;
+    QSignalBlocker blk(one_click_cb_);
+    if (selected_account_id_.isEmpty()) {
+        one_click_cb_->setChecked(false);
+        one_click_cb_->setEnabled(false);
+        one_click_cb_->setText(tr("One-click trading"));
+        return;
+    }
+    const auto account = AccountManager::instance().get_account(selected_account_id_);
+    const QString name = account.display_name.isEmpty() ? selected_account_id_ : account.display_name;
+    one_click_cb_->setText(tr("One-click trading for %1 — skip the confirmation dialog for LIVE orders from the "
+                              "order ticket")
+                               .arg(name));
+    one_click_cb_->setChecked(ActionCenter::instance().one_click_enabled(selected_account_id_));
+    one_click_cb_->setEnabled(true);
+}
+
+void AccountManagementDialog::on_one_click_toggled(bool on) {
+    if (selected_account_id_.isEmpty())
+        return;
+    if (on) {
+        const auto account = AccountManager::instance().get_account(selected_account_id_);
+        const QString name = account.display_name.isEmpty() ? selected_account_id_ : account.display_name;
+        const auto ans = QMessageBox::warning(
+            this, tr("Enable One-click Trading"),
+            tr("Enable one-click trading for %1?\n\n"
+               "LIVE orders placed from the order ticket on this account will be sent to the broker IMMEDIATELY "
+               "when you press BUY / SELL — the order confirmation dialog (with the margin and fat-finger checks) "
+               "will no longer be shown.\n\n"
+               "Orders from AI agents, MCP tools, workflows and algos are not affected.")
+                .arg(name),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (ans != QMessageBox::Yes) {
+            QSignalBlocker blk(one_click_cb_);
+            one_click_cb_->setChecked(false);
+            return;
+        }
+    }
+    ActionCenter::instance().set_one_click_enabled(selected_account_id_, on);
+    update_approval_warning();
+}
+
+void AccountManagementDialog::open_risk_limits_dialog() {
+    bool ok = true;
+    const auto cur = OrderValidator::load_risk_settings(&ok);
+    if (!ok) {
+        QMessageBox::warning(this, tr("Risk Limits"),
+                             tr("The risk settings could not be read, so they cannot be edited safely right now."));
+        return;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Pre-trade Risk Limits"));
+    auto* form = new QFormLayout(&dlg);
+    auto* intro = new QLabel(tr("Checked on every order path — order ticket, broadcasts, approvals, MCP tools, "
+                                "workflows, algos. 0 / empty = no limit. Orders that only reduce an open position "
+                                "are always allowed."));
+    intro->setWordWrap(true);
+    form->addRow(intro);
+
+    auto make_money = [&dlg](double v) {
+        auto* s = new QDoubleSpinBox(&dlg);
+        s->setRange(0.0, 1.0e12);
+        s->setDecimals(2);
+        s->setGroupSeparatorShown(true);
+        s->setSpecialValueText(tr("No limit"));
+        s->setValue(v);
+        return s;
+    };
+    auto* max_value = make_money(cur.max_order_value);
+    form->addRow(tr("Max order value"), max_value);
+    auto* max_qty = new QDoubleSpinBox(&dlg);
+    max_qty->setRange(0.0, 1.0e9);
+    max_qty->setDecimals(0);
+    max_qty->setGroupSeparatorShown(true);
+    max_qty->setSpecialValueText(tr("No limit"));
+    max_qty->setValue(cur.max_order_quantity);
+    form->addRow(tr("Max order quantity"), max_qty);
+    auto* daily_loss = make_money(cur.daily_loss_limit);
+    daily_loss->setToolTip(tr("Once today's position P&L on an account is at or below minus this amount, only "
+                              "position-reducing orders are accepted."));
+    form->addRow(tr("Daily loss limit"), daily_loss);
+    auto* blocked = new QLineEdit(cur.blocked_symbols.join(QStringLiteral(", ")), &dlg);
+    blocked->setPlaceholderText(tr("e.g. YESBANK, NSE:IDEA"));
+    form->addRow(tr("Blocked symbols"), blocked);
+    auto* sanity = new QCheckBox(tr("Reject absurd orders (quantity > 10,000,000, or cash-segment value > 10× "
+                                    "available buying power)"),
+                                 &dlg);
+    sanity->setChecked(cur.sanity_checks);
+    form->addRow(sanity);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dlg);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    form->addRow(buttons);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    OrderValidator::RiskSettings s;
+    s.max_order_value = max_value->value();
+    s.max_order_quantity = max_qty->value();
+    s.daily_loss_limit = daily_loss->value();
+    s.sanity_checks = sanity->isChecked();
+    for (const QString& part : blocked->text().split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+        const QString t = part.trimmed().toUpper();
+        if (!t.isEmpty())
+            s.blocked_symbols << t;
+    }
+    if (!OrderValidator::save_risk_settings(s))
+        QMessageBox::warning(this, tr("Risk Limits"), tr("Saving the risk limits failed — see the log."));
 }
 
 void AccountManagementDialog::changeEvent(QEvent* event) {
@@ -465,6 +598,9 @@ void AccountManagementDialog::retranslateUi() {
         approval_mode_combo_->setItemText(0, tr("Auto — execute immediately"));
         approval_mode_combo_->setItemText(1, tr("Semi-Auto — require approval"));
     }
+    if (risk_limits_btn_)
+        risk_limits_btn_->setText(tr("RISK LIMITS…"));
+    refresh_one_click();
     update_approval_warning();
 
     // Per-broker form bottom buttons (built lazily — guarded). Their dynamic
@@ -513,6 +649,7 @@ void AccountManagementDialog::on_account_selected(int row) {
         if (approval_mode_combo_)
             approval_mode_combo_->setEnabled(false);
         selected_account_id_.clear();
+        refresh_one_click();
         update_approval_warning();
         return;
     }
@@ -528,6 +665,7 @@ void AccountManagementDialog::on_account_selected(int row) {
         approval_mode_combo_->setCurrentIndex(mode == OrderMode::SemiAuto ? 1 : 0);
         approval_mode_combo_->setEnabled(true);
     }
+    refresh_one_click();
     update_approval_warning();
 
     auto account = AccountManager::instance().get_account(selected_account_id_);

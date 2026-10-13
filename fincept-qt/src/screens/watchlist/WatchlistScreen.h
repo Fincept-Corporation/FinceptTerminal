@@ -125,6 +125,13 @@ class WatchlistScreen : public QWidget, public IStatefulScreen, public IGroupLin
     QHash<QString, services::QuoteData> row_cache_;
     bool hub_active_ = false;
 
+    // populate_table() updates rows in place while the symbol set is unchanged.
+    // The visible order must stay exactly what a full rebuild produced: Qt's
+    // stable sort starting from stocks_ order. These say whether the current row
+    // order still is that, so the rows are only re-seated + re-sorted when needed.
+    bool sort_order_dirty_ = true;   // the sort indicator changed (header click / restore)
+    QStringList sorted_stock_order_; // stocks_ order the current row order derives from
+
     // Symbol group link — SymbolGroup::None when unlinked.
     SymbolGroup link_group_ = SymbolGroup::None;
 

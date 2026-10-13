@@ -27,7 +27,7 @@ Payload shape for `place_order`:
         "size":            100,
         "side":            "BUY" | "SELL",
         "order_type":      "GTC" | "FOK" | "GTD" | "FAK",
-        "tick_size":       "0.01",
+        "tick_size":       "0.01",          // hint only — the market tick is read from the API
         "neg_risk":        false,
         "expiration":      0                // 0=GTC; unix seconds for GTD
     }
@@ -205,10 +205,91 @@ def cmd_activity(payload: dict) -> None:
     _emit({"ok": True, "activities": r.json() or []})
 
 
+# Tick sizes the CLOB order builder supports (py_clob_client ROUNDING_CONFIG keys).
+_SUPPORTED_TICKS = ("0.1", "0.01", "0.001", "0.0001")
+
+
+def _normalize_tick(raw) -> str:
+    """Canonical tick string ("0.001") from an API value (str or float)."""
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        d = Decimal(str(raw).strip())
+    except (InvalidOperation, ValueError):
+        raise ValueError(f"unreadable market tick size: {raw!r}")
+    for t in _SUPPORTED_TICKS:
+        if d == Decimal(t):
+            return t
+    raise ValueError(f"unsupported market tick size {raw!r} (expected one of {', '.join(_SUPPORTED_TICKS)})")
+
+
+def _normalize_price(price, tick: str) -> float:
+    """Validate a limit price against the market's tick grid and return it snapped
+    EXACTLY onto the grid.
+
+    Only float representation noise is absorbed (0.6549999999 -> 0.655). A price
+    that is genuinely off the grid is REJECTED with the two nearest valid prices
+    rather than rounded: the order ticket showed the user an exact price, and the
+    order builder would otherwise silently round it (with a coarser tick than the
+    market's, a 0.655 BUY became 0.66 — paying more than confirmed).
+    """
+    import math
+    from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
+
+    p = float(price)
+    if not math.isfinite(p):
+        raise ValueError("price must be a finite number")
+    t = Decimal(tick)
+    dp = Decimal(str(p))
+    ticks = dp / t
+    nearest = ticks.to_integral_value()
+    if abs(ticks - nearest) > Decimal("1e-6"):
+        lo = (ticks.to_integral_value(rounding=ROUND_FLOOR) * t).quantize(t)
+        hi = (ticks.to_integral_value(rounding=ROUND_CEILING) * t).quantize(t)
+        raise ValueError(f"price {p} is not a multiple of this market's tick size {tick} — use {lo} or {hi}")
+    snapped = (nearest * t).quantize(t)
+    if snapped < t or snapped > Decimal(1) - t:
+        raise ValueError(f"price {snapped} is outside the tradable range {tick} .. {Decimal(1) - t}")
+    return float(snapped)
+
+
 def cmd_place_order(payload: dict) -> None:
     from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
 
     client = _build_client(payload)
+
+    token_id = str(payload.get("token_id") or "").strip()
+    if not token_id:
+        _fail("token_id is required")
+        return
+    try:
+        size = float(payload["size"])
+    except (KeyError, TypeError, ValueError):
+        _fail("size must be a number")
+        return
+    import math
+
+    # The order builder truncates size to 2 decimals; below 0.01 that is a 0-share order.
+    if not math.isfinite(size) or size < 0.01:
+        _fail(f"size must be at least 0.01 shares (got {payload.get('size')!r})")
+        return
+
+    # The MARKET's minimum tick is authoritative (GET /tick-size); the caller's value
+    # is only a hint and was hard-coded to "0.01" — wrong for 0.001-tick markets.
+    # Ticks also change live (e.g. when a price nears 0 or 1), so always re-read.
+    try:
+        market_tick = _normalize_tick(client.get_tick_size(token_id))
+    except Exception as exc:  # network / unknown token / unsupported tick
+        _fail(f"could not read the market's tick size: {exc}")
+        return
+    hint = payload.get("tick_size")
+    if hint not in (None, "") and str(hint) != market_tick:
+        sys.stderr.write(f"prediction_polymarket: caller tick {hint!r} ignored; market tick is {market_tick}\n")
+    try:
+        price = _normalize_price(payload.get("price"), market_tick)
+    except (TypeError, ValueError) as exc:
+        _fail(str(exc), tick_size=market_tick)
+        return
 
     order_type_map = {
         "GTC": OrderType.GTC,
@@ -218,11 +299,15 @@ def cmd_place_order(payload: dict) -> None:
     }
     order_type = order_type_map.get(payload.get("order_type", "GTC"), OrderType.GTC)
 
+    side = str(payload.get("side", "BUY")).upper()
+    if side not in ("BUY", "SELL"):
+        _fail(f"side must be BUY or SELL (got {payload.get('side')!r})")
+        return
     args = OrderArgs(
-        token_id=str(payload["token_id"]),
-        price=float(payload["price"]),
-        size=float(payload["size"]),
-        side=str(payload.get("side", "BUY")).upper(),
+        token_id=token_id,
+        price=price,
+        size=size,
+        side=side,
     )
     if payload.get("expiration"):
         args.expiration = int(payload["expiration"])
@@ -232,7 +317,7 @@ def cmd_place_order(payload: dict) -> None:
     # posts GTC). Sign with create_order(), then publish with post_order() so the
     # caller's FOK/FAK/GTD/GTC time-in-force is actually honored.
     options = PartialCreateOrderOptions(
-        tick_size=str(payload.get("tick_size", "0.01")),
+        tick_size=market_tick,
         neg_risk=bool(payload.get("neg_risk", False)),
     )
 
@@ -243,6 +328,8 @@ def cmd_place_order(payload: dict) -> None:
         "order_id": result.get("orderID") or result.get("order_id") or "",
         "status": result.get("status", ""),
         "error": result.get("errorMsg", ""),
+        "price": price,
+        "tick_size": market_tick,
         "raw": result,
     })
 

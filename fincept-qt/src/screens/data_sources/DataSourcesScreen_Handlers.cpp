@@ -358,13 +358,6 @@ void DataSourcesScreen::update_connection_status_cell(const QString& conn_id, bo
     }
 }
 
-void DataSourcesScreen::on_view_mode_toggle() {
-    // Legacy — now handled by tab bar
-    view_mode_ = (view_mode_ == ViewMode::Gallery) ? ViewMode::Connections : ViewMode::Gallery;
-    if (page_stack_)
-        page_stack_->setCurrentIndex(view_mode_ == ViewMode::Gallery ? 0 : 1);
-}
-
 void DataSourcesScreen::on_connections_search_changed(const QString& text) {
     // Record the filter immediately (cheap) but debounce the rebuild — same
     // reasoning as on_search_changed.

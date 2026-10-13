@@ -84,6 +84,10 @@ class EquityWatchlist : public QWidget {
     QTableWidget* table_ = nullptr;
 
     QVector<WatchlistEntry> entries_;
+    // symbol → index into entries_ (== table row: rebuild_table() lays rows out
+    // in entries_ order and the table is never sorted). First occurrence wins,
+    // like the linear scans it replaces. Rebuilt by rebuild_table().
+    QHash<QString, int> row_of_;
     QString active_symbol_;
     QString broker_id_;
     QMutex mutex_;

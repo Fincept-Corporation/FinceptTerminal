@@ -62,6 +62,19 @@ AiChatScreen::AiChatScreen(QWidget* parent) : QWidget(parent) {
     typing_timer_->setInterval(400);
     connect(typing_timer_, &QTimer::timeout, this, &AiChatScreen::on_typing_indicator_tick);
 
+    // Stop grace period: if a cancelled turn hasn't come back by then it is
+    // stuck inside a tool — stop waiting for it (see detach_stopped_request).
+    stop_grace_timer_ = new QTimer(this);
+    stop_grace_timer_->setSingleShot(true);
+    stop_grace_timer_->setInterval(kStopGraceMs);
+    connect(stop_grace_timer_, &QTimer::timeout, this, &AiChatScreen::detach_stopped_request);
+
+    // Background-job status lines in the Tools card. Started by track_job() and
+    // showEvent, stopped in hideEvent and once no tracked job is running (P3).
+    job_timer_ = new QTimer(this);
+    job_timer_->setInterval(1000);
+    connect(job_timer_, &QTimer::timeout, this, &AiChatScreen::refresh_job_lines);
+
     build_ui();
     load_sessions();
 
@@ -149,11 +162,17 @@ void AiChatScreen::showEvent(QShowEvent* e) {
     }
     update_stats();
     subscribe_mcp_events();
+    if (!tracked_job_ids_.isEmpty()) {
+        refresh_job_lines();
+        if (!tracked_job_ids_.isEmpty())
+            job_timer_->start();
+    }
 }
 
 void AiChatScreen::hideEvent(QHideEvent* e) {
     QWidget::hideEvent(e);
     unsubscribe_mcp_events();
+    job_timer_->stop();
 }
 
 // ── MCP-driven UI sync ──────────────────────────────────────────────────────
@@ -206,10 +225,6 @@ void AiChatScreen::unsubscribe_mcp_events() {
     mcp_event_subs_.clear();
 }
 
-void AiChatScreen::resizeEvent(QResizeEvent* e) {
-    QWidget::resizeEvent(e);
-}
-
 void AiChatScreen::changeEvent(QEvent* event) {
     if (event->type() == QEvent::LanguageChange)
         retranslateUi();
@@ -237,11 +252,18 @@ void AiChatScreen::retranslateUi() {
     // Header
     if (hdr_model_lbl_)
         hdr_model_lbl_->setToolTip(tr("Active model — change in Settings > LLM Configuration"));
+    if (export_btn_) {
+        export_btn_->setText(tr("Export"));
+        export_btn_->setToolTip(tr("Save or copy this conversation as Markdown"));
+    }
     // Input area
     if (input_box_)
-        input_box_->setPlaceholderText(tr("Message Fincept AI..."));
+        input_box_->setPlaceholderText(tr("Message Fincept AI...  (Enter to send · Shift+Enter for a new line)"));
     if (attach_btn_)
         attach_btn_->setToolTip(tr("Attach a file to this message"));
+    if (load_earlier_btn_ && load_earlier_btn_->isVisible())
+        load_earlier_btn_->setText(tr("Show %n earlier message(s)", "", hidden_message_count_));
+    update_model_notice();
     // Typing label — only refresh while visible (timer will overwrite shortly anyway)
     if (typing_dots_lbl_ && typing_indicator_ && typing_indicator_->isVisible())
         typing_dots_lbl_->setText(tr("AI is thinking"));
@@ -262,13 +284,37 @@ bool AiChatScreen::eventFilter(QObject* obj, QEvent* event) {
             if (ke->modifiers() & Qt::ShiftModifier)
                 return false;
             ke->accept();
-            on_send();
+            // Enter never doubles as Stop: a user typing the next question
+            // while an answer streams must not cancel it by pressing Enter.
+            if (!streaming_)
+                on_send();
+            return true;
+        }
+        // Esc stops the answer that is streaming.
+        if (ke->key() == Qt::Key_Escape && streaming_) {
+            on_stop_requested();
+            return true;
+        }
+        // Ctrl+R regenerates the newest answer (or retries a failed turn).
+        if (ke->key() == Qt::Key_R && (ke->modifiers() & Qt::ControlModifier)) {
+            on_regenerate();
             return true;
         }
         // Ctrl+N and Ctrl+K both start a new session (Ctrl+K is the convention
         // most chat clients use; Ctrl+N was already documented in the tooltip).
         if ((ke->key() == Qt::Key_N || ke->key() == Qt::Key_K) && (ke->modifiers() & Qt::ControlModifier)) {
             on_new_session();
+            return true;
+        }
+    }
+    if (obj == session_list_ && event->type() == QEvent::KeyPress && !streaming_) {
+        auto* ke = static_cast<QKeyEvent*>(event);
+        if (ke->key() == Qt::Key_F2) {
+            on_rename_session();
+            return true;
+        }
+        if (ke->key() == Qt::Key_Delete) {
+            on_delete_session();
             return true;
         }
     }

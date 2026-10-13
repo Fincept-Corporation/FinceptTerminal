@@ -13,6 +13,7 @@
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -29,23 +30,40 @@ struct BlsPreset {
     QString label;
     QString command;
     QString series_id; // non-empty -> use get_series command
+    QString units;     // what the values are (BLS publishes it per series, not in the API rows)
 };
 
+// The CPI / PPI presets are the NOT seasonally adjusted indexes (CUUR…, WPU…): read them year over
+// year (the YoY card) — their month-over-month change includes seasonality.
 static const QList<BlsPreset> kBlsPresets = {
-    {"-- Select a series --", "", ""},
-    {"Total Nonfarm Employment", "get_series", "CES0000000001"},
-    {"Unemployment Rate (U-3)", "get_series", "LNS14000000"},
-    {"CPI All Urban Consumers", "get_series", "CUUR0000SA0"},
-    {"CPI Less Food & Energy (Core)", "get_series", "CUUR0000SA0L1E"},
-    {"PPI Final Demand", "get_series", "WPUFD4"},
-    {"Average Hourly Earnings", "get_series", "CES0500000003"},
-    {"Labor Force Participation Rate", "get_series", "LNS11300000"},
-    {"Job Openings (JOLTS)", "get_series", "JTS000000000000000JOL"},
-    {"Labor Market Overview", "get_labor_overview", ""},
-    {"Inflation Overview", "get_inflation_overview", ""},
-    {"Employment Cost Index", "get_employment_cost_index", ""},
-    {"Productivity & Costs", "get_productivity_costs", ""},
+    {"-- Select a series --", "", "", ""},
+    {"Total Nonfarm Employment (SA)", "get_series", "CES0000000001", "Thousands of persons"},
+    {"Unemployment Rate U-3 (SA)", "get_series", "LNS14000000", "Percent"},
+    {"CPI-U All Items (NSA index)", "get_series", "CUUR0000SA0", "Index 1982-84=100"},
+    {"CPI-U Less Food & Energy (NSA index)", "get_series", "CUUR0000SA0L1E", "Index 1982-84=100"},
+    {"PPI Final Demand (NSA index)", "get_series", "WPUFD4", "Index Nov 2009=100"},
+    {"Average Hourly Earnings, Private (SA)", "get_series", "CES0500000003", "Dollars per hour"},
+    {"Labor Force Participation Rate (SA)", "get_series", "LNS11300000", "Percent"},
+    {"Job Openings, JOLTS (SA)", "get_series", "JTS000000000000000JOL", "Thousands"},
+    {"Labor Market Overview", "get_labor_overview", "", ""},
+    {"Inflation Overview", "get_inflation_overview", "", ""},
+    {"Employment Cost Index", "get_employment_cost_index", "", ""},
+    {"Productivity & Costs", "get_productivity_costs", "", ""},
 };
+
+/// BLS series ids carry the seasonal-adjustment code as their third character for the main surveys
+/// (CES/CEU, LNS/LNU, CUSR/CUUR, WPS/WPU, JTS/JTU, CIS/CIU, PRS/PRU, SMS/SMU, LAS/LAU).
+QString bls_seasonal_label(const QString& series_id) {
+    static const QStringList kSurveys = {"CE", "LN", "CU", "WP", "JT", "CI", "PR", "SM", "LA"};
+    if (series_id.size() < 3 || !kSurveys.contains(series_id.left(2)))
+        return {};
+    const QChar code = series_id.at(2);
+    if (code == QLatin1Char('S'))
+        return QCoreApplication::translate("fincept::screens::BlsPanel", "Seasonally adjusted");
+    if (code == QLatin1Char('U'))
+        return QCoreApplication::translate("fincept::screens::BlsPanel", "Not seasonally adjusted");
+    return {};
+}
 
 } // namespace
 
@@ -63,7 +81,7 @@ void BlsPanel::activate() {
 void BlsPanel::build_controls(QHBoxLayout* thl) {
     auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -82,7 +100,7 @@ void BlsPanel::build_controls(QHBoxLayout* thl) {
     });
 
     series_lbl_ = new QLabel(tr("SERIES ID"));
-    series_lbl_->setStyleSheet(ctrl_label_style());
+    series_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_input_ = new QLineEdit;
     series_input_->setPlaceholderText(tr("e.g. CES0000000001"));
@@ -209,9 +227,33 @@ void BlsPanel::on_result(const QString& request_id, const services::EconomicsRes
         return;
     }
 
-    const int idx = preset_combo_->currentIndex();
-    const QString title = (idx > 0 && idx < kBlsPresets.size()) ? "BLS: " + kBlsPresets[idx].label
-                                                                : "BLS: " + series_input_->text().trimmed().toUpper();
+    // Describe the series this result belongs to (request id "bls_series_<ID>"), not whatever the
+    // combo shows now.
+    QString title = "BLS: " + request_id.mid(4);
+    SeriesMeta meta;
+    if (request_id.startsWith(QLatin1String("bls_series_"))) {
+        const QString sid = request_id.mid(QStringLiteral("bls_series_").size());
+        title = "BLS: " + sid;
+        for (const auto& p : kBlsPresets) {
+            if (p.series_id == sid) {
+                title = "BLS: " + p.label + " — " + sid;
+                meta.units = p.units;
+                break;
+            }
+        }
+        if (meta.units.isEmpty() && !rows.isEmpty()) {
+            // Custom id: BLS's own series title is the best description available.
+            const QString series_title = rows.first().toObject().value(QStringLiteral("series")).toString();
+            if (!series_title.isEmpty() && series_title != sid)
+                title = "BLS: " + series_title + " — " + sid;
+        }
+        meta.seasonal_adj = bls_seasonal_label(sid);
+    } else {
+        for (const auto& p : kBlsPresets)
+            if (!p.command.isEmpty() && request_id == "bls_" + p.command)
+                title = "BLS: " + p.label;
+    }
+    set_series_meta(meta);
     display(rows, title);
     LOG_INFO("BlsPanel", QString("Displayed %1 rows").arg(rows.size()));
 }

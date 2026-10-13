@@ -2,8 +2,10 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "storage/repositories/WorkflowRepository.h"
+#include "trading/AccountManager.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -11,6 +13,8 @@
 #include <QJsonObject>
 #include <QSet>
 #include <QUuid>
+
+#include <cmath>
 
 namespace fincept::workflow {
 
@@ -101,6 +105,8 @@ Result<WorkflowDef> WorkflowService::import_from_json(const QString& path) {
     wf.id = obj.value("id").toString();
     wf.name = obj.value("name").toString("Imported Workflow");
     wf.description = obj.value("description").toString();
+    // static_data (and with it the execution mode) is deliberately NOT imported: a file
+    // from elsewhere must never arrive armed for LIVE trading. Imports always run PAPER.
 
     // The canvas keys nodes and edges by id: a missing or repeated id would make
     // two nodes collapse into one, so repair them on the way in.
@@ -190,40 +196,17 @@ Result<void> WorkflowService::export_to_json(const WorkflowDef& wf, const QStrin
     return Result<void>::ok();
 }
 
-// ── Execution ──────────────────────────────────────────────────────────
+// ── Execution safety ───────────────────────────────────────────────────
 
-namespace {
+namespace wf_service_detail {
 
-// Node types that place, modify or cancel orders and carry a `mode` select
-// (paper | live). The executors treat ANY mode other than the exact string
-// "paper" as live — this list is deliberately matched the same way.
-const QSet<QString>& wf_moded_order_types() {
-    static const QSet<QString> k = {
-        QStringLiteral("trading.place_order"),   QStringLiteral("trading.cancel_order"),
-        QStringLiteral("trading.modify_order"),  QStringLiteral("trading.close_position"),
-        QStringLiteral("trading.bracket_order"), QStringLiteral("trading.trailing_stop"),
-        QStringLiteral("trading.scale_in"),
-    };
-    return k;
-}
-
-// Order nodes that have no paper mode at all: they always act on the broker.
-const QSet<QString>& wf_live_only_order_types() {
-    static const QSet<QString> k = {
-        QStringLiteral("trading.smart_order"),
-        QStringLiteral("trading.cancel_all"),
-        QStringLiteral("trading.close_all"),
-    };
-    return k;
-}
-
-QString wf_variant_text(const QJsonValue& v) {
+QString variant_text(const QJsonValue& v) {
     return v.toVariant().toString();
 }
 
 // True when the MCP tool named by an mcp.tool_call node is a declared-destructive
 // internal tool (anything that mutates state: orders, transfers, writes).
-bool wf_mcp_tool_is_destructive(const QString& tool) {
+bool mcp_tool_is_destructive(const QString& tool) {
     if (tool.isEmpty() || tool.contains(QLatin1String("__")))
         return false; // external tools carry no destructiveness metadata
     for (const auto& t : mcp::McpService::instance().get_all_tools()) {
@@ -233,77 +216,260 @@ bool wf_mcp_tool_is_destructive(const QString& tool) {
     return false;
 }
 
-void wf_collect_live_rows(const WorkflowDef& wf, const QString& via, int depth, QSet<QString>& visited,
-                          QStringList& rows) {
+// The broker account an order node will use — the same resolution the trading
+// bridges apply: an explicit, existing account_id wins, otherwise the first ACTIVE
+// account of the node's broker (else its first account).
+QString account_note(const QString& broker, const QString& account_id_param) {
+    auto& am = fincept::trading::AccountManager::instance();
+    fincept::trading::BrokerAccount acct;
+    const QString explicit_id = account_id_param.trimmed();
+    if (!explicit_id.isEmpty() && am.has_account(explicit_id)) {
+        acct = am.get_account(explicit_id);
+    } else {
+        const auto accounts = am.list_accounts(broker);
+        for (const auto& a : accounts) {
+            if (a.is_active) {
+                acct = a;
+                break;
+            }
+        }
+        if (acct.account_id.isEmpty() && !accounts.isEmpty())
+            acct = accounts.first();
+    }
+    if (acct.account_id.isEmpty())
+        return WorkflowService::tr("NO %1 ACCOUNT CONFIGURED — this node will fail").arg(broker.toUpper());
+    const QString name = acct.display_name.isEmpty() ? acct.account_id.left(8) : acct.display_name;
+    return acct.trading_mode == QLatin1String("paper")
+               ? WorkflowService::tr("account \"%1\" (account is in PAPER mode — the broker adapter simulates it)")
+                     .arg(name)
+               : WorkflowService::tr("account \"%1\" (LIVE account)").arg(name);
+}
+
+QString order_detail(const NodeDef& nd) {
+    QString detail;
+    const QString symbol = nd.parameters.value(QStringLiteral("symbol")).toString();
+    const QString side = nd.parameters.value(QStringLiteral("side")).toString();
+    QString qty = variant_text(nd.parameters.value(QStringLiteral("quantity")));
+    if (qty.isEmpty())
+        qty = variant_text(nd.parameters.value(QStringLiteral("total_quantity")));
+    if (qty.isEmpty())
+        qty = variant_text(nd.parameters.value(QStringLiteral("position_size")));
+    if (!symbol.isEmpty())
+        detail += QStringLiteral("  %1").arg(symbol);
+    if (!side.isEmpty())
+        detail += QStringLiteral("  %1").arg(side.toUpper());
+    if (!qty.isEmpty())
+        detail += QStringLiteral(" x%1").arg(qty);
+    return detail;
+}
+
+void collect_rows(const WorkflowDef& wf, bool live_mode, const QString& via, int depth, QSet<QString>& visited,
+                  QVector<WorkflowService::ActionRow>& rows) {
     for (const auto& nd : wf.nodes) {
         if (nd.disabled)
             continue;
 
         const QString label = nd.name.isEmpty() ? nd.type : nd.name;
         QString detail;
+        bool money = false;
 
-        if (wf_moded_order_types().contains(nd.type) || wf_live_only_order_types().contains(nd.type)) {
-            // Same rule as the executors: only the exact string "paper" is paper
-            // ("Paper", "" or any other value is routed to the real broker).
-            const QString mode = nd.parameters.value(QStringLiteral("mode")).toString(QStringLiteral("paper"));
-            if (wf_moded_order_types().contains(nd.type) && mode == QLatin1String("paper"))
-                continue;
-
-            const QString symbol = nd.parameters.value(QStringLiteral("symbol")).toString();
-            const QString side = nd.parameters.value(QStringLiteral("side")).toString();
-            QString qty = wf_variant_text(nd.parameters.value(QStringLiteral("quantity")));
-            if (qty.isEmpty())
-                qty = wf_variant_text(nd.parameters.value(QStringLiteral("total_quantity")));
-            if (qty.isEmpty())
-                qty = wf_variant_text(nd.parameters.value(QStringLiteral("position_size")));
-            const QString broker = nd.parameters.value(QStringLiteral("broker")).toString();
-
-            if (!symbol.isEmpty())
-                detail += QStringLiteral("  %1").arg(symbol);
-            if (!side.isEmpty())
-                detail += QStringLiteral("  %1").arg(side.toUpper());
-            if (!qty.isEmpty())
-                detail += QStringLiteral(" x%1").arg(qty);
-            if (!broker.isEmpty())
-                detail += QStringLiteral("  → %1").arg(broker);
+        if (WorkflowExecutor::is_moded_order_type(nd.type) || WorkflowExecutor::is_live_only_order_type(nd.type)) {
+            if (!live_mode)
+                continue; // PAPER: the executor forces / refuses every order node
+            if (WorkflowExecutor::is_moded_order_type(nd.type) && !WorkflowExecutor::node_requests_live(nd.parameters))
+                continue; // the node itself is set to paper
+            const QString broker = nd.parameters.value(QStringLiteral("broker")).toString(QStringLiteral("fyers"));
+            detail = order_detail(nd) +
+                     QStringLiteral("  → %1 · %2")
+                         .arg(broker, account_note(broker, nd.parameters.value(QStringLiteral("account_id")).toString()));
+            money = true;
         } else if (nd.type == QLatin1String("mcp.tool_call")) {
             const QString tool = nd.parameters.value(QStringLiteral("tool")).toString().trimmed();
-            if (!wf_mcp_tool_is_destructive(tool))
+            if (WorkflowExecutor::mcp_tool_moves_money(tool)) {
+                if (!live_mode)
+                    continue; // refused by the executor in PAPER
+                detail = QStringLiteral("  %1").arg(WorkflowService::tr("live-trading MCP tool: %1").arg(tool));
+                money = true;
+            } else if (mcp_tool_is_destructive(tool)) {
+                detail = QStringLiteral("  %1").arg(WorkflowService::tr("destructive MCP tool: %1").arg(tool));
+            } else {
                 continue;
-            detail = QStringLiteral("  %1").arg(WorkflowService::tr("destructive MCP tool: %1").arg(tool));
+            }
         } else if (nd.type == QLatin1String("control.execute_workflow")) {
             const QString sub_id = nd.parameters.value(QStringLiteral("workflow_id")).toString().trimmed();
-            if (sub_id.isEmpty() || depth >= 5 || visited.contains(sub_id))
+            if (sub_id.isEmpty() || depth >= WorkflowExecutor::kMaxSubworkflowDepth || visited.contains(sub_id))
                 continue;
             visited.insert(sub_id);
             auto loaded = WorkflowRepository::instance().load(sub_id);
             if (loaded.is_ok()) {
                 const WorkflowDef& sub = loaded.value();
                 const QString sub_via = via.isEmpty() ? sub.name : via + QStringLiteral(" › ") + sub.name;
-                wf_collect_live_rows(sub, sub_via, depth + 1, visited, rows);
+                // A sub-workflow runs in the parent's mode, whatever it was saved with.
+                collect_rows(sub, live_mode, sub_via, depth + 1, visited, rows);
             }
             continue;
         } else {
             continue;
         }
 
-        QString row = QStringLiteral("  • %1  [%2]").arg(label, nd.type) + detail;
+        QString text = QStringLiteral("  • %1  [%2]").arg(label, nd.type) + detail;
         if (!via.isEmpty())
-            row += QStringLiteral("   ") + WorkflowService::tr("(in sub-workflow: %1)").arg(via);
-        rows << row;
+            text += QStringLiteral("   ") + WorkflowService::tr("(in sub-workflow: %1)").arg(via);
+        rows.append({nd.id, text, money});
     }
 }
 
-} // namespace
+double param_number(const QJsonValue& v, bool* ok) {
+    if (v.isDouble()) {
+        *ok = true;
+        return v.toDouble();
+    }
+    return v.toVariant().toString().trimmed().toDouble(ok);
+}
 
-QStringList WorkflowService::live_order_rows(const WorkflowDef& wf) {
-    QStringList rows;
+// Numeric parameter with a fallback for missing / non-numeric values.
+double param_or(const NodeDef& nd, const char* key, double fallback) {
+    const QJsonValue v = nd.parameters.value(QLatin1String(key));
+    if (v.isUndefined() || v.isNull())
+        return fallback;
+    bool ok = false;
+    const double d = param_number(v, &ok);
+    return ok ? d : fallback;
+}
+
+} // namespace wf_service_detail
+
+QVector<WorkflowService::ActionRow> WorkflowService::live_action_rows(const WorkflowDef& wf, bool live_mode) {
+    QVector<ActionRow> rows;
     QSet<QString> visited;
     if (!wf.id.isEmpty())
         visited.insert(wf.id); // a workflow calling itself is reported once, not recursed
-    wf_collect_live_rows(wf, {}, 0, visited, rows);
+    wf_service_detail::collect_rows(wf, live_mode, {}, 0, visited, rows);
     return rows;
 }
+
+QStringList WorkflowService::simulated_live_rows(const WorkflowDef& wf) {
+    QStringList rows;
+    for (const auto& nd : wf.nodes) {
+        if (nd.disabled || !WorkflowExecutor::is_moded_order_type(nd.type) ||
+            !WorkflowExecutor::node_requests_live(nd.parameters))
+            continue;
+        rows << QStringLiteral("  • %1  [%2]%3")
+                    .arg(nd.name.isEmpty() ? nd.type : nd.name, nd.type, wf_service_detail::order_detail(nd));
+    }
+    return rows;
+}
+
+QVector<WorkflowService::ValidationIssue> WorkflowService::validate(const WorkflowDef& wf) {
+    using wf_service_detail::param_number;
+    using wf_service_detail::param_or;
+
+    QVector<ValidationIssue> issues;
+    auto& reg = NodeRegistry::instance();
+
+    QSet<QString> has_input;
+    QHash<QString, QVector<QString>> adjacency;
+    QHash<QString, QString> names;
+    for (const auto& nd : wf.nodes) {
+        adjacency[nd.id];
+        names.insert(nd.id, nd.name.isEmpty() ? nd.type : nd.name);
+    }
+    for (const auto& ed : wf.edges) {
+        if (!adjacency.contains(ed.source_node) || !adjacency.contains(ed.target_node))
+            continue;
+        adjacency[ed.source_node].append(ed.target_node);
+        has_input.insert(ed.target_node);
+    }
+
+    // Required parameters a node takes from its input when left blank (the bridges fall back).
+    static const QHash<QString, QString> kFromInput = {
+        {QStringLiteral("trading.cancel_order"), QStringLiteral("order_id")},
+        {QStringLiteral("trading.modify_order"), QStringLiteral("order_id")},
+        {QStringLiteral("trading.alert"), QStringLiteral("message")},
+        {QStringLiteral("mcp.tool_call"), QStringLiteral("tool")}, // a Tool Picker can supply it
+    };
+
+    for (const auto& nd : wf.nodes) {
+        if (nd.disabled)
+            continue;
+        const auto* td = reg.find(nd.type);
+        if (!td) {
+            issues.append({nd.id, tr("Unknown node type '%1' — this build cannot run it.").arg(nd.type)});
+            continue;
+        }
+        for (const auto& pd : td->parameters) {
+            if (!pd.required || pd.type == QLatin1String("boolean"))
+                continue;
+            const QJsonValue v = nd.parameters.contains(pd.key) ? nd.parameters.value(pd.key) : pd.default_value;
+            if (pd.type == QLatin1String("number")) {
+                bool ok = false;
+                const double d = param_number(v, &ok);
+                if (!ok || std::isnan(d) || std::isinf(d))
+                    issues.append({nd.id, tr("'%1' needs a number.").arg(pd.label)});
+                continue;
+            }
+            if (v.toVariant().toString().trimmed().isEmpty()) {
+                if (kFromInput.value(nd.type) == pd.key && has_input.contains(nd.id))
+                    continue;
+                issues.append({nd.id, tr("'%1' is required.").arg(pd.label)});
+            }
+        }
+
+        // Mode must be one of the two exact values — the bridges treat anything else as live.
+        if (WorkflowExecutor::is_moded_order_type(nd.type) || WorkflowExecutor::is_moded_read_type(nd.type)) {
+            const QString mode = nd.parameters.value(QStringLiteral("mode")).toString(QStringLiteral("paper"));
+            if (mode != QLatin1String("paper") && mode != QLatin1String("live"))
+                issues.append({nd.id, tr("Mode is '%1' — it must be paper or live.").arg(mode)});
+        }
+
+        if (nd.type == QLatin1String("trading.place_order")) {
+            if (param_or(nd, "quantity", 0) <= 0)
+                issues.append({nd.id, tr("Quantity must be greater than 0.")});
+            const QString ot = nd.parameters.value(QStringLiteral("order_type")).toString(QStringLiteral("market"));
+            if (ot != QLatin1String("market") && param_or(nd, "price", 0) <= 0)
+                issues.append({nd.id, tr("A %1 order needs a price greater than 0.").arg(ot)});
+        } else if (nd.type == QLatin1String("trading.bracket_order")) {
+            const double qty = param_or(nd, "quantity", 0);
+            const double entry = param_or(nd, "entry_price", 0);
+            const double sl = param_or(nd, "stop_loss", 0);
+            const double tp = param_or(nd, "take_profit", 0);
+            const bool buy = nd.parameters.value(QStringLiteral("side")).toString(QStringLiteral("buy")) !=
+                             QLatin1String("sell");
+            if (qty <= 0)
+                issues.append({nd.id, tr("Quantity must be greater than 0.")});
+            if (sl <= 0 || tp <= 0)
+                issues.append({nd.id, tr("Stop loss and take profit must both be greater than 0.")});
+            else if (buy ? !(sl < tp) : !(sl > tp))
+                issues.append({nd.id, buy ? tr("For a BUY bracket the stop loss must be below the take profit.")
+                                          : tr("For a SELL bracket the stop loss must be above the take profit.")});
+            else if (entry > 0 && (buy ? !(sl < entry && entry < tp) : !(tp < entry && entry < sl)))
+                issues.append({nd.id, tr("The entry price must lie between the stop loss and the take profit.")});
+        } else if (nd.type == QLatin1String("trading.scale_in")) {
+            if (param_or(nd, "total_quantity", 0) <= 0)
+                issues.append({nd.id, tr("Total quantity must be greater than 0.")});
+            if (param_or(nd, "tranches", 1) < 1)
+                issues.append({nd.id, tr("Tranches must be at least 1.")});
+        } else if (nd.type == QLatin1String("trading.trailing_stop")) {
+            if (param_or(nd, "trail_value", 0) <= 0)
+                issues.append({nd.id, tr("Trail value must be greater than 0.")});
+        }
+    }
+
+    const QStringList cycle = WorkflowExecutor::find_cycle(adjacency);
+    if (!cycle.isEmpty()) {
+        QStringList chain;
+        for (const auto& id : cycle)
+            chain << names.value(id, id);
+        chain << names.value(cycle.first(), cycle.first());
+        const QString msg =
+            tr("Part of a cycle: %1. Workflows must be acyclic.").arg(chain.join(QStringLiteral(" → ")));
+        for (const auto& id : cycle)
+            issues.append({id, msg});
+    }
+    return issues;
+}
+
+// ── Execution ──────────────────────────────────────────────────────────
 
 WorkflowExecutor* WorkflowService::make_executor() {
     if (executor_) {

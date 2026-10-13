@@ -39,14 +39,9 @@ There is no paid exemption from these terms for this repository. If AGPL-3.0 doe
 
 **[Fincept Terminal Enterprise](https://fincept.in/enterprise)** is a separate, closed-source product. It is not this codebase, is not published here, and is not covered by AGPL-3.0.
 
-| | Price |
-|---|---|
-| **Exclusive** | $99 / user / month |
-| **Exclusive+** | $199 / user / month |
-| **Exclusive Pro** | $299 / user / month |
-| **Academic bundle** — 5 Exclusive Pro seats | $699 / month |
+Enterprise is sold per user per month in three plans — **Exclusive**, **Exclusive+** and **Exclusive Pro** — with academic terms for universities. Current prices are published at **[fincept.in/pricing](https://fincept.in/pricing)**.
 
-Monthly billing, no annual lock-in, no seat minimum, 15% off on quarterly. **These are the only prices offered.** There is no custom, negotiated, or enterprise-tier pricing, and no bespoke licensing track.
+Monthly billing, no annual lock-in, no seat minimum. **The prices published at fincept.in/pricing are the only prices offered.** There is no custom, negotiated, or enterprise-tier pricing, and no bespoke licensing track.
 
 - Plans and full feature breakdown: [fincept.in/pricing](https://fincept.in/pricing)
 - Comparison against the open edition: [fincept.in/comparison](https://fincept.in/comparison)

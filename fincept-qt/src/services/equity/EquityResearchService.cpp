@@ -263,7 +263,13 @@ void EquityResearchService::load_quote_only(const QString& symbol) {
         emit quote_loaded(parse_quote(QJsonDocument::fromJson(qcv.toString().toUtf8()).object()));
         return;
     }
+    // The header bar and the Overview tab both ask when a symbol opens; the answer is
+    // broadcast to every listener, so a second request while one runs is redundant.
+    if (equity_svc_inflight_busy(quote_inflight_, symbol, kInflightMaxAgeMs))
+        return;
+    quote_inflight_.insert(symbol, QDateTime::currentMSecsSinceEpoch());
     run_python("yfinance_data.py", {"quote", symbol}, [this, symbol](bool ok, const QString& out) {
+        quote_inflight_.remove(symbol);
         if (!ok) {
             emit error_occurred("Quote", "Failed to fetch quote for " + symbol);
             return;
@@ -288,7 +294,11 @@ void EquityResearchService::load_info_only(const QString& symbol) {
         emit info_loaded(parse_info(QJsonDocument::fromJson(icv.toString().toUtf8()).object()));
         return;
     }
+    if (equity_svc_inflight_busy(info_inflight_, symbol, kInflightMaxAgeMs))
+        return; // header bar + Overview + Analysis all ask on open — one daemon call serves them
+    info_inflight_.insert(symbol, QDateTime::currentMSecsSinceEpoch());
     run_python("yfinance_data.py", {"info", symbol}, [this, symbol](bool ok, const QString& out) {
+        info_inflight_.remove(symbol);
         if (!ok) {
             emit error_occurred("Info", "Failed to fetch info for " + symbol);
             return;
@@ -317,8 +327,12 @@ void EquityResearchService::load_historical_only(const QString& symbol, const QS
             return;
         }
     }
+    if (equity_svc_inflight_busy(historical_inflight_, cache_key, kInflightMaxAgeMs))
+        return;
+    historical_inflight_.insert(cache_key, QDateTime::currentMSecsSinceEpoch());
     run_python("yfinance_data.py", {"historical_period", symbol, period, "1d"},
                [this, symbol, cache_key](bool ok, const QString& out) {
+                   historical_inflight_.remove(cache_key);
                    if (!ok) {
                        emit error_occurred("Historical", "Failed to fetch historical for " + symbol);
                        return;
@@ -347,7 +361,9 @@ void EquityResearchService::fetch_financials(const QString& symbol) {
     // re-run the yfinance statements pull (and the two tabs each started their own).
     // Serve a cached copy, and fold a request that arrives while one is in flight.
     const QString cache_key = "equity:financials:" + symbol;
-    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
+    const QString lkg_key = "equity:lkg:financials:" + symbol;
+    auto& cache = fincept::CacheManager::instance();
+    const QVariant cached = cache.get(cache_key);
     if (!cached.isNull()) {
         const auto cached_obj = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
         if (!cached_obj.isEmpty()) {
@@ -359,26 +375,50 @@ void EquityResearchService::fetch_financials(const QString& symbol) {
         return;
     financials_inflight_.insert(symbol, QDateTime::currentMSecsSinceEpoch());
 
-    run_python("yfinance_data.py", {"financials", symbol}, [this, symbol, cache_key](bool ok, const QString& out) {
-        financials_inflight_.remove(symbol);
-        if (!ok) {
-            emit error_occurred("Financials", "Failed to fetch financials for " + symbol);
-            return;
+    // Last-known-good statements: shown at once (flagged stale) while the refresh runs. A
+    // failed refresh then leaves them on screen, still flagged, instead of a blank tab.
+    if (const auto lkg = cache.try_get(lkg_key)) {
+        const auto lkg_obj = QJsonDocument::fromJson(lkg->toUtf8()).object();
+        if (!lkg_obj.isEmpty()) {
+            FinancialsData stale = parse_financials(lkg_obj);
+            stale.stale = true;
+            emit financials_loaded(stale);
         }
-        auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
-        if (obj.contains("error")) {
-            emit error_occurred("Financials", obj["error"].toString());
-            return;
-        }
-        fincept::CacheManager::instance().put(
-            cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))),
-            kFinancialsTtlSec, "equity");
-        emit financials_loaded(parse_financials(obj));
-    });
+    }
+
+    run_python("yfinance_data.py", {"financials", symbol},
+               [this, symbol, cache_key, lkg_key](bool ok, const QString& out) {
+                   financials_inflight_.remove(symbol);
+                   if (!ok) {
+                       emit error_occurred("Financials", "Failed to fetch financials for " + symbol);
+                       return;
+                   }
+                   auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+                   if (obj.contains("error")) {
+                       emit error_occurred("Financials", obj["error"].toString());
+                       return;
+                   }
+                   const QVariant payload(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
+                   auto& c = fincept::CacheManager::instance();
+                   c.put(cache_key, payload, kFinancialsTtlSec, "equity");
+                   c.put(lkg_key, payload, kFinancialsLkgTtlSec, "equity");
+                   emit financials_loaded(parse_financials(obj));
+               });
 }
 
 // ── Technicals ────────────────────────────────────────────────────────────────
 void EquityResearchService::fetch_technicals(const QString& symbol, const QString& period) {
+    // Indicators off daily bars: serve a recent computation instead of spawning another
+    // compute_technicals.py process on every Technicals-tab visit / Sentiment blend.
+    const QString result_key = "equity:technicals:" + symbol + ":" + period;
+    if (const auto hit = fincept::CacheManager::instance().try_get(result_key)) {
+        const QJsonArray rows = QJsonDocument::fromJson(hit->toUtf8()).array();
+        if (!rows.isEmpty()) {
+            emit technicals_loaded(parse_technicals(symbol, rows));
+            return;
+        }
+    }
+
     // The Technicals tab and the Sentiment blend both ask for the same symbol; the
     // second request would only spawn a duplicate compute_technicals.py process.
     const QString inflight_key = symbol + QLatin1Char(':') + period;
@@ -388,9 +428,9 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
 
     // Candles come from ensure_candles (cache → region-matched connected broker →
     // yfinance fallback); compute_technicals.py then derives the rating + indicators.
-    auto run_compute = [this, symbol, inflight_key](const QString& hist_json) {
+    auto run_compute = [this, symbol, inflight_key, result_key](const QString& hist_json) {
         run_python("compute_technicals.py", {equity_svc_fit_candles_for_argv(hist_json)},
-                   [this, symbol, inflight_key](bool ok2, const QString& out2) {
+                   [this, symbol, inflight_key, result_key](bool ok2, const QString& out2) {
                        technicals_inflight_.remove(inflight_key);
                        if (!ok2) {
                            emit error_occurred("Technicals", "Indicator computation failed");
@@ -401,7 +441,17 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
                            emit error_occurred("Technicals", "compute_technicals returned failure");
                            return;
                        }
-                       emit technicals_loaded(parse_technicals(symbol, doc["data"].toArray()));
+                       const QJsonArray rows = doc["data"].toArray();
+                       // parse_technicals() reads the last row plus the last 50 closes (SMA 50);
+                       // keep a 60-row tail rather than the whole indicator frame.
+                       QJsonArray tail;
+                       for (qsizetype i = std::max<qsizetype>(0, rows.size() - 60); i < rows.size(); ++i)
+                           tail.append(rows.at(i));
+                       if (!tail.isEmpty())
+                           fincept::CacheManager::instance().put(
+                               result_key, QVariant(QString::fromUtf8(QJsonDocument(tail).toJson(QJsonDocument::Compact))),
+                               kTechnicalsTtlSec, "equity");
+                       emit technicals_loaded(parse_technicals(symbol, rows));
                    });
     };
 
@@ -817,6 +867,7 @@ StockInfo EquityResearchService::parse_info(const QJsonObject& o) const {
     s.website = o["website"].toString();
     s.country = o["country"].toString();
     s.currency = o["currency"].toString();
+    s.financial_currency = o["financial_currency"].toString(); // absent from older payloads → empty
     s.exchange = o["exchange"].toString();
     s.employees = o["employees"].toInt();
 
@@ -891,6 +942,7 @@ QVector<Candle> EquityResearchService::parse_candles(const QJsonArray& arr) cons
 FinancialsData EquityResearchService::parse_financials(const QJsonObject& obj) const {
     FinancialsData fd;
     fd.symbol = obj["symbol"].toString();
+    fd.fetched_at = static_cast<qint64>(obj["timestamp"].toDouble());
 
     auto parse_stmt = [](const QJsonObject& stmt) {
         QVector<QPair<QString, QJsonObject>> result;
@@ -920,9 +972,16 @@ TechSignal EquityResearchService::score_indicator(const QString& name, double va
             return TechSignal::Sell;
         return TechSignal::StrongSell;
     }
-    // MACD: positive histogram = buy
-    if (name == "macd") {
-        return value > 0 ? TechSignal::Buy : TechSignal::Sell;
+    // MACD vote = the histogram ("macd_diff" = MACD line − signal line): the classic
+    // crossover signal. The line itself (12-EMA − 26-EMA) used to be scored instead and was
+    // labelled "MACD above signal line" whenever it was merely above zero; it is now shown
+    // for information only, so MACD still casts a single vote in the rating.
+    if (name == "macd_diff") {
+        if (value > 0)
+            return TechSignal::Buy;
+        if (value < 0)
+            return TechSignal::Sell;
+        return TechSignal::Neutral;
     }
     // SMA crossover
     if (name == "sma_20" && sma50 > 0) {
@@ -1057,9 +1116,10 @@ TechnicalsData EquityResearchService::parse_technicals(const QString& symbol, co
     // Maps: display name → actual column key in JSON output
     // Trend: sma_20, sma_50, ema_12, wma_9, macd, macd_signal, cci, adx, aroon_up, aroon_down
     static const QList<QPair<QString, QString>> kTrend = {
-        {"SMA 20", "sma_20"},     {"SMA 50", "sma_50"},           {"EMA 12", "ema_12"}, {"WMA 9", "wma_9"},
-        {"MACD", "macd"},         {"MACD Signal", "macd_signal"}, {"CCI", "cci"},       {"ADX", "adx"},
-        {"Aroon Up", "aroon_up"}, {"Aroon Down", "aroon_down"},
+        {"SMA 20", "sma_20"},       {"SMA 50", "sma_50"},       {"EMA 12", "ema_12"},
+        {"WMA 9", "wma_9"},         {"MACD", "macd"},           {"MACD Signal", "macd_signal"},
+        {"MACD Hist", "macd_diff"}, {"CCI", "cci"},             {"ADX", "adx"},
+        {"Aroon Up", "aroon_up"},   {"Aroon Down", "aroon_down"},
     };
     // Momentum: rsi, stoch_k, stoch_d, williams_r, roc, mfi, ao, kama
     static const QList<QPair<QString, QString>> kMomentum = {
@@ -1067,14 +1127,17 @@ TechnicalsData EquityResearchService::parse_technicals(const QString& symbol, co
         {"ROC", "roc"}, {"MFI", "mfi"},          {"Awesome Osc", "ao"},   {"KAMA", "kama"},
     };
     // Volatility: atr, bb_mavg, bb_hband, bb_lband, bb_pband, bb_wband
+    // bb_wband comes from ta.BollingerBands.bollinger_wband(): (upper − lower) / mid × 100,
+    // i.e. already in PERCENT.
     static const QList<QPair<QString, QString>> kVolatility = {
         {"ATR", "atr"},           {"BB Mid", "bb_mavg"}, {"BB Upper", "bb_hband"},
-        {"BB Lower", "bb_lband"}, {"BB %B", "bb_pband"}, {"BB Width", "bb_wband"},
+        {"BB Lower", "bb_lband"}, {"BB %B", "bb_pband"}, {"BB Width %", "bb_wband"},
     };
-    // Volume: obv, vwap, mfi (mfi also in momentum), cmf, adi
+    // Volume: obv, vwap, cmf, adi. ta's VWAP is a 14-bar ROLLING volume-weighted price, not
+    // the session VWAP traders usually mean — say so in the name.
     static const QList<QPair<QString, QString>> kVolume = {
         {"OBV", "obv"},
-        {"VWAP", "vwap"},
+        {"VWAP (14-bar)", "vwap"},
         {"CMF", "cmf"},
         {"ADI", "adi"},
     };
@@ -1093,6 +1156,7 @@ TechnicalsData EquityResearchService::parse_technicals(const QString& symbol, co
                 continue;
             TechIndicator ti;
             ti.name = kv.first;
+            ti.key = col;
             ti.value = val;
             ti.category = cat;
             ti.signal = score_indicator(col, val, sma20, sma50);

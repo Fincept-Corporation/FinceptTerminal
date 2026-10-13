@@ -2,849 +2,477 @@
 """
 Universal CKAN Data Portals API Wrapper
 
-A comprehensive wrapper for accessing multiple CKAN-based data portals worldwide.
-Supports 8 major CKAN portals: US, UK, Australia, Italy, Brazil, Latvia, Slovenia, Uruguay.
+One client for several national CKAN open-data portals. Used by the Gov Data screen's
+"CKAN Portals" provider (portal selector) and callable from the command line.
 
-Usage Examples:
-    # List all datasets from US portal
-    python universal_ckan_api.py --country us --action list_datasets
+Positional CLI (the convention the app uses — JSON on stdout, non-zero exit on error):
+    python universal_ckan_api.py portals
+    python universal_ckan_api.py publishers <portal> [limit]
+    python universal_ckan_api.py datasets   <portal> <organization> [rows]
+    python universal_ckan_api.py search     <portal> <query ...> [rows]
+    python universal_ckan_api.py resources  <portal> <dataset_id>
+    python universal_ckan_api.py dataset    <portal> <dataset_id>
+    python universal_ckan_api.py test       <portal>
 
-    # Search for climate data in Australia
-    python universal_ckan_api.py --country au --action search_datasets --query "climate"
+Flag CLI (kept for backward compatibility):
+    python universal_ckan_api.py --country ie --action search_datasets --query "climate" [--limit 20]
+    actions: list_organizations, get_organization_details, list_datasets, search_datasets,
+             get_dataset_details, get_datasets_by_organization, get_dataset_resources,
+             get_resource_details, test_connection, supported_countries
 
-    # Get dataset details from UK portal
-    python universal_ckan_api.py --country uk --action dataset_details --id "uk-some-dataset"
+Portals (all keyless, verified 2026-10): Argentina, Australia, Chile, Ireland, Italy, Latvia,
+Mexico, Netherlands, Slovenia, United Kingdom, Uruguay.
+Removed: United States (catalog.data.gov retired its CKAN API — every action answers 404) and
+Brazil (dados.gov.br now requires an API token — HTTP 401).
 
-Supported Portals:
-    - US (data.gov): https://catalog.data.gov/api/3/action
-    - UK (data.gov.uk): https://data.gov.uk/api/3/action
-    - AU (data.gov.au): https://data.gov.au/api/3/action
-    - IT (dati.gov.it): https://www.dati.gov.it/api/3/action
-    - BR (dados.gov.br): https://dados.gov.br/api/3/action
-    - LV (data.gov.lv): https://data.gov.lv/api/3/action
-    - SI (podatki.gov.si): https://podatki.gov.si/api/3/action
-    - UY (catalogodatos.gub.uy): https://catalogodatos.gub.uy/api/3/action
-
-API Documentation: https://docs.ckan.org/en/2.9/api/
+API documentation: https://docs.ckan.org/en/2.9/api/
 """
 
-import sys
 import json
-import os
-import requests
+import sys
+import time
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
+import requests
 
 # --- 1. CONFIGURATION ---
 
-# Supported CKAN portals with their base URLs
-CKAN_PORTALS = {
-    'us': {
-        'name': 'United States (Data.gov)',
-        'base_url': 'https://catalog.data.gov/api/3/action',
-        'country_code': 'US'
-    },
-    'uk': {
-        'name': 'United Kingdom (data.gov.uk)',
-        'base_url': 'https://data.gov.uk/api/3/action',
-        'country_code': 'UK'
-    },
-    'au': {
-        'name': 'Australia (data.gov.au)',
-        'base_url': 'https://data.gov.au/api/3/action',
-        'country_code': 'AU'
-    },
-    'it': {
-        'name': 'Italy (dati.gov.it)',
-        'base_url': 'https://www.dati.gov.it/api/3/action',
-        'country_code': 'IT'
-    },
-    'br': {
-        'name': 'Brazil (dados.gov.br)',
-        'base_url': 'https://dados.gov.br/api/3/action',
-        'country_code': 'BR'
-    },
-    'lv': {
-        'name': 'Latvia (data.gov.lv)',
-        'base_url': 'https://data.gov.lv/api/3/action',
-        'country_code': 'LV'
-    },
-    'si': {
-        'name': 'Slovenia (podatki.gov.si)',
-        'base_url': 'https://podatki.gov.si/api/3/action',
-        'country_code': 'SI'
-    },
-    'uy': {
-        'name': 'Uruguay (catalogodatos.gub.uy)',
-        'base_url': 'https://catalogodatos.gub.uy/api/3/action',
-        'country_code': 'UY'
-    }
+CKAN_PORTALS: Dict[str, Dict[str, str]] = {
+    'ar': {'name': 'Argentina (datos.gob.ar)', 'base_url': 'https://datos.gob.ar/api/3/action',
+           'country_code': 'AR'},
+    'au': {'name': 'Australia (data.gov.au)', 'base_url': 'https://data.gov.au/data/api/3/action',
+           'country_code': 'AU'},
+    'cl': {'name': 'Chile (datos.gob.cl)', 'base_url': 'https://datos.gob.cl/api/3/action',
+           'country_code': 'CL'},
+    'ie': {'name': 'Ireland (data.gov.ie)', 'base_url': 'https://data.gov.ie/api/3/action',
+           'country_code': 'IE'},
+    'it': {'name': 'Italy (dati.gov.it)', 'base_url': 'https://www.dati.gov.it/opendata/api/3/action',
+           'country_code': 'IT'},
+    'lv': {'name': 'Latvia (data.gov.lv)', 'base_url': 'https://data.gov.lv/dati/api/3/action',
+           'country_code': 'LV'},
+    'mx': {'name': 'Mexico (datos.gob.mx)', 'base_url': 'https://www.datos.gob.mx/api/3/action',
+           'country_code': 'MX'},
+    'nl': {'name': 'Netherlands (data.overheid.nl)', 'base_url': 'https://data.overheid.nl/data/api/3/action',
+           'country_code': 'NL'},
+    'si': {'name': 'Slovenia (podatki.gov.si)', 'base_url': 'https://podatki.gov.si/api/3/action',
+           'country_code': 'SI'},
+    'uk': {'name': 'United Kingdom (data.gov.uk)', 'base_url': 'https://data.gov.uk/api/3/action',
+           'country_code': 'UK'},
+    'uy': {'name': 'Uruguay (catalogodatos.gub.uy)', 'base_url': 'https://catalogodatos.gub.uy/api/3/action',
+           'country_code': 'UY'},
 }
 
-# Request configuration
-TIMEOUT = 30
-MAX_RETRIES = 3
+DEFAULT_PORTAL = 'ie'
 
-# --- 2. PRIVATE HELPER FUNCTIONS ---
+TIMEOUT = 30
+MAX_ATTEMPTS = 2          # one retry on timeouts / connection errors / 5xx / non-JSON bodies
+NOTES_MAX_CHARS = 400     # dataset descriptions are trimmed in list views (full text via `dataset`)
+
+HEADERS = {
+    'User-Agent': 'Fincept-Terminal/1.0',
+    'Accept': 'application/json',
+}
+
+
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr)
+
+
+# --- 2. REQUEST HELPERS ---
 
 def _get_portal_config(country_code: str) -> Dict[str, str]:
-    """
-    Get portal configuration for the specified country.
+    code = (country_code or '').strip().lower()
+    if code not in CKAN_PORTALS:
+        raise ValueError(f"Unsupported portal '{country_code}'. Supported: {', '.join(sorted(CKAN_PORTALS))}")
+    return CKAN_PORTALS[code]
 
-    Args:
-        country_code: Two-letter country code (us, uk, au, etc.)
 
-    Returns:
-        Dictionary containing portal configuration
+def _metadata(portal: Dict[str, str], action: str, **extra: Any) -> Dict[str, Any]:
+    meta = {
+        "source": portal['name'],
+        "country": portal['country_code'],
+        "action": action,
+        "last_updated": datetime.now().isoformat(),
+    }
+    meta.update(extra)
+    return meta
 
-    Raises:
-        ValueError: If country code is not supported
-    """
-    country_code = country_code.lower()
-    if country_code not in CKAN_PORTALS:
-        supported_countries = ', '.join(CKAN_PORTALS.keys())
-        raise ValueError(f"Unsupported country code '{country_code}'. Supported: {supported_countries}")
-
-    return CKAN_PORTALS[country_code]
 
 def _make_request(country_code: str, action: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Centralized request handler for CKAN API calls.
-
-    Args:
-        country_code: Two-letter country code
-        action: CKAN action name (e.g., 'package_search', 'package_show')
-        params: Additional parameters for the API call
-
-    Returns:
-        Formatted response with data, metadata, and error fields
-    """
+    """GET <base>/<action>?params. Returns {"success", "data", "metadata", "error"}; `data` is CKAN's
+    `result` unchanged (callers reshape it)."""
     try:
-        portal_config = _get_portal_config(country_code)
-        base_url = portal_config['base_url']
-
-        # Prepare request parameters
-        request_params = params.copy() if params else {}
-
-        # Prepare headers
-        headers = {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Fincept-Terminal/1.0',
-            'Accept': 'application/json'
-        }
-
-        # Make the request with retries
-        url = f"{base_url}/{action}"
-
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = requests.post(
-                    url,
-                    json=request_params,
-                    headers=headers,
-                    timeout=TIMEOUT
-                )
-                response.raise_for_status()
-
-                # Parse JSON response
-                api_response = response.json()
-
-                # Check if CKAN API returned success
-                if not api_response.get('success', False):
-                    error_msg = api_response.get('error', {}).get('message', 'Unknown CKAN API error')
-                    return {
-                        "data": [],
-                        "metadata": {
-                            "source": portal_config['name'],
-                            "country": portal_config['country_code'],
-                            "action": action,
-                            "last_updated": datetime.now().isoformat(),
-                            "count": 0,
-                            "url": url
-                        },
-                        "error": f"CKAN API Error: {error_msg}"
-                    }
-
-                # Return successful response
-                result_data = api_response.get('result', [])
-
-                # Handle different response formats
-                if isinstance(result_data, dict) and 'results' in result_data:
-                    # Search results format
-                    data = result_data['results']
-                    count = result_data.get('count', len(data))
-                else:
-                    # Direct result format
-                    data = result_data if isinstance(result_data, list) else [result_data]
-                    count = len(data)
-
-                return {
-                    "data": data,
-                    "metadata": {
-                        "source": portal_config['name'],
-                        "country": portal_config['country_code'],
-                        "action": action,
-                        "last_updated": datetime.now().isoformat(),
-                        "count": count,
-                        "url": url,
-                        "params": request_params
-                    },
-                    "error": None
-                }
-
-            except requests.exceptions.Timeout:
-                if attempt == MAX_RETRIES - 1:
-                    return {
-                        "data": [],
-                        "metadata": {
-                            "source": portal_config['name'],
-                            "country": portal_config['country_code'],
-                            "action": action,
-                            "last_updated": datetime.now().isoformat(),
-                            "count": 0,
-                            "url": url
-                        },
-                        "error": f"Request timeout after {TIMEOUT} seconds"
-                    }
-                continue
-
-            except requests.exceptions.ConnectionError:
-                if attempt == MAX_RETRIES - 1:
-                    return {
-                        "data": [],
-                        "metadata": {
-                            "source": portal_config['name'],
-                            "country": portal_config['country_code'],
-                            "action": action,
-                            "last_updated": datetime.now().isoformat(),
-                            "count": 0,
-                            "url": url
-                        },
-                        "error": "Connection error - unable to reach the portal"
-                    }
-                continue
-
-            except requests.exceptions.HTTPError as e:
-                return {
-                    "data": [],
-                    "metadata": {
-                        "source": portal_config['name'],
-                        "country": portal_config['country_code'],
-                        "action": action,
-                        "last_updated": datetime.now().isoformat(),
-                        "count": 0,
-                        "url": url
-                    },
-                    "error": f"HTTP error: {e.response.status_code} - {e.response.reason}"
-                }
-
-    except Exception as e:
-        return {
-            "data": [],
-            "metadata": {},
-            "error": f"Unexpected error: {str(e)}"
-        }
-
-def _enhance_dataset_metadata(dataset: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Enhance dataset with additional computed metadata.
-
-    Args:
-        dataset: Raw dataset from CKAN API
-
-    Returns:
-        Enhanced dataset with additional fields
-    """
-    enhanced = dataset.copy()
-
-    # Add computed fields
-    enhanced['num_resources'] = len(dataset.get('resources', []))
-    enhanced['has_tags'] = len(dataset.get('tags', [])) > 0
-    enhanced['organization_name'] = dataset.get('organization', {}).get('title', 'Unknown')
-    enhanced['metadata_created'] = dataset.get('metadata_created', '')
-    enhanced['metadata_modified'] = dataset.get('metadata_modified', '')
-
-    # Extract resource types
-    resource_types = []
-    for resource in dataset.get('resources', []):
-        format_type = resource.get('format', '').lower()
-        if format_type and format_type not in resource_types:
-            resource_types.append(format_type)
-    enhanced['resource_types'] = resource_types
-
-    return enhanced
-
-# --- 3. ORGANIZATION/CATALOGUE FUNCTIONS ---
-
-def list_organizations(country_code: str, limit: Optional[int] = None) -> Dict[str, Any]:
-    """
-    List all organizations (catalogues) in the specified portal.
-
-    Args:
-        country_code: Two-letter country code
-        limit: Maximum number of organizations to return
-
-    Returns:
-        Formatted response containing list of organizations
-    """
-    params = {}
-    if limit:
-        params['limit'] = limit
-
-    result = _make_request(country_code, 'organization_list', params)
-
-    if not result['error']:
-        # Enhance organization data
-        enhanced_orgs = []
-        for org_name in result['data']:
-            enhanced_orgs.append({
-                'name': org_name,
-                'display_name': org_name.replace('-', ' ').title(),
-                'country': country_code.upper()
-            })
-        result['data'] = enhanced_orgs
-        result['metadata']['count'] = len(enhanced_orgs)
-        result['metadata']['action'] = 'list_organizations'
-
-    return result
-
-def get_organization_details(country_code: str, organization_id: str) -> Dict[str, Any]:
-    """
-    Get detailed information about a specific organization.
-
-    Args:
-        country_code: Two-letter country code
-        organization_id: ID or name of the organization
-
-    Returns:
-        Formatted response containing organization details
-    """
-    params = {'id': organization_id}
-    result = _make_request(country_code, 'organization_show', params)
-
-    if not result['error'] and result['data']:
-        # Handle different response formats
-        org_data = result['data']
-
-        # Ensure we have a dictionary, not a list
-        if isinstance(org_data, list) and len(org_data) > 0:
-            org_data = org_data[0]
-        elif isinstance(org_data, list):
-            # Empty list, return error
-            result['error'] = f"Organization '{organization_id}' not found"
-            result['data'] = {}
-            return result
-
-        # Ensure it's a dictionary
-        if isinstance(org_data, dict):
-            # Enhance organization data
-            org_data['package_count'] = len(org_data.get('packages', []))
-            org_data['country'] = country_code.upper()
-            result['data'] = org_data
-        else:
-            result['error'] = f"Unexpected data format for organization '{organization_id}'"
-            result['data'] = {}
-
-    return result
-
-# --- 4. DATASET FUNCTIONS ---
-
-def list_datasets(country_code: str, limit: Optional[int] = 50) -> Dict[str, Any]:
-    """
-    List all datasets in the specified portal.
-
-    Args:
-        country_code: Two-letter country code
-        limit: Maximum number of datasets to return
-
-    Returns:
-        Formatted response containing list of datasets
-    """
-    params = {'limit': limit}
-    result = _make_request(country_code, 'package_list', params)
-
-    if not result['error']:
-        # Handle different response formats from different CKAN implementations
-        enhanced_datasets = []
-
-        if isinstance(result['data'], list) and len(result['data']) > 0:
-            # Check if it's a simple list of names or a search result format
-            first_item = result['data'][0]
-
-            if isinstance(first_item, str):
-                # Simple list of names (standard CKAN package_list)
-                for dataset_name in result['data']:
-                    enhanced_datasets.append({
-                        'name': dataset_name,
-                        'display_name': dataset_name.replace('-', ' ').title(),
-                        'country': country_code.upper()
-                    })
-            elif isinstance(first_item, dict) and 'name' in first_item:
-                # Search result format (some implementations return this)
-                for dataset in result['data']:
-                    enhanced_dataset = {
-                        'name': dataset.get('name', ''),
-                        'display_name': dataset.get('title', dataset.get('name', '')).replace('-', ' ').title(),
-                        'country': country_code.upper(),
-                        'title': dataset.get('title', ''),
-                        'notes': dataset.get('notes', ''),
-                        'organization': dataset.get('organization', {}).get('title', ''),
-                        'num_resources': dataset.get('num_resources', 0),
-                        'metadata_created': dataset.get('metadata_created', ''),
-                        'metadata_modified': dataset.get('metadata_modified', '')
-                    }
-                    enhanced_datasets.append(enhanced_dataset)
-
-        result['data'] = enhanced_datasets
-        result['metadata']['count'] = len(enhanced_datasets)
-        result['metadata']['action'] = 'list_datasets'
-
-    return result
-
-def search_datasets(country_code: str, query: str = "", rows: int = 50,
-                   organization: Optional[str] = None,
-                   tags: Optional[List[str]] = None) -> Dict[str, Any]:
-    """
-    Search for datasets in the specified portal.
-
-    Args:
-        country_code: Two-letter country code
-        query: Search query string
-        rows: Number of results to return
-        organization: Filter by organization name
-        tags: Filter by tags
-
-    Returns:
-        Formatted response containing search results
-    """
-    params = {
-        'rows': rows
-    }
-
-    if query:
-        params['q'] = query
-
-    if organization:
-        params['fq'] = f'organization:{organization}'
-
-    if tags:
-        tag_filter = ' OR '.join([f'tags:{tag}' for tag in tags])
-        if 'fq' in params:
-            params['fq'] += f' AND ({tag_filter})'
-        else:
-            params['fq'] = tag_filter
-
-    result = _make_request(country_code, 'package_search', params)
-
-    if not result['error']:
-        # Enhance dataset metadata
-        enhanced_datasets = []
-        for dataset in result['data']:
-            enhanced_dataset = _enhance_dataset_metadata(dataset)
-            enhanced_datasets.append(enhanced_dataset)
-
-        result['data'] = enhanced_datasets
-        result['metadata']['count'] = len(enhanced_datasets)
-        result['metadata']['query'] = query
-
-    return result
-
-def get_dataset_details(country_code: str, dataset_id: str) -> Dict[str, Any]:
-    """
-    Get detailed information about a specific dataset.
-
-    Args:
-        country_code: Two-letter country code
-        dataset_id: ID or name of the dataset
-
-    Returns:
-        Formatted response containing dataset details
-    """
-    params = {'id': dataset_id}
-    result = _make_request(country_code, 'package_show', params)
-
-    if not result['error'] and result['data']:
-        # Handle different response formats
-        dataset_data = result['data']
-
-        # Ensure we have a dictionary, not a list
-        if isinstance(dataset_data, list) and len(dataset_data) > 0:
-            dataset_data = dataset_data[0]
-        elif isinstance(dataset_data, list):
-            # Empty list, return error
-            result['error'] = f"Dataset '{dataset_id}' not found"
-            result['data'] = {}
-            return result
-
-        # Ensure it's a dictionary
-        if isinstance(dataset_data, dict):
-            # Enhance dataset metadata
-            enhanced_dataset = _enhance_dataset_metadata(dataset_data)
-            result['data'] = enhanced_dataset
-        else:
-            result['error'] = f"Unexpected data format for dataset '{dataset_id}'"
-            result['data'] = {}
-
-    return result
-
-def get_datasets_by_organization(country_code: str, organization_id: str,
-                                limit: Optional[int] = None) -> Dict[str, Any]:
-    """
-    Get all datasets belonging to a specific organization.
-
-    Args:
-        country_code: Two-letter country code
-        organization_id: ID or name of the organization
-        limit: Maximum number of datasets to return
-
-    Returns:
-        Formatted response containing organization datasets
-    """
-    # First get organization details to get the list of packages
-    org_result = get_organization_details(country_code, organization_id)
-
-    if org_result['error']:
-        return org_result
-
-    # Get the list of packages from the organization
-    packages = org_result['data'].get('packages', [])
-
-    if limit:
-        packages = packages[:limit]
-
-    # Get details for each package
-    datasets = []
-    errors = []
-
-    for package_name in packages:
+        portal = _get_portal_config(country_code)
+    except ValueError as e:
+        return {"success": False, "data": [], "metadata": {}, "error": str(e)}
+
+    url = f"{portal['base_url']}/{action}"
+    last_error = "unknown error"
+    for attempt in range(MAX_ATTEMPTS):
+        if attempt:
+            time.sleep(1.5)
         try:
-            dataset_result = get_dataset_details(country_code, package_name)
-            if not dataset_result['error']:
-                datasets.append(dataset_result['data'])
-            else:
-                errors.append(f"Failed to get dataset {package_name}: {dataset_result['error']}")
-        except Exception as e:
-            errors.append(f"Error getting dataset {package_name}: {str(e)}")
+            response = requests.get(url, params=params or {}, headers=HEADERS, timeout=TIMEOUT)
+        except requests.exceptions.Timeout:
+            last_error = f"Request timed out after {TIMEOUT} s"
+            continue
+        except requests.exceptions.ConnectionError:
+            last_error = f"Could not connect to {portal['name']}"
+            continue
+        except requests.exceptions.RequestException as e:
+            last_error = f"Request failed: {e}"
+            break
 
-    portal_config = _get_portal_config(country_code)
+        if response.status_code >= 500:
+            last_error = f"HTTP {response.status_code} from {portal['name']}"
+            continue
+        try:
+            body = response.json()
+        except ValueError:
+            last_error = f"HTTP {response.status_code}: the portal did not answer with JSON"
+            if response.status_code == 200:
+                continue  # transient gateway pages are served with 200 on some portals
+            break
+        if response.status_code >= 400 or not isinstance(body, dict) or not body.get('success', False):
+            err = body.get('error') if isinstance(body, dict) else None
+            msg = err.get('message') if isinstance(err, dict) else err
+            last_error = f"HTTP {response.status_code}: {msg or 'CKAN API error'}"
+            break
+        return {"success": True, "data": body.get('result'),
+                "metadata": _metadata(portal, action, url=url), "error": None}
 
+    return {"success": False, "data": [], "metadata": _metadata(portal, action, url=url), "error": last_error}
+
+
+def _fail(message: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    return {"success": False, "data": [], "metadata": metadata or {}, "error": message}
+
+
+def _tag_names(dataset: Dict[str, Any]) -> List[str]:
+    names = []
+    for t in dataset.get('tags') or []:
+        if isinstance(t, dict):
+            n = t.get('display_name') or t.get('name')
+        else:
+            n = str(t)
+        if n:
+            names.append(n)
+    return names
+
+
+def _slim_dataset(ds: Dict[str, Any]) -> Dict[str, Any]:
+    notes = ds.get('notes') or ''
+    if len(notes) > NOTES_MAX_CHARS:
+        notes = notes[:NOTES_MAX_CHARS].rstrip() + '...'
+    org = ds.get('organization') or {}
+    resources = ds.get('resources') or []
+    formats = []
+    for r in resources:
+        f = (r.get('format') or '').upper()
+        if f and f not in formats:
+            formats.append(f)
     return {
-        "data": datasets,
-        "metadata": {
-            "source": portal_config['name'],
-            "country": portal_config['country_code'],
-            "organization": organization_id,
-            "last_updated": datetime.now().isoformat(),
-            "count": len(datasets),
-            "errors": errors if errors else None
-        },
-        "error": None if errors else f"Partial success with {len(errors)} errors"
+        "id": ds.get('id', ''),
+        "name": ds.get('name', ''),
+        "title": ds.get('title') or ds.get('name', ''),
+        "notes": notes,
+        "organization": org.get('title') or org.get('name', '') if isinstance(org, dict) else '',
+        "num_resources": ds.get('num_resources', len(resources)),
+        "resource_formats": formats,
+        "metadata_created": ds.get('metadata_created', ''),
+        "metadata_modified": ds.get('metadata_modified', ''),
+        "license": ds.get('license_title') or ds.get('license_id', ''),
+        "tags": _tag_names(ds),
     }
 
-# --- 5. RESOURCE/SERIES FUNCTIONS ---
 
-def get_dataset_resources(country_code: str, dataset_id: str) -> Dict[str, Any]:
-    """
-    Get all resources (data files) for a specific dataset.
-
-    Args:
-        country_code: Two-letter country code
-        dataset_id: ID or name of the dataset
-
-    Returns:
-        Formatted response containing dataset resources
-    """
-    # First get dataset details
-    dataset_result = get_dataset_details(country_code, dataset_id)
-
-    if dataset_result['error']:
-        return dataset_result
-
-    # Extract and enhance resources
-    resources = dataset_result['data'].get('resources', [])
-    enhanced_resources = []
-
-    for resource in resources:
-        enhanced_resource = resource.copy()
-        enhanced_resource['dataset_name'] = dataset_result['data'].get('name', '')
-        enhanced_resource['dataset_title'] = dataset_result['data'].get('title', '')
-        enhanced_resource['organization'] = dataset_result['data'].get('organization', {}).get('name', '')
-        enhanced_resources.append(enhanced_resource)
-
-    portal_config = _get_portal_config(country_code)
-
+def _slim_resource(res: Dict[str, Any], dataset: Dict[str, Any]) -> Dict[str, Any]:
+    size = res.get('size')
+    try:
+        size = int(size) if size not in (None, '') else None
+    except (TypeError, ValueError):
+        size = None
     return {
-        "data": enhanced_resources,
-        "metadata": {
-            "source": portal_config['name'],
-            "country": portal_config['country_code'],
-            "dataset_id": dataset_id,
-            "dataset_name": dataset_result['data'].get('name', ''),
-            "last_updated": datetime.now().isoformat(),
-            "count": len(enhanced_resources)
-        },
-        "error": None
+        "id": res.get('id', ''),
+        "name": res.get('name') or res.get('description') or res.get('id', ''),
+        "description": res.get('description') or '',
+        "format": (res.get('format') or '').upper(),
+        "size": size,
+        "url": res.get('url', ''),
+        "last_modified": res.get('last_modified') or res.get('metadata_modified') or res.get('created', ''),
+        "dataset_name": dataset.get('name', ''),
+        "dataset_title": dataset.get('title', ''),
     }
 
-def get_resource_details(country_code: str, resource_id: str) -> Dict[str, Any]:
-    """
-    Get detailed information about a specific resource.
 
-    Args:
-        country_code: Two-letter country code
-        resource_id: ID of the resource
-
-    Returns:
-        Formatted response containing resource details
-    """
-    params = {'id': resource_id}
-    result = _make_request(country_code, 'resource_show', params)
-
-    return result
-
-# --- 6. UTILITY FUNCTIONS ---
+# --- 3. COMMANDS ---
 
 def get_supported_countries() -> Dict[str, Any]:
-    """
-    Get list of supported countries and their portal information.
+    """The portal list (code, name, country) — feeds the panel's portal selector."""
+    portals = [{
+        "code": code,
+        "name": cfg['name'],
+        "country_code": cfg['country_code'],
+        "base_url": cfg['base_url'],
+        "default": code == DEFAULT_PORTAL,
+    } for code, cfg in sorted(CKAN_PORTALS.items(), key=lambda kv: kv[1]['name'])]
+    return {"success": True, "data": portals,
+            "metadata": {"source": "Universal CKAN API Wrapper", "count": len(portals),
+                         "default": DEFAULT_PORTAL, "last_updated": datetime.now().isoformat()},
+            "error": None}
 
-    Returns:
-        Formatted response containing supported countries
-    """
-    countries = []
-    for code, config in CKAN_PORTALS.items():
-        countries.append({
-            'code': code.upper(),
-            'name': config['name'],
-            'base_url': config['base_url'],
-            'country_code': config['country_code']
-        })
 
-    return {
-        "data": countries,
-        "metadata": {
-            "source": "Universal CKAN API Wrapper",
-            "country": "ALL",
-            "action": "get_supported_countries",
-            "last_updated": datetime.now().isoformat(),
-            "count": len(countries)
-        },
-        "error": None
-    }
+def list_organizations(country_code: str, limit: Optional[int] = 300) -> Dict[str, Any]:
+    """Publishers with their dataset counts, largest first (one package_search facet query). Falls
+    back to organization_list (names only) for portals whose search facets are unavailable."""
+    limit = max(1, min(int(limit or 300), 1000))
+    result = _make_request(country_code, 'package_search',
+                           {'rows': 0, 'facet.field': '["organization"]', 'facet.limit': limit})
+    orgs: List[Dict[str, Any]] = []
+    if result['success'] and isinstance(result['data'], dict):
+        items = (((result['data'].get('search_facets') or {}).get('organization') or {}).get('items') or [])
+        for it in items:
+            name = it.get('name', '')
+            if not name:
+                continue
+            orgs.append({"id": name, "name": name, "display_name": it.get('display_name') or name,
+                         "dataset_count": int(it.get('count') or 0)})
+        orgs.sort(key=lambda o: (-o['dataset_count'], o['display_name'].lower()))
+
+    if not orgs:
+        fallback = _make_request(country_code, 'organization_list', {'limit': limit})
+        if not fallback['success']:
+            return fallback
+        for name in fallback['data'] or []:
+            if isinstance(name, str) and name:
+                orgs.append({"id": name, "name": name, "display_name": name.replace('-', ' ').title(),
+                             "dataset_count": -1})
+        result = fallback
+
+    meta = dict(result['metadata'])
+    meta.update({"action": "list_organizations", "count": len(orgs), "total_count": len(orgs)})
+    return {"success": True, "data": orgs, "metadata": meta, "error": None}
+
+
+def search_datasets(country_code: str, query: str = "", rows: int = 50,
+                    organization: Optional[str] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
+    """package_search; results trimmed to the fields a list view needs."""
+    params: Dict[str, Any] = {'rows': max(1, min(int(rows or 50), 1000))}
+    if query:
+        params['q'] = query
+    filters = []
+    if organization:
+        filters.append(f'organization:"{organization}"')
+    if tags:
+        filters.append('(' + ' OR '.join(f'tags:"{t}"' for t in tags) + ')')
+    if filters:
+        params['fq'] = ' AND '.join(filters)
+    if not query:
+        params['sort'] = 'metadata_modified desc'
+
+    result = _make_request(country_code, 'package_search', params)
+    if not result['success']:
+        return result
+    payload = result['data'] if isinstance(result['data'], dict) else {}
+    datasets = [_slim_dataset(d) for d in payload.get('results') or [] if isinstance(d, dict)]
+    meta = dict(result['metadata'])
+    meta.update({"action": "search_datasets", "query": query, "organization": organization,
+                 "count": len(datasets), "total_count": int(payload.get('count') or len(datasets))})
+    return {"success": True, "data": datasets, "metadata": meta, "error": None}
+
+
+def get_datasets_by_organization(country_code: str, organization_id: str,
+                                 limit: Optional[int] = 100) -> Dict[str, Any]:
+    """Datasets of one publisher, newest first — a single filtered package_search (the old version
+    fetched every package separately)."""
+    if not organization_id:
+        return _fail("An organization id is required")
+    result = search_datasets(country_code, "", limit or 100, organization=organization_id)
+    if result['success']:
+        result['metadata']['action'] = 'get_datasets_by_organization'
+    return result
+
+
+def list_datasets(country_code: str, limit: Optional[int] = 50) -> Dict[str, Any]:
+    """Most recently modified datasets on the portal."""
+    result = search_datasets(country_code, "", limit or 50)
+    if result['success']:
+        result['metadata']['action'] = 'list_datasets'
+    return result
+
+
+def get_dataset_details(country_code: str, dataset_id: str) -> Dict[str, Any]:
+    if not dataset_id:
+        return _fail("A dataset id is required")
+    result = _make_request(country_code, 'package_show', {'id': dataset_id})
+    if not result['success']:
+        return result
+    ds = result['data'] if isinstance(result['data'], dict) else {}
+    if not ds:
+        return _fail(f"Dataset '{dataset_id}' not found", result['metadata'])
+    details = _slim_dataset(ds)
+    details['notes'] = ds.get('notes') or ''
+    details['resources'] = [_slim_resource(r, ds) for r in ds.get('resources') or [] if isinstance(r, dict)]
+    meta = dict(result['metadata'])
+    meta.update({"action": "get_dataset_details", "count": 1})
+    return {"success": True, "data": details, "metadata": meta, "error": None}
+
+
+def get_dataset_resources(country_code: str, dataset_id: str) -> Dict[str, Any]:
+    if not dataset_id:
+        return _fail("A dataset id is required")
+    result = _make_request(country_code, 'package_show', {'id': dataset_id})
+    if not result['success']:
+        return result
+    ds = result['data'] if isinstance(result['data'], dict) else {}
+    resources = [_slim_resource(r, ds) for r in ds.get('resources') or [] if isinstance(r, dict)]
+    meta = dict(result['metadata'])
+    meta.update({"action": "get_dataset_resources", "dataset_id": dataset_id,
+                 "dataset_name": ds.get('name', ''), "count": len(resources), "total_count": len(resources)})
+    return {"success": True, "data": resources, "metadata": meta, "error": None}
+
+
+def get_organization_details(country_code: str, organization_id: str) -> Dict[str, Any]:
+    if not organization_id:
+        return _fail("An organization id is required")
+    result = _make_request(country_code, 'organization_show', {'id': organization_id})
+    if not result['success']:
+        return result
+    org = result['data'] if isinstance(result['data'], dict) else {}
+    return {"success": True,
+            "data": {"id": org.get('id', ''), "name": org.get('name', ''),
+                     "display_name": org.get('display_name') or org.get('title') or org.get('name', ''),
+                     "description": org.get('description') or '',
+                     "dataset_count": org.get('package_count', 0),
+                     "image_url": org.get('image_url') or '', "created": org.get('created', '')},
+            "metadata": result['metadata'], "error": None}
+
+
+def get_resource_details(country_code: str, resource_id: str) -> Dict[str, Any]:
+    if not resource_id:
+        return _fail("A resource id is required")
+    return _make_request(country_code, 'resource_show', {'id': resource_id})
+
 
 def test_portal_connection(country_code: str) -> Dict[str, Any]:
-    """
-    Test connection to a specific CKAN portal.
+    result = _make_request(country_code, 'package_search', {'rows': 0})
+    if not result['success']:
+        return result
+    count = result['data'].get('count', 0) if isinstance(result['data'], dict) else 0
+    return {"success": True,
+            "data": {"status": "connected", "portal": result['metadata'].get('source'), "datasets": count},
+            "metadata": result['metadata'], "error": None}
 
-    Args:
-        country_code: Two-letter country code
 
-    Returns:
-        Formatted response containing connection test results
-    """
+# --- 4. CLI ---
+
+def _int_arg(value: str, default: int) -> int:
     try:
-        portal_config = _get_portal_config(country_code)
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
-        # Test with a simple API call
-        result = _make_request(country_code, 'package_list', {'limit': 1})
 
-        if not result['error']:
-            return {
-                "data": {
-                    "status": "connected",
-                    "portal": result['metadata']['source'],
-                    "country": result['metadata']['country']
-                },
-                "metadata": {
-                    "source": portal_config['name'],
-                    "country": portal_config['country_code'],
-                    "action": "test_portal_connection",
-                    "last_updated": datetime.now().isoformat(),
-                    "test_time": datetime.now().isoformat(),
-                    "count": 1
-                },
-                "error": None
-            }
-        else:
-            return {
-                "data": {
-                    "status": "failed",
-                    "portal": portal_config['name'],
-                    "country": portal_config['country_code'],
-                    "error": result['error']
-                },
-                "metadata": {
-                    "source": portal_config['name'],
-                    "country": portal_config['country_code'],
-                    "action": "test_portal_connection",
-                    "last_updated": datetime.now().isoformat(),
-                    "test_time": datetime.now().isoformat(),
-                    "count": 0
-                },
-                "error": result['error']
-            }
+POSITIONAL_COMMANDS = ('portals', 'supported-countries', 'publishers', 'organizations', 'datasets', 'search',
+                       'resources', 'dataset', 'dataset-details', 'recent', 'recent-datasets', 'test')
 
-    except Exception as e:
-        try:
-            portal_config = _get_portal_config(country_code)
-        except ValueError:
-            portal_config = {'name': f'Portal {country_code.upper()}', 'country_code': country_code.upper()}
 
-        return {
-            "data": {
-                "status": "failed",
-                "portal": portal_config['name'],
-                "country": portal_config['country_code'],
-                "error": str(e)
-            },
-            "metadata": {
-                "source": portal_config['name'],
-                "country": portal_config['country_code'],
-                "action": "test_portal_connection",
-                "last_updated": datetime.now().isoformat(),
-                "test_time": datetime.now().isoformat(),
-                "count": 0
-            },
-            "error": f"Connection test failed: {str(e)}"
-        }
+def run_positional(argv: List[str]) -> Dict[str, Any]:
+    command = argv[0].strip().lower().replace('_', '-')
+    args = argv[1:]
+    if command not in POSITIONAL_COMMANDS:
+        return _fail(f"Unknown command '{argv[0]}'. Commands: portals, publishers, datasets, search, "
+                     "resources, dataset, recent, test")
+    if command in ('portals', 'supported-countries'):
+        return get_supported_countries()
+    if not args:
+        return _fail(f"Usage: {command} <portal> [args...] — portals: {', '.join(sorted(CKAN_PORTALS))}")
+    portal = args[0]
+    rest = args[1:]
+    if command in ('publishers', 'organizations'):
+        return list_organizations(portal, _int_arg(rest[0], 300) if rest else 300)
+    if command == 'datasets':
+        if not rest:
+            return _fail("Usage: datasets <portal> <organization> [rows]")
+        return get_datasets_by_organization(portal, rest[0], _int_arg(rest[1], 100) if len(rest) > 1 else 100)
+    if command == 'search':
+        if not rest:
+            return _fail("Usage: search <portal> <query> [rows]")
+        rows = 50
+        if len(rest) > 1 and rest[-1].isdigit():
+            rows = int(rest[-1])
+            rest = rest[:-1]
+        return search_datasets(portal, " ".join(rest), rows)
+    if command == 'resources':
+        if not rest:
+            return _fail("Usage: resources <portal> <dataset_id>")
+        return get_dataset_resources(portal, rest[0])
+    if command in ('dataset', 'dataset-details'):
+        if not rest:
+            return _fail("Usage: dataset <portal> <dataset_id>")
+        return get_dataset_details(portal, rest[0])
+    if command in ('recent', 'recent-datasets'):
+        return list_datasets(portal, _int_arg(rest[0], 50) if rest else 50)
+    if command == 'test':
+        return test_portal_connection(portal)
+    return _fail(f"Unknown command '{argv[0]}'. Commands: portals, publishers, datasets, search, "
+                 "resources, dataset, recent, test")
 
-# --- 7. CLI INTERFACE ---
 
-def print_usage():
-    """Print usage instructions."""
-    print("Universal CKAN Data Portals API Wrapper")
-    print("=" * 50)
-    print()
-    print("Usage Examples:")
-    print("  # List all datasets from US portal")
-    print(f"  python {sys.argv[0]} --country us --action list_datasets")
-    print()
-    print("  # Search for climate data in Australia")
-    print(f"  python {sys.argv[0]} --country au --action search_datasets --query 'climate'")
-    print()
-    print("  # Get dataset details from UK portal")
-    print(f"  python {sys.argv[0]} --country uk --action dataset_details --id 'dataset-name'")
-    print()
-    print("Supported Countries:")
-    for code in CKAN_PORTALS.keys():
-        print(f"  {code.upper()}: {CKAN_PORTALS[code]['name']}")
-    print()
-    print("Available Actions:")
-    actions = [
-        "list_organizations", "get_organization_details",
-        "list_datasets", "search_datasets", "get_dataset_details",
-        "get_datasets_by_organization", "get_dataset_resources",
-        "get_resource_details", "test_connection", "supported_countries"
-    ]
-    for action in actions:
-        print(f"  - {action}")
-    print()
-
-def main():
-    """Main CLI function."""
-    if len(sys.argv) < 4 or '--help' in sys.argv or '-h' in sys.argv:
-        print_usage()
-        sys.exit(1)
-
-    # Parse command line arguments
-    country_code = None
-    action = None
-    dataset_id = None
-    organization_id = None
-    query = ""
-    limit = 50
-
-    i = 1
-    while i < len(sys.argv):
-        arg = sys.argv[i]
-        if arg == '--country' and i + 1 < len(sys.argv):
-            country_code = sys.argv[i + 1]
-            i += 2
-        elif arg == '--action' and i + 1 < len(sys.argv):
-            action = sys.argv[i + 1]
-            i += 2
-        elif arg == '--id' and i + 1 < len(sys.argv):
-            dataset_id = sys.argv[i + 1]
-            i += 2
-        elif arg == '--org' and i + 1 < len(sys.argv):
-            organization_id = sys.argv[i + 1]
-            i += 2
-        elif arg == '--query' and i + 1 < len(sys.argv):
-            query = sys.argv[i + 1]
-            i += 2
-        elif arg == '--limit' and i + 1 < len(sys.argv):
-            try:
-                limit = int(sys.argv[i + 1])
-            except ValueError:
-                print("Error: Limit must be a number")
-                sys.exit(1)
+def run_flags(argv: List[str]) -> Dict[str, Any]:
+    opts: Dict[str, str] = {}
+    i = 0
+    while i < len(argv):
+        if argv[i].startswith('--') and i + 1 < len(argv):
+            opts[argv[i][2:]] = argv[i + 1]
             i += 2
         else:
             i += 1
+    action = opts.get('action', '')
+    country = opts.get('country', '')
+    if action == 'supported_countries':
+        return get_supported_countries()
+    if not country or not action:
+        return _fail("--country and --action are required")
+    limit = _int_arg(opts.get('limit', ''), 50)
+    item_id = opts.get('id', '')
+    org = opts.get('org', '')
+    if action == 'list_organizations':
+        return list_organizations(country, limit)
+    if action == 'get_organization_details':
+        return get_organization_details(country, org)
+    if action == 'list_datasets':
+        return list_datasets(country, limit)
+    if action == 'search_datasets':
+        return search_datasets(country, opts.get('query', ''), limit, org or None)
+    if action == 'get_dataset_details':
+        return get_dataset_details(country, item_id)
+    if action == 'get_datasets_by_organization':
+        return get_datasets_by_organization(country, org, limit)
+    if action == 'get_dataset_resources':
+        return get_dataset_resources(country, item_id)
+    if action == 'get_resource_details':
+        return get_resource_details(country, item_id)
+    if action == 'test_connection':
+        return test_portal_connection(country)
+    return _fail(f"Unknown action '{action}'")
 
-    # Validate required arguments
-    if not country_code or not action:
-        print("Error: --country and --action are required")
-        print_usage()
-        sys.exit(1)
 
-    # Execute the requested action
-    try:
-        if action == 'list_organizations':
-            result = list_organizations(country_code, limit)
-        elif action == 'get_organization_details':
-            if not organization_id:
-                print("Error: --org is required for get_organization_details")
-                sys.exit(1)
-            result = get_organization_details(country_code, organization_id)
-        elif action == 'list_datasets':
-            result = list_datasets(country_code, limit)
-        elif action == 'search_datasets':
-            result = search_datasets(country_code, query, limit, organization_id)
-        elif action == 'get_dataset_details':
-            if not dataset_id:
-                print("Error: --id is required for get_dataset_details")
-                sys.exit(1)
-            result = get_dataset_details(country_code, dataset_id)
-        elif action == 'get_datasets_by_organization':
-            if not organization_id:
-                print("Error: --org is required for get_datasets_by_organization")
-                sys.exit(1)
-            result = get_datasets_by_organization(country_code, organization_id, limit)
-        elif action == 'get_dataset_resources':
-            if not dataset_id:
-                print("Error: --id is required for get_dataset_resources")
-                sys.exit(1)
-            result = get_dataset_resources(country_code, dataset_id)
-        elif action == 'get_resource_details':
-            if not dataset_id:
-                print("Error: --id is required for get_resource_details")
-                sys.exit(1)
-            result = get_resource_details(country_code, dataset_id)
-        elif action == 'test_connection':
-            result = test_portal_connection(country_code)
-        elif action == 'supported_countries':
-            result = get_supported_countries()
-        else:
-            print(f"Error: Unknown action '{action}'")
-            print_usage()
-            sys.exit(1)
+def main() -> None:
+    argv = sys.argv[1:]
+    if not argv or argv[0] in ('-h', '--help'):
+        result = _fail("Usage: universal_ckan_api.py <command> [args...]  (commands: portals, publishers, "
+                       "datasets, search, resources, dataset, recent, test)")
+    else:
+        try:
+            result = run_flags(argv) if argv[0].startswith('--') else run_positional(argv)
+        except Exception as e:  # never let a traceback replace the JSON contract
+            _log(f"universal_ckan_api: {type(e).__name__}: {e}")
+            result = _fail(f"{type(e).__name__}: {e}")
+    print(json.dumps(result, ensure_ascii=True, default=str))
+    sys.exit(0 if result.get('success') else 1)
 
-        # Output result as JSON
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-
-        # Exit with error code if API call failed
-        if result.get('error'):
-            sys.exit(1)
-
-    except Exception as e:
-        error_result = {
-            "data": [],
-            "metadata": {},
-            "error": f"CLI Error: {str(e)}"
-        }
-        print(json.dumps(error_result, indent=2))
-        sys.exit(1)
 
 if __name__ == "__main__":
     main()

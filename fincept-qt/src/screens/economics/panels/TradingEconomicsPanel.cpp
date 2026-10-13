@@ -56,7 +56,7 @@ void TradingEconomicsPanel::activate() {
 void TradingEconomicsPanel::build_controls(QHBoxLayout* thl) {
     auto lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -176,9 +176,15 @@ void TradingEconomicsPanel::on_result(const QString& request_id, const services:
         return;
     }
 
-    const int idx = dataset_combo_->currentIndex();
-    const QString title =
-        "Trading Economics: " + (idx >= 0 && idx < kTEDatasets.size() ? kTEDatasets[idx].label : request_id.mid(3));
+    // Label from the request id ("te_<command>[_<country>]"), not the combo the user may have changed.
+    QString title = "Trading Economics: " + request_id.mid(3);
+    for (const auto& d : kTEDatasets) {
+        if (request_id == "te_" + d.command || request_id.startsWith("te_" + d.command + "_")) {
+            title = "Trading Economics: " + d.label;
+            if (request_id.size() > QString("te_" + d.command + "_").size())
+                title += " — " + request_id.mid(QString("te_" + d.command + "_").size());
+        }
+    }
     display(rows, title);
     LOG_INFO("TradingEconomicsPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }

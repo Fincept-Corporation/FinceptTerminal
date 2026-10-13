@@ -4,14 +4,62 @@
 #include "mcp/tools/PortfolioTools.h"
 
 #include "core/logging/Logger.h"
+#include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/PortfolioHoldingsRepository.h"
 #include "storage/repositories/PortfolioRepository.h"
+
+#include <QDate>
+#include <QMetaObject>
+#include <QThread>
 
 #include <algorithm>
 
 namespace fincept::mcp::tools {
 
-static constexpr const char* TAG = "PortfolioTools";
+namespace portfolio_tools_detail {
+
+constexpr const char* kPortfolioToolsTag = "PortfolioTools";
+
+/// Tool handlers run on a worker thread; PortfolioService lives on the GUI
+/// thread. Run the mutation there and block until it has committed (and its
+/// signals have refreshed the screen) — same pattern as ReportBuilderTools.
+template <typename F>
+void run_on_service_thread(F&& fn) {
+    auto* svc = &services::PortfolioService::instance();
+    if (QThread::currentThread() == svc->thread()) {
+        fn();
+        return;
+    }
+    QMetaObject::invokeMethod(svc, std::forward<F>(fn), Qt::BlockingQueuedConnection);
+}
+
+/// Run a service write on its thread, capturing its bool result and any
+/// operation_failed() message it emits (over-sell, bad input, DB error).
+template <typename F>
+std::pair<bool, QString> run_service_write(F&& write) {
+    bool ok = false;
+    QString message;
+    run_on_service_thread([&]() {
+        auto& svc = services::PortfolioService::instance();
+        auto conn = QObject::connect(&svc, &services::PortfolioService::operation_failed, &svc,
+                                     [&message](const QString&, const QString& msg) { message = msg; });
+        ok = write(svc);
+        QObject::disconnect(conn);
+    });
+    return {ok, message};
+}
+
+bool valid_trade_date(const QString& date) {
+    if (date.isEmpty())
+        return true;
+    const QDate d = QDate::fromString(date.left(10), Qt::ISODate);
+    return d.isValid() && d <= QDate::currentDate();
+}
+
+} // namespace portfolio_tools_detail
+
+namespace ptd = portfolio_tools_detail;
+using ptd::kPortfolioToolsTag;
 
 std::vector<ToolDef> get_portfolio_tools() {
     std::vector<ToolDef> tools;
@@ -72,7 +120,7 @@ std::vector<ToolDef> get_portfolio_tools() {
             if (r.is_err())
                 return ToolResult::fail("Failed to add holding: " + QString::fromStdString(r.error()));
 
-            LOG_INFO(TAG, QString("Added holding: %1 x%2 @ %3").arg(symbol).arg(shares).arg(avg_cost));
+            LOG_INFO(kPortfolioToolsTag, QString("Added holding: %1 x%2 @ %3").arg(symbol).arg(shares).arg(avg_cost));
             return ToolResult::ok("Holding added", QJsonObject{{"id", static_cast<int>(r.value())},
                                                                {"symbol", symbol},
                                                                {"shares", shares},
@@ -221,7 +269,8 @@ std::vector<ToolDef> get_portfolio_tools() {
             if (r.is_err())
                 return ToolResult::fail("Failed to create portfolio: " + QString::fromStdString(r.error()));
 
-            LOG_INFO(TAG, "Created portfolio: " + name);
+            LOG_INFO(kPortfolioToolsTag, "Created portfolio: " + name);
+            ptd::run_on_service_thread([]() { services::PortfolioService::instance().load_portfolios(); });
             return ToolResult::ok("Portfolio created",
                                   QJsonObject{{"id", r.value()}, {"name", name}, {"currency", currency}});
         };
@@ -243,11 +292,14 @@ std::vector<ToolDef> get_portfolio_tools() {
             if (id.isEmpty())
                 return ToolResult::fail("Missing 'portfolio_id'");
 
-            auto r = PortfolioRepository::instance().delete_portfolio(id);
-            if (r.is_err())
-                return ToolResult::fail("Failed to delete portfolio: " + QString::fromStdString(r.error()));
+            if (PortfolioRepository::instance().get_portfolio(id).is_err())
+                return ToolResult::fail("Portfolio not found: " + id);
+            // Through the service so its caches are dropped and the open screen refreshes.
+            ptd::run_on_service_thread([id]() { services::PortfolioService::instance().delete_portfolio(id); });
+            if (PortfolioRepository::instance().get_portfolio(id).is_ok())
+                return ToolResult::fail("Failed to delete portfolio " + id);
 
-            LOG_INFO(TAG, "Deleted portfolio: " + id);
+            LOG_INFO(kPortfolioToolsTag, "Deleted portfolio: " + id);
             return ToolResult::ok("Portfolio deleted", QJsonObject{{"id", id}});
         };
         tools.push_back(std::move(t));
@@ -277,6 +329,8 @@ std::vector<ToolDef> get_portfolio_tools() {
                                        {"symbol", a.symbol},
                                        {"quantity", a.quantity},
                                        {"avg_buy_price", a.avg_buy_price},
+                                       {"cost_basis", a.quantity * a.avg_buy_price},
+                                       {"sector", a.sector},
                                        {"first_purchase_date", a.first_purchase_date},
                                        {"last_updated", a.last_updated}});
             }
@@ -289,7 +343,8 @@ std::vector<ToolDef> get_portfolio_tools() {
     {
         ToolDef t;
         t.name = "add_portfolio_asset";
-        t.description = "Add a new asset/holding to a named portfolio.";
+        t.description = "Buy an asset into a named portfolio: records a BUY in the ledger and updates the "
+                        "position (weighted-average cost).";
         t.category = "portfolio";
         t.is_destructive = true; // upserts quantity / average price in the user's portfolio
         t.input_schema.properties = QJsonObject{
@@ -308,16 +363,23 @@ std::vector<ToolDef> get_portfolio_tools() {
 
             if (portfolio_id.isEmpty() || symbol.isEmpty() || quantity <= 0 || price <= 0)
                 return ToolResult::fail("Missing or invalid: portfolio_id, symbol, quantity (>0), price (>0)");
+            if (!ptd::valid_trade_date(date))
+                return ToolResult::fail("Invalid 'date': expected YYYY-MM-DD, not in the future");
+            if (PortfolioRepository::instance().get_portfolio(portfolio_id).is_err())
+                return ToolResult::fail("Portfolio not found: " + portfolio_id);
 
-            auto r = PortfolioRepository::instance().add_asset(portfolio_id, symbol, quantity, price, date);
-            if (r.is_err())
-                return ToolResult::fail("Failed to add asset: " + QString::fromStdString(r.error()));
+            // Through the service: the old path wrote the position WITHOUT a BUY
+            // ledger row, so history replay, realised P&L and exports never saw it.
+            const auto [ok, msg] = ptd::run_service_write([&](services::PortfolioService& svc) {
+                return svc.add_asset(portfolio_id, symbol, quantity, price, date.left(10));
+            });
+            if (!ok)
+                return ToolResult::fail(msg.isEmpty() ? QStringLiteral("Failed to add asset") : msg);
 
-            LOG_INFO(TAG, QString("Added asset %1 x%2 to portfolio %3").arg(symbol).arg(quantity).arg(portfolio_id));
-            return ToolResult::ok("Asset added", QJsonObject{{"id", static_cast<int>(r.value())},
-                                                             {"symbol", symbol},
-                                                             {"quantity", quantity},
-                                                             {"price", price}});
+            LOG_INFO(kPortfolioToolsTag,
+                     QString("Added asset %1 x%2 to portfolio %3").arg(symbol).arg(quantity).arg(portfolio_id));
+            return ToolResult::ok("BUY recorded",
+                                  QJsonObject{{"symbol", symbol}, {"quantity", quantity}, {"price", price}});
         };
         tools.push_back(std::move(t));
     }
@@ -326,7 +388,8 @@ std::vector<ToolDef> get_portfolio_tools() {
     {
         ToolDef t;
         t.name = "remove_portfolio_asset";
-        t.description = "Remove an asset from a named portfolio by symbol.";
+        t.description = "Delete a position from a named portfolio WITHOUT recording a sale (data correction). "
+                        "To record an actual sale use sell_portfolio_asset.";
         t.category = "portfolio";
         t.is_destructive = true; // mutation tool — penalise on read-style queries
         t.input_schema.properties =
@@ -342,8 +405,46 @@ std::vector<ToolDef> get_portfolio_tools() {
             auto r = PortfolioRepository::instance().remove_asset(portfolio_id, symbol);
             if (r.is_err())
                 return ToolResult::fail("Failed to remove asset: " + QString::fromStdString(r.error()));
+            ptd::run_on_service_thread(
+                [portfolio_id]() { services::PortfolioService::instance().refresh_summary(portfolio_id); });
 
-            return ToolResult::ok("Asset removed", QJsonObject{{"symbol", symbol}});
+            return ToolResult::ok("Position removed (no SELL recorded)", QJsonObject{{"symbol", symbol}});
+        };
+        tools.push_back(std::move(t));
+    }
+
+    // ── sell_portfolio_asset ────────────────────────────────────────────
+    {
+        ToolDef t;
+        t.name = "sell_portfolio_asset";
+        t.description = "Sell part or all of a position: records a SELL in the ledger and reduces the position. "
+                        "Refused when the quantity exceeds what is held.";
+        t.category = "portfolio";
+        t.is_destructive = true;
+        t.input_schema.properties = QJsonObject{
+            {"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
+            {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol held in the portfolio"}}},
+            {"quantity", QJsonObject{{"type", "number"}, {"description", "Units to sell (<= units held)"}}},
+            {"price", QJsonObject{{"type", "number"}, {"description", "Sale price per unit"}}},
+            {"date", QJsonObject{{"type", "string"}, {"description", "Trade date YYYY-MM-DD (optional, default today)"}}}};
+        t.input_schema.required = {"portfolio_id", "symbol", "quantity", "price"};
+        t.handler = [](const QJsonObject& args) -> ToolResult {
+            const QString portfolio_id = args["portfolio_id"].toString().trimmed();
+            const QString symbol = args["symbol"].toString().trimmed().toUpper();
+            const double quantity = args["quantity"].toDouble(0.0);
+            const double price = args["price"].toDouble(0.0);
+            const QString date = args["date"].toString().trimmed();
+            if (portfolio_id.isEmpty() || symbol.isEmpty() || quantity <= 0 || price <= 0)
+                return ToolResult::fail("Missing or invalid: portfolio_id, symbol, quantity (>0), price (>0)");
+            if (!ptd::valid_trade_date(date))
+                return ToolResult::fail("Invalid 'date': expected YYYY-MM-DD, not in the future");
+            const auto [ok, msg] = ptd::run_service_write([&](services::PortfolioService& svc) {
+                return svc.sell_asset(portfolio_id, symbol, quantity, price, date.left(10));
+            });
+            if (!ok)
+                return ToolResult::fail(msg.isEmpty() ? QStringLiteral("Failed to record the sale") : msg);
+            return ToolResult::ok("SELL recorded",
+                                  QJsonObject{{"symbol", symbol}, {"quantity", quantity}, {"price", price}});
         };
         tools.push_back(std::move(t));
     }
@@ -402,13 +503,15 @@ std::vector<ToolDef> get_portfolio_tools() {
     {
         ToolDef t;
         t.name = "add_transaction";
-        t.description = "Record a transaction (BUY, SELL, DIVIDEND, SPLIT) in a portfolio.";
+        t.description = "Record a transaction in a portfolio. BUY/SELL also update the position (a SELL above "
+                        "the quantity held is refused); DIVIDEND records income (quantity = shares held, price = "
+                        "amount per share). SPLIT is not supported.";
         t.category = "portfolio";
         t.is_destructive = true; // appends to the user's transaction ledger
         t.input_schema.properties =
             QJsonObject{{"portfolio_id", QJsonObject{{"type", "string"}, {"description", "Portfolio ID"}}},
                         {"symbol", QJsonObject{{"type", "string"}, {"description", "Ticker symbol"}}},
-                        {"type", QJsonObject{{"type", "string"}, {"description", "BUY, SELL, DIVIDEND, SPLIT"}}},
+                        {"type", QJsonObject{{"type", "string"}, {"description", "BUY, SELL or DIVIDEND"}}},
                         {"quantity", QJsonObject{{"type", "number"}, {"description", "Number of shares/units"}}},
                         {"price", QJsonObject{{"type", "number"}, {"description", "Price per unit"}}},
                         {"date", QJsonObject{{"type", "string"}, {"description", "Transaction date YYYY-MM-DD"}}},
@@ -426,18 +529,35 @@ std::vector<ToolDef> get_portfolio_tools() {
             if (portfolio_id.isEmpty() || symbol.isEmpty() || type.isEmpty() || quantity <= 0 || date.isEmpty())
                 return ToolResult::fail("Missing required: portfolio_id, symbol, type, quantity (>0), date");
 
-            static const QStringList valid_types{"BUY", "SELL", "DIVIDEND", "SPLIT"};
+            if (type == QLatin1String("SPLIT"))
+                return ToolResult::fail("SPLIT is not supported: positions and history are not split-adjusted. "
+                                        "Record the post-split position with SELL/BUY instead.");
+            static const QStringList valid_types{"BUY", "SELL", "DIVIDEND"};
             if (!valid_types.contains(type))
-                return ToolResult::fail("Invalid type. Must be BUY, SELL, DIVIDEND, or SPLIT");
+                return ToolResult::fail("Invalid type. Must be BUY, SELL or DIVIDEND");
+            if (price <= 0)
+                return ToolResult::fail("'price' must be > 0");
+            if (!ptd::valid_trade_date(date))
+                return ToolResult::fail("Invalid 'date': expected YYYY-MM-DD, not in the future");
+            if (PortfolioRepository::instance().get_portfolio(portfolio_id).is_err())
+                return ToolResult::fail("Portfolio not found: " + portfolio_id);
 
-            auto r = PortfolioRepository::instance().add_transaction(portfolio_id, symbol, type, quantity, price, date,
-                                                                     notes);
-            if (r.is_err())
-                return ToolResult::fail("Failed to add transaction: " + QString::fromStdString(r.error()));
+            // Ledger-only writes used to leave the position untouched, so holdings
+            // and history disagreed. Route through the service, which keeps both.
+            const auto [ok, msg] = ptd::run_service_write([&](services::PortfolioService& svc) {
+                if (type == QLatin1String("BUY"))
+                    return svc.add_asset(portfolio_id, symbol, quantity, price, date.left(10));
+                if (type == QLatin1String("SELL"))
+                    return svc.sell_asset(portfolio_id, symbol, quantity, price, date.left(10));
+                return svc.record_dividend(portfolio_id, symbol, quantity, price, quantity * price, date.left(10),
+                                           notes);
+            });
+            if (!ok)
+                return ToolResult::fail(msg.isEmpty() ? QStringLiteral("Failed to add transaction") : msg);
 
-            LOG_INFO(TAG, QString("Transaction %1 %2 x%3").arg(type, symbol).arg(quantity));
+            LOG_INFO(kPortfolioToolsTag, QString("Transaction %1 %2 x%3").arg(type, symbol).arg(quantity));
             return ToolResult::ok("Transaction recorded",
-                                  QJsonObject{{"id", r.value()}, {"symbol", symbol}, {"type", type}});
+                                  QJsonObject{{"symbol", symbol}, {"type", type}, {"quantity", quantity}});
         };
         tools.push_back(std::move(t));
     }
@@ -446,22 +566,41 @@ std::vector<ToolDef> get_portfolio_tools() {
     {
         ToolDef t;
         t.name = "delete_transaction";
-        t.description = "Delete a transaction by ID.";
+        t.description = "Delete a transaction by ID. A BUY/SELL deletion re-derives that symbol's position "
+                        "from the remaining ledger.";
         t.category = "portfolio";
         t.is_destructive = true; // mutation tool — penalise on read-style queries
-        t.input_schema.properties =
-            QJsonObject{{"transaction_id", QJsonObject{{"type", "string"}, {"description", "Transaction ID"}}}};
+        t.input_schema.properties = QJsonObject{
+            {"transaction_id", QJsonObject{{"type", "string"}, {"description", "Transaction ID"}}},
+            {"portfolio_id",
+             QJsonObject{{"type", "string"}, {"description", "Portfolio ID (optional; looked up when omitted)"}}}};
         t.input_schema.required = {"transaction_id"};
         t.handler = [](const QJsonObject& args) -> ToolResult {
             QString id = args["transaction_id"].toString().trimmed();
             if (id.isEmpty())
                 return ToolResult::fail("Missing 'transaction_id'");
 
-            auto r = PortfolioRepository::instance().delete_transaction(id);
-            if (r.is_err())
-                return ToolResult::fail("Failed to delete transaction: " + QString::fromStdString(r.error()));
+            QString portfolio_id = args["portfolio_id"].toString().trimmed();
+            if (portfolio_id.isEmpty()) {
+                auto ports = PortfolioRepository::instance().list_portfolios();
+                if (ports.is_ok()) {
+                    for (const auto& p : ports.value()) {
+                        const auto txns = services::PortfolioService::instance().ledger(p.id);
+                        if (std::any_of(txns.begin(), txns.end(), [&id](const auto& t) { return t.id == id; })) {
+                            portfolio_id = p.id;
+                            break;
+                        }
+                    }
+                }
+                if (portfolio_id.isEmpty())
+                    return ToolResult::fail("Transaction not found: " + id);
+            }
+            const auto [ok, msg] = ptd::run_service_write(
+                [&](services::PortfolioService& svc) { return svc.delete_transaction(id, portfolio_id); });
+            if (!ok)
+                return ToolResult::fail(msg.isEmpty() ? QStringLiteral("Failed to delete transaction") : msg);
 
-            return ToolResult::ok("Transaction deleted", QJsonObject{{"id", id}});
+            return ToolResult::ok("Transaction deleted", QJsonObject{{"id", id}, {"portfolio_id", portfolio_id}});
         };
         tools.push_back(std::move(t));
     }

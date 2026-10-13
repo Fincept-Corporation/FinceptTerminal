@@ -152,12 +152,10 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
     QLineEdit* api_auth_value_ = nullptr;
     QPlainTextEdit* api_headers_ = nullptr;
     QPlainTextEdit* api_body_ = nullptr;
-    QSpinBox* api_timeout_ = nullptr;
     QPushButton* api_test_btn_ = nullptr;
     QLabel* api_test_status_ = nullptr;
 
     // ── Step 1: Schema ──
-    QComboBox* schema_type_ = nullptr;   // predefined | custom
     QComboBox* schema_select_ = nullptr; // OHLCV, QUOTE, etc.
     QLabel* schema_desc_ = nullptr;
     QTableWidget* schema_fields_table_ = nullptr;
@@ -213,9 +211,7 @@ class DataMappingScreen : public QWidget, public IStatefulScreen {
     QWidget* api_auth_value_row_ = nullptr;
     QWidget* api_headers_row_ = nullptr;
     QWidget* api_body_row_ = nullptr;
-    QWidget* api_timeout_row_ = nullptr;
     QLabel* schema_panel_title_ = nullptr;
-    QWidget* schema_type_row_ = nullptr;
     QWidget* schema_select_row_ = nullptr;
     QLabel* field_panel_title_ = nullptr;
     QLabel* parser_label_ = nullptr;

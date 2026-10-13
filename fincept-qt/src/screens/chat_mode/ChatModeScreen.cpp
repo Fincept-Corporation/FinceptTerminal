@@ -88,7 +88,7 @@ void ChatModeScreen::wire_signals() {
         QTimer::singleShot(1500, this, [s]() {
             if (!s)
                 return;
-            ChatModeService::instance().get_credits([s](bool ok, int credits, QString) {
+            ChatModeService::instance().get_credits([s](bool ok, double credits, QString) {
                 if (s && ok)
                     s->message_panel_->set_credits(credits);
             });
@@ -113,7 +113,7 @@ void ChatModeScreen::showEvent(QShowEvent* e) {
     QPointer<ChatModeScreen> self = this;
 
     // Load credits
-    ChatModeService::instance().get_credits([self](bool ok, int credits, QString) {
+    ChatModeService::instance().get_credits([self](bool ok, double credits, QString) {
         if (self && ok)
             self->message_panel_->set_credits(credits);
     });

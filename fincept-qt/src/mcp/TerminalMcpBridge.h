@@ -3,17 +3,22 @@
 // catalog to the Python `finagent_core` agent subprocess.
 //
 // The Python side (`scripts/agents/finagent_core/tools/terminal_toolkit.py`)
-// already speaks this contract:
+// speaks this contract:
 //
-//   POST <endpoint>/tool       body: {id, tool, args}   → ToolResult JSON
-//   (optional) GET <endpoint>/tools                     → [{name, description, inputSchema}]
+//   POST <endpoint>/tool   body: {id, tool, args, serverId?} → ToolResult JSON
+//   GET  <endpoint>/tools                → {tools: [{name, description, inputSchema, serverId, timeoutMs}]}
 //
 // Auth: every request must include `X-MCP-Token: <token>`, compared in constant
-// time. Two kinds of token are accepted: the per-process UUID (`token()`), and
-// a per-run UUID minted by `begin_run()` that additionally binds that agent's
-// own tool filter to dispatch. AgentService injects one into the agent config
-// payload. Agents share the parent's user session, so the token only guards
-// against OTHER local processes stumbling onto the port.
+// time against the live RUN tokens minted by `begin_run()` — one per agent
+// process, bound to that agent's own tool policy and retired when the process
+// exits. There is no process-wide token: a credential that outlives every run
+// and binds no policy had no caller and was pure attack surface. Agents share
+// the parent's user session, so the token only guards against OTHER local
+// processes stumbling onto the port.
+//
+// Result size: responses are shaped to a 24 KB budget (structure-aware, via
+// ResultStore/shrink_json). Anything trimmed is marked in place and the full
+// payload is parked for `result_fetch` — never silently cut.
 //
 // Every request is also checked against auth/LoopbackGuard.h (Host must be our
 // own loopback authority; no cross-site fetch metadata), which is what stops a
@@ -37,8 +42,19 @@
 
 class QTcpServer;
 class QTcpSocket;
+class QThreadPool;
 
 namespace fincept::mcp {
+
+/// What an agent run is shown, and therefore what it may dispatch.
+///   Essentials — the agent config named no categories / name patterns: the
+///                curated essentials set (mcp/server/EssentialTools.h) incl.
+///                tool_list / tool_describe / tool_invoke, which reach every
+///                other tool the run's policy permits.
+///   Filtered   — the agent named categories or name patterns: exactly the
+///                matching tools (McpService::get_agent_tools), capped only by
+///                the agent's own max_tools.
+enum class AgentToolCatalog { Essentials, Filtered };
 
 class TerminalMcpBridge : public QObject {
     Q_OBJECT
@@ -57,27 +73,21 @@ class TerminalMcpBridge : public QObject {
     /// "http://127.0.0.1:<port>" — no path, no query. Empty when not active.
     QString endpoint() const;
 
-    /// Per-process UUID. Accepted as `X-MCP-Token` for the life of the process.
-    /// Prefer `begin_run()` for anything that spawns an agent — a run-scoped
-    /// token carries that agent's own tool filter to the dispatch path.
-    QString token() const { return token_; }
-
     /// Open a run scope and mint the `X-MCP-Token` the agent should present.
     ///
-    /// The returned token authenticates exactly like `token()` but additionally
-    /// binds `filter` / `include_external` to every call made with it, so the
-    /// per-agent tool filter is enforced at DISPATCH and not only when the
-    /// catalog is built. Without this an agent that knows a tool's name could
-    /// POST a tool its own configuration excluded — the catalog is a hint, the
-    /// bridge is the boundary.
+    /// The token binds `filter` / `include_external` / `catalog` to every call
+    /// made with it, so the per-agent tool policy is enforced at DISPATCH and
+    /// not only when the catalog is built. Without this an agent that knows a
+    /// tool's name could POST a tool its own configuration excluded — the
+    /// catalog is a hint, the bridge is the boundary.
     ///
-    /// Returns `token()` unchanged when the bridge is not listening (nothing to
+    /// Returns an empty string when the bridge is not listening (nothing to
     /// scope). Pair with `end_run()`; scopes are also swept by age and count so
     /// a caller that never retires one cannot grow the map without bound.
-    QString begin_run(const ToolFilter& filter, bool include_external = true);
+    QString begin_run(const ToolFilter& filter, bool include_external, AgentToolCatalog catalog);
 
-    /// Retire a run scope minted by `begin_run()`. No-op for an empty token,
-    /// the process token, or a token that has already been retired.
+    /// Retire a run scope minted by `begin_run()`. No-op for an empty token or
+    /// a token that has already been retired.
     void end_run(const QString& run_token);
 
     /// Second per-process UUID. Only injected into agent configs whose
@@ -118,15 +128,22 @@ class TerminalMcpBridge : public QObject {
 
     /// Build the catalog payload that AgentService injects into
     /// `config["terminal_tools"]`. Output shape (per item):
-    ///   { "name": str, "description": str, "inputSchema": {JSON Schema} }
-    /// Note: camelCase `inputSchema` — matches MCP wire spec and what the
-    /// Python `TerminalToolkit` constructor expects.
+    ///   { "name": str, "description": str, "inputSchema": {JSON Schema},
+    ///     "serverId": str, "timeoutMs": int }
+    /// camelCase `inputSchema` matches the MCP wire spec and the Python
+    /// `TerminalToolkit`. `serverId` must be echoed back on POST /tool for an
+    /// external tool (otherwise the call is routed to the internal registry);
+    /// `timeoutMs` is the tool's own budget, which the toolkit uses for its HTTP
+    /// timeout instead of one fixed value for every tool.
+    ///
+    /// Every entry is one this run's policy will actually dispatch — the same
+    /// check handle_post_tool applies — so the catalog never advertises a tool
+    /// the bridge would refuse.
     ///
     /// `include_external` controls whether tools from user-configured
     /// external MCP servers (Notion, Slack, etc., visible in the MCP Servers
-    /// tab) are included alongside internal Fincept tools. Defaults to true
-    /// to match prior behaviour.
-    QJsonArray tool_definitions(const ToolFilter& filter, bool include_external = true) const;
+    /// tab) are included alongside internal Fincept tools.
+    QJsonArray tool_definitions(const ToolFilter& filter, bool include_external, AgentToolCatalog catalog) const;
 
     TerminalMcpBridge(const TerminalMcpBridge&) = delete;
     TerminalMcpBridge& operator=(const TerminalMcpBridge&) = delete;
@@ -150,9 +167,8 @@ class TerminalMcpBridge : public QObject {
         QString path;
         int content_length = 0;
         QHash<QString, QString> headers;
-        /// Run scope this request authenticated against, empty when it
-        /// presented the process-wide token. Resolved once in try_dispatch()
-        /// so the handlers don't re-walk the token map.
+        /// Run scope this request authenticated against. Resolved once in
+        /// try_dispatch() so the handlers don't re-walk the token map.
         QString run_token;
     };
 
@@ -160,15 +176,15 @@ class TerminalMcpBridge : public QObject {
     struct RunScope {
         ToolFilter filter;
         bool include_external = true;
+        AgentToolCatalog catalog = AgentToolCatalog::Filtered;
         qint64 started_ms = 0;
     };
 
     bool parse_headers(RequestState& st);
     void try_dispatch(QTcpSocket* sock);
 
-    /// Constant-time match of a supplied `X-MCP-Token` against the process
-    /// token and every live run token. On a run-token hit, `run_token_out`
-    /// receives it; on a process-token hit it is cleared.
+    /// Constant-time match of a supplied `X-MCP-Token` against every live run
+    /// token. On a hit, `run_token_out` receives it.
     bool authenticate(const QString& supplied, QString* run_token_out) const;
 
     std::optional<RunScope> run_scope(const QString& run_token) const;
@@ -186,9 +202,14 @@ class TerminalMcpBridge : public QObject {
 
     QTcpServer* server_ = nullptr;
     bool active_ = false;
-    QString token_;
     QString destructive_token_;
     QHash<QTcpSocket*, RequestState> states_;
+
+    /// Dedicated pool for the synchronous part of a dispatch (auth, schema
+    /// validation, sync handlers, async kick-off). Never the global pool: the
+    /// LLM tool fan-out and McpService's external-tool hops live there, and an
+    /// agent hammering the bridge must not starve them. Created on first use.
+    QThreadPool* dispatch_pool_ = nullptr;
 
     /// Live run scopes keyed by the run token handed to the agent. Socket
     /// handling is GUI-thread-only, but begin_run/end_run are called from the

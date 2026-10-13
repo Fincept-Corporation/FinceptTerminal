@@ -13,11 +13,31 @@
 #include "storage/repositories/NotesRepository.h"
 
 #include <QCoreApplication>
+#include <QRegularExpression>
 #include <QVariantMap>
 
 #include <algorithm>
 
 namespace fincept::mcp::tools {
+
+namespace notes_tools_detail {
+
+// The Notes screen stores and matches these as exact upper-case codes; a model that
+// sends "bullish" or "Trade Idea" produced notes the editor could not show.
+QString normalized_code(const QString& raw, const QStringList& allowed, const QString& fallback, QString* error,
+                        const char* field) {
+    QString v = raw.trimmed().toUpper();
+    v.replace(QLatin1Char(' '), QLatin1Char('_'));
+    if (v.isEmpty())
+        return fallback;
+    if (!allowed.contains(v)) {
+        *error = QString("Invalid %1 '%2' — use one of: %3").arg(QLatin1String(field), raw, allowed.join(", "));
+        return {};
+    }
+    return v;
+}
+
+} // namespace notes_tools_detail
 
 std::vector<ToolDef> get_notes_tools() {
     std::vector<ToolDef> tools;
@@ -46,14 +66,23 @@ std::vector<ToolDef> get_notes_tools() {
             if (title.isEmpty())
                 return ToolResult::fail("Missing 'title'");
 
+            QString bad;
             FinancialNote note;
             note.title = title;
             note.content = args["content"].toString();
-            note.category = args["category"].toString("GENERAL");
-            note.priority = args["priority"].toString("MEDIUM");
-            note.tickers = args["tickers"].toString();
-            note.sentiment = args["sentiment"].toString("NEUTRAL");
-            note.tags = args["tags"].toString();
+            note.category = notes_tools_detail::normalized_code(
+                args["category"].toString(),
+                {"RESEARCH", "TRADE_IDEA", "MARKET_ANALYSIS", "EARNINGS", "ECONOMIC", "PORTFOLIO", "GENERAL"},
+                "GENERAL", &bad, "category");
+            note.priority = notes_tools_detail::normalized_code(args["priority"].toString(), {"HIGH", "MEDIUM", "LOW"},
+                                                                "MEDIUM", &bad, "priority");
+            note.sentiment = notes_tools_detail::normalized_code(
+                args["sentiment"].toString(), {"BULLISH", "BEARISH", "NEUTRAL"}, "NEUTRAL", &bad, "sentiment");
+            if (!bad.isEmpty())
+                return ToolResult::fail(bad);
+            note.tickers = args["tickers"].toString().trimmed().toUpper();
+            note.tags = args["tags"].toString().trimmed();
+            note.word_count = static_cast<int>(note.content.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
 
             qint64 new_id = -1;
             QString error;
@@ -204,6 +233,13 @@ std::vector<ToolDef> get_notes_tools() {
 
             QString error;
             detail::run_async_wait(QCoreApplication::instance(), [&](auto signal_done) {
+                // DELETE of a missing id succeeds with 0 rows — check first so a wrong id
+                // is reported instead of "Note deleted".
+                if (NotesRepository::instance().get(id).is_err()) {
+                    error = "Note not found: " + QString::number(id);
+                    signal_done();
+                    return;
+                }
                 auto r = NotesRepository::instance().remove(id);
                 if (r.is_err())
                     error = "Failed to delete note: " + QString::fromStdString(r.error());

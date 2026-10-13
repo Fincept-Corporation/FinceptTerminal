@@ -50,7 +50,7 @@ void IlostatPanel::activate() {
 void IlostatPanel::build_controls(QHBoxLayout* thl) {
     auto mk_lbl = [](const QString& t) {
         auto* l = new QLabel(t);
-        l->setStyleSheet(ctrl_label_style());
+        l->setObjectName(QStringLiteral("econCtrlLabel"));
         return l;
     };
 
@@ -103,7 +103,7 @@ void IlostatPanel::on_fetch() {
     const QString end = end_edit_->text().trimmed();
 
     if (country.isEmpty()) {
-        show_error(tr("Please enter a country code (e.g. USA)"));
+        show_empty(tr("Please enter a country code (e.g. USA)"));
         return;
     }
 
@@ -150,6 +150,12 @@ void IlostatPanel::on_result(const QString& request_id, const services::Economic
     const QString country = country_edit_->text().trimmed().toUpper();
     const QString title = "ILO: " + (label.isEmpty() ? cmd : label) + (country.isEmpty() ? "" : " — " + country);
 
+    // All three ILOSTAT series are annual, both sexes, age 15+, modelled estimates in percent.
+    SeriesMeta meta;
+    meta.units = tr("Percent");
+    meta.frequency = tr("Annual");
+    meta.note = tr("ILO modelled estimates, both sexes, age 15+");
+    set_series_meta(meta);
     display(rows, title);
     LOG_INFO("IlostatPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }

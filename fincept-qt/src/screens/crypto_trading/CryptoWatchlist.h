@@ -45,6 +45,8 @@ class CryptoWatchlist : public QWidget {
   private:
     void rebuild_table();
     void retranslateUi();
+    /// Right-click on a pair: open it in News (searched by coin name) or Equity Research.
+    void show_row_menu(const QPoint& pos);
 
     QLineEdit* filter_edit_ = nullptr;
     QLabel* title_label_ = nullptr;

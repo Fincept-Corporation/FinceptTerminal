@@ -11,6 +11,7 @@
 
 using fincept::Database;
 #include "trading/AccountManager.h"
+#include "trading/ActionCenter.h"
 #include "trading/BrokerInterface.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/BrokerTopic.h"
@@ -60,13 +61,16 @@ DeploymentRunner::DeploymentRunner(const services::algo::AlgoDeployment& deploym
 }
 
 DeploymentRunner::~DeploymentRunner() {
+    // Detach every listener first: stop() emits status_changed, and AlgoEngine's
+    // handler would otherwise act on (and deleteLater) an object mid-destruction.
+    QObject::disconnect(this, nullptr, nullptr, nullptr);
     if (running_.load())
         stop();
 }
 
 void DeploymentRunner::start() {
-    if (running_.load())
-        return;
+    if (running_.load() || stop_requested_.load())
+        return; // a stop raced ahead of the queued start
 
     running_ = true;
     paused_ = false;
@@ -199,7 +203,7 @@ void DeploymentRunner::stop_market_data() {
 }
 
 void DeploymentRunner::on_tick_data(const QVariant& data) {
-    if (!running_.load() || paused_.load())
+    if (!running_.load() || paused_.load() || stop_requested_.load())
         return;
 
     last_heartbeat_ms_ = QDateTime::currentMSecsSinceEpoch();
@@ -374,7 +378,7 @@ void DeploymentRunner::emit_live_snapshot(double price, const QString& note) {
 }
 
 void DeploymentRunner::on_candle_closed(const OhlcvCandle& /*candle*/) {
-    if (!running_.load() || paused_.load())
+    if (!running_.load() || paused_.load() || stop_requested_.load())
         return;
     if (position_mgr_->is_paused())
         return;
@@ -519,6 +523,13 @@ void DeploymentRunner::evaluate_exit(const QVector<OhlcvCandle>& candles) {
 }
 
 void DeploymentRunner::emit_order_signal(const AlgoOrderSignal& signal_in) {
+    // A stop was requested (possibly from another thread, before the queued stop()
+    // ran): never place another order.
+    if (stop_requested_.load()) {
+        LOG_WARN("AlgoEngine",
+                 QString("Deployment %1: %2 suppressed - stop requested").arg(deployment_.id, signal_in.reason));
+        return;
+    }
     // Only one order in flight at a time. Position/risk state updates only when a
     // fill arrives, so without this guard a stop-loss re-fires on every tick (and
     // entry/exit on every candle) until the fill lands — flooding duplicate orders.
@@ -800,12 +811,15 @@ void DeploymentRunner::on_heartbeat() {
     // Purge orders that never reported a fill/rejection so a lost ack doesn't
     // permanently block new signals (the in-flight guard in emit_order_signal).
     // An order parked in the Semi-Auto approval queue is NOT a lost ack — it is
-    // waiting on a human — so it keeps the guard until ActionCenter's own TTL
-    // (kPendingOrderTtlMinutes = 15) has certainly expired it. Purging it at 60s
-    // would let the runner re-signal and stack duplicate approval requests.
+    // waiting on a human — so it keeps the guard until ActionCenter's approval
+    // window (ActionCenter::pending_ttl_minutes(): 5 min by default, user-
+    // configurable) has certainly expired it, plus a minute of slack. Purging it
+    // earlier would let the runner re-signal and stack duplicate approval requests.
+    const int64_t approval_limit_ms =
+        (static_cast<int64_t>(fincept::trading::ActionCenter::pending_ttl_minutes()) + 1) * 60000;
     for (int i = pending_orders_.size() - 1; i >= 0; --i) {
         const int64_t age = now - pending_orders_[i].submitted_ms;
-        const int64_t limit = pending_orders_[i].awaiting_approval ? 16 * 60000 : 60000;
+        const int64_t limit = pending_orders_[i].awaiting_approval ? approval_limit_ms : 60000;
         if (age > limit) {
             LOG_WARN("AlgoEngine", QString("Deployment %1: pending order timed out (no %2 in %3s), clearing")
                                        .arg(deployment_.id,
@@ -819,7 +833,7 @@ void DeploymentRunner::on_heartbeat() {
     // A paused runner drops every quote by design, so the stale-data watchdog must
     // not treat that silence as a broker outage (it would error the deployment out
     // 30s into any pause, and AlgoEngine tears the runner down on 'error').
-    if (!paused_.load() && now - last_heartbeat_ms_ > 30000) {
+    if (!paused_.load() && !stop_requested_.load() && now - last_heartbeat_ms_ > 30000) {
         const QString msg = deployment_.broker_id.isEmpty()
                                 ? QStringLiteral("No market data in 30s — no broker is attached to this deployment.")
                                 : QString("No market data from broker '%1' in 30s — check the broker is connected "

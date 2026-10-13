@@ -70,7 +70,9 @@ class TradeVizScreen : public QWidget, public IStatefulScreen {
     void refresh_data();
     void on_econ_result(const QString& request_id, const fincept::services::EconomicsResult& result);
     // Show `all` (any order) as the current dataset and repaint chord + table.
-    void set_dataset(const QVector<TradePartner>& all, const QString& note);
+    // `illustrative` marks the static offline snapshot: labelled above the table
+    // as well as on the chord, and never exported as if it were data.
+    void set_dataset(const QVector<TradePartner>& all, const QString& note, bool illustrative = false);
     // No dataset to draw (loading / error / empty): clear both views and tell the user why.
     void show_message(const QString& note, const QString& message);
     // Static US snapshot, used only when live data for the US/2024 selection is unavailable.
@@ -105,7 +107,9 @@ class TradeVizScreen : public QWidget, public IStatefulScreen {
     QString shown_key_;                    // "<un code>_<year>" the dataset belongs to
     QString loading_key_;                  // key of the request in flight (empty when idle)
     QHash<QString, QJsonArray> flow_rows_; // "X" / "M" rows received for loading_key_
-    QString dataset_note_;                 // provenance line for the chord widget
+    QString dataset_note_;                 // provenance line for the chord widget + table
+    bool illustrative_ = false;            // current dataset is the static snapshot
+    QLabel* source_note_ = nullptr;        // provenance line above the partner table
     QString empty_message_;                // chord centre text while partners_ is empty
 
     // ── Timers ───────────────────────────────────────────────────────────────

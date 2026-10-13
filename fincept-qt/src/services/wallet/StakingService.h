@@ -11,31 +11,26 @@
 
 namespace fincept::wallet {
 
-class SolanaRpcClient;
-
 /// Producer for the veFNCPT lock topics (Phase 3 §3.4):
 ///
 ///   - `wallet:locks:<pubkey>`     →  `QVector<LockPosition>`  (TTL 60 s)
 ///   - `wallet:vefncpt:<pubkey>`   →  `VeFncptAggregate`       (TTL 60 s)
 ///
-/// **Real path** (deferred — needs the on-chain Anchor program): query
-/// `getProgramAccounts` against the configured `fincept.lock_program_id`,
-/// filter by `owner = pubkey`, deserialise position accounts, and publish.
-/// The terminal-side surface ships first; the Anchor program lives in
-/// `solana/programs/fincept_lock/` (out-of-tree) and lands separately.
+/// **On-chain staking is not live in this build.** The `fincept_lock` Anchor
+/// program is not deployed, the position-account decoder is not written and
+/// the lock / extend / withdraw transaction builders do not exist. So:
 ///
-/// **Mock path** (active until program ID is configured): publishes the
-/// 3 demo positions from plan §3.2 — 2,000 @ 4yr, 1,000 @ 1yr, 500 @ 6mo —
-/// for any pubkey, with `is_mock=true` on every payload. Lets the dashboard
-/// be reviewed before the program ships.
+///   - `staking_live()` is false; the STAKE tab renders a "coming soon" state
+///     and never subscribes to the lock topics.
+///   - `refresh()` publishes an explicit "not live" error for both topics (for
+///     any other consumer, e.g. hub introspection) — it never publishes data.
+///     It used to publish three fabricated positions (2,000 @ 4 yr, ...) for
+///     whatever wallet was connected, which the tier system then treated as
+///     that wallet's real weight.
+///   - `build_lock_tx()` fails with the same "not live" reason.
 ///
-/// **Lock / extend / withdraw** transaction-building helpers: in real mode
-/// these construct unsigned versioned txs that `WalletService::sign_and_send`
-/// can forward to the user's wallet. In mock mode they return
-/// `Result::err("…not yet deployed…")` so `LockPanel` can disable the
-/// LOCK button with a clear message.
-///
-/// Duration → veCRV-style multiplier table (4-yr lock = 1.0× the amount):
+/// The duration → multiplier table (veCRV-style, 4-yr lock = 1.0×) is the
+/// planned program's and is exposed for the lock calculator:
 ///   3 mo  → 0.0625
 ///   6 mo  → 0.125
 ///   1 yr  → 0.25
@@ -50,9 +45,7 @@ class StakingService : public QObject, public fincept::datahub::Producer {
     void refresh(const QStringList& topics) override;
     int max_requests_per_sec() const override { return 3; }
 
-    /// Duration enum — the only five locks the program accepts. Stored as
-    /// seconds in the Anchor program; the multiplier table is derived from
-    /// the seconds and a 4-yr max-duration constant.
+    /// Duration enum — the only five locks the planned program accepts.
     enum class Duration {
         ThreeMonths,
         SixMonths,
@@ -70,57 +63,24 @@ class StakingService : public QObject, public fincept::datahub::Producer {
     /// Seconds count.
     static qint64 seconds_for(Duration d) noexcept;
 
-    /// Build an unsigned `lock` transaction. Async; callback receives the
-    /// base64 versioned tx body, or an error if the on-chain program isn't
-    /// deployed (mock mode).
+    /// False in this build: lock positions can neither be read nor created
+    /// (see the class comment). UI gates every staking action and every
+    /// staking-derived number on this.
+    bool staking_live() const;
+
+    /// User-facing reason staking is unavailable. Shown verbatim by the panels.
+    static QString not_live_reason();
+
+    /// Build an unsigned `lock` transaction. Async; the callback receives the
+    /// base64 versioned tx body — or, in this build, the "not live" error.
     void build_lock_tx(const QString& pubkey, const QString& amount_raw, Duration duration,
                        std::function<void(Result<QString>)> callback);
-
-    /// Build an unsigned `extend` transaction for an existing position.
-    void build_extend_tx(const QString& pubkey, const QString& position_id, Duration new_duration,
-                         std::function<void(Result<QString>)> callback);
-
-    /// Build an unsigned `withdraw` transaction. Only valid after the
-    /// position's `unlock_ts`; the Anchor program rejects early withdrawals.
-    void build_withdraw_tx(const QString& pubkey, const QString& position_id,
-                           std::function<void(Result<QString>)> callback);
-
-    /// True iff the on-chain program ID is configured. UI uses this to
-    /// disable LOCK/EXTEND/WITHDRAW buttons in mock mode and show
-    /// "Anchor program not deployed yet" guidance.
-    bool program_is_configured() const;
-
-  signals:
-    /// Emitted on every successful publish for a pubkey's locks topic.
-    /// Used by `RealYieldService` to recompute projections without
-    /// pulling them from the hub.
-    void locks_published(QString pubkey_b58);
 
   private:
     explicit StakingService(QObject* parent = nullptr);
     ~StakingService() override;
     StakingService(const StakingService&) = delete;
     StakingService& operator=(const StakingService&) = delete;
-
-    /// `wallet:locks:<pubkey>` → pubkey.
-    static QString pubkey_from_locks_topic(const QString& topic);
-
-    /// `wallet:vefncpt:<pubkey>` → pubkey.
-    static QString pubkey_from_vefncpt_topic(const QString& topic);
-
-    /// Resolve the Anchor program ID from SecureStorage. Empty string if
-    /// not configured; producer falls back to mock data for both topics.
-    QString resolve_program_id() const;
-
-    /// Real-path producers — query `getProgramAccounts` and parse positions.
-    void refresh_locks_real(const QString& topic, const QString& pubkey, const QString& program_id);
-    void refresh_vefncpt_real(const QString& topic, const QString& pubkey, const QString& program_id);
-
-    /// Mock-path producers — publish the 3-position demo from plan §3.2.
-    void publish_mock_locks(const QString& topic, const QString& pubkey);
-    void publish_mock_vefncpt(const QString& topic, const QString& pubkey);
-
-    SolanaRpcClient* rpc_ = nullptr;
 };
 
 } // namespace fincept::wallet

@@ -1,14 +1,13 @@
 #pragma once
 #include "services/news/NewsService.h"
 
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QMap>
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QVector>
 
 #include <functional>
+#include <optional>
 
 namespace fincept::services {
 
@@ -29,7 +28,7 @@ struct TopEntity {
 
 struct NerResult {
     QVector<EntityResult> per_article;
-    QVector<TopEntity> top_countries;
+    QVector<TopEntity> top_countries; // name = ISO country code
     QVector<TopEntity> top_organizations;
     QVector<TopEntity> top_people;
 };
@@ -59,6 +58,12 @@ struct InfrastructureItem {
     double distance_km = 0;
 };
 
+/// NER + geolocation for a set of articles (see NewsNlpService::enrich_articles).
+struct NewsEnrichment {
+    NerResult ner;               // per_article for every input article; top_* over the set
+    QVector<ArticleGeo> geo;     // only articles that mention a known place
+};
+
 // ── Sentiment Types ───────────────────────────────────────────────────────────
 
 struct ArticleSentimentResult {
@@ -82,27 +87,30 @@ struct NewsSentimentResult {
 class NewsNlpService : public QObject {
     Q_OBJECT
   public:
-    using EntitiesCallback = std::function<void(bool, NerResult)>;
-    using GeoCallback = std::function<void(bool, QVector<ArticleGeo>)>;
+    using EnrichCallback = std::function<void(bool, NewsEnrichment)>;
     using InfraCallback = std::function<void(bool, QVector<InfrastructureItem>)>;
     using TranslateCallback = std::function<void(bool, QString translated, QString detected_lang)>;
-    using SemanticClustersCallback = std::function<void(bool, QJsonArray clusters)>;
     using SentimentCallback = std::function<void(bool, NewsSentimentResult)>;
 
     static NewsNlpService& instance();
 
-    /// Extract entities (countries, orgs, people, tickers) from articles.
-    void extract_entities(const QVector<NewsArticle>& articles, EntitiesCallback cb);
+    /// Entities (countries, orgs, people, tickers) + places for `articles`.
+    ///
+    /// Results are cached per article (id + content hash). Only articles not seen
+    /// before are sent to Python — all of them in ONE news_nlp.py `enrich_batch`
+    /// process — so a filter change over already-enriched articles costs no process
+    /// at all. While a batch is running, a newer request replaces any queued one and
+    /// runs when the batch lands (at most one enrichment process at a time).
+    void enrich_articles(const QVector<NewsArticle>& articles, EnrichCallback cb);
+
+    /// Cached per-article results (populated by enrich_articles).
+    std::optional<EntityResult> cached_entities(const QString& article_id) const;
+    /// Cached places for an article; nullopt when unknown or when it names no place.
+    std::optional<ArticleGeo> cached_geo(const QString& article_id) const;
 
     /// Headline sentiment (VADER when available, keyword fallback) via
     /// news_nlp.py. Per-article results are keyed by NewsArticle::id.
     void analyze_sentiment(const QVector<NewsArticle>& articles, SentimentCallback cb);
-
-    /// Semantic clustering via TF-IDF cosine similarity.
-    void cluster_semantic(const QVector<NewsArticle>& articles, SemanticClustersCallback cb);
-
-    /// Geolocate articles — extract locations and return coordinates.
-    void geolocate_articles(const QVector<NewsArticle>& articles, GeoCallback cb);
 
     /// Find nearby infrastructure for a coordinate.
     void nearby_infrastructure(double lat, double lon, int radius_km, InfraCallback cb);
@@ -110,17 +118,28 @@ class NewsNlpService : public QObject {
     /// Translate text to target language.
     void translate_text(const QString& text, const QString& target_lang, TranslateCallback cb);
 
-    /// Cached NER results (populated after extract_entities completes).
-    const NerResult& cached_ner() const { return ner_cache_; }
-    const QVector<ArticleGeo>& cached_geo() const { return geo_cache_; }
-
   private:
     NewsNlpService();
 
-    QJsonArray articles_to_json(const QVector<NewsArticle>& articles) const;
+    struct CacheEntry {
+        size_t content_hash = 0;
+        EntityResult entities;
+        ArticleGeo geo; // empty locations = enriched, no place found
+    };
+    struct PendingEnrich {
+        QVector<NewsArticle> articles;
+        EnrichCallback cb;
+    };
 
-    NerResult ner_cache_;
-    QVector<ArticleGeo> geo_cache_;
+    static size_t content_hash(const NewsArticle& a);
+    NewsEnrichment build_enrichment(const QVector<NewsArticle>& articles) const;
+    void trim_cache(const QVector<NewsArticle>& keep);
+    void run_pending_enrich();
+
+    QHash<QString, CacheEntry> enrich_cache_; // article id -> results
+    bool enrich_inflight_ = false;
+    qint64 enrich_failed_at_ = 0; // unix secs of the last failed batch; 0 = none
+    std::optional<PendingEnrich> pending_enrich_;
 };
 
 } // namespace fincept::services

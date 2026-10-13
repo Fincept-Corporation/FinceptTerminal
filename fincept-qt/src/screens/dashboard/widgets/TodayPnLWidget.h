@@ -43,6 +43,7 @@ class TodayPnLWidget : public BaseWidget {
     QString broker_id_;
 
     QLabel* header_hint_ = nullptr;
+    QLabel* hero_caption_ = nullptr; ///< says what the big number is (it is NOT day P&L)
     QLabel* total_pnl_label_ = nullptr;
     QLabel* day_pnl_label_ = nullptr;
     QLabel* day_pnl_value_ = nullptr;

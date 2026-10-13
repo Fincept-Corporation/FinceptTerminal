@@ -27,6 +27,7 @@
 #include "trading/BrokerRegistry.h"
 #include "trading/DataStreamManager.h"
 #include "trading/OrderMatcher.h"
+#include "trading/OrderThreadPool.h"
 #include "trading/PaperTrading.h"
 #include "trading/instruments/InstrumentNormalize.h"
 #include "trading/instruments/InstrumentService.h"
@@ -515,23 +516,33 @@ void EquityTradingScreen::on_order_submitted(const UnifiedOrder& order) {
         // Safety: capture account_id by value at click time (immutable per order lifecycle)
         const QString acct_id = focused_account_id_;
 
-        // Semi-Auto pre-gate: confirm inline before sending. Manual orders are
-        // synchronous (the trader is present), so approval is an inline modal —
-        // no pending-queue round-trip. On confirm we place immediately, exactly
-        // like Auto mode. (Headless paths — AI/workflow/broadcast — still queue
-        // via ActionCenter and surface in the status-bar popover.)
-        if (ActionCenter::instance().should_queue(acct_id, "placeorder")) {
-            const auto acct_meta = AccountManager::instance().get_account(acct_id);
-            const QString acct_label = acct_meta.display_name.isEmpty() ? acct_id : acct_meta.display_name;
+        // Pre-send confirmation. Manual orders are synchronous (the trader is
+        // present), so approval is an inline modal — no pending-queue round-trip.
+        //   • LIVE accounts: ALWAYS confirm, unless the user explicitly opted this
+        //     account into one-click trading (Accounts dialog; off by default).
+        //   • Semi-Auto accounts (any mode): always confirm — one-click never
+        //     overrides an approval requirement the user turned on.
+        //   • PAPER (incl. a broker paper venue) in Auto mode: unchanged, no dialog.
+        // Headless paths (AI / workflow / broadcast) still queue via ActionCenter.
+        const bool semi_auto = ActionCenter::instance().should_queue(acct_id, "placeorder");
+        const bool is_live = (account.trading_mode == QLatin1String("live"));
+        const bool one_click = is_live && ActionCenter::instance().one_click_enabled(acct_id);
+        if (semi_auto || (is_live && !one_click)) {
+            const QString acct_label = account.display_name.isEmpty() ? acct_id : account.display_name;
             if (!OrderConfirmDialog::confirm(this, order, acct_label, current_price_, acct_id)) {
                 order_entry_->show_order_status(tr("Order cancelled"), false);
                 return;
             }
+        } else if (one_click) {
+            LOG_INFO(TAG, QString("One-click LIVE order (no confirmation, opted in for %1): %2 %3 x%4")
+                              .arg(account.display_name, order.side == OrderSide::Buy ? "BUY" : "SELL", order.symbol)
+                              .arg(order.quantity));
         }
 
         QPointer<EquityTradingScreen> self = this;
         auto order_copy = order;
-        (void)QtConcurrent::run([self, acct_id, order_copy]() {
+        // Dedicated order executor — never queued behind the shared global pool.
+        (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, order_copy]() {
             if (!self)
                 return;
             auto result = UnifiedTrading::instance().place_order(acct_id, order_copy);
@@ -634,7 +645,7 @@ void EquityTradingScreen::on_multi_broker_submit(const trading::UnifiedOrder& or
 
     QPointer<EquityTradingScreen> self = this;
     auto order_copy = order;
-    (void)QtConcurrent::run([self, immediate, order_copy, queued]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, immediate, order_copy, queued]() {
         const auto results = trading::UnifiedTrading::instance().broadcast_order(immediate, order_copy);
         QMetaObject::invokeMethod(
             self,
@@ -772,7 +783,7 @@ void EquityTradingScreen::on_cancel_order(const QString& order_id) {
         const QString acct_id = focused_account_id_;
         const bool native_paper = focused_native_paper_;
         QPointer<EquityTradingScreen> self = this;
-        (void)QtConcurrent::run([self, acct_id, order_id, native_paper]() {
+        (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, order_id, native_paper]() {
             if (!self)
                 return;
             UnifiedTrading::instance().cancel_order(acct_id, order_id);
@@ -808,7 +819,7 @@ void EquityTradingScreen::refresh_candles() {
 void EquityTradingScreen::async_modify_order(const QString& order_id, double qty, double price) {
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id, order_id, qty, price]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, order_id, qty, price]() {
         if (!self)
             return;
         QJsonObject mods;
@@ -1056,7 +1067,7 @@ void EquityTradingScreen::on_square_off_group(const QString& account_id, int sig
     // Close each in a single background worker (sequential) to avoid a thread storm.
     const QString acct_id = account_id;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id, targets]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, targets]() {
         if (!self)
             return;
         for (const auto& t : targets)
@@ -1247,7 +1258,7 @@ void EquityTradingScreen::on_chart_exit_position(const QString& symbol, const QS
 
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id, symbol, exchange, product_type]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, symbol, exchange, product_type]() {
         if (!self)
             return;
         auto result = UnifiedTrading::instance().close_position(acct_id, symbol, exchange, product_type);
@@ -1271,7 +1282,7 @@ void EquityTradingScreen::on_cancel_all_orders() {
     }
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id]() {
         if (!self)
             return;
         auto result = UnifiedTrading::instance().cancel_all_orders(acct_id);
@@ -1332,7 +1343,7 @@ void EquityTradingScreen::on_close_all_positions() {
 
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id, targets]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, targets]() {
         if (!self)
             return;
         int ok = 0, fail = 0;
@@ -1384,7 +1395,7 @@ void EquityTradingScreen::on_square_off_all_holdings(const QVector<trading::Brok
 
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id, targets]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, targets]() {
         if (!self)
             return;
         int ok = 0, fail = 0;
@@ -1423,7 +1434,7 @@ void EquityTradingScreen::on_square_off_holding(const QString& symbol, const QSt
 
     const QString acct_id = focused_account_id_;
     QPointer<EquityTradingScreen> self = this;
-    (void)QtConcurrent::run([self, acct_id, symbol, exchange]() {
+    (void)QtConcurrent::run(&order_thread_pool(), [self, acct_id, symbol, exchange]() {
         if (!self)
             return;
         auto r = UnifiedTrading::instance().close_position(acct_id, symbol, exchange, QStringLiteral("CNC"));
@@ -1456,7 +1467,12 @@ void EquityTradingScreen::on_strategy_submitted(const trading::BasketOrderReques
 
     // Semi-Auto gate (headless entry): a strategy/basket is placed in one shot
     // with no per-leg prompt, so queue it for approval in the status-bar popover
-    // rather than confirming inline. Auto mode falls straight through.
+    // rather than confirming inline. Auto mode falls straight through — but a
+    // LIVE account always gets a read-back of every leg first (T1).
+    if (!ActionCenter::instance().should_queue(acct_id, "basketorder") && !confirm_live_basket(acct_id, basket)) {
+        order_entry_->show_order_status(tr("Strategy cancelled — nothing was sent"), false);
+        return;
+    }
     if (ActionCenter::instance().should_queue(acct_id, "basketorder")) {
         const QString pending_id =
             ActionCenter::instance().queue_order(acct_id, "basketorder", ActionCenter::serialize_basket_order(basket));
@@ -1468,22 +1484,117 @@ void EquityTradingScreen::on_strategy_submitted(const trading::BasketOrderReques
     }
 
     QPointer<EquityTradingScreen> self = this;
+    const QString strategy_name = basket.strategy_name;
     // place_basket_orders runs async on its own worker and delivers the result
     // back on the caller's thread; marshal to the UI thread defensively.
-    UnifiedTrading::instance().place_basket_orders(acct_id, basket, [self](const trading::BasketOrderResult& result) {
+    UnifiedTrading::instance().place_basket_orders(
+        acct_id, basket, [self, acct_id, strategy_name](const trading::BasketOrderResult& result) {
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self,
+                [self, acct_id, strategy_name, result]() {
+                    if (!self)
+                        return;
+                    self->order_entry_->show_order_status(
+                        self->tr("Strategy: %1/%2 legs placed%3")
+                            .arg(result.successful)
+                            .arg(result.total)
+                            .arg(result.failed > 0 ? self->tr(", %1 failed").arg(result.failed) : QString()),
+                        result.failed == 0);
+                    self->refresh_paper_panels();
+                    // Partial fill of a multi-leg strategy = unhedged exposure.
+                    if (result.failed > 0 && result.successful > 0)
+                        self->offer_basket_unwind(acct_id, strategy_name, result);
+                },
+                Qt::QueuedConnection);
+        });
+}
+
+bool EquityTradingScreen::confirm_live_basket(const QString& account_id, const trading::BasketOrderRequest& basket) {
+    const auto account = AccountManager::instance().get_account(account_id);
+    if (account.trading_mode != QLatin1String("live"))
+        return true; // paper: unchanged behaviour
+    QStringList legs;
+    for (const auto& o : basket.orders) {
+        legs << QString("  %1  %2 × %3  %4  %5")
+                    .arg(QString::fromLatin1(order_side_str(o.side)).toUpper())
+                    .arg(o.quantity, 0, 'f', 0)
+                    .arg(o.symbol, o.exchange, QString::fromLatin1(product_to_broker_str(o.product_type)))
+                    .arg(o.order_type == OrderType::Market ? tr("MARKET") : QString::number(o.price, 'f', 2));
+    }
+    const QString name = basket.strategy_name.isEmpty() ? tr("Strategy") : basket.strategy_name;
+    const QString body = tr("LIVE ORDER — real money.\n\n%1 on %2:\n\n%3\n\n"
+                            "The legs are sent one after another — this is NOT atomic. If a leg is rejected, the "
+                            "legs already sent stay open and you will be offered an unwind.")
+                             .arg(name, account.display_name.isEmpty() ? account_id : account.display_name,
+                                  legs.join(QLatin1Char('\n')));
+    QMessageBox box(this);
+    box.setWindowTitle(tr("Confirm Strategy"));
+    box.setIcon(QMessageBox::Warning);
+    box.setText(body);
+    auto* send = box.addButton(tr("Send %1 legs").arg(basket.orders.size()), QMessageBox::AcceptRole);
+    auto* cancel = box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(cancel); // Enter never sends a live strategy
+    box.exec();
+    return box.clickedButton() == send;
+}
+
+void EquityTradingScreen::offer_basket_unwind(const QString& account_id, const QString& strategy_name,
+                                              const trading::BasketOrderResult& result) {
+    QStringList lines;
+    for (const auto& r : result.results) {
+        lines << (r.success ? tr("  ✓ %1 %2 — placed (order %3)").arg(r.symbol, r.exchange, r.order_id)
+                            : tr("  ✗ %1 %2 — FAILED: %3").arg(r.symbol, r.exchange, r.error));
+    }
+    QMessageBox box(this);
+    box.setWindowTitle(tr("Strategy Partially Placed"));
+    box.setIcon(QMessageBox::Critical);
+    box.setText(tr("%1: only %2 of %3 legs were placed. The placed legs are now UNHEDGED.\n\n%4\n\n"
+                   "Unwind cancels any unfilled remainder of the placed legs and closes what filled with "
+                   "opposite MARKET orders (same product). Fills are read from the broker's order book; a leg "
+                   "whose fill cannot be verified is reported, never guessed.")
+                    .arg(strategy_name.isEmpty() ? tr("Strategy") : strategy_name)
+                    .arg(result.successful)
+                    .arg(result.total)
+                    .arg(lines.join(QLatin1Char('\n'))));
+    auto* unwind = box.addButton(tr("Unwind placed legs"), QMessageBox::DestructiveRole);
+    auto* keep = box.addButton(tr("Keep positions"), QMessageBox::RejectRole);
+    box.setDefaultButton(keep);
+    box.exec();
+    if (box.clickedButton() != unwind)
+        return;
+
+    order_entry_->show_order_status(tr("Unwinding %1 placed leg(s)…").arg(result.successful), true);
+    QPointer<EquityTradingScreen> self = this;
+    const QVector<trading::BasketOrderResult::OrderResult> legs = result.results;
+    (void)QtConcurrent::run(&order_thread_pool(), [self, account_id, legs]() {
+        const auto out = UnifiedTrading::instance().unwind_basket_legs(account_id, legs);
         if (!self)
             return;
         QMetaObject::invokeMethod(
             self,
-            [self, result]() {
+            [self, out]() {
                 if (!self)
                     return;
+                int ok = 0;
+                QStringList report;
+                for (const auto& u : out) {
+                    if (u.ok)
+                        ++ok;
+                    report << (u.ok ? tr("  ✓ %1 — %2").arg(u.symbol, u.action)
+                                    : tr("  ✗ %1 — %2%3")
+                                          .arg(u.symbol, u.error,
+                                               u.action.isEmpty() ? QString() : QStringLiteral(" (") + u.action + ")"));
+                }
+                const bool all_ok = (ok == out.size());
                 self->order_entry_->show_order_status(
-                    self->tr("Strategy: %1/%2 legs placed%3")
-                        .arg(result.successful)
-                        .arg(result.total)
-                        .arg(result.failed > 0 ? self->tr(", %1 failed").arg(result.failed) : QString()),
-                    result.failed == 0);
+                    tr("Unwind: %1/%2 legs done").arg(ok).arg(out.size()), all_ok);
+                QMessageBox::information(self, tr("Unwind Report"),
+                                         (all_ok ? tr("All placed legs were unwound.\n\n")
+                                                 : tr("Some legs could NOT be unwound — check them in the broker's "
+                                                      "terminal now.\n\n")) +
+                                             report.join(QLatin1Char('\n')));
                 self->refresh_paper_panels();
             },
             Qt::QueuedConnection);

@@ -45,8 +45,9 @@ class PortfolioPerfChart : public QWidget {
     /// Feed real benchmark closes for the overlay. The symbol is shown on the
     /// toggle button and used to disambiguate currencies in indexed mode.
     void set_benchmark_history(const QString& symbol, const QStringList& dates, const QVector<double>& closes);
-    /// Legacy shim — same as set_benchmark_history("SPY", dates, closes).
-    void set_spy_history(const QStringList& dates, const QVector<double>& closes);
+    /// Flow-adjusted (time-weighted) return series from PortfolioService. The
+    /// period figure uses it so deposits/withdrawals are not shown as returns.
+    void set_twr_series(const QVector<portfolio::TwrPoint>& series);
     void refresh_theme();
 
   protected:
@@ -92,6 +93,7 @@ class PortfolioPerfChart : public QWidget {
     // Data
     portfolio::PortfolioSummary summary_;
     QVector<portfolio::PortfolioSnapshot> snapshots_;
+    QVector<portfolio::TwrPoint> twr_series_;
     QString currency_ = "USD";
 
     // Benchmark history — symbol may differ from "SPY" depending on currency

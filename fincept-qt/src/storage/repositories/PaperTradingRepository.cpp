@@ -207,6 +207,22 @@ Result<QVector<PtOrder>> PaperTradingRepository::get_orders(const QString& portf
     return Result<QVector<PtOrder>>::ok(std::move(result));
 }
 
+Result<QVector<PtOrder>> PaperTradingRepository::get_open_orders(const QString& portfolio_id) {
+    // Same ordering as get_orders(); idx_pt_orders_portfolio / idx_pt_orders_status
+    // (v001) serve the filter.
+    auto r = db().execute(QString("SELECT %1 FROM pt_orders WHERE portfolio_id = ? AND status IN ('pending', "
+                                  "'partial') ORDER BY created_at DESC")
+                              .arg(kOrderCols),
+                          {portfolio_id});
+    if (r.is_err())
+        return Result<QVector<PtOrder>>::err(r.error());
+    QVector<PtOrder> result;
+    auto& q = r.value();
+    while (q.next())
+        result.append(map_order(q));
+    return Result<QVector<PtOrder>>::ok(std::move(result));
+}
+
 Result<QVector<PtOrder>> PaperTradingRepository::get_orders_between(const QString& portfolio_id,
                                                                     const QString& from_iso, const QString& to_iso) {
     // created_at is stored as a naive UTC ISO string (fixed width), so lexical

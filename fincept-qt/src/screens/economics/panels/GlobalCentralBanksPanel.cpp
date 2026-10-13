@@ -100,10 +100,9 @@ static const QList<CbBank> kBanks = {
          {"NIBOR / Interest Rates", "interest_rates"},
      }},
     // ── Central & Eastern Europe, Middle East, SE Asia ───────────────────────
-    // These eight connectors already shipped in scripts/ and were already
-    // exposed as MCP tools (DataConnectorManifest.inc) — the AI could query
-    // them, a human could not. None requires an API key. Commands below are
-    // taken verbatim from that manifest.
+    // These eight connectors ship in scripts/ and are also exposed to the AI
+    // as data-connector MCP tools; this panel gives humans the same access.
+    // None requires an API key. Commands match each script's dispatcher.
     {"CNB — Czech National Bank",
      "cnb_data.py",
      "cnb",
@@ -219,6 +218,24 @@ static CbArgKind cb_arg_kind(const QString& script, const QString& command) {
     return CbArgKind::None;
 }
 
+// Interest-rate series are compared in percentage points (a 5.25 → 5.50 hike is +0.25 pp, not
+// "+4.8%"); exchange rates, aggregates and operations are levels. Decided by command.
+static int cb_percent_hint(const QString& command) {
+    static const QStringList kRateCommands = {
+        "bank_rate", "sonia",     "quoted_rates",  "cash_rate",      "bond_yields",
+        "lending_rates", "policy_rate", "corra",    "prime",          "policy_all",   "tbills",
+        "mortgage",  "bond_yields_d", "interest_rates", "pribor_history", "pribor_year", "pribor",
+        "czeonia_year", "czeonia", "opr"};
+    static const QStringList kLevelCommands = {
+        "exchange_rates", "monetary_aggregates", "monetary", "usd", "eur", "range", "major", "currency",
+        "today", "gbp", "all", "asean", "sessions", "date", "year", "monthly_avg", "exchange_rates_y"};
+    if (kRateCommands.contains(command))
+        return 1;
+    if (kLevelCommands.contains(command))
+        return 0;
+    return -1;
+}
+
 // ── Flatten helpers ──────────────────────────────────────────────────────────
 
 // Bank responses put their payload under "data" with a "date" key and one or
@@ -290,7 +307,7 @@ void GlobalCentralBanksPanel::activate() {
 
 void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     bank_lbl_ = new QLabel(tr("BANK"));
-    bank_lbl_->setStyleSheet(ctrl_label_style());
+    bank_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     bank_combo_ = new QComboBox;
     for (const auto& b : kBanks)
@@ -299,7 +316,7 @@ void GlobalCentralBanksPanel::build_controls(QHBoxLayout* thl) {
     bank_combo_->setMinimumWidth(230);
 
     series_lbl_ = new QLabel(tr("SERIES"));
-    series_lbl_->setStyleSheet(ctrl_label_style());
+    series_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_combo_ = new QComboBox;
     series_combo_->setFixedHeight(26);
@@ -473,6 +490,20 @@ void GlobalCentralBanksPanel::on_result(const QString& request_id, const service
         (matched_bank >= 0 && matched_series >= 0) ? kBanks[matched_bank].series[matched_series].label : request_id;
     const QString title = bank_name + ": " + series_name;
 
+    SeriesMeta meta;
+    meta.source = bank_name;
+    if (matched_bank >= 0 && matched_series >= 0)
+        meta.percent = cb_percent_hint(kBanks[matched_bank].series[matched_series].command);
+    // Some connectors say what the columns are (BoE source note, RBA per-series units/frequency).
+    const QJsonObject series_meta = result.data["series_metadata"].toObject();
+    if (series_meta.size() == 1) {
+        const QJsonObject m = series_meta.begin().value().toObject();
+        meta.units = m.value("unit").toString();
+        meta.frequency = m.value("frequency").toString();
+    }
+    if (meta.units.isEmpty())
+        meta.units = result.data["unit"].toString();
+    set_series_meta(meta);
     display(rows, title);
     LOG_INFO("GlobalCentralBanksPanel", QString("Displayed %1 rows: %2").arg(rows.size()).arg(title));
 }

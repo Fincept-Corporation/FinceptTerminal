@@ -36,9 +36,11 @@ class PerformanceRiskView : public QWidget {
     // Header labels
     QLabel* chart_title_ = nullptr;
     QLabel* metrics_header_ = nullptr;
-    QLabel* rf_hint_ = nullptr; // shown only when no FRED key is configured
+    QLabel* rf_hint_ = nullptr; // basis line: TWR window, risk-free rate + source, risk basis
+    QPushButton* export_btn_ = nullptr;
 
     void update_rf_hint();
+    void export_csv();
 
     // Chart
     QChartView* chart_view_ = nullptr;

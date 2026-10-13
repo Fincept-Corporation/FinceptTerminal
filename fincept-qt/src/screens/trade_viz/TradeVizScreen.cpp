@@ -7,6 +7,7 @@
 #include "ui/theme/Theme.h"
 
 #include <QCoreApplication>
+#include <QDate>
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
@@ -19,6 +20,7 @@
 #include <QPainterPath>
 #include <QSplitter>
 #include <QStandardItemModel>
+#include <QStyle>
 #include <QTextStream>
 #include <QVBoxLayout>
 
@@ -585,9 +587,12 @@ QWidget* TradeVizScreen::build_filter_bar() {
     year_combo_ = new QComboBox;
     year_combo_->setStyleSheet(combo_ss());
     year_combo_->setFixedWidth(80);
-    for (int y = 2024; y >= 2010; --y) {
+    // Newest selectable year = last calendar year (UN Comtrade publishes annual data
+    // with a lag, so the default selection is the year before that).
+    const int newest_year = QDate::currentDate().year() - 1;
+    for (int y = newest_year; y >= 2010; --y)
         year_combo_->addItem(QString::number(y));
-    }
+    year_combo_->setCurrentIndex(year_combo_->count() > 1 ? 1 : 0);
     hl->addWidget(year_combo_);
 
     next_year_btn_ = new QToolButton;
@@ -647,6 +652,14 @@ QWidget* TradeVizScreen::build_partner_table() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
+    // Provenance above the table too: the chord's note is easy to miss, and the
+    // static snapshot's numbers must never read as live data in the table.
+    source_note_ = new QLabel(panel);
+    source_note_->setObjectName(QStringLiteral("tvSourceNote"));
+    source_note_->setWordWrap(true);
+    source_note_->setTextFormat(Qt::PlainText);
+    vl->addWidget(source_note_);
+
     partner_table_ = new QTableWidget;
     partner_table_->setStyleSheet(table_ss());
     partner_table_->setColumnCount(6);
@@ -679,13 +692,15 @@ QWidget* TradeVizScreen::build_partner_table() {
 
 void TradeVizScreen::show_message(const QString& note, const QString& message) {
     partners_.clear();
+    illustrative_ = false;
     dataset_note_ = note;
     empty_message_ = message;
     rebuild_views();
 }
 
-void TradeVizScreen::set_dataset(const QVector<TradePartner>& all, const QString& note) {
+void TradeVizScreen::set_dataset(const QVector<TradePartner>& all, const QString& note, bool illustrative) {
     partners_ = all;
+    illustrative_ = illustrative;
     dataset_note_ = note;
     empty_message_.clear();
     rebuild_views();
@@ -733,8 +748,19 @@ void TradeVizScreen::rebuild_views() {
     }
     partner_table_->setUpdatesEnabled(true);
 
-    if (export_btn_)
-        export_btn_->setEnabled(!shown_.isEmpty());
+    if (export_btn_) {
+        export_btn_->setEnabled(!shown_.isEmpty() && !illustrative_);
+        export_btn_->setToolTip(illustrative_ ? tr("Export is disabled for the illustrative static snapshot — "
+                                                   "load live UN Comtrade data first")
+                                              : tr("Save the partner table as a CSV file"));
+    }
+    if (source_note_) {
+        source_note_->setText(illustrative_ ? tr("ILLUSTRATIVE — not live data. %1").arg(dataset_note_)
+                                            : dataset_note_);
+        source_note_->setProperty("illustrative", illustrative_);
+        source_note_->style()->unpolish(source_note_);
+        source_note_->style()->polish(source_note_);
+    }
 
     if (auto* chord = static_cast<TradeFlowChordWidget*>(chord_widget_.data())) {
         const int idx = country_combo_ ? country_combo_->currentIndex() : 0;
@@ -755,7 +781,8 @@ void TradeVizScreen::show_static_fallback(const QString& why) {
         partner.exports = r.exports;
         rows.append(partner);
     }
-    set_dataset(rows, tr("Illustrative — US bilateral trade, 2024 estimates (static). %1").arg(why));
+    set_dataset(rows, tr("Illustrative — US bilateral trade, 2024 estimates (static). %1").arg(why),
+                /*illustrative=*/true);
 }
 
 // ============================================================================
@@ -839,7 +866,7 @@ void TradeVizScreen::on_econ_result(const QString& request_id, const services::E
 }
 
 void TradeVizScreen::export_csv() {
-    if (shown_.isEmpty())
+    if (shown_.isEmpty() || illustrative_)
         return;
     const QString country = country_combo_ ? country_combo_->currentText() : QString();
     const QString year = year_combo_ ? year_combo_->currentText() : QString();
@@ -927,7 +954,12 @@ TradeVizScreen::TradeVizScreen(QWidget* parent) : QWidget(parent) {
 
 void TradeVizScreen::setup_ui() {
     setObjectName("tradeVizScreen");
-    setStyleSheet(QString("QWidget#tradeVizScreen { background: %1; }").arg(ui::colors::BG_BASE()));
+    setStyleSheet(QString("QWidget#tradeVizScreen { background: %1; }"
+                          "QLabel#tvSourceNote { color: %2; background: %1; font-size: 11px; padding: 4px 10px;"
+                          " border-bottom: 1px solid %3; font-family: 'Consolas','Courier New',monospace; }"
+                          "QLabel#tvSourceNote[illustrative=\"true\"] { color: %4; font-weight: bold; }")
+                      .arg(ui::colors::BG_BASE(), ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(),
+                           ui::colors::WARNING()));
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -1020,8 +1052,11 @@ QVariantMap TradeVizScreen::save_state() const {
         s.insert("order", order_combo_->currentIndex());
     if (period_combo_)
         s.insert("period", period_combo_->currentIndex());
-    if (year_combo_)
+    if (year_combo_) {
         s.insert("year", year_combo_->currentIndex());
+        // The year list now grows each January, so restore by value, not index.
+        s.insert("year_value", year_combo_->currentText());
+    }
     return s;
 }
 
@@ -1035,7 +1070,18 @@ void TradeVizScreen::restore_state(const QVariantMap& state) {
     };
     apply(country_combo_, "country");
     apply(order_combo_, "order");
-    apply(year_combo_, "year");
+    if (year_combo_) {
+        // "year_value" (current) or a legacy index into the old fixed 2024..2010 list.
+        QString year = state.value("year_value").toString();
+        if (year.isEmpty() && state.contains("year")) {
+            const int legacy_idx = state.value("year").toInt();
+            if (legacy_idx >= 0 && legacy_idx <= 14)
+                year = QString::number(2024 - legacy_idx);
+        }
+        const int idx = year.isEmpty() ? -1 : year_combo_->findText(year);
+        if (idx >= 0)
+            year_combo_->setCurrentIndex(idx);
+    }
     // "% of GDP" and the non-annual periodicities are disabled entries (nothing backs them),
     // so a selection saved while they were inert placeholders is not restored.
     if (order_combo_ && order_combo_->currentIndex() == TvGdp)

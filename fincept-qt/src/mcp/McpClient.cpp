@@ -83,11 +83,19 @@ Result<void> McpClient::start() {
     QString command = config_.command;
     QStringList args = config_.args;
     if (command == "uvx") {
-        const QString uv = python::PythonSetupManager::instance().uv_path();
+        auto& setup = python::PythonSetupManager::instance();
+        const QString uv = setup.uv_path();
         if (QFileInfo::exists(uv)) {
             command = uv;
             args.prepend("run");
             args.prepend("tool"); // becomes: uv tool run <package> <args>
+            // Same uv environment as the app's own setup (shared cache, managed
+            // Python only, no user uv.toml / inherited VIRTUAL_ENV); the server's
+            // configured env still wins. uv_environment() is thread-safe.
+            QProcessEnvironment uv_env = setup.uv_environment();
+            for (auto it = config_.env.constBegin(); it != config_.env.constEnd(); ++it)
+                uv_env.insert(it.key(), it.value());
+            process_->setProcessEnvironment(uv_env);
             LOG_INFO(TAG, "Routing uvx through bundled uv: " + uv);
         }
     }

@@ -1,0 +1,45 @@
+# Analytics CORE — the subset of requirements-numpy2.txt that the first-run
+# experience needs (dashboard quotes/sparklines, Markets, Watchlist, News NLP,
+# Equity Research quote/history/financials/technicals/news).
+#
+# PythonSetupManager installs this FIRST into venv-numpy2, constrained by the
+# lock compiled from requirements-numpy2.txt (`uv pip install -r <this> -c
+# <lock>`), then lets the user into the terminal while the rest of the lock
+# keeps installing in the background. Because both passes take their versions
+# from the same lock, the background pass never replaces anything installed
+# here.
+#
+# RULES
+#   * Every line MUST also appear in requirements-numpy2.txt with the SAME
+#     specifier — the lock must be able to satisfy it.
+#   * Keep it small: no torch / jupyter / mlflow / langchain etc. This list is
+#     what stands between a new user and the terminal.
+#   * Transitive dependencies (pytz, tzdata, dateutil, idna, urllib3, …) are
+#     pulled in and pinned by the lock automatically — list only what the
+#     scripts import directly.
+
+# numpy/pandas — every analytics script
+numpy>=2.2.3,<3.0
+pandas>=2.3.3,<3.0
+
+# yfinance_data.py (quotes, sparklines, history, info, financials, search,
+# news) and the PythonWorker daemon that serves the same actions
+yfinance==0.2.66
+curl_cffi==0.13.0
+protobuf>=3.20.2,<6.0.0
+websockets==15.0.1
+requests==2.32.5
+certifi==2025.11.12
+# Lets requests/urllib3 trust the OS certificate store (corporate TLS proxies)
+pip_system_certs==5.3
+beautifulsoup4==4.14.2
+
+# News: fetch_company_news.py (gnews → feedparser), news_nlp.py sentiment,
+# translate_text.py
+feedparser==6.0.12
+gnews==0.4.2
+vaderSentiment==3.3.2
+googletrans==4.0.2
+
+# Equity Research → Technicals (compute_technicals.py)
+ta==0.11.0

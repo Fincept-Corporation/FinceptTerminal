@@ -122,6 +122,10 @@ class PythonRunner : public QObject {
     PythonRunner();
     QString find_python_sync() const;
     void find_python_async();
+    /// Re-resolve the interpreter once PythonSetupManager reports the managed
+    /// venvs usable (core_ready / setup_complete) — a runner constructed before
+    /// setup finished otherwise keeps an empty or system path until restart.
+    void refresh_interpreter();
     QString find_scripts_dir() const;
     void start_next();
 

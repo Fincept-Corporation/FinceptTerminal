@@ -18,6 +18,8 @@
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLocale>
+#include <QSet>
 #include <QPointer>
 #include <QRegularExpression>
 #include <QScrollArea>
@@ -127,42 +129,6 @@ namespace fincept::screens {
 
 using namespace fincept::ui;
 
-// ── Field factory helpers ────────────────────────────────────────────────────
-
-static AltField text_field(const QString& key, const QString& label, const QString& def = "") {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::Text;
-    f.combo_items = def;
-    return f;
-}
-
-static AltField spin_field(const QString& key, const QString& label, double def, double min_v, double max_v,
-                           int dec = 2, const QString& pfx = "", const QString& sfx = "", bool div100 = false) {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::Spin;
-    f.default_val = def;
-    f.min_val = min_v;
-    f.max_val = max_v;
-    f.decimals = dec;
-    f.prefix = pfx;
-    f.suffix = sfx;
-    f.divide_100 = div100;
-    return f;
-}
-
-static AltField combo_field(const QString& key, const QString& label, const QString& items) {
-    AltField f;
-    f.key = key;
-    f.label = label;
-    f.type = AltField::Combo;
-    f.combo_items = items;
-    return f;
-}
-
 // ── Category definitions ─────────────────────────────────────────────────────
 
 // Translation helper for the data-driven category/analyzer display strings.
@@ -200,10 +166,10 @@ static QList<AltCategory> build_categories() {
          "#EAB308",
          "HF",
          {
-             {"hedge-funds", alt_tr("Long/Short Equity"), alt_tr("Strategy metrics, fee impact, liquidity risk")},
-             {"managed-futures", alt_tr("Managed Futures / CTA"),
-              alt_tr("Fee drag, trend following, crisis alpha analysis")},
-             {"market-neutral", alt_tr("Market Neutral"), alt_tr("Beta neutrality, factor exposure, leverage risk")},
+             {"hedge-funds", alt_tr("Hedge Fund (Monthly Returns)"),
+              alt_tr("CAGR, volatility, Sharpe, drawdown — gross and net of 2/20 fees")},
+             {"managed-futures", alt_tr("Managed Futures / CTA"), alt_tr("Fee drag of 2/20 on a gross return")},
+             {"market-neutral", alt_tr("Market Neutral"), alt_tr("Gross/net exposure and leverage risk")},
          }},
         {"commodities",
          alt_tr("Commodities"),
@@ -211,8 +177,7 @@ static QList<AltCategory> build_categories() {
          "C",
          {
              {"natural-resources", alt_tr("Natural Resources"),
-              alt_tr("Futures basis, contango/backwardation, roll yield")},
-             {"pme", alt_tr("Precious Metals Equities"), alt_tr("Correlation to metals, inflation hedge, drawdowns")},
+              alt_tr("Futures basis: contango / backwardation, annualised basis")},
          }},
         {"private_capital",
          alt_tr("Private Capital"),
@@ -220,7 +185,7 @@ static QList<AltCategory> build_categories() {
          "PE",
          {
              {"private-capital", alt_tr("Private Equity / Venture Capital"),
-              alt_tr("IRR, MOIC, DPI, RVPI, J-curve, fee drag")},
+              alt_tr("IRR, TVPI, DPI, RVPI from your cash flows and NAV")},
          }},
         {"annuities",
          alt_tr("Annuities"),
@@ -241,7 +206,7 @@ static QList<AltCategory> build_categories() {
          "SP",
          {
              {"structured-products", alt_tr("Structured Notes"),
-              alt_tr("Complexity score, hidden costs, issuer credit risk")},
+              alt_tr("Qualitative verdict — complexity, hidden costs, issuer credit risk")},
              {"leveraged-funds", alt_tr("Leveraged ETFs (2x/3x)"),
               alt_tr("Volatility decay, path-dependency, holding cost")},
          }},
@@ -274,206 +239,9 @@ static QList<AltCategory> build_categories() {
          "DA",
          {
              {"digital-assets", alt_tr("Cryptocurrency"),
-              alt_tr("Fundamental metrics, NVT ratio, market cap analysis")},
+              alt_tr("Implied price, supply inflation, volume / market cap")},
          }},
     };
-}
-
-// ── Per-analyzer form fields ─────────────────────────────────────────────────
-
-[[maybe_unused]] static QList<AltField> fields_for(const QString& id) {
-    if (id == "high-yield")
-        return {
-            text_field("name", "BOND NAME", "HY Corp Bond"),
-            spin_field("par_value", "PAR VALUE ($)", 1000, 100, 1e9, 0, "$"),
-            spin_field("price", "MARKET PRICE ($)", 950, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", "COUPON RATE (%)", 8.5, 0, 30, 2, "", "%"),
-            spin_field("maturity_years", "MATURITY (years)", 5, 0.5, 30, 1),
-            combo_field("credit_rating", "CREDIT RATING", "BB|B|CCC|BB+|BB-|B+|B-|CCC+"),
-        };
-    if (id == "em-bonds")
-        return {
-            text_field("name", "BOND NAME", "Brazil 2030"),
-            spin_field("face_value", "FACE VALUE ($)", 1000, 100, 1e9, 0, "$"),
-            spin_field("current_market_value", "MARKET PRICE ($)", 950, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", "COUPON RATE (%)", 6.0, 0, 25, 2, "", "%"),
-            spin_field("maturity_years", "MATURITY (years)", 10, 0.5, 30, 1),
-            spin_field("credit_spread", "CREDIT SPREAD (%)", 3.0, 0, 20, 2, "", "%", true),
-        };
-    if (id == "convertible-bonds")
-        return {
-            text_field("name", "BOND NAME", "Tesla Conv 2028"),
-            spin_field("par_value", "PAR VALUE ($)", 1000, 100, 1e9, 0, "$"),
-            spin_field("current_price", "MARKET PRICE ($)", 1100, 100, 1e9, 2, "$"),
-            spin_field("coupon_rate", "COUPON RATE (%)", 2.0, 0, 15, 2, "", "%"),
-            spin_field("maturity_years", "MATURITY (years)", 5, 0.5, 30, 1),
-            spin_field("stock_price", "STOCK PRICE ($)", 55, 1, 1e6, 2, "$"),
-            spin_field("conversion_ratio", "CONVERSION RATIO", 18, 1, 1e4, 2),
-        };
-    if (id == "preferred-stocks")
-        return {
-            text_field("name", "SECURITY NAME", "JPM Series J Preferred"),
-            spin_field("par_value", "PAR VALUE ($)", 25, 1, 1e4, 2, "$"),
-            spin_field("current_price", "MARKET PRICE ($)", 24.5, 1, 1e4, 2, "$"),
-            spin_field("dividend_rate", "DIVIDEND RATE (%)", 5.5, 0, 20, 2, "", "%", true),
-        };
-    if (id == "real-estate")
-        return {
-            text_field("name", "PROPERTY NAME", "Class A Office"),
-            spin_field("acquisition_price", "PURCHASE PRICE ($)", 1000000, 1000, 1e12, 0, "$"),
-            spin_field("gross_income", "GROSS INCOME ($/yr)", 120000, 0, 1e9, 0, "$"),
-            spin_field("vacancy_rate", "VACANCY RATE (%)", 5.0, 0, 100, 1, "", "%", true),
-            spin_field("operating_expenses", "OPER. EXPENSES ($/yr)", 40000, 0, 1e9, 0, "$"),
-            spin_field("loan_amount", "LOAN AMOUNT ($)", 700000, 0, 1e12, 0, "$"),
-            spin_field("interest_rate", "MORTGAGE RATE (%)", 6.5, 0, 30, 2, "", "%", true),
-            spin_field("loan_term", "LOAN TERM (years)", 30, 5, 50, 0),
-        };
-    if (id == "hedge-funds")
-        return {
-            text_field("name", "FUND NAME", "Global Macro Fund"),
-            spin_field("management_fee", "MGMT FEE (%)", 2.0, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", "PERF FEE (%)", 20.0, 0, 50, 1, "", "%", true),
-            spin_field("hurdle_rate", "HURDLE RATE (%)", 6.0, 0, 20, 2, "", "%", true),
-            combo_field("strategy_type", "STRATEGY",
-                        "equity_long_short|global_macro|event_driven|relative_value|multi_strategy"),
-        };
-    if (id == "managed-futures")
-        return {
-            text_field("name", "FUND NAME", "CTA Trend Fund"),
-            spin_field("management_fee", "MGMT FEE (%)", 2.0, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", "PERF FEE (%)", 20.0, 0, 50, 1, "", "%", true),
-            spin_field("gross_return", "GROSS RETURN (%)", 12.0, -50, 100, 2, "", "%", true),
-        };
-    if (id == "market-neutral")
-        return {
-            text_field("name", "FUND NAME", "Market Neutral Fund"),
-            spin_field("gross_leverage", "GROSS LEVERAGE", 2.0, 0.5, 10, 1),
-            spin_field("management_fee", "MGMT FEE (%)", 1.5, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", "PERF FEE (%)", 20.0, 0, 50, 1, "", "%", true),
-        };
-    if (id == "natural-resources")
-        return {
-            text_field("name", "COMMODITY NAME", "WTI Crude Oil"),
-            spin_field("spot_price", "SPOT PRICE ($)", 80, 0, 1e6, 2, "$"),
-            spin_field("three_month_futures", "3M FUTURES ($)", 82, 0, 1e6, 2, "$"),
-            spin_field("six_month_futures", "6M FUTURES ($)", 84, 0, 1e6, 2, "$"),
-            spin_field("twelve_month_futures", "12M FUTURES ($)", 87, 0, 1e6, 2, "$"),
-            combo_field("sector", "SECTOR", "energy|metals|agriculture|livestock"),
-        };
-    if (id == "pme")
-        return {
-            text_field("name", "FUND NAME", "Gold Miners ETF"),
-        };
-    if (id == "private-capital")
-        return {
-            text_field("name", "FUND NAME", "Buyout Fund III"),
-            spin_field("management_fee", "MGMT FEE (%)", 2.0, 0, 10, 2, "", "%", true),
-            spin_field("performance_fee", "CARRIED INT (%)", 20.0, 0, 40, 1, "", "%", true),
-            spin_field("hurdle_rate", "HURDLE RATE (%)", 8.0, 0, 20, 2, "", "%", true),
-        };
-    if (id == "annuities")
-        return {
-            text_field("name", "ANNUITY NAME", "Fixed Annuity"),
-            spin_field("premium", "PREMIUM ($)", 100000, 1000, 1e9, 0, "$"),
-            spin_field("annual_payout_rate", "ANNUAL PAYOUT RATE (%)", 5.0, 0.1, 20, 2, "", "%", true),
-            spin_field("payout_years", "PAYOUT TERM (years)", 20, 5, 50, 0),
-            spin_field("guaranteed_rate", "GUARANTEED RATE (%)", 4.0, 0, 15, 2, "", "%", true),
-        };
-    if (id == "variable-annuities")
-        return {
-            text_field("name", "ANNUITY NAME", "Variable Annuity"),
-            spin_field("premium", "PREMIUM ($)", 100000, 1000, 1e9, 0, "$"),
-            spin_field("me_fee", "M&E FEE (%)", 1.25, 0, 5, 2, "", "%", true),
-            spin_field("investment_fee", "INVESTMENT FEE (%)", 0.75, 0, 5, 2, "", "%", true),
-            spin_field("admin_fee", "ADMIN FEE (%)", 0.15, 0, 3, 2, "", "%", true),
-            spin_field("surrender_period", "SURRENDER PERIOD (yrs)", 7, 0, 20, 0),
-        };
-    if (id == "eia")
-        return {
-            text_field("name", "PRODUCT NAME", "EIA Product"),
-            spin_field("index_return", "INDEX RETURN (%)", 10.0, -50, 100, 2, "", "%", true),
-            spin_field("participation_rate", "PARTICIPATION (%)", 80.0, 10, 100, 1, "", "%", true),
-            spin_field("cap_rate", "CAP RATE (%)", 6.0, 0, 50, 2, "", "%", true),
-            spin_field("floor_rate", "FLOOR RATE (%)", 0.0, -10, 10, 2, "", "%", true),
-        };
-    if (id == "inflation-annuity")
-        return {
-            text_field("name", "ANNUITY NAME", "Inflation-Indexed Annuity"),
-            spin_field("real_payout_rate", "REAL PAYOUT RATE (%)", 4.0, 0, 15, 2, "", "%", true),
-            spin_field("inflation_rate", "ASSUMED INFLATION (%)", 3.0, 0, 15, 2, "", "%", true),
-            spin_field("payout_years", "PAYOUT TERM (years)", 20, 5, 50, 0),
-            spin_field("fixed_payout_rate", "FIXED ALT RATE (%)", 5.5, 0, 15, 2, "", "%", true),
-        };
-    if (id == "structured-products")
-        return {
-            text_field("name", "PRODUCT NAME", "Principal Protected Note"),
-            spin_field("principal", "PRINCIPAL ($)", 50000, 1000, 1e9, 0, "$"),
-            spin_field("participation_rate", "PARTICIPATION (%)", 80.0, 10, 100, 1, "", "%", true),
-            spin_field("cap_rate", "UPSIDE CAP (%)", 20.0, 0, 100, 1, "", "%", true),
-            spin_field("maturity_years", "MATURITY (years)", 5, 1, 30, 0),
-        };
-    if (id == "leveraged-funds")
-        return {
-            text_field("name", "FUND NAME", "3x S&P 500 ETF"),
-            spin_field("leverage_ratio", "LEVERAGE RATIO", 3.0, 2.0, 4.0, 1),
-        };
-    if (id == "tips")
-        return {
-            text_field("name", "SECURITY NAME", "TIPS 2031"),
-            spin_field("face_value", "FACE VALUE ($)", 10000, 1000, 1e9, 0, "$"),
-            spin_field("current_market_value", "MARKET PRICE ($)", 10200, 1000, 1e9, 2, "$"),
-            spin_field("coupon_rate", "REAL COUPON (%)", 2.5, 0, 10, 2, "", "%", true),
-            spin_field("maturity_years", "MATURITY (years)", 7, 1, 30, 1),
-        };
-    if (id == "ibonds")
-        return {
-            text_field("name", "BOND NAME", "I-Bond 2025"),
-            spin_field("purchase_price", "PURCHASE PRICE ($)", 10000, 25, 10000, 0, "$"),
-            spin_field("fixed_rate", "FIXED RATE (%)", 0.4, 0, 5, 2, "", "%", true),
-            spin_field("inflation_rate", "CPI-U INFLATION (%)", 3.4, 0, 20, 2, "", "%", true),
-        };
-    if (id == "stable-value")
-        return {
-            text_field("name", "FUND NAME", "Stable Value Fund"),
-            spin_field("book_value", "BOOK VALUE ($)", 100000, 1000, 1e9, 0, "$"),
-            spin_field("market_value", "MARKET VALUE ($)", 98000, 1000, 1e9, 0, "$"),
-            spin_field("crediting_rate", "CREDITING RATE (%)", 3.2, 0, 15, 2, "", "%", true),
-        };
-    if (id == "covered-calls")
-        return {
-            text_field("name", "POSITION NAME", "AAPL Covered Call"),
-            spin_field("stock_price", "STOCK PRICE ($)", 150, 1, 1e6, 2, "$"),
-            spin_field("strike_price", "STRIKE PRICE ($)", 160, 1, 1e6, 2, "$"),
-            spin_field("premium", "PREMIUM / SHARE ($)", 5, 0, 1e4, 2, "$"),
-            spin_field("shares", "SHARES", 100, 1, 1e6, 0),
-            spin_field("cost_basis", "COST BASIS ($)", 125, 1, 1e6, 2, "$"),
-            spin_field("holding_period_days", "HOLDING DAYS", 400, 1, 3650, 0),
-        };
-    if (id == "sri")
-        return {
-            text_field("name", "FUND NAME", "ESG Equity Fund"),
-            spin_field("sri_return", "SRI RETURN (%)", 9.0, -30, 100, 2, "", "%", true),
-            spin_field("benchmark_return", "BENCHMARK RETURN (%)", 10.0, -30, 100, 2, "", "%", true),
-            spin_field("expense_ratio", "EXPENSE RATIO (%)", 0.8, 0, 5, 2, "", "%", true),
-            spin_field("time_period_years", "TIME PERIOD (years)", 10, 1, 50, 0),
-        };
-    if (id == "asset-location")
-        return {
-            text_field("name", "ASSET NAME", "REITs / High-Yield"),
-            combo_field("asset_class", "ASSET CLASS",
-                        "reits|high_yield_bonds|stocks|municipal_bonds|tips|commodities|cash"),
-            spin_field("tax_bracket", "TAX BRACKET (%)", 24.0, 10, 45, 1, "", "%", true),
-        };
-    if (id == "digital-assets")
-        return {
-            text_field("name", "ASSET NAME", "Bitcoin"),
-            spin_field("price", "PRICE ($)", 45000, 0, 1e9, 2, "$"),
-            spin_field("market_cap", "MARKET CAP ($B)", 850, 0, 1e6, 1, "$", "B"),
-            spin_field("volume_24h", "24H VOLUME ($B)", 25, 0, 1e6, 1, "$", "B"),
-            spin_field("circulating_supply", "CIRC. SUPPLY (M)", 19.5, 0, 1e6, 1, "", "M"),
-            spin_field("max_supply", "MAX SUPPLY (M)", 21.0, 0, 1e6, 1, "", "M"),
-        };
-    return {text_field("name", "NAME", "")};
 }
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -541,7 +309,48 @@ void AltInvestmentsScreen::retranslateUi() {
 
 // ── UI Setup ─────────────────────────────────────────────────────────────────
 
-QString AltInvestmentsScreen::format_value(const QJsonValue& v) const {
+// Unit of a metric, decided by its NAME. The old rule — "any value strictly
+// between 0 and 1 is a percentage" — showed a 0.25-year expiry as 25%, a 0.45
+// Sharpe as 45% and a beta of 0.8 as 80%, while a 1.27 participation rate in the
+// same list stayed 1.2667. The analyzers report rates as fractions.
+enum class AltUnit { Percent, Bps, Plain };
+
+static AltUnit alt_unit_for_key(const QString& key) {
+    const QStringList tokens = key.toLower().split(QLatin1Char('_'), Qt::SkipEmptyParts);
+    if (tokens.isEmpty())
+        return AltUnit::Plain;
+    if (tokens.contains(QStringLiteral("bps")) || key.contains(QLatin1String("basis_points")))
+        return AltUnit::Bps;
+    static const QSet<QString> kPercent = {
+        "rate",    "pct",      "percent",       "percentage", "yield",    "return",    "returns",
+        "spread",  "probability", "prob",       "cagr",       "drag",     "margin",    "irr",
+        "volatility", "drawdown", "capture",    "captured",   "participation", "loss", "lost",
+        "increase", "inflation", "growth",      "premium"};
+    static const QSet<QString> kPlain = {"ratio",    "sharpe",   "sortino", "calmar", "beta",  "correlation",
+                                         "multiple", "moic",     "tvpi",    "dpi",    "rvpi",  "years",
+                                         "year",     "age",      "months",  "days",   "count", "score",
+                                         "duration", "leverage", "exposure", "shares", "periods"};
+    static const QSet<QString> kMoney = {"value",  "price",   "amount", "income",   "dollar",  "dollars",
+                                         "wealth", "paid",    "payout", "payouts",  "nav",     "principal",
+                                         "fees",   "charge",  "noi",    "invested", "capital", "commitment",
+                                         "gain",   "adjustment"};
+    // A rate-like LAST word wins ("annual_payout_rate", "upside_capture_pct")...
+    if (kPercent.contains(tokens.last()))
+        return AltUnit::Percent;
+    // ...then explicit non-percent words ("leverage_ratio", "conversion_premium_dollar")...
+    for (const QString& t : tokens) {
+        if (kPlain.contains(t) || kMoney.contains(t))
+            return AltUnit::Plain;
+    }
+    // ...then a rate word anywhere ("spread_over_treasuries", "yield_to_maturity").
+    for (const QString& t : tokens) {
+        if (kPercent.contains(t))
+            return AltUnit::Percent;
+    }
+    return AltUnit::Plain;
+}
+
+QString AltInvestmentsScreen::format_value(const QString& key, const QJsonValue& v) const {
     if (v.isBool())
         return v.toBool() ? tr("Yes") : tr("No");
     if (v.isNull())
@@ -550,18 +359,17 @@ QString AltInvestmentsScreen::format_value(const QJsonValue& v) const {
         return v.toString();
     if (v.isDouble()) {
         const double d = v.toDouble();
-        // Looks like a 0–1 rate/fraction (not an integer)
-        if (d > 0.0001 && d < 1.0 && d != static_cast<double>(static_cast<long long>(d)))
-            return QString::number(d * 100.0, 'f', 2) + "%";
-        if (qAbs(d) >= 1e12)
-            return QString::number(d / 1e12, 'f', 2) + "T";
-        if (qAbs(d) >= 1e9)
-            return QString::number(d / 1e9, 'f', 2) + "B";
-        if (qAbs(d) >= 1e6)
-            return QString::number(d / 1e6, 'f', 2) + "M";
+        switch (alt_unit_for_key(key)) {
+            case AltUnit::Percent:
+                return QLocale().toString(d * 100.0, 'f', 2) + "%";
+            case AltUnit::Bps:
+                return QLocale().toString(d, 'f', 1) + " bps";
+            case AltUnit::Plain:
+                break;
+        }
         if (d == static_cast<double>(static_cast<long long>(d)) && qAbs(d) < 1e15)
-            return QString::number(static_cast<long long>(d));
-        return QString::number(d, 'f', 4);
+            return QLocale().toString(static_cast<qlonglong>(d));
+        return QLocale().toString(d, 'f', qAbs(d) >= 1000.0 ? 2 : 4);
     }
     if (v.isArray())
         return QString("[%1 items]").arg(v.toArray().size());

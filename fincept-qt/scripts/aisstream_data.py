@@ -1,98 +1,109 @@
 """
 AISStream Data Fetcher
-Global real-time AIS vessel positions, vessel info, port calls
-via AISStream REST API (free key required).
+Live AIS vessel positions and ship static data (name, type, destination, ETA) from the AISStream.io WebSocket feed, collected for a few seconds into a snapshot (free key: AISSTREAM_API_KEY).
 """
 import sys
 import json
 import os
-import requests
-from typing import Dict, Any, Optional, List
+import time
+from typing import Dict, Any, List
 
 API_KEY = os.environ.get('AISSTREAM_API_KEY', '')
-BASE_URL = "https://api.aisstream.io/v0"
-
-session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# AISStream has no REST API (api.aisstream.io never resolved); data is only served over this WebSocket.
+STREAM_URL = "wss://stream.aisstream.io/v0/stream"
+MAX_SECONDS = 60
 
 
-def _make_request(endpoint: str, params: Dict = None) -> Any:
-    url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
-    headers = {}
-    if API_KEY:
-        headers["X-API-Key"] = API_KEY
+def _collect(bboxes: List, message_types: List[str], seconds: float, mmsi: List[str] = None,
+             max_messages: int = 2000) -> Any:
+    if not API_KEY:
+        return {"error": "AISStream needs a free API key: sign in at https://aisstream.io/apikeys and save it as "
+                         "AISSTREAM_API_KEY in Settings > Credentials"}
     try:
-        response = session.get(url, params=params, headers=headers, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
-
-
-def _make_post_request(endpoint: str, payload: Dict) -> Any:
-    url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
-    headers = {"Content-Type": "application/json"}
-    if API_KEY:
-        headers["X-API-Key"] = API_KEY
+        import websocket  # websocket-client
+    except ImportError:
+        return {"error": "Missing dependency: websocket-client"}
+    seconds = max(1.0, min(float(seconds), MAX_SECONDS))
+    sub = {"APIKey": API_KEY, "BoundingBoxes": bboxes, "FilterMessageTypes": message_types}
+    if mmsi:
+        sub["FiltersShipMMSI"] = mmsi
+    messages = []
     try:
-        response = session.post(url, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+        ws = websocket.create_connection(STREAM_URL, timeout=10)
+    except Exception as e:  # network / TLS failures
+        return {"error": f"Could not connect to AISStream: {e}"}
+    try:
+        ws.send(json.dumps(sub))
+        deadline = time.time() + seconds
+        while time.time() < deadline and len(messages) < max_messages:
+            ws.settimeout(max(0.1, deadline - time.time()))
+            try:
+                raw = ws.recv()
+            except websocket.WebSocketTimeoutException:
+                break
+            except websocket.WebSocketConnectionClosedException:
+                if not messages:
+                    return {"error": "AISStream closed the connection without data - check AISSTREAM_API_KEY "
+                                     "(an invalid key is rejected this way)"}
+                break
+            try:
+                msg = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(msg, dict) and msg.get("error"):
+                return {"error": f"AISStream: {msg['error']}"}
+            messages.append(msg)
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+    return messages
 
 
-def get_vessels_in_area(lat1: float, lon1: float, lat2: float, lon2: float) -> Any:
-    payload = {
-        "BoundingBoxes": [[[lat1, lon1], [lat2, lon2]]]
-    }
-    return _make_post_request("vessels/area", payload)
+def _vessels(messages: List[Dict]) -> List[Dict]:
+    out: Dict[str, Dict] = {}
+    for m in messages:
+        meta = m.get("MetaData", {})
+        key = str(meta.get("MMSI"))
+        v = out.setdefault(key, {"mmsi": meta.get("MMSI")})
+        if meta.get("ShipName", "").strip():
+            v["name"] = meta["ShipName"].strip()
+        body = m.get("Message", {}).get(m.get("MessageType", ""), {})
+        if m.get("MessageType") in ("PositionReport", "StandardClassBPositionReport"):
+            v.update({"lat": body.get("Latitude", meta.get("latitude")), "lon": body.get("Longitude", meta.get("longitude")),
+                      "sog_knots": body.get("Sog"), "cog": body.get("Cog"), "heading": body.get("TrueHeading"),
+                      "nav_status": body.get("NavigationalStatus"), "time_utc": meta.get("time_utc")})
+        elif m.get("MessageType") == "ShipStaticData":
+            eta = body.get("Eta") or {}
+            v.update({"imo": body.get("ImoNumber"), "call_sign": (body.get("CallSign") or "").strip(),
+                      "ship_type": body.get("Type"), "destination": (body.get("Destination") or "").strip(),
+                      "draught_m": body.get("MaximumStaticDraught"),
+                      "eta": f"{eta.get('Month', 0):02d}-{eta.get('Day', 0):02d} {eta.get('Hour', 0):02d}:{eta.get('Minute', 0):02d}" if eta else None})
+    return list(out.values())
 
 
-def get_vessel_by_mmsi(mmsi: str) -> Any:
-    return _make_request(f"vessels/{mmsi}")
+def get_vessels_in_area(lat1: float, lon1: float, lat2: float, lon2: float, seconds: float = 15) -> Any:
+    """Vessels reporting positions inside a bounding box during a short listening window."""
+    msgs = _collect([[[float(lat1), float(lon1)], [float(lat2), float(lon2)]]],
+                    ["PositionReport", "StandardClassBPositionReport", "ShipStaticData"], seconds)
+    if isinstance(msgs, dict):
+        return msgs
+    vessels = _vessels(msgs)
+    return {"bbox": [[lat1, lon1], [lat2, lon2]], "seconds": seconds, "messages": len(msgs),
+            "count": len(vessels), "vessels": vessels, "source": "AISStream.io (live)"}
 
 
-def get_vessel_track(mmsi: str, start_date: str = None, end_date: str = None) -> Any:
-    params = {}
-    if start_date:
-        params["start_date"] = start_date
-    if end_date:
-        params["end_date"] = end_date
-    return _make_request(f"vessels/{mmsi}/track", params)
-
-
-def get_port_calls(port_name: str = None, start_date: str = None, end_date: str = None) -> Any:
-    params = {}
-    if port_name:
-        params["port_name"] = port_name
-    if start_date:
-        params["start_date"] = start_date
-    if end_date:
-        params["end_date"] = end_date
-    return _make_request("port-calls", params)
-
-
-def get_fleet(vessel_type: str = None, limit: int = 50) -> Any:
-    params = {"limit": limit}
-    if vessel_type:
-        params["vessel_type"] = vessel_type
-    return _make_request("vessels", params)
-
-
-def search_vessel(name: str) -> Any:
-    params = {"name": name}
-    return _make_request("vessels/search", params)
+def get_vessel_by_mmsi(mmsi: str, seconds: float = 30) -> Any:
+    """Latest position/static data for one MMSI heard during the listening window (worldwide)."""
+    msgs = _collect([[[-90, -180], [90, 180]]], ["PositionReport", "StandardClassBPositionReport", "ShipStaticData"],
+                    seconds, mmsi=[str(mmsi)])
+    if isinstance(msgs, dict):
+        return msgs
+    vessels = _vessels(msgs)
+    if not vessels:
+        return {"error": f"No AIS messages from MMSI {mmsi} within {seconds}s (vessel may be out of coverage or silent)"}
+    return {"vessel": vessels[0], "messages": len(msgs), "source": "AISStream.io (live)"}
 
 
 def main(args=None):
@@ -103,32 +114,23 @@ def main(args=None):
         return
     command = args[0]
     result = {"error": f"Unknown command: {command}"}
-    if command == "area":
-        lat1 = float(args[1]) if len(args) > 1 else 51.0
-        lon1 = float(args[2]) if len(args) > 2 else -1.0
-        lat2 = float(args[3]) if len(args) > 3 else 52.0
-        lon2 = float(args[4]) if len(args) > 4 else 1.0
-        result = get_vessels_in_area(lat1, lon1, lat2, lon2)
-    elif command == "vessel":
-        mmsi = args[1] if len(args) > 1 else "123456789"
-        result = get_vessel_by_mmsi(mmsi)
-    elif command == "track":
-        mmsi = args[1] if len(args) > 1 else "123456789"
-        start_date = args[2] if len(args) > 2 else None
-        end_date = args[3] if len(args) > 3 else None
-        result = get_vessel_track(mmsi, start_date, end_date)
-    elif command == "port_calls":
-        port_name = args[1] if len(args) > 1 else None
-        start_date = args[2] if len(args) > 2 else None
-        end_date = args[3] if len(args) > 3 else None
-        result = get_port_calls(port_name, start_date, end_date)
-    elif command == "fleet":
-        vessel_type = args[1] if len(args) > 1 else None
-        limit = int(args[2]) if len(args) > 2 else 50
-        result = get_fleet(vessel_type, limit)
-    elif command == "search":
-        name = args[1] if len(args) > 1 else "MSC"
-        result = search_vessel(name)
+    try:
+        if command == "area":
+            # default: approaches to Rotterdam
+            lat1 = args[1] if len(args) > 1 else "51.8"
+            lon1 = args[2] if len(args) > 2 else "3.8"
+            lat2 = args[3] if len(args) > 3 else "52.1"
+            lon2 = args[4] if len(args) > 4 else "4.4"
+            seconds = float(args[5]) if len(args) > 5 else 15
+            result = get_vessels_in_area(lat1, lon1, lat2, lon2, seconds)
+        elif command == "vessel":
+            if len(args) < 2:
+                result = {"error": "Usage: vessel <mmsi> [seconds]"}
+            else:
+                seconds = float(args[2]) if len(args) > 2 else 30
+                result = get_vessel_by_mmsi(args[1], seconds)
+    except ValueError as e:
+        result = {"error": f"Invalid argument: {e}"}
     print(json.dumps(result))
 
 

@@ -1,150 +1,139 @@
 """
 Macro Trends Data Fetcher
-Long-term historical macro data — P/E ratios, Shiller CAPE, Buffett indicator via public endpoints.
+Long-term US market valuation and macro history (no key): Shiller CAPE, S&P 500 P/E and price levels (multpl.com tables) and a Buffett indicator, Fed funds rate, GDP and CPI from FRED's public CSV download.
 """
 import sys
+import re
 import json
-import os
+import html
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Any, List, Dict
 
-API_KEY = os.environ.get('MACROTRENDS_API_KEY', '')
-BASE_URL = "https://www.macrotrends.net/assets/php"
+FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+MULTPL = "https://www.multpl.com"
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; FinceptTerminal/4.5; +https://fincept.in)"}
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
+session.headers.update(HEADERS)
 
-def _make_request(endpoint: str, params: Dict = None) -> Any:
-    url = f"{BASE_URL}/{endpoint}" if not endpoint.startswith('http') else endpoint
+_MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
+                                        "Nov", "Dec"], 1)}
+
+
+def _in_range(date: str, start_year: int, end_year: int) -> bool:
+    y = int(date[:4])
+    return (not start_year or y >= start_year) and (not end_year or y <= end_year)
+
+
+def _fred(series_id: str, start_year: int = None, end_year: int = None) -> Any:
+    """Keyless FRED series via fredgraph.csv (fredgraph.json does not exist)."""
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; FinceptTerminal/4.0)"}
-        response = session.get(url, params=params, headers=headers, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
+        r = session.get(FRED_CSV, params={"id": series_id}, timeout=30)
+        r.raise_for_status()
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+    lines = r.text.strip().splitlines()
+    if not lines or "," not in lines[0]:
+        return {"error": f"Unexpected FRED response for {series_id}"}
+    rows = []
+    for line in lines[1:]:
+        d, _, v = line.partition(",")
+        if not d or v in ("", "."):
+            continue
+        if _in_range(d, start_year, end_year):
+            try:
+                rows.append({"date": d, "value": float(v)})
+            except ValueError:
+                pass
+    return rows
 
-def _fetch_multpl_series(series_id: str, start_year: int = None, end_year: int = None) -> Any:
-    url = f"https://www.multpl.com/{series_id}/table/by-year"
+
+def _multpl(slug: str, start_year: int = None, end_year: int = None) -> Any:
+    """Annual table from multpl.com (/<slug>/table/by-year), newest first on the site."""
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; FinceptTerminal/4.0)", "Accept": "application/json"}
-        response = session.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        if start_year or end_year:
-            filtered = []
-            for entry in data if isinstance(data, list) else data.get("data", []):
-                year = int(str(entry.get("date", "0"))[:4]) if isinstance(entry, dict) else 0
-                if start_year and year < start_year:
-                    continue
-                if end_year and year > end_year:
-                    continue
-                filtered.append(entry)
-            return filtered
-        return data
+        r = session.get(f"{MULTPL}/{slug}/table/by-year", timeout=30)
+        r.raise_for_status()
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
-    except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"JSON decode error: {str(e)}"}
+    rows = []
+    for d, v in re.findall(r"<td>\s*([A-Z][a-z]{2} \d{1,2}, \d{4})\s*</td>\s*<td>(.*?)</td>", r.text, re.S):
+        txt = html.unescape(re.sub(r"<[^>]+>", "", v)).strip().replace(",", "").replace("%", "")
+        m = re.search(r"-?\d+(\.\d+)?", txt)
+        if not m:
+            continue
+        mon, day, year = d.replace(",", "").split()
+        date = f"{year}-{_MONTHS.get(mon, 1):02d}-{int(day):02d}"
+        if _in_range(date, start_year, end_year):
+            rows.append({"date": date, "value": float(m.group(0))})
+    if not rows:
+        return {"error": f"No rows parsed from multpl.com/{slug} (page layout may have changed)"}
+    rows.sort(key=lambda x: x["date"])
+    return rows
+
+
+def _wrap(name: str, unit: str, source: str, rows: Any) -> Any:
+    if isinstance(rows, dict):
+        return rows
+    return {"series": name, "unit": unit, "source": source, "count": len(rows), "data": rows}
+
 
 def get_shiller_pe(start_year: int = None, end_year: int = None) -> Any:
-    return _fetch_multpl_series("shiller-pe", start_year, end_year)
+    return _wrap("Shiller PE (CAPE)", "ratio", "multpl.com", _multpl("shiller-pe", start_year, end_year))
+
 
 def get_buffett_indicator(start_year: int = None, end_year: int = None) -> Any:
-    url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=WILL5000INDFC"
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; FinceptTerminal/4.0)"}
-        response = session.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        lines = response.text.strip().split("\n")
-        rows = []
-        for line in lines[1:]:
-            parts = line.split(",")
-            if len(parts) == 2:
-                year = int(parts[0][:4]) if parts[0] else 0
-                if start_year and year < start_year:
-                    continue
-                if end_year and year > end_year:
-                    continue
-                rows.append({"date": parts[0], "value": parts[1]})
-        return rows
-    except Exception as e:
-        return {"error": f"Request failed: {str(e)}"}
+    """Market value of US nonfinancial corporate equities (Fed Z.1, NCBEILQ027S) / nominal GDP, %.
+    (FRED's Wilshire 5000 series used previously was discontinued.)"""
+    eq = _fred("NCBEILQ027S", start_year, end_year)
+    gdp = _fred("GDP", start_year, end_year)
+    if isinstance(eq, dict):
+        return eq
+    if isinstance(gdp, dict):
+        return gdp
+    g = {r["date"]: r["value"] for r in gdp}
+    rows = [{"date": r["date"], "value": round(r["value"] / 1000.0 / g[r["date"]] * 100.0, 2),
+             "equities_bn_usd": round(r["value"] / 1000.0, 1), "gdp_bn_usd": g[r["date"]]}
+            for r in eq if g.get(r["date"])]
+    return _wrap("Buffett indicator (corporate equities / GDP)", "% of GDP", "FRED (Fed Z.1, BEA)", rows)
+
 
 def get_sp500_historical(start_year: int = None, end_year: int = None) -> Any:
-    return _fetch_multpl_series("sp500-historical-annual-returns", start_year, end_year)
+    prices = _multpl("s-p-500-historical-prices", start_year, end_year)
+    pe = _multpl("s-p-500-pe-ratio", start_year, end_year)
+    if isinstance(prices, dict):
+        return prices
+    pe_map = {r["date"][:4]: r["value"] for r in pe} if isinstance(pe, list) else {}
+    rows: List[Dict] = []
+    prev = None
+    for r in prices:
+        row = {"date": r["date"], "price": r["value"], "pe_ratio": pe_map.get(r["date"][:4])}
+        if prev:
+            row["change_pct"] = round((r["value"] / prev - 1) * 100, 2)
+        prev = r["value"]
+        rows.append(row)
+    return _wrap("S&P 500 annual level and P/E", "index points", "multpl.com", rows)
+
 
 def get_interest_rates_history(start_year: int = None, end_year: int = None) -> Any:
-    url = "https://fred.stlouisfed.org/graph/fredgraph.json?id=FEDFUNDS"
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; FinceptTerminal/4.0)"}
-        response = session.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        observations = data.get("observations", [])
-        if start_year or end_year:
-            filtered = []
-            for obs in observations:
-                year = int(obs.get("date", "0000")[:4])
-                if start_year and year < start_year:
-                    continue
-                if end_year and year > end_year:
-                    continue
-                filtered.append(obs)
-            return filtered
-        return observations
-    except Exception as e:
-        return {"error": f"Request failed: {str(e)}"}
+    return _wrap("Effective federal funds rate (FEDFUNDS)", "%", "FRED", _fred("FEDFUNDS", start_year, end_year))
+
 
 def get_gdp_historical(start_year: int = None, end_year: int = None) -> Any:
-    url = "https://fred.stlouisfed.org/graph/fredgraph.json?id=GDP"
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; FinceptTerminal/4.0)"}
-        response = session.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        observations = data.get("observations", [])
-        if start_year or end_year:
-            filtered = []
-            for obs in observations:
-                year = int(obs.get("date", "0000")[:4])
-                if start_year and year < start_year:
-                    continue
-                if end_year and year > end_year:
-                    continue
-                filtered.append(obs)
-            return filtered
-        return observations
-    except Exception as e:
-        return {"error": f"Request failed: {str(e)}"}
+    return _wrap("US nominal GDP (GDP)", "USD bn, SAAR", "FRED", _fred("GDP", start_year, end_year))
+
 
 def get_inflation_historical(start_year: int = None, end_year: int = None) -> Any:
-    url = "https://fred.stlouisfed.org/graph/fredgraph.json?id=CPIAUCSL"
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; FinceptTerminal/4.0)"}
-        response = session.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        observations = data.get("observations", [])
-        if start_year or end_year:
-            filtered = []
-            for obs in observations:
-                year = int(obs.get("date", "0000")[:4])
-                if start_year and year < start_year:
-                    continue
-                if end_year and year > end_year:
-                    continue
-                filtered.append(obs)
-            return filtered
-        return observations
-    except Exception as e:
-        return {"error": f"Request failed: {str(e)}"}
+    rows = _fred("CPIAUCSL")
+    if isinstance(rows, list):
+        for i, r in enumerate(rows):
+            if i >= 12:
+                r["yoy_pct"] = round((r["value"] / rows[i - 12]["value"] - 1) * 100, 2)
+        rows = [r for r in rows if _in_range(r["date"], start_year, end_year)]
+    return _wrap("US CPI, all urban consumers (CPIAUCSL)", "index 1982-84=100", "FRED", rows)
+
 
 def main(args=None):
     if args is None:
@@ -169,6 +158,7 @@ def main(args=None):
     elif command == "inflation":
         result = get_inflation_historical(start_year, end_year)
     print(json.dumps(result))
+
 
 if __name__ == "__main__":
     main()

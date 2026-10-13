@@ -30,6 +30,16 @@ inline void publish_to_hub(const QString& topic, const QVariant& value) {
 inline void geo_svc_publish_error(const QString& topic, const QString& message) {
     fincept::datahub::DataHub::instance().publish_error(topic, message.left(200));
 }
+/// Credit figures arrive as JSON numbers (fractional — the balance is NUMERIC) or,
+/// from some paths, strings. toInt() rejected every fractional balance, so the
+/// screen never showed one. Returns `def` when absent / unparsable.
+inline double geo_svc_credit_value(const QJsonValue& v, double def) {
+    if (v.isDouble())
+        return v.toDouble();
+    bool ok = false;
+    const double d = v.toString().trimmed().toDouble(&ok);
+    return ok ? d : def;
+}
 } // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
@@ -147,48 +157,17 @@ void GeopoliticsService::fetch_events(const QString& country, const QString& cit
                 page_data.current_page = page;
                 page_data.events_per_page = limit;
             }
-            page_data.credits_used = obj["credits_used"].toDouble(0.0);
-            page_data.remaining_credits = obj["remaining_credits"].toInt(-1);
-
-            // Cache the (already-sorted) events for offline replay.
-            QJsonArray cached_arr;
-            for (const auto& ev : page_data.events) {
-                QJsonObject o;
-                o["url"] = ev.url;
-                o["source"] = ev.source;
-                o["event_category"] = ev.event_category;
-                o["title"] = ev.title;
-                o["city"] = ev.city;
-                o["country"] = ev.country;
-                if (ev.has_coords) {
-                    o["latitude"] = ev.latitude;
-                    o["longitude"] = ev.longitude;
-                }
-                o["extracted_date"] = ev.extracted_date;
-                o["created_at"] = ev.created_at;
-                cached_arr.append(o);
-            }
-            QJsonObject cached_root;
-            cached_root["events"] = cached_arr;
-            cached_root["total_events"] = page_data.total_events;
-            cached_root["current_page"] = page_data.current_page;
-            cached_root["total_pages"] = page_data.total_pages;
-            cached_root["events_per_page"] = page_data.events_per_page;
-            cached_root["has_next"] = page_data.has_next;
-            cached_root["has_prev"] = page_data.has_prev;
-            cached_root["credits_used"] = page_data.credits_used;
-            cached_root["remaining_credits"] = page_data.remaining_credits;
-            const QString cache_key = QStringLiteral("geo:events:") + request_key;
-            fincept::CacheManager::instance().put(cache_key,
-                                                  QVariant(QJsonDocument(cached_root).toJson(QJsonDocument::Compact)),
-                                                  kEventsTtlSec, "geopolitics");
+            page_data.credits_used = geo_svc_credit_value(obj["credits_used"], 0.0);
+            page_data.remaining_credits = geo_svc_credit_value(obj["remaining_credits"], -1.0);
+            // (A CacheManager copy of every page used to be written here "for offline
+            // replay", but nothing ever read it back — the hub keeps the last page.)
 
             LOG_INFO("Geopolitics", QString("Loaded %1 events (page %2/%3, total %4, %5 credits left)")
                                         .arg(page_data.events.size())
                                         .arg(page_data.current_page)
                                         .arg(page_data.total_pages)
                                         .arg(page_data.total_events)
-                                        .arg(page_data.remaining_credits));
+                                        .arg(page_data.remaining_credits, 0, 'f', 2));
 
             emit self->events_loaded(page_data);
             if (self->hub_registered_ && hub_eligible)
@@ -597,13 +576,16 @@ void GeopoliticsService::ensure_registered_with_hub() {
     auto& hub = fincept::datahub::DataHub::instance();
     hub.register_producer(this);
 
-    // Events — 2 min TTL (matches kEventsTtlSec), 30s min_interval.
+    // Events — every request costs API credits (3 per call) and the source refreshes
+    // every ~30 min, so a 2-min TTL made a visible dashboard events widget re-buy the
+    // same page ~30 times an hour. Align the TTL with the source cadence; a widget's
+    // REFRESH button still forces a fetch.
     fincept::datahub::TopicPolicy events_policy;
-    events_policy.ttl_ms = kEventsTtlSec * 1000;
-    events_policy.min_interval_ms = 30 * 1000;
+    events_policy.ttl_ms = kEventsHubTtlSec * 1000;
+    events_policy.min_interval_ms = 5 * 60 * 1000;
     hub.set_policy_pattern(QStringLiteral("geopolitics:events"), events_policy);
 
-    // Reference data (countries/categories/cities) — 10 min TTL.
+    // Reference data (countries/categories/cities) — slow-moving lists, each call metered.
     fincept::datahub::TopicPolicy ref_policy;
     ref_policy.ttl_ms = kRefDataTtlSec * 1000;
     ref_policy.min_interval_ms = 60 * 1000;

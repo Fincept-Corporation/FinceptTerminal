@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 using fincept::services::AnalyticsResult;
 using fincept::services::PortfolioAnalyticsService;
@@ -60,14 +61,16 @@ static QTableWidgetItem* make_item(const QString& text, Qt::Alignment align, con
 }
 
 // ── Benchmark stats ───────────────────────────────────────────────────────────
-// Computed natively from the SPY daily closes routed in via set_benchmark()
-// (same 1-year series the perf-chart overlay uses). All values are fractions.
+// Computed natively from the benchmark daily closes routed in via
+// set_benchmark() (same 1-year series the perf-chart overlay uses). All values
+// are fractions. Sharpe here is (CAGR − rf) / vol, the same definition
+// ffn_analysis.py uses for the portfolio column, so the two are comparable.
 struct BenchStats {
     bool valid = false;
     double total_return = 0, cagr = 0, volatility = 0, sharpe = 0, max_drawdown = 0;
 };
 
-static BenchStats compute_bench_stats(const QVector<double>& closes) {
+static BenchStats compute_bench_stats(const QVector<double>& closes, double rf_rate) {
     BenchStats s;
     if (closes.size() < 3 || closes.first() <= 0.0 || closes.last() <= 0.0)
         return s;
@@ -96,9 +99,7 @@ static BenchStats compute_bench_stats(const QVector<double>& closes) {
     var /= (rets.size() - 1);
     s.volatility = std::sqrt(var) * std::sqrt(252.0);
 
-    // Mirrors PortfolioService::kDefaultRiskFreeRate (0.04) — keep in sync.
-    constexpr double kRfRate = 0.04;
-    s.sharpe = s.volatility > 1e-9 ? (s.cagr - kRfRate) / s.volatility : 0.0;
+    s.sharpe = s.volatility > 1e-9 ? (s.cagr - rf_rate) / s.volatility : 0.0;
 
     // Max drawdown: worst peak-to-trough decline
     double peak = closes.first();
@@ -236,7 +237,7 @@ void PortfolioFFNView::build_ui() {
             QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
         vl->addWidget(overview_hdr_);
 
-        overview_table_ = make_table(3, {tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK (SPY)")});
+        overview_table_ = make_table(3, {tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK (%1)").arg(benchmark_symbol_)});
         overview_table_->setColumnWidth(0, 220);
         overview_table_->setColumnWidth(1, 140);
         vl->addWidget(overview_table_, 1);
@@ -262,8 +263,7 @@ void PortfolioFFNView::build_ui() {
         benchmark_table_->setColumnWidth(1, 150);
         vl->addWidget(benchmark_table_);
 
-        benchmark_info_label_ = new QLabel(tr("Portfolio metrics computed from 1-year price history via yfinance.\n"
-                                              "Benchmark column: SPY (S&P 500), computed from 1-year daily closes."));
+        benchmark_info_label_ = new QLabel(benchmark_info_text());
         benchmark_info_label_->setWordWrap(true);
         benchmark_info_label_->setStyleSheet(
             QString("color:%1; font-size:10px; padding:6px 0;").arg(ui::colors::TEXT_TERTIARY()));
@@ -430,6 +430,13 @@ QChartView* PortfolioFFNView::make_chart_view(const QString& title) {
     return cv;
 }
 
+QString PortfolioFFNView::benchmark_info_text() const {
+    return tr("Portfolio column: the CURRENT weights applied to 1-year daily price history (a back-test of today's "
+              "mix, not your realised performance).\nBenchmark column: %1, 1-year daily closes. "
+              "Sharpe = (CAGR \u2212 risk-free %2%) / volatility.")
+        .arg(benchmark_symbol_, QString::number(risk_free_rate_ * 100.0, 'f', 2));
+}
+
 // ── set_data ──────────────────────────────────────────────────────────────────
 
 void PortfolioFFNView::set_data(const portfolio::PortfolioSummary& summary, const QString& currency) {
@@ -452,8 +459,17 @@ void PortfolioFFNView::set_data(const portfolio::PortfolioSummary& summary, cons
     update_overview();
 }
 
-void PortfolioFFNView::set_benchmark(const QVector<double>& closes) {
+void PortfolioFFNView::set_benchmark(const QString& symbol, const QVector<double>& closes, double risk_free_rate) {
     benchmark_closes_ = closes;
+    if (!symbol.isEmpty())
+        benchmark_symbol_ = symbol;
+    if (std::isfinite(risk_free_rate))
+        risk_free_rate_ = risk_free_rate;
+    if (overview_table_)
+        overview_table_->setHorizontalHeaderLabels(
+            {tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK (%1)").arg(benchmark_symbol_)});
+    if (benchmark_info_label_)
+        benchmark_info_label_->setText(benchmark_info_text());
     // Refresh the tables that carry a benchmark column. Same guards as
     // retranslateUi(): each update_* needs its source data to be present.
     if (!summary_.holdings.isEmpty())
@@ -467,9 +483,13 @@ void PortfolioFFNView::set_benchmark(const QVector<double>& closes) {
 void PortfolioFFNView::update_overview() {
     bool has_ffn = !ffn_data_.isEmpty();
 
-    double total_ann_ret = 0, total_ann_vol = 0, total_sharpe = 0, total_max_dd = 0;
+    // Portfolio-level return/vol/Sharpe/drawdown come ONLY from the optimiser's
+    // "current" block (a real weighted return series). The old fallback summed
+    // per-symbol weighted vols, Sharpes and drawdowns — none of which are linear
+    // in the weights — and summed every holding's up/down day counts into
+    // meaningless totals.
+    std::optional<double> total_ann_ret, total_ann_vol, total_sharpe, total_max_dd;
     double total_best_day = 0, total_worst_day = 0;
-    int pos_days = 0, neg_days = 0;
     QString best_sym, worst_sym;
     double best_ret = -1e9, worst_ret = 1e9;
 
@@ -478,15 +498,8 @@ void PortfolioFFNView::update_overview() {
             if (!ffn_data_.contains(h.symbol))
                 continue;
             auto s = ffn_data_[h.symbol].toObject();
-            double w = h.weight / 100.0;
-            total_ann_ret += s["annualized_return"].toDouble() * w;
-            total_ann_vol += s["annualized_volatility"].toDouble() * w;
-            total_sharpe += s["sharpe_ratio"].toDouble() * w;
-            total_max_dd += s["max_drawdown"].toDouble() * w;
             total_best_day = std::max(total_best_day, s["best_day"].toDouble());
             total_worst_day = std::min(total_worst_day, s["worst_day"].toDouble());
-            pos_days += s["positive_days"].toInt();
-            neg_days += s["negative_days"].toInt();
             double sym_ret = s["total_return"].toDouble();
             if (sym_ret > best_ret) {
                 best_ret = sym_ret;
@@ -497,25 +510,22 @@ void PortfolioFFNView::update_overview() {
                 worst_sym = h.symbol;
             }
         }
-        // Portfolio-level volatility/Sharpe/max-drawdown are NOT linear in the
-        // holding weights, so the per-symbol weighted sums above are statistically
-        // wrong for these. Prefer the FFN optimizer's real portfolio stats (the
-        // same source update_benchmark() uses); the weighted values remain only as
-        // a fallback when the optimizer block is absent.
         auto cur_stats = ffn_data_["optimization"].toObject()["stats"].toObject()["current"].toObject();
-        if (!cur_stats.isEmpty()) {
-            total_ann_ret = cur_stats["cagr"].toDouble();
-            total_ann_vol = cur_stats["volatility"].toDouble();
-            total_sharpe = cur_stats["sharpe"].toDouble();
-            total_max_dd = cur_stats["max_drawdown"].toDouble();
-        }
+        auto num = [&cur_stats](const char* k) -> std::optional<double> {
+            const QJsonValue v = cur_stats.value(QLatin1String(k));
+            return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
+        };
+        total_ann_ret = num("cagr");
+        total_ann_vol = num("volatility");
+        total_sharpe = num("sharpe");
+        total_max_dd = num("max_drawdown");
     }
 
     double pnl_pct = summary_.total_unrealized_pnl_percent;
     double win_rate = summary_.total_positions > 0 ? summary_.gainers * 100.0 / summary_.total_positions : 0.0;
 
-    // Benchmark (SPY) column — "--" until set_benchmark() has delivered closes.
-    const BenchStats bench = compute_bench_stats(benchmark_closes_);
+    // Benchmark column — "--" until set_benchmark() has delivered closes.
+    const BenchStats bench = compute_bench_stats(benchmark_closes_, risk_free_rate_);
     auto bench_pct = [&](double v) { return bench.valid ? pct_str(v) : QStringLiteral("--"); };
     auto bench_num = [&](double v) { return bench.valid ? fmt(v) : QStringLiteral("--"); };
 
@@ -527,53 +537,42 @@ void PortfolioFFNView::update_overview() {
     };
     QVector<Row> rows;
 
+    auto opt_pct = [](const std::optional<double>& v) { return v ? pct_str(*v) : QStringLiteral("--"); };
+    auto opt_num = [](const std::optional<double>& v) { return v ? fmt(*v) : QStringLiteral("--"); };
+    auto sign_col = [](const std::optional<double>& v) {
+        return !v ? ui::colors::TEXT_TERTIARY : *v >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+    };
+
     if (has_ffn) {
         rows = {
-            {tr("Annualized Return"), pct_str(total_ann_ret), bench_pct(bench.cagr),
-             total_ann_ret >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {tr("Annualized Volatility"), pct_str(total_ann_vol), bench_pct(bench.volatility), ui::colors::CYAN},
-            {tr("Sharpe Ratio"), fmt(total_sharpe), bench_num(bench.sharpe),
-             total_sharpe >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {tr("Max Drawdown"), pct_str(total_max_dd), bench_pct(bench.max_drawdown), ui::colors::NEGATIVE},
-            {tr("Best Day (any)"), pct_str(total_best_day), "--", ui::colors::POSITIVE},
-            {tr("Worst Day (any)"), pct_str(total_worst_day), "--", ui::colors::NEGATIVE},
-            {tr("Positive Days"), QString::number(pos_days), "--", ui::colors::POSITIVE},
-            {tr("Negative Days"), QString::number(neg_days), "--", ui::colors::NEGATIVE},
-            {tr("Best Holding"), best_sym.isEmpty() ? "--" : best_sym + " (" + pct_str(best_ret) + ")", "--",
+            {tr("Annualized Return (1Y, current weights)"), opt_pct(total_ann_ret), bench_pct(bench.cagr),
+             sign_col(total_ann_ret)},
+            {tr("Annualized Volatility"), opt_pct(total_ann_vol), bench_pct(bench.volatility), ui::colors::CYAN},
+            {tr("Sharpe Ratio"), opt_num(total_sharpe), bench_num(bench.sharpe), sign_col(total_sharpe)},
+            {tr("Max Drawdown"), opt_pct(total_max_dd), bench_pct(bench.max_drawdown), ui::colors::NEGATIVE},
+            {tr("Best Day (any holding)"), pct_str(total_best_day), "--", ui::colors::POSITIVE},
+            {tr("Worst Day (any holding)"), pct_str(total_worst_day), "--", ui::colors::NEGATIVE},
+            {tr("Best Holding (1Y)"), best_sym.isEmpty() ? "--" : best_sym + " (" + pct_str(best_ret) + ")", "--",
              ui::colors::POSITIVE},
-            {tr("Worst Holding"), worst_sym.isEmpty() ? "--" : worst_sym + " (" + pct_str(worst_ret) + ")", "--",
+            {tr("Worst Holding (1Y)"), worst_sym.isEmpty() ? "--" : worst_sym + " (" + pct_str(worst_ret) + ")", "--",
              ui::colors::NEGATIVE},
-            {tr("Total Return (cost)"), pct_str(pnl_pct / 100.0), "--",
+            {tr("Unrealized P&L (vs cost)"), pct_str(pnl_pct / 100.0), "--",
              pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {tr("Win Rate"), fmt(win_rate) + "%", "--", ui::colors::CYAN},
+            {tr("Holdings in Profit"), fmt(win_rate) + "%", "--", ui::colors::CYAN},
             {tr("Positions"), QString::number(summary_.total_positions), "--", ui::colors::CYAN},
             {tr("Total Value"), currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
             {tr("Cost Basis"), currency_ + " " + fmt(summary_.total_cost_basis), "--", ui::colors::TEXT_SECONDARY},
         };
     } else {
-        // Pre-run: show live data and prompt user
-        double vol = 0;
-        int vn = 0;
-        for (const auto& h : summary_.holdings)
-            if (std::abs(h.day_change_percent) > 0.001) {
-                vol += std::abs(h.day_change_percent);
-                ++vn;
-            }
-        double daily_vol = vn > 0 ? vol / vn : 0.0;
-        double ann_vol = daily_vol * std::sqrt(252.0);
-        // Rough Sharpe estimate in percent units; mirrors PortfolioService's
-        // kDefaultRiskFreeRate (0.04 → 4%) — keep in sync if that default changes.
-        constexpr double kRoughRfRatePct = 4.0;
-        double sharpe = ann_vol > 0.01 ? (pnl_pct - kRoughRfRatePct) / ann_vol : 0.0;
-
+        // Pre-run: only facts that need no price history. The old rows here
+        // annualised today's average absolute move into a "volatility" and
+        // divided unrealised P&L (not an annual return) by it for a "Sharpe".
         rows = {
-            {tr("Total Return (unrealized)"), pct_str(pnl_pct / 100.0), "--",
+            {tr("Unrealized P&L (vs cost)"), pct_str(pnl_pct / 100.0), "--",
              pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {tr("Annualized Volatility (est.)"), pct_str(ann_vol / 100.0), bench_pct(bench.volatility),
-             ui::colors::CYAN},
-            {tr("Sharpe Ratio (est.)"), fmt(sharpe), bench_num(bench.sharpe),
-             sharpe >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE},
-            {tr("Win Rate"), fmt(win_rate) + "%", "--", ui::colors::CYAN},
+            {tr("Annualized Volatility"), "--", bench_pct(bench.volatility), ui::colors::TEXT_TERTIARY},
+            {tr("Sharpe Ratio"), "--", bench_num(bench.sharpe), ui::colors::TEXT_TERTIARY},
+            {tr("Holdings in Profit"), fmt(win_rate) + "%", "--", ui::colors::CYAN},
             {tr("Positions"), QString::number(summary_.total_positions), "--", ui::colors::CYAN},
             {tr("Total Value"), currency_ + " " + fmt(summary_.total_market_value), "--", ui::colors::WARNING},
             {tr("Cost Basis"), currency_ + " " + fmt(summary_.total_cost_basis), "--", ui::colors::TEXT_SECONDARY},
@@ -603,8 +602,8 @@ void PortfolioFFNView::update_benchmark() {
     auto stats_obj = opt_obj["stats"].toObject();
     auto cur_stats = stats_obj["current"].toObject();
 
-    // Benchmark (SPY) column — "--" until set_benchmark() has delivered closes.
-    const BenchStats bench = compute_bench_stats(benchmark_closes_);
+    // Benchmark column — "--" until set_benchmark() has delivered closes.
+    const BenchStats bench = compute_bench_stats(benchmark_closes_, risk_free_rate_);
     const QStringList bench_vals =
         bench.valid ? QStringList{pct_str(bench.total_return), pct_str(bench.cagr), pct_str(bench.volatility),
                                   fmt(bench.sharpe), pct_str(bench.max_drawdown)}
@@ -618,16 +617,16 @@ void PortfolioFFNView::update_benchmark() {
     QVector<BRow> rows;
 
     if (!cur_stats.isEmpty()) {
-        double total_ret = cur_stats["total_return"].toDouble();
-        double cagr = cur_stats["cagr"].toDouble();
-        double vol = cur_stats["volatility"].toDouble();
-        double sharpe = cur_stats["sharpe"].toDouble();
-        double max_dd = cur_stats["max_drawdown"].toDouble();
-
+        auto cell = [&cur_stats](const char* k, bool pct) {
+            const QJsonValue v = cur_stats.value(QLatin1String(k));
+            if (!v.isDouble())
+                return QStringLiteral("--");
+            return pct ? pct_str(v.toDouble()) : fmt(v.toDouble());
+        };
         rows = {
-            {tr("Total Return"), pct_str(total_ret)}, {tr("CAGR"), pct_str(cagr)},
-            {tr("Volatility"), pct_str(vol)},         {tr("Sharpe Ratio"), fmt(sharpe)},
-            {tr("Max Drawdown"), pct_str(max_dd)},
+            {tr("Total Return"), cell("total_return", true)}, {tr("CAGR"), cell("cagr", true)},
+            {tr("Volatility"), cell("volatility", true)},     {tr("Sharpe Ratio"), cell("sharpe", false)},
+            {tr("Max Drawdown"), cell("max_drawdown", true)},
         };
     } else {
         rows = {
@@ -708,6 +707,15 @@ void PortfolioFFNView::update_optimization() {
         // Named `total_ret`, not `tr` — a local called `tr` shadows QObject::tr()
         // for the rest of the scope, so any future tr("…") added here would fail
         // to compile with a baffling error.
+        if (s.isEmpty() || !s["volatility"].isDouble()) {
+            // The script omits a strategy whose stats it could not compute
+            // (it used to report a row of fake zeros).
+            opt_stats_table_->setItem(r, 0, make_item(name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::AMBER())));
+            for (int c = 1; c <= 4; ++c)
+                opt_stats_table_->setItem(r, c, make_item(QStringLiteral("--"), Qt::AlignRight | Qt::AlignVCenter,
+                                                          QColor(ui::colors::TEXT_TERTIARY())));
+            continue;
+        }
         double total_ret = s["total_return"].toDouble();
         double vol = s["volatility"].toDouble();
         double sh = s["sharpe"].toDouble();
@@ -1008,7 +1016,7 @@ void PortfolioFFNView::run_ffn() {
     }
 
     QPointer<PortfolioFFNView> self = this;
-    PortfolioAnalyticsService::instance().run_ffn(symbols, weights_obj, [self](const AnalyticsResult& r) {
+    PortfolioAnalyticsService::instance().run_ffn(symbols, weights_obj, risk_free_rate_, [self](const AnalyticsResult& r) {
         if (!self)
             return;
         QMetaObject::invokeMethod(
@@ -1087,8 +1095,7 @@ void PortfolioFFNView::retranslateUi() {
         stats_hdr_->setText(tr("STRATEGY PERFORMANCE STATS"));
 
     if (benchmark_info_label_)
-        benchmark_info_label_->setText(tr("Portfolio metrics computed from 1-year price history via yfinance.\n"
-                                          "Benchmark column: SPY (S&P 500), computed from 1-year daily closes."));
+        benchmark_info_label_->setText(benchmark_info_text());
 
     if (opt_placeholder_)
         opt_placeholder_->setText(tr("EFFICIENT FRONTIER\n\nRun FFN Analysis to compute optimal weights\n"
@@ -1122,7 +1129,8 @@ void PortfolioFFNView::retranslateUi() {
 
     // Re-set table column headers.
     if (overview_table_)
-        overview_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK (SPY)")});
+        overview_table_->setHorizontalHeaderLabels(
+            {tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK (%1)").arg(benchmark_symbol_)});
     if (benchmark_table_)
         benchmark_table_->setHorizontalHeaderLabels({tr("METRIC"), tr("PORTFOLIO"), tr("BENCHMARK")});
     if (opt_weights_table_)

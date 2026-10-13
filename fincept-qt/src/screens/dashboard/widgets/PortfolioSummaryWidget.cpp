@@ -16,11 +16,23 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QScrollArea>
+#include <QStyle>
 
 namespace fincept::screens::widgets {
 
 namespace {
 constexpr const char* kConfigKeyPortfolioId = "portfolio_id";
+
+// P&L colour is a "tone" property ("pos" / "neg", empty = default) matched by
+// the card / list stylesheets; re-polish only when it changes — render() runs
+// on every quote burst and used to re-parse CSS for both P&L labels each time.
+void ps_set_tone(QLabel* label, const char* tone) {
+    if (label->property("tone").toString() == QLatin1String(tone))
+        return;
+    label->setProperty("tone", QString::fromLatin1(tone));
+    label->style()->unpolish(label);
+    label->style()->polish(label);
+}
 } // namespace
 
 PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
@@ -39,6 +51,7 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
 
     // ── Summary card ──
     summary_card_ = new QWidget(this);
+    summary_card_->setObjectName("psCard");
     auto* sl = new QGridLayout(summary_card_);
     sl->setContentsMargins(10, 8, 10, 8);
     sl->setHorizontalSpacing(16);
@@ -46,11 +59,11 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
 
     auto make_metric = [&](const QString& label, QLabel*& value_out, int row, int col) {
         auto* lbl = new QLabel(label);
-        metric_labels_.append(lbl);
+        lbl->setObjectName("psMetricLbl");
         sl->addWidget(lbl, row * 2, col);
 
         value_out = new QLabel("--");
-        metric_values_.append(value_out);
+        value_out->setObjectName("psMetricVal");
         sl->addWidget(value_out, row * 2 + 1, col);
     };
 
@@ -63,13 +76,13 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
 
     // ── Holdings list header ──
     header_row_ = new QWidget(this);
+    header_row_->setObjectName("psHeader");
     auto* hl = new QHBoxLayout(header_row_);
     hl->setContentsMargins(8, 3, 8, 3);
 
     auto make_hdr_lbl = [&](const QString& t, int s, Qt::Alignment a = Qt::AlignLeft) {
         auto* l = new QLabel(t);
         l->setAlignment(a);
-        header_labels_.append(l);
         hl->addWidget(l, s);
     };
     make_hdr_lbl(tr("SYM"), 1);
@@ -88,6 +101,13 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     list_layout_ = new QVBoxLayout(list_widget_);
     list_layout_->setContentsMargins(0, 0, 0, 0);
     list_layout_->setSpacing(0);
+    // Layout: [empty-state label][holding rows ...][stretch]
+    empty_lbl_ = new QLabel(list_widget_);
+    empty_lbl_->setObjectName("psEmpty");
+    empty_lbl_->setAlignment(Qt::AlignCenter);
+    empty_lbl_->setWordWrap(true);
+    empty_lbl_->hide();
+    list_layout_->addWidget(empty_lbl_);
     list_layout_->addStretch();
 
     scroll_area_->setWidget(list_widget_);
@@ -168,17 +188,21 @@ void PortfolioSummaryWidget::hideEvent(QHideEvent* e) {
 }
 
 void PortfolioSummaryWidget::apply_styles() {
-    summary_card_->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(ui::colors::BG_RAISED()));
-    for (auto* lbl : metric_labels_)
-        lbl->setStyleSheet(
-            QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
-    for (auto* val : metric_values_)
-        val->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_PRIMARY()));
-    header_row_->setStyleSheet(QString("background: %1;").arg(ui::colors::BG_RAISED()));
-    for (auto* lbl : header_labels_)
-        lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
+    // The card and header used to carry selector-less sheets, which Qt applies
+    // to their labels as well — the "... QLabel" rules keep that cascade intact.
+    summary_card_->setStyleSheet(
+        QString("QWidget#psCard{background:%1;border-radius:2px;}"
+                "QWidget#psCard QLabel{border-radius:2px;background:transparent;}"
+                "QLabel#psMetricLbl{color:%2;font-size:9px;}"
+                "QLabel#psMetricVal{color:%3;font-size:13px;font-weight:bold;}"
+                "QLabel#psMetricVal[tone=\"pos\"]{color:%4;}"
+                "QLabel#psMetricVal[tone=\"neg\"]{color:%5;}")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_PRIMARY(),
+                 ui::colors::POSITIVE(), ui::colors::NEGATIVE()));
+    header_row_->setStyleSheet(
+        QString("QWidget#psHeader{background:%1;}"
+                "QWidget#psHeader QLabel{color:%2;font-size:9px;font-weight:bold;background:transparent;}")
+            .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_TERTIARY()));
     if (portfolio_name_lbl_)
         portfolio_name_lbl_->setStyleSheet(
             QString("color: %1; font-size: 10px; font-weight: 600; background: transparent; padding: 0 2px;")
@@ -200,8 +224,9 @@ void PortfolioSummaryWidget::apply_styles() {
                                             "#psList QLabel#psSym{color:%2;}"
                                             "#psList QLabel#psShares{color:%3;}"
                                             "#psList QLabel#psNum{color:%2;}"
-                                            "#psList QLabel#psPnlPos{color:%4;}"
-                                            "#psList QLabel#psPnlNeg{color:%5;}"
+                                            "#psList QLabel#psPnl{color:%2;}"
+                                            "#psList QLabel#psPnl[tone=\"pos\"]{color:%4;}"
+                                            "#psList QLabel#psPnl[tone=\"neg\"]{color:%5;}"
                                             "#psList QLabel#psEmpty{color:%6;font-size:11px;padding:20px;}")
                                         .arg(ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(),
                                              ui::colors::TEXT_SECONDARY(), ui::colors::POSITIVE(),
@@ -282,20 +307,12 @@ void PortfolioSummaryWidget::render_empty(const QString& message) {
     last_quotes_.clear();
     hub_unsubscribe_all();
 
-    // Wipe rows + zero the summary counters so old numbers don't linger
+    // Hide the rows + zero the summary counters so old numbers don't linger
     // after a portfolio switch / deletion.
-    while (list_layout_->count() > 0) {
-        auto* item = list_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
-    auto* empty = new QLabel(message, list_widget_);
-    empty->setObjectName("psEmpty");
-    empty->setAlignment(Qt::AlignCenter);
-    empty->setWordWrap(true);
-    list_layout_->addWidget(empty);
-    list_layout_->addStretch();
+    for (const auto& r : rows_)
+        r.row->setVisible(false);
+    empty_lbl_->setText(message);
+    empty_lbl_->setVisible(true);
     const QString sym = cur::symbol_for(selected_portfolio_currency_);
     total_value_lbl_->setText(sym + QStringLiteral("0"));
     day_pnl_lbl_->setText(sym + QStringLiteral("0"));
@@ -304,10 +321,8 @@ void PortfolioSummaryWidget::render_empty(const QString& message) {
 
     // Reset the colour overrides applied during a populated render so the
     // zeroed-out P&L labels don't get stuck red/green from the prior state.
-    const QString default_value_css = QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                                          .arg(ui::colors::TEXT_PRIMARY());
-    day_pnl_lbl_->setStyleSheet(default_value_css);
-    total_pnl_lbl_->setStyleSheet(default_value_css);
+    ps_set_tone(day_pnl_lbl_, "");
+    ps_set_tone(total_pnl_lbl_, "");
 
     if (!selected_portfolio_name_.isEmpty()) {
         portfolio_name_lbl_->setText(selected_portfolio_name_.toUpper());
@@ -371,16 +386,10 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
     double total_cost = 0;
     double day_pnl = 0;
 
-    // Clear list
-    while (list_layout_->count() > 0) {
-        auto* item = list_layout_->takeAt(0);
-        if (item->widget())
-            item->widget()->deleteLater();
-        delete item;
-    }
+    empty_lbl_->setVisible(false);
 
-    bool alt = false;
-    for (const auto& h : holdings) {
+    for (int i = 0; i < holdings.size(); ++i) {
+        const Holding& h = holdings[i];
         const services::QuoteData* q = qmap.value(h.symbol, nullptr);
         double price = q ? q->price : 0;
         double value = price * h.shares;
@@ -400,41 +409,28 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
         }
         day_pnl += day_chg;
 
-        // No setStyleSheet in this loop — colours come from the single
-        // stylesheet on list_widget_ (see apply_styles) via these object names.
-        auto* row = new QWidget(list_widget_);
-        row->setObjectName(alt ? QStringLiteral("psRowAlt") : QStringLiteral("psRow"));
-        link_symbol(row, h.symbol); // double-click a holding → Equity Research
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(8, 4, 8, 4);
-
-        auto cell = [&](const QString& text, Qt::Alignment align, const QString& object_name) {
-            auto* lbl = new QLabel(text);
-            lbl->setObjectName(object_name);
-            lbl->setAlignment(align);
-            rl->addWidget(lbl, 1);
-        };
-
-        cell(h.symbol, Qt::AlignLeft, QStringLiteral("psSym"));
-        cell(QString::number(h.shares, 'f', h.shares == (int)h.shares ? 0 : 2), Qt::AlignRight,
-             QStringLiteral("psShares"));
-        cell(price > 0 ? sym + QString::number(price, 'f', 2) : QStringLiteral("--"), Qt::AlignRight,
-             QStringLiteral("psNum"));
-        cell(value > 0 ? sym + QString::number(value, 'f', 0) : QStringLiteral("--"), Qt::AlignRight,
-             QStringLiteral("psNum"));
+        // Refill the pooled row in place (QLabel::setText skips unchanged text).
+        // No setStyleSheet here — colours come from the single stylesheet on
+        // list_widget_ (see apply_styles) via object names / the "tone" property.
+        if (i >= rows_.size())
+            rows_.append(make_row(i));
+        const PsRow& r = rows_[i];
+        link_symbol(r.row, h.symbol); // double-click a holding → Equity Research
+        r.sym->setText(h.symbol);
+        r.shares->setText(QString::number(h.shares, 'f', h.shares == (int)h.shares ? 0 : 2));
+        r.price->setText(price > 0 ? sym + QString::number(price, 'f', 2) : QStringLiteral("--"));
+        r.value->setText(value > 0 ? sym + QString::number(value, 'f', 0) : QStringLiteral("--"));
 
         QString pnl_str = pnl >= 0 ? QStringLiteral("+") + sym + QString::number(pnl, 'f', 0)
                                    : QStringLiteral("-") + sym + QString::number(-pnl, 'f', 0);
         if (!priced)
             pnl_str = QStringLiteral("--");
-        cell(pnl_str, Qt::AlignRight,
-             !priced ? QStringLiteral("psNum")
-                     : (pnl >= 0 ? QStringLiteral("psPnlPos") : QStringLiteral("psPnlNeg")));
-
-        list_layout_->addWidget(row);
-        alt = !alt;
+        r.pnl->setText(pnl_str);
+        ps_set_tone(r.pnl, !priced ? "" : (pnl >= 0 ? "pos" : "neg"));
+        r.row->setVisible(true);
     }
-    list_layout_->addStretch();
+    for (int i = static_cast<int>(holdings.size()); i < rows_.size(); ++i)
+        rows_[i].row->setVisible(false);
 
     total_value_lbl_->setText(sym + QString::number(total_value, 'f', 0));
     num_holdings_lbl_->setText(QString::number(holdings.size()));
@@ -446,12 +442,35 @@ void PortfolioSummaryWidget::render(const QVector<Holding>& holdings, const QVec
                                      : QStringLiteral("-") + sym + QString::number(-total_pnl, 'f', 0);
 
     day_pnl_lbl_->setText(day_str);
-    day_pnl_lbl_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                                    .arg(day_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    ps_set_tone(day_pnl_lbl_, day_pnl >= 0 ? "pos" : "neg");
 
     total_pnl_lbl_->setText(tot_str);
-    total_pnl_lbl_->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: bold; background: transparent;")
-                                      .arg(total_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+    ps_set_tone(total_pnl_lbl_, total_pnl >= 0 ? "pos" : "neg");
+}
+
+PortfolioSummaryWidget::PsRow PortfolioSummaryWidget::make_row(int index) {
+    PsRow r;
+    r.row = new QWidget(list_widget_);
+    r.row->setObjectName(index % 2 ? QStringLiteral("psRowAlt") : QStringLiteral("psRow"));
+    auto* rl = new QHBoxLayout(r.row);
+    rl->setContentsMargins(8, 4, 8, 4);
+
+    auto cell = [&r, rl](Qt::Alignment align, const QString& object_name) {
+        auto* lbl = new QLabel(r.row);
+        lbl->setObjectName(object_name);
+        lbl->setAlignment(align);
+        rl->addWidget(lbl, 1);
+        return lbl;
+    };
+    r.sym = cell(Qt::AlignLeft, QStringLiteral("psSym"));
+    r.shares = cell(Qt::AlignRight, QStringLiteral("psShares"));
+    r.price = cell(Qt::AlignRight, QStringLiteral("psNum"));
+    r.value = cell(Qt::AlignRight, QStringLiteral("psNum"));
+    r.pnl = cell(Qt::AlignRight, QStringLiteral("psPnl"));
+
+    // Rows sit between the empty-state label and the trailing stretch.
+    list_layout_->insertWidget(list_layout_->count() - 1, r.row);
+    return r;
 }
 
 QDialog* PortfolioSummaryWidget::make_config_dialog(QWidget* parent) {

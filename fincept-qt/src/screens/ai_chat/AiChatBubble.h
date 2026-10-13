@@ -123,6 +123,7 @@ class AiChatBubble : public QWidget {
     void show_welcome_if_empty();
     void hide_welcome();
     void add_bubble(const QString& role, const QString& text);
+    void add_fincept_notice(const QString& error); // out of credits / sign-in rejected
     QLabel* add_streaming_bubble();
     void scroll_to_bottom();
     void set_input_enabled(bool enabled);

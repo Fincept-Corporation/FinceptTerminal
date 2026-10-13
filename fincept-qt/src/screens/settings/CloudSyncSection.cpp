@@ -4,6 +4,7 @@
 #include "screens/settings/SettingsStyles.h"
 #include "services/cloud/CloudSyncEngine.h"
 #include "storage/sync/CloudSyncSettings.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QCoreApplication>
 #include <QMessageBox>
@@ -58,6 +59,15 @@ void capture_row_labels(QWidget* row, QLabel** label_out, QLabel** desc_out = nu
         *desc_out = labels.at(1);
 }
 
+/// Out-of-credits banner: the warning plus an in-app link to Plans & Pricing
+/// (handled by linkActivated — the href never leaves the terminal).
+QString cloud_credits_banner_html() {
+    return QStringLiteral("%1 <a href=\"fincept:plans\" style=\"color:%2;\">%3</a>")
+        .arg(QCoreApplication::translate("CloudSyncSection", "Out of credits — cloud sync is paused.").toHtmlEscaped(),
+             QString(ui::colors::AMBER()),
+             QCoreApplication::translate("CloudSyncSection", "Get more credits with Pro").toHtmlEscaped());
+}
+
 QString cloud_status_text(CloudSyncEngine::Status s, int pending, const QString& error) {
     switch (s) {
         case CloudSyncEngine::Status::Disabled:
@@ -103,10 +113,14 @@ void CloudSyncSection::build_ui() {
     blurb_->setStyleSheet(label_ss());
     vl->addWidget(blurb_);
 
-    credits_banner_ = new QLabel(tr("Out of credits — top up to resume cloud sync."));
+    credits_banner_ = new QLabel(cloud_credits_banner_html());
+    credits_banner_->setTextFormat(Qt::RichText);
+    credits_banner_->setWordWrap(true);
+    credits_banner_->setTextInteractionFlags(Qt::LinksAccessibleByMouse | Qt::LinksAccessibleByKeyboard);
     credits_banner_->setStyleSheet(
         QString("color:%1;background:transparent;font-weight:700;").arg(ui::colors::NEGATIVE()));
     credits_banner_->setVisible(false);
+    connect(credits_banner_, &QLabel::linkActivated, this, [this](const QString&) { ui::billing::open_plans(this); });
     vl->addWidget(credits_banner_);
 
     master_toggle_ = new QCheckBox(tr("Enable cloud sync"));
@@ -250,7 +264,7 @@ void CloudSyncSection::retranslateUi() {
         blurb_->setText(tr("Mirror your data to your Fincept account. Your local copy stays the working "
                            "copy — sync runs in the background, on this device and across your devices."));
     if (credits_banner_)
-        credits_banner_->setText(tr("Out of credits — top up to resume cloud sync."));
+        credits_banner_->setText(cloud_credits_banner_html());
     if (master_toggle_)
         master_toggle_->setText(tr("Enable cloud sync"));
     if (cloud_sync_label_)

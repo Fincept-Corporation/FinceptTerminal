@@ -25,7 +25,6 @@ class DBnomicsSelectionPanel : public QWidget {
                          bool append);
     void populate_search_results(const QVector<services::DbnSearchResult>& results, const services::DbnPagination& page,
                                  bool append);
-    void set_loading(bool loading);
     void set_status(const QString& message);
     void update_slot_series(int slot_index, const QVector<services::DbnDataPoint>& series);
 
@@ -59,7 +58,6 @@ class DBnomicsSelectionPanel : public QWidget {
     void add_to_slot_clicked(int slot_index);
     void remove_from_slot_clicked(int slot_index, const QString& series_id);
     void remove_slot_clicked(int slot_index);
-    void search_result_selected(const QString& provider_code, const QString& dataset_code);
 
   public:
     void set_providers_loading(bool on);

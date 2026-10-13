@@ -12,7 +12,7 @@ Fincept Terminal is a native C++20 desktop terminal for financial research — Q
 It ships in **two editions on one data core**:
 
 - **Open source** (this repository) — AGPL-3.0, free for learning, personal use and academic research. Ships one release a month. **This guide covers building it.**
-- **[Enterprise](https://fincept.in/enterprise)** — the private, closed-source build for funds, family offices and research desks: 41 modules, proprietary datasets, multi-agent research, live broker routing, SSO and an SLA, from $99/user/month. It is not built from this repository.
+- **[Enterprise](https://fincept.in/enterprise)** — the private, closed-source build for funds, family offices and research desks: 41 modules, proprietary datasets, multi-agent research, SSO and an SLA — current prices at [fincept.in/pricing](https://fincept.in/pricing). It is a separate product and is not built from this repository.
 
 ### The Big Picture
 
@@ -191,7 +191,7 @@ FinceptTerminal/
 │   │   │   ├── widgets/            ← Card, SearchBar, StatusBadge, etc.
 │   │   │   ├── charts/             ← ChartFactory (Qt6 Charts)
 │   │   │   ├── tables/             ← DataTable
-│   │   │   └── navigation/         ← NavigationBar, StatusBar, FKeyBar
+│   │   │   └── navigation/         ← ToolBar, StatusBar, FKeyBar
 │   │   ├── network/                ← HTTP client, WebSocket client
 │   │   ├── storage/                ← SQLite databases + repositories
 │   │   ├── auth/                   ← Authentication (JWT, guest mode)
@@ -291,7 +291,7 @@ cmake --build build --config Release
 2. Create files: `YourScreen.h/.cpp` (subclass `QWidget`)
 3. Add `.cpp` file to `CMakeLists.txt` `SCREEN_SOURCES` list
 4. Register screen in `src/app/MainWindow.cpp` via `ScreenRouter`
-5. Add navigation entry in `NavigationBar`
+5. Add navigation entry in `ToolBar::build_navigate_menu()`
 6. Build and test
 
 ### Workflow 3: Fix a Bug

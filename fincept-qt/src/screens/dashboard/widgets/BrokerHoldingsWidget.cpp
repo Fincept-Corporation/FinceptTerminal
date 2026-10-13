@@ -5,7 +5,9 @@
 #include "trading/AccountManager.h"
 #include "trading/BrokerTopic.h"
 #include "trading/DataStreamManager.h"
+#include "trading/OrderThreadPool.h"
 #include "trading/UnifiedTrading.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "ui/theme/Theme.h"
 
 #include <QComboBox>
@@ -203,9 +205,12 @@ void BrokerHoldingsWidget::populate(const QVector<trading::BrokerHolding>& rows)
         const auto& h = rows[i];
         auto* sym = new QTableWidgetItem(h.symbol);
         sym->setData(Qt::UserRole, h.exchange);
-        auto* qty = new QTableWidgetItem(QString::number(h.quantity, 'f', 0));
-        auto* avg = new QTableWidgetItem(QString::number(h.avg_price, 'f', 2));
-        auto* ltp = new QTableWidgetItem(QString::number(h.ltp, 'f', 2));
+        // Fractional holdings (Alpaca / IBKR fractional shares, crypto) used to
+        // print 0.5 as "0" / "1" — and the Exit confirmation said the same.
+        auto* qty = new QTableWidgetItem(dash_fmt::quantity(h.quantity));
+        auto* avg = new QTableWidgetItem(dash_fmt::grouped(h.avg_price, dash_fmt::price_decimals(h.avg_price)));
+        auto* ltp = new QTableWidgetItem(h.ltp > 0 ? dash_fmt::grouped(h.ltp, dash_fmt::price_decimals(h.ltp))
+                                                   : QStringLiteral("--"));
         auto* pnl_pct = new QTableWidgetItem(QString("%1%2%").arg(h.pnl_pct >= 0 ? "+" : "").arg(h.pnl_pct, 0, 'f', 2));
         const QColor col(h.pnl_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
         pnl_pct->setForeground(col);
@@ -273,7 +278,7 @@ void BrokerHoldingsWidget::square_off_holding(const trading::BrokerHolding& h) {
 
     const auto answer = QMessageBox::warning(
         this, tr("Square Off Holding"),
-        tr("Place a MARKET SELL order for %1 %2 (CNC)?").arg(QString::number(h.quantity, 'f', 0), h.symbol),
+        tr("Place a MARKET SELL order for %1 %2 (CNC)?").arg(dash_fmt::quantity(h.quantity), h.symbol),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes)
         return;
@@ -284,7 +289,7 @@ void BrokerHoldingsWidget::square_off_holding(const trading::BrokerHolding& h) {
     const QString account = account_id_;
     const QString sym = h.symbol;
     QPointer<BrokerHoldingsWidget> self = this;
-    (void)QtConcurrent::run([self, account, order, sym]() {
+    (void)QtConcurrent::run(&trading::order_thread_pool(), [self, account, order, sym]() {
         const auto resp = trading::UnifiedTrading::instance().place_order(account, order);
         if (!self)
             return;
@@ -342,7 +347,7 @@ void BrokerHoldingsWidget::square_off_all() {
 
     const QString account = account_id_;
     QPointer<BrokerHoldingsWidget> self = this;
-    (void)QtConcurrent::run([self, account, jobs]() {
+    (void)QtConcurrent::run(&trading::order_thread_pool(), [self, account, jobs]() {
         int placed = 0;
         QStringList failures;
         for (const auto& j : jobs) {

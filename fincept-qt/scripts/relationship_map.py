@@ -364,10 +364,14 @@ def fetch_company_data(ticker: str) -> dict:
         for key, peers_list in INDUSTRY_PEERS.items():
             if key.lower() in industry.lower() or key.lower() in sector.lower():
                 peer_tickers = [p for p in peers_list if p != ticker.upper()][:8]
+                result["peer_source"] = "industry:" + key
                 break
 
         if not peer_tickers:
+            # No curated list for this industry: show mega-caps for context, but say so —
+            # the terminal must not run a relative valuation against them.
             peer_tickers = [p for p in ["AAPL", "MSFT", "GOOGL", "AMZN", "META"] if p != ticker.upper()][:5]
+            result["peer_source"] = "generic_fallback"
 
         for pt in peer_tickers:
             try:
@@ -389,6 +393,7 @@ def fetch_company_data(ticker: str) -> dict:
                     "price_to_book": _safe_float(pi.get("priceToBook")),
                     "week52_change": _safe_float(pi.get("52WeekChange")),
                     "recommendation": pi.get("recommendationKey", ""),
+                    "currency": pi.get("currency", ""),
                 }
                 result["peers"].append(peer)
                 quality += 3

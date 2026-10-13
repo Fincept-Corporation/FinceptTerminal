@@ -188,6 +188,16 @@ class IBroker {
         return false;
     }
 
+    // --- Product reverse mapping ---
+    // Map the product string THIS broker reports on positions / orders back to a
+    // ProductType, so a close or unwind goes out in the same product it nets
+    // against. Default: the broker-agnostic product_from_broker_str(). Override
+    // only where a spelling means something different on this broker (Angel One:
+    // "MARGIN" is MTF, not NRML).
+    virtual ProductType product_from_wire(const QString& wire_product) const {
+        return product_from_broker_str(wire_product);
+    }
+
     // --- Orders ---
     virtual OrderPlaceResponse place_order(const BrokerCredentials& creds, const UnifiedOrder& order) = 0;
     virtual ApiResponse<QJsonObject> modify_order(const BrokerCredentials& creds, const QString& order_id,
@@ -420,18 +430,14 @@ class IBroker {
             // Direction comes from `side` FIRST, sign only as a fallback. MetaAPI and
             // ICICI Direct report an UNSIGNED quantity plus a separate side, so
             // sign(quantity) alone reads a short as a long and "close all" places
-            // ANOTHER sell — doubling the short at market. Same fix the paper path
-            // already carries (UnifiedTrading::close_all_positions).
-            const QString dir = p.side.toLower();
-            const bool is_short =
-                dir.startsWith(QLatin1String("short")) || dir.startsWith(QLatin1String("sell")) || p.quantity < 0;
-            counter.side = is_short ? OrderSide::Buy : OrderSide::Sell;
+            // ANOTHER sell — doubling the short at market.
+            counter.side = closing_side_for_position(p.side, p.quantity);
             counter.quantity = std::abs(p.quantity);
             counter.order_type = OrderType::Market;
             // Preserve the position's product (CNC/NRML/MTF) — otherwise the close
             // goes out as the default Intraday(MIS) and opens a NEW intraday position
             // instead of closing the delivery/carry-forward holding.
-            counter.product_type = product_from_broker_str(p.product_type);
+            counter.product_type = product_from_wire(p.product_type);
             auto r = place_order(creds, counter);
             if (r.success)
                 result.closed_symbols.append(p.symbol);
@@ -447,28 +453,43 @@ class IBroker {
         auto pos_resp = get_positions(creds);
         if (!pos_resp.success)
             return {false, std::nullopt, pos_resp.error};
-        for (const auto& p : pos_resp.data.value_or(QVector<BrokerPosition>{})) {
-            if (p.symbol == symbol && p.exchange == exchange &&
-                (product_type.isEmpty() || p.product_type == product_type) && p.quantity != 0) {
-                UnifiedOrder counter;
-                counter.symbol = p.symbol;
-                counter.exchange = p.exchange;
-                // Direction from `side` first (unsigned-quantity brokers like MetaAPI /
-                // ICICI Direct), sign only as a fallback — see close_all_positions.
-                const QString dir = p.side.toLower();
-                const bool is_short =
-                    dir.startsWith(QLatin1String("short")) || dir.startsWith(QLatin1String("sell")) || p.quantity < 0;
-                counter.side = is_short ? OrderSide::Buy : OrderSide::Sell;
-                counter.quantity = std::abs(p.quantity);
-                counter.order_type = OrderType::Market;
-                // Preserve the position's product (CNC/NRML/MTF) — else the close
-                // goes out as default Intraday(MIS) and opens a new intraday position.
-                counter.product_type = product_from_broker_str(p.product_type);
-                auto opr = place_order(creds, counter);
-                if (!opr.success)
-                    return {false, std::nullopt, opr.error};
-                return {true, opr, ""};
+        const QVector<BrokerPosition> positions = pos_resp.data.value_or(QVector<BrokerPosition>{});
+        // Product filter: an exact (case-insensitive) spelling match first; only if
+        // none matches, compare the NORMALISED product, so a caller's canonical "CNC"
+        // still finds Angel One's "DELIVERY" / Noren's "C" row instead of failing with
+        // "Position not found".
+        const BrokerPosition* target = nullptr;
+        for (int pass = 0; pass < 2 && !target; ++pass) {
+            for (const auto& p : positions) {
+                if (p.symbol != symbol || p.exchange != exchange || p.quantity == 0)
+                    continue;
+                const bool product_ok =
+                    product_type.isEmpty() ||
+                    (pass == 0 ? p.product_type.compare(product_type, Qt::CaseInsensitive) == 0
+                               : product_from_wire(p.product_type) == product_from_wire(product_type));
+                if (product_ok) {
+                    target = &p;
+                    break;
+                }
             }
+        }
+        if (target) {
+            const BrokerPosition& p = *target;
+            UnifiedOrder counter;
+            counter.symbol = p.symbol;
+            counter.exchange = p.exchange;
+            // Direction from `side` first (unsigned-quantity brokers like MetaAPI /
+            // ICICI Direct), sign only as a fallback — see close_all_positions.
+            counter.side = closing_side_for_position(p.side, p.quantity);
+            counter.quantity = std::abs(p.quantity);
+            counter.order_type = OrderType::Market;
+            // Preserve the position's product (CNC/NRML/MTF) — else the close
+            // goes out as default Intraday(MIS) and opens a new intraday position.
+            counter.product_type = product_from_wire(p.product_type);
+            auto opr = place_order(creds, counter);
+            if (!opr.success)
+                return {false, std::nullopt, opr.error};
+            return {true, opr, ""};
         }
         return {false, std::nullopt, "Position not found"};
     }

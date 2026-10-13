@@ -28,9 +28,10 @@ class PortfolioFFNView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
 
-    /// Benchmark (SPY) daily closes — feeds the BENCHMARK column of the
-    /// Overview and Benchmark tables (stats computed natively in C++).
-    void set_benchmark(const QVector<double>& closes);
+    /// Benchmark daily closes (the portfolio currency's index, e.g. SPY / ^NSEI)
+    /// and the live annual risk-free rate — feed the BENCHMARK column of the
+    /// Overview and Benchmark tables and every Sharpe on this view.
+    void set_benchmark(const QString& symbol, const QVector<double>& closes, double risk_free_rate);
 
   signals:
     void back_requested();
@@ -51,6 +52,7 @@ class PortfolioFFNView : public QWidget {
     void update_rolling();
 
     void run_ffn();
+    QString benchmark_info_text() const;
 
     /// Creates a dark-themed QChartView with an amber title.
     QChartView* make_chart_view(const QString& title);
@@ -111,7 +113,9 @@ class PortfolioFFNView : public QWidget {
     portfolio::PortfolioSummary summary_;
     QString currency_;
     QJsonObject ffn_data_;
-    QVector<double> benchmark_closes_; // SPY daily closes (1y), via set_benchmark()
+    QVector<double> benchmark_closes_; // benchmark daily closes (1y), via set_benchmark()
+    QString benchmark_symbol_ = QStringLiteral("SPY");
+    double risk_free_rate_ = 0.04; // replaced by the live rate via set_benchmark()
 };
 
 } // namespace fincept::screens

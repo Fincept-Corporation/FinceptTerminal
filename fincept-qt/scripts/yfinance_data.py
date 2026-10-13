@@ -260,6 +260,7 @@ def get_info(symbol):
             "website": info.get('website', 'N/A'),
             "country": info.get('country', 'N/A'),
             "currency": info.get('currency', 'USD'),
+            "financial_currency": info.get('financialCurrency'),
             "exchange": info.get('exchange', 'N/A'),
             "employees": info.get('fullTimeEmployees'),
             # Additional comprehensive metrics
@@ -458,22 +459,34 @@ def get_quote_names(symbols):
     yf_logger.setLevel(logging.CRITICAL)
     names = {}
     currencies = {}
+
+    def _fetch(symbol):
+        try:
+            return symbol, (yf.Ticker(symbol).info or {})
+        except Exception:
+            return symbol, None
+
+    # .info is one HTTP round trip per symbol; run them concurrently. A screen
+    # asks for 50-80 symbols at once and sequential lookups took 30 s+. stdout
+    # is redirected once around the whole pool: swapping sys.stdout from
+    # several threads would race and could leave it pointing at a buffer.
+    from concurrent.futures import ThreadPoolExecutor
+    unique = list(dict.fromkeys(s for s in symbols if s))
     try:
-        for symbol in symbols:
-            try:
-                _buf = io.StringIO()
-                with contextlib.redirect_stdout(_buf), contextlib.redirect_stderr(_buf):
-                    info = yf.Ticker(symbol).info
-                info = info or {}
-                name = _clean_display_name(symbol, info)
-                if name:
-                    names[symbol] = name
-                quote_type = (info.get("quoteType") or "").upper()
-                currency = info.get("currency")
-                if currency and quote_type not in ("CURRENCY", "INDEX"):
-                    currencies[symbol] = currency
-            except Exception:
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf), contextlib.redirect_stderr(_buf):
+            with ThreadPoolExecutor(max_workers=min(8, max(1, len(unique)))) as pool:
+                results = list(pool.map(_fetch, unique))
+        for symbol, info in results:
+            if not info:
                 continue
+            name = _clean_display_name(symbol, info)
+            if name:
+                names[symbol] = name
+            quote_type = (info.get("quoteType") or "").upper()
+            currency = info.get("currency")
+            if currency and quote_type not in ("CURRENCY", "INDEX"):
+                currencies[symbol] = currency
     finally:
         yf_logger.setLevel(prev_level)
     return {"names": names, "currencies": currencies}

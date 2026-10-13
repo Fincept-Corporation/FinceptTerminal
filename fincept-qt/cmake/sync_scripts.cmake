@@ -41,10 +41,12 @@ if(NOT IS_DIRECTORY "${SRC_DIR}")
 endif()
 
 # Directory names never worth walking, copying, or shipping. Keep in sync with
-# .github/scripts/sync_scripts.sh.
+# .github/scripts/sync_scripts.sh. "tests" / "_tools" are dev-only (pytest
+# suites, one-off config migration scripts) — nothing at runtime imports them.
 set(_skip_dirs
     "__pycache__" ".venv" "venv" "env" ".pytest_cache" ".benchmarks"
-    ".firecrawl" ".git" ".mypy_cache" ".ruff_cache" "node_modules")
+    ".firecrawl" ".git" ".mypy_cache" ".ruff_cache" "node_modules"
+    "tests" "_tools")
 # File suffixes that are build artefacts or local state, not source.
 set(_skip_file_regex "\\.(pyc|pyo|bak|log|db|sqlite|sqlite3)$")
 # Anything a contributor parked as a backup (agents.deleted.2026-05-01/, x.deleted).

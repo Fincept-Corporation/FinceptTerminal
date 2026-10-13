@@ -1,12 +1,17 @@
 """
 FFN (Financial Functions) Analysis — Deep analytics per symbol.
-Input:  JSON via stdin: {"symbols": ["AAPL","MSFT"], "weights": {"AAPL": 0.6, "MSFT": 0.4}}
+Input:  JSON via stdin: {"symbols": ["AAPL","MSFT"], "weights": {"AAPL": 0.6, "MSFT": 0.4},
+                        "risk_free_rate": 0.042}   # optional annual fraction, default 0.04
+Sharpe here is (CAGR - risk_free_rate) / annualised volatility. Values that
+cannot be computed are emitted as null (never as a fake 0).
 Output: JSON to stdout with per-symbol stats, rebased series, drawdown series,
         rolling correlations, and portfolio optimisation weights.
 """
 import sys
 import json
 import numpy as np
+
+RISK_FREE_RATE = 0.04  # replaced from the payload in main()
 
 
 def convert_numpy(obj):
@@ -19,13 +24,13 @@ def convert_numpy(obj):
     elif isinstance(obj, (np.floating,)):
         v = float(obj)
         if np.isnan(v) or np.isinf(v):
-            return 0.0
+            return None
         return v
     elif isinstance(obj, np.ndarray):
         return [convert_numpy(x) for x in obj]
     elif isinstance(obj, float):
         if np.isnan(obj) or np.isinf(obj):
-            return 0.0
+            return None
     return obj
 
 
@@ -50,7 +55,7 @@ def portfolio_stats(close_df, weights_arr, symbols):
     n = len(port_returns)
     cagr = float((1 + total_ret) ** (252.0 / max(n, 1)) - 1)
     vol = float(port_returns.std() * np.sqrt(252))
-    sharpe = float((cagr - 0.04) / vol) if vol > 0 else 0.0
+    sharpe = float((cagr - RISK_FREE_RATE) / vol) if vol > 0 else None
     cum = (1 + port_returns).cumprod()
     peak = cum.expanding().max()
     dd = (cum - peak) / peak
@@ -122,7 +127,7 @@ def compute_ffn(symbols, weights, period="1y"):
             "annualized_return":     ann_ret,
             "annualized_volatility": ann_vol,
             "max_drawdown":          max_dd,
-            "sharpe_ratio":          float((ann_ret - 0.04) / ann_vol) if ann_vol > 0 else 0.0,
+            "sharpe_ratio":          float((ann_ret - RISK_FREE_RATE) / ann_vol) if ann_vol > 0 else None,
             "current_price":         float(prices.iloc[-1]),
             "start_price":           float(prices.iloc[0]),
             "best_day":              float(returns.max()),
@@ -299,11 +304,9 @@ def compute_ffn(symbols, weights, period="1y"):
                     try:
                         stats[name] = portfolio_stats(valid_close[valid_syms].dropna(),
                                                        w_arr(wd), valid_syms)
-                    except Exception:
-                        stats[name] = {
-                            "total_return": 0.0, "cagr": 0.0,
-                            "volatility": 0.0, "sharpe": 0.0, "max_drawdown": 0.0,
-                        }
+                    except Exception as e:
+                        # Omitted (the view shows "--") rather than a row of fake zeros.
+                        print(f"[ffn_analysis] stats for {name} failed: {e}", file=sys.stderr)
 
                 opt_out = {
                     "erc":     erc_w,
@@ -349,7 +352,18 @@ def main():
     else:
         weights = {s: 1.0 / n for s in symbols}
 
-    result = compute_ffn(symbols, weights)
+    global RISK_FREE_RATE
+    try:
+        rf = float(params.get("risk_free_rate", RISK_FREE_RATE))
+        if np.isfinite(rf):
+            RISK_FREE_RATE = rf
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        result = compute_ffn(symbols, weights)
+    except Exception as exc:  # yfinance / pandas failures must come back as JSON, not a traceback
+        result = {"error": str(exc)}
     print(json.dumps(convert_numpy(result)))
 
 

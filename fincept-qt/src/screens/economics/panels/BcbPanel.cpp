@@ -10,6 +10,7 @@
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
 
+#include <QDate>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -61,7 +62,7 @@ void BcbPanel::activate() {
 
 void BcbPanel::build_controls(QHBoxLayout* thl) {
     series_lbl_ = new QLabel(tr("SERIES"));
-    series_lbl_->setStyleSheet(ctrl_label_style());
+    series_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     series_combo_ = new QComboBox;
     for (const auto& s : kBcbSeries)
@@ -130,10 +131,21 @@ void BcbPanel::on_result(const QString& request_id, const services::EconomicsRes
         rows.append(row);
     }
 
-    const int idx = series_combo_->currentIndex();
-    const QString unit = (idx >= 0 && idx < kBcbSeries.size()) ? " (" + kBcbSeries[idx].unit + ")" : "";
-    const QString title = "BCB: " + (series_ptr ? series_ptr->label : cmd) + unit;
+    // Unit / label from the series this result belongs to — the combo may have moved on since.
+    const QString unit = result.data["unit"].toString(series_ptr ? series_ptr->unit : QString());
+    const QString title = "BCB: " + result.data["name"].toString(series_ptr ? series_ptr->label : cmd) +
+                          (unit.isEmpty() ? QString() : " (" + unit + ")");
 
+    SeriesMeta meta;
+    meta.units = unit;
+    meta.frequency = result.data["frequency"].toString();
+    meta.note = tr("SGS series %1").arg(result.data["series_id"].toVariant().toString());
+    if (cmd == QLatin1String("selic")) {
+        // SGS 432 is published forward to the next Copom meeting; the cards use today's target.
+        meta.stats_cutoff = QDate::currentDate();
+        meta.note += tr(" · dates after today carry the target in force until the next Copom meeting");
+    }
+    set_series_meta(meta);
     display(rows, title);
     LOG_INFO("BcbPanel", QString("Displayed %1 records: %2").arg(rows.size()).arg(title));
 }

@@ -8,6 +8,7 @@
 #include <QDateTime>
 #include <QHash>
 #include <QJsonObject>
+#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -150,6 +151,14 @@ class DatabentoService : public QObject {
     void fetch_commodity_vol(const QString& root_symbol);
     void fetch_crack_spread();
     void fetch_stress_test(const QStringList& symbols);
+    // Rates / FX curves. Each fetches raw CME continuous-futures daily settlements (GLBX.MDP3,
+    // `futures_data`) and derives the surface here — see DatabentoService.cpp for the method and
+    // its approximations. surface_ready carries type "yield_curve" (x_axis = maturity months,
+    // x_labels = contracts, y_labels = settlement dates newest first, z[date][maturity] = yield %),
+    // "forward_rate" (x_axis = start month, y_axis = window months, z = avg implied rate %),
+    // "rate_path" (x_labels = series, y_axis = months ahead, y_labels = contract months,
+    // z[series][month] = implied rate %) and "fx_forward_points" (x_labels = pairs, y_axis =
+    // deferred contract #, y_labels = "C+n", z[pair][n] = points vs the front contract).
     void fetch_yield_curve();
     void fetch_forward_rate();
     void fetch_rate_path();
@@ -176,6 +185,11 @@ class DatabentoService : public QObject {
   private:
     DatabentoService();
     void run_script(const QStringList& args, std::function<void(bool, const QJsonObject&)> cb);
+
+    /// Daily settlements of continuous futures symbols ("ZQ.c.0", ...): symbol -> (yyyy-MM-dd -> close).
+    using SettlementsBySymbol = QHash<QString, QMap<QString, double>>;
+    void fetch_futures_settlements(const QStringList& symbols, int days,
+                                   std::function<void(bool ok, const SettlementsBySymbol&, const QString& err)> cb);
 
     static surface::VolatilitySurfaceData parse_vol_surface(const QJsonObject& j, const std::string& symbol,
                                                             float spot);

@@ -16,6 +16,9 @@ namespace fincept::services::polymarket {
 
 static constexpr int kPingIntervalMs = 50000;
 static constexpr int kPolyWsIdleCloseMs = 5000; // socket stays up this long after the last unsubscribe
+// Hub fan-out cap for the push topics. Both payloads are latest-state (a price
+// scalar / a full book snapshot), so latest-wins coalescing drops nothing.
+static constexpr int kPolyWsHubCoalesceMs = 100;
 
 namespace {
 
@@ -333,6 +336,7 @@ void PolymarketWebSocket::ensure_registered_with_hub() {
     push_only.push_only = true;
     push_only.ttl_ms = 0;
     push_only.min_interval_ms = 0;
+    push_only.coalesce_within_ms = kPolyWsHubCoalesceMs; // 10 Hz latest-wins fan-out
 
     hub.set_policy_pattern("prediction:polymarket:price:*", push_only);
     hub.set_policy_pattern("prediction:polymarket:orderbook:*", push_only);

@@ -13,9 +13,12 @@
 #include <QPainter>
 #include <QPointer>
 #include <QResizeEvent>
+#include <QTextLayout>
+#include <QTextOption>
 #include <QtConcurrent>
 
 #include <cmath>
+#include <limits>
 
 namespace fincept::screens {
 
@@ -24,6 +27,36 @@ static constexpr int kSegmentGap = 8;
 static constexpr int kEditBarHeight = 24;
 static const char* kSettingsKey = "ticker_bar_symbols";
 static const char* kSettingsCategory = "dashboard";
+
+// Shapes `text` once, exactly as QPainter::drawText(QPointF, QString) would on
+// `device` (plain text, one unwrapped line, `dir` as the base direction), with
+// glyph positions re-based on the baseline: drawGlyphRun(QPointF(x, baseline))
+// then puts every glyph where drawText(QPointF(x, baseline), text) did.
+static QList<QGlyphRun> ticker_bar_layout_runs(const QString& text, const QFont& font, Qt::LayoutDirection dir,
+                                               QPaintDevice* device) {
+    QTextLayout layout(text, font, device);
+    QTextOption opt;
+    opt.setWrapMode(QTextOption::NoWrap);
+    opt.setTextDirection(dir);
+    layout.setTextOption(opt);
+    layout.beginLayout();
+    QTextLine line = layout.createLine();
+    qreal ascent = 0;
+    if (line.isValid()) {
+        line.setLineWidth(std::numeric_limits<int>::max() / 128);
+        line.setPosition(QPointF(0, 0));
+        ascent = line.ascent();
+    }
+    layout.endLayout();
+    QList<QGlyphRun> runs = layout.glyphRuns();
+    for (auto& run : runs) {
+        QList<QPointF> positions = run.positions();
+        for (auto& pos : positions)
+            pos.ry() -= ascent;
+        run.setPositions(positions);
+    }
+    return runs;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor
@@ -143,6 +176,21 @@ void TickerBar::load_symbols() {
     });
 }
 
+void TickerBar::set_symbols(const QStringList& symbols, bool persist) {
+    QStringList cleaned;
+    for (const QString& s : symbols) {
+        const QString t = s.trimmed().toUpper();
+        if (!t.isEmpty() && !cleaned.contains(t))
+            cleaned << t;
+    }
+    if (cleaned == symbols_)
+        return;
+    symbols_ = cleaned;
+    if (persist)
+        save_symbols();
+    emit symbols_changed(symbols_);
+}
+
 void TickerBar::save_symbols() {
     const QString value = symbols_.join(",");
     (void)QtConcurrent::run(
@@ -159,11 +207,32 @@ void TickerBar::save_symbols() {
 // three segments per entry per pass at 20 fps — roughly 3,000 text-shaping calls
 // a second, forever, on the always-visible dashboard ticker. NewsTickerStrip
 // already caches its widths this way; this brings TickerBar in line.
+QList<QGlyphRun> TickerBar::runs_for(const QString& text, QHash<QString, QList<QGlyphRun>>& next_cache) {
+    if (const auto it = next_cache.constFind(text); it != next_cache.constEnd())
+        return it.value();
+    const auto old = run_cache_.constFind(text);
+    QList<QGlyphRun> runs = old != run_cache_.constEnd()
+                                ? old.value()
+                                : ticker_bar_layout_runs(text, ticker_font_, run_cache_dir_, this);
+    next_cache.insert(text, runs);
+    return runs;
+}
+
 void TickerBar::rebuild_entry_cache() {
     ticker_font_ = QFont(ui::fonts::DATA_FAMILY(), ui::fonts::font_px(-2));
     ticker_fm_ = QFontMetrics(ticker_font_);
     symbol_color_ = QColor(ui::colors::WHITE());
     price_color_ = QColor(ui::colors::GRAY());
+
+    // Shaped runs survive this rebuild only for strings still on the strip, and
+    // only while the font and layout direction they were shaped for still hold.
+    if (ticker_font_ != run_cache_font_ || layoutDirection() != run_cache_dir_) {
+        run_cache_font_ = ticker_font_;
+        run_cache_dir_ = layoutDirection();
+        run_cache_.clear();
+    }
+    QHash<QString, QList<QGlyphRun>> next_cache;
+    next_cache.reserve(entries_.size() * 3);
 
     total_width_ = 0;
     for (auto& e : entries_) {
@@ -176,8 +245,13 @@ void TickerBar::rebuild_entry_cache() {
         e.change_width = ticker_fm_.horizontalAdvance(e.change_text);
         e.total_width = e.symbol_width + kSegmentGap + e.price_width + kSegmentGap + e.change_width + kItemSpacing;
 
+        e.symbol_runs = runs_for(e.symbol, next_cache);
+        e.price_runs = runs_for(e.price_text, next_cache);
+        e.change_runs = runs_for(e.change_text, next_cache);
+
         total_width_ += e.total_width;
     }
+    run_cache_ = std::move(next_cache);
 }
 
 void TickerBar::set_data(const QVector<Entry>& entries) {
@@ -328,14 +402,21 @@ void TickerBar::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::TextAntialiasing);
 
-    // Font, metrics, strings, widths and colours all come from the cache built in
-    // rebuild_entry_cache(). Nothing here formats or measures — see P9.
+    // Font, metrics, strings, widths, colours and the laid-out text all come from
+    // the cache built in rebuild_entry_cache(). Nothing here formats, measures or
+    // shapes text — see P9.
     p.setFont(ticker_font_);
 
     const int text_y = (height() + ticker_fm_.ascent() - ticker_fm_.descent()) / 2;
     const int viewport_w = width();
     double x = -offset_;
     const int passes = (viewport_w / total_width_) + 2;
+    // Pixel-identical to drawText(QPointF(x, text_y), text) — the runs carry
+    // drawText's own shaping with positions relative to the baseline.
+    auto draw_runs = [&p, text_y](double at_x, const QList<QGlyphRun>& runs) {
+        for (const auto& run : runs)
+            p.drawGlyphRun(QPointF(at_x, text_y), run);
+    };
 
     for (int pass = 0; pass < passes; ++pass) {
         for (const auto& e : entries_) {
@@ -347,15 +428,15 @@ void TickerBar::paintEvent(QPaintEvent*) {
             }
 
             p.setPen(symbol_color_);
-            p.drawText(QPointF(x, text_y), e.symbol);
+            draw_runs(x, e.symbol_runs);
             x += e.symbol_width + kSegmentGap;
 
             p.setPen(price_color_);
-            p.drawText(QPointF(x, text_y), e.price_text);
+            draw_runs(x, e.price_runs);
             x += e.price_width + kSegmentGap;
 
             p.setPen(e.change_col);
-            p.drawText(QPointF(x, text_y), e.change_text);
+            draw_runs(x, e.change_runs);
             x += e.change_width + kItemSpacing;
         }
     }

@@ -70,6 +70,7 @@ QWidget* DocsScreen::page_welcome() {
                                         "■  18-module QuantLib quantitative analysis suite (590+ endpoints)\n"
                                         "■  AI Quant Lab with ML models, factor discovery, HFT, RL trading\n"
                                         "■  Multiple AI agent frameworks (Geopolitics, Economic, Hedge Fund)\n"
+                                        "■  Agent Workbench — Claude Code / Codex agents running on the terminal's tools\n"
                                         "■  Visual node editor for workflow automation\n"
                                         "■  DBnomics access to 100+ data providers, 500K+ datasets\n"
                                         "■  Surface analytics for derivatives, fixed income, credit, risk\n"
@@ -129,9 +130,9 @@ QWidget* DocsScreen::page_getting_started() {
                                         "■  Continue with Google\n"
                                         "■  Log in with existing credentials (plus your two-factor code, if enabled)\n\n"
                                         "After login you set a 6-digit PIN that unlocks the terminal — it also locks "
-                                        "after a period of inactivity, or on demand with Ctrl+L. Then choose a plan "
-                                        "(the Free plan continues straight in) and you'll land on the Dashboard — "
-                                        "your home base."),
+                                        "after a period of inactivity, or on demand with Ctrl+L. You land on the "
+                                        "Dashboard — your home base. Free accounts see Plans & Pricing once per "
+                                        "release; CONTINUE WITH FREE goes straight in."),
                                      ui::colors::POSITIVE));
 
     vl->addWidget(make_section_panel("2", tr("THE INTERFACE"),
@@ -158,12 +159,16 @@ QWidget* DocsScreen::page_getting_started() {
                                      ui::colors::AMBER));
 
     vl->addWidget(make_section_panel("4", tr("SUBSCRIPTION PLANS"),
-                                     tr("This open-source edition uses credit-based plans:\n\n"
-                                        "■  FREE — start right away with a limited credit allowance\n"
-                                        "■  PAID PLANS — more credits, longer validity and priority support "
-                                        "(compare them on the Pricing screen)\n\n"
-                                        "Your credit balance and payment history are under Profile → Billing. "
-                                        "Fincept Terminal Enterprise is a separate product, billed separately."),
+                                     tr("Your Fincept account has two plans. Credits pay for cloud analytics, AI "
+                                        "and premium data calls:\n\n"
+                                        "■  FREE — signup credits and community support; start right away\n"
+                                        "■  PRO — $10/month: a monthly credit allowance, higher limits, every cloud "
+                                        "analytics module and priority support\n\n"
+                                        "Open Plans & Pricing from the plan badge in the toolbar, Profile → Billing "
+                                        "or the command palette (Ctrl+Shift+P → \"plans\"). Your balance and "
+                                        "payment history are under Profile → Billing.\n\n"
+                                        "Firms and teams: Fincept Terminal Enterprise is the private edition — a "
+                                        "separate product with its own accounts (fincept.in/enterprise)."),
                                      ui::colors::AMBER));
 
     vl->addWidget(
@@ -267,7 +272,7 @@ QWidget* DocsScreen::page_keyboard_shortcuts() {
         tr("FILE — New Window, Move to Monitor, Close Window / Close All Windows, New / Open / Save / Save As "
            "layout, Import / Export layout, File Manager, Refresh All\n"
            "NAVIGATE — Markets & Data, Trading & Portfolio, Crypto, Research & Intelligence and Tools sub-menus, "
-           "plus Forum, Docs, Support and About\n"
+           "plus Docs, Support and About\n"
            "VIEW — Component Browser, Fullscreen, Focus Mode, Always on Top, Float Panel, Quick Switch "
            "(workspace perspectives), Refresh Screen, Take Screenshot\n"
            "HELP — About, Help Center, Contact Us, Terms of Service, Privacy Policy, Trademarks, Check for "
@@ -454,17 +459,21 @@ QWidget* DocsScreen::page_watchlist() {
 
 QWidget* DocsScreen::page_screener() {
     return make_page(
-        tr("SCREENER"), tr("Full-screen stock screener over a broad large-cap basket"),
+        tr("SCREENER"), tr("Equity screener — predefined screens and a custom criteria builder"),
         {
-            {tr("OVERVIEW"), tr("The Screener lists a broad basket of large-cap stocks with live quotes in a "
-                                "full-width table. It is the full-screen version of the dashboard Screener "
-                                "widget and shares its data path.")},
-            {tr("KEY FEATURES"), tr("■  Live quotes — the table updates while the screen is visible\n"
-                                    "■  Symbol / name search box to narrow the list\n"
-                                    "■  Sort selector to rank by the measure you care about\n"
-                                    "■  Filtering and sorting happen client-side, so they respond instantly")},
-            {tr("TIPS"), tr("■  The screen only streams while it is on screen — switch away and updates pause\n"
-                            "■  Use Watchlist to keep the symbols you find here")},
+            {tr("OVERVIEW"), tr("The Screener runs Yahoo Finance equity screens. Pick one of the predefined screens "
+                                "or build your own criteria, then sort, export or act on the results.")},
+            {tr("PREDEFINED SCREENS"), tr("■  22 ready-made screens: day gainers / losers, most actives, 52-week "
+                                          "gainers, high dividend yield, regional movers and more\n"
+                                          "■  US LARGE-CAP BASKET — the previous fixed large-cap list with live quotes")},
+            {tr("CUSTOM CRITERIA"), tr("■  Build a screen from 76 fields (valuation, profitability, growth, size, "
+                                       "price action, …)\n"
+                                       "■  Region, exchange, sector, industry and peer-group pickers\n"
+                                       "■  Save a screen and run it again later")},
+            {tr("WORKING WITH RESULTS"), tr("■  Sortable results table\n"
+                                            "■  CSV export\n"
+                                            "■  Add symbols to a watchlist\n"
+                                            "■  Open in… Equity Research, Equity Trading, News and other screens")},
         });
 }
 

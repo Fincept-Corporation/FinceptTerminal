@@ -40,14 +40,6 @@ QString AppPaths::cache() {
     return ProfileManager::instance().profile_root() + "/cache";
 }
 
-QString AppPaths::models() {
-    return root() + "/models";
-}
-
-QString AppPaths::runtime() {
-    return root() + "/runtime";
-}
-
 QString AppPaths::workspaces() {
     return ProfileManager::instance().profile_root() + "/workspaces";
 }
@@ -76,8 +68,6 @@ void AppPaths::ensure_all() {
     try_mkpath(logs());
     try_mkpath(files());
     try_mkpath(cache());
-    try_mkpath(models());
-    try_mkpath(runtime());
     try_mkpath(workspaces());
     try_mkpath(crashdumps());
 }

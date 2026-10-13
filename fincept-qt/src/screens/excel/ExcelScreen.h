@@ -47,6 +47,8 @@ class ExcelScreen : public QWidget, public IStatefulScreen {
   private slots:
     void on_import();
     void on_export();
+    /// Ctrl+S: write back to the open .xlsx without a dialog (Save As otherwise).
+    void on_save();
     void on_add_sheet();
     void on_delete_sheet();
     void on_rename_sheet();
@@ -88,6 +90,7 @@ class ExcelScreen : public QWidget, public IStatefulScreen {
     QString file_path_;
     bool dirty_ = false;
     bool busy_ = false; // an XLSX read/write is running on a worker thread
+    bool quick_save_ = false; // set by on_save(): reuse file_path_ when it is an .xlsx
 
     // Toolbar text widgets (cached for retranslateUi)
     QLabel* toolbar_title_ = nullptr;

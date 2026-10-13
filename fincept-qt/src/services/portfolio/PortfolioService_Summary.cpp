@@ -33,6 +33,87 @@
 
 namespace fincept::services {
 
+namespace portfolio_summary_detail {
+
+/// Trading currency implied by a yfinance ticker's exchange suffix. Empty when
+/// it cannot be told (indices, FX pairs, unknown suffixes). Note the sub-units:
+/// London quotes in pence (GBp), Johannesburg in cents (ZAc), Tel Aviv in
+/// agorot (ILA) — a 100x error if read as the major unit.
+QString instrument_currency(const QString& symbol) {
+    const QString s = symbol.trimmed().toUpper();
+    if (s.isEmpty() || s.startsWith(QLatin1Char('^')) || s.endsWith(QLatin1String("=X")) ||
+        s.endsWith(QLatin1String("=F")))
+        return {};
+    const qsizetype dot = s.lastIndexOf(QLatin1Char('.'));
+    if (dot < 0) {
+        // Crypto pairs: BTC-USD, ETH-EUR, SOL-USDT. Share classes (BRK-B) fall
+        // through to a US listing.
+        const qsizetype dash = s.lastIndexOf(QLatin1Char('-'));
+        if (dash > 0) {
+            const QString quote = s.mid(dash + 1);
+            if (quote == QLatin1String("USDT") || quote == QLatin1String("USDC"))
+                return QStringLiteral("USD");
+            if (quote.size() == 3 && quote != QLatin1String("USD") && quote.at(0).isLetter())
+                return quote;
+        }
+        return QStringLiteral("USD"); // bare ticker = US listing
+    }
+    static const QHash<QString, QString> kSuffix = {
+        {"NS", "INR"},  {"BO", "INR"}, {"L", "GBp"},  {"TO", "CAD"}, {"V", "CAD"},  {"CN", "CAD"}, {"NE", "CAD"},
+        {"AX", "AUD"},  {"NZ", "NZD"}, {"HK", "HKD"}, {"T", "JPY"},  {"KS", "KRW"}, {"KQ", "KRW"}, {"TW", "TWD"},
+        {"TWO", "TWD"}, {"SS", "CNY"}, {"SZ", "CNY"}, {"SI", "SGD"}, {"DE", "EUR"}, {"F", "EUR"},  {"BE", "EUR"},
+        {"DU", "EUR"},  {"HM", "EUR"}, {"HA", "EUR"}, {"MU", "EUR"}, {"SG", "EUR"}, {"PA", "EUR"}, {"AS", "EUR"},
+        {"BR", "EUR"},  {"LS", "EUR"}, {"MC", "EUR"}, {"MI", "EUR"}, {"IR", "EUR"}, {"VI", "EUR"}, {"HE", "EUR"},
+        {"AT", "EUR"},  {"SW", "CHF"}, {"ST", "SEK"}, {"OL", "NOK"}, {"CO", "DKK"}, {"SA", "BRL"}, {"MX", "MXN"},
+        {"JO", "ZAc"},  {"TA", "ILA"}, {"KL", "MYR"}, {"BK", "THB"}, {"JK", "IDR"}, {"IS", "TRY"}, {"SR", "SAR"},
+        {"WA", "PLN"},  {"PR", "CZK"}, {"BD", "HUF"}, {"CA", "EGP"}, {"QA", "QAR"},
+    };
+    return kSuffix.value(s.mid(dot + 1));
+}
+
+struct LedgerTotals {
+    double realized = 0;
+    double dividends = 0;
+};
+
+/// Weighted-average-cost replay of the whole ledger (oldest first). A SELL with
+/// no known cost basis (position pre-dates its ledger) contributes nothing
+/// rather than a made-up gain.
+LedgerTotals ledger_totals(const QVector<portfolio::Transaction>& newest_first) {
+    LedgerTotals out;
+    struct Pos {
+        double qty = 0;
+        double avg = 0;
+    };
+    QHash<QString, Pos> book;
+    for (auto it = newest_first.crbegin(); it != newest_first.crend(); ++it) {
+        const auto& t = *it;
+        const QString type = t.transaction_type.toUpper();
+        if (!std::isfinite(t.quantity) || !std::isfinite(t.price) || t.quantity <= 0)
+            continue;
+        if (type == QLatin1String("BUY")) {
+            Pos& p = book[t.symbol];
+            const double nq = p.qty + t.quantity;
+            p.avg = nq > 0 ? (p.qty * p.avg + t.quantity * t.price) / nq : 0.0;
+            p.qty = nq;
+        } else if (type == QLatin1String("SELL")) {
+            Pos& p = book[t.symbol];
+            const double sold = std::min(t.quantity, p.qty);
+            if (sold > 0) {
+                out.realized += (t.price - p.avg) * sold;
+                p.qty -= sold;
+                if (p.qty <= 1e-12)
+                    p = Pos{};
+            }
+        } else if (type == QLatin1String("DIVIDEND")) {
+            out.dividends += t.quantity * t.price;
+        }
+    }
+    return out;
+}
+
+} // namespace portfolio_summary_detail
+
 void PortfolioService::load_summary(const QString& portfolio_id) {
     // Check cache first (P11)
     {
@@ -298,6 +379,22 @@ void PortfolioService::finalize_summary(const QString& portfolio_id, const QVect
     summary.total_day_change_percent = (total_prev > 0) ? (total_day / total_prev) * 100.0 : 0;
     summary.total_positions = assets.size();
     summary.last_updated = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+
+    // Realised P&L and dividend income come from the ledger, not the position
+    // rows (which only carry what is still held).
+    if (auto txns = PortfolioRepository::instance().get_transactions(portfolio_id, /*limit=*/1000000); txns.is_ok()) {
+        const auto totals = portfolio_summary_detail::ledger_totals(txns.value());
+        summary.total_realized_pnl = totals.realized;
+        summary.total_dividends = totals.dividends;
+    }
+
+    // Holdings quoted in another currency are summed as-is (no FX conversion).
+    const QString base_ccy = portfolio.currency.trimmed().toUpper();
+    for (const auto& h : summary.holdings) {
+        const QString ccy = portfolio_summary_detail::instrument_currency(h.symbol);
+        if (!ccy.isEmpty() && ccy != base_ccy)
+            summary.fx_unconverted.append(QStringLiteral("%1 (%2)").arg(h.symbol, ccy));
+    }
 
     // A refresh where NO holding got a quote (network down, provider outage)
     // values every position at its cost basis. That is fine to display, but it

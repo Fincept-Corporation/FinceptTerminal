@@ -1,57 +1,71 @@
 #include "services/workflow/nodes/DataSourceNodes.h"
 
-#include "python/PythonRunner.h"
 #include "screens/data_sources/ConnectorRegistry.h"
 #include "screens/data_sources/DataSourceTypes.h"
+#include "services/connectors/ConnectorCatalog.h"
+#include "services/connectors/ConnectorService.h"
 #include "services/workflow/NodeRegistry.h"
 #include "storage/repositories/DataSourceRepository.h"
 
-#include <QDateTime>
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QHash>
-#include <QRegularExpression>
-#include <QTcpSocket>
-#include <QUrl>
-#include <QtConcurrent/QtConcurrent>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QProcess>
 
 namespace fincept::workflow {
 
-using fincept::python::extract_json;
-using fincept::python::PythonResult;
-using fincept::python::PythonRunner;
-
 namespace {
 
-// The fallback outputs below echo the connection config back as node output. That config holds the
-// saved connection's secrets (passwords, API keys, tokens), and node output is rendered in the
-// results panel, copied to the clipboard and handed to every downstream node — a Webhook or HTTP
-// node could have posted it anywhere. Mask anything that looks like a secret.
-QJsonObject ds_node_redact_config(const QJsonObject& config) {
-    static const QRegularExpression secret_re(
-        QStringLiteral("pass(word|wd)?|secret|token|api[_-]?key|private|credential|auth|signature|^key$|_key$"),
-        QRegularExpression::CaseInsensitiveOption);
-    QJsonObject out;
-    for (auto it = config.constBegin(); it != config.constEnd(); ++it) {
-        if (secret_re.match(it.key()).hasMatch() && !it.value().toString().isEmpty())
-            out[it.key()] = QStringLiteral("********");
-        else
-            out[it.key()] = it.value();
+/// Data Sources connection types that have a live Python connector in the catalogue
+/// (resources/data_connectors.json). Every other connection type (databases, brokers' data
+/// feeds, cloud storage, ...) has no fetch implementation behind its workflow node yet.
+struct DsNodeLiveConnector {
+    const char* node_id;
+    const char* connector;
+};
+constexpr DsNodeLiveConnector kDsNodeLiveConnectors[] = {
+    {"yahoo-finance", "data_yfinance"}, {"alpha-vantage", "data_alphavantage"},  {"eod-historical", "data_eodhd"},
+    {"coingecko", "data_coingecko"},    {"coinmarketcap", "data_coinmarketcap"}, {"finnhub", "data_finnhub"},
+    {"intrinio", "data_intrinio"},      {"marketstack", "data_marketstack"},
+    {"openfigi", "data_openfigi"},      {"polygon-io", "data_polygon_io"},       {"tiingo", "data_tiingo"},
+    {"twelve-data", "data_twelve"},     {"quandl", "data_quandl_nasdaq"},
+};
+
+QString ds_node_connector_for(const QString& node_id) {
+    for (const auto& m : kDsNodeLiveConnectors)
+        if (node_id == QLatin1String(m.node_id))
+            return QString::fromLatin1(m.connector);
+    return {};
+}
+
+/// Symbols configured on the node or its saved connection, used as the default arguments
+/// when the node's `args` parameter is empty (e.g. Yahoo Finance's "Default Symbols").
+QStringList ds_node_symbols(const QJsonObject& config) {
+    for (const char* key : {"symbols", "symbol", "ticker", "tickers"}) {
+        const QString v = config.value(QLatin1String(key)).toString().trimmed();
+        if (v.isEmpty())
+            continue;
+        QStringList out;
+        for (const QString& s : v.split(QLatin1Char(','), Qt::SkipEmptyParts))
+            if (!s.trimmed().isEmpty())
+                out << s.trimmed();
+        return out;
     }
-    return out;
+    return {};
 }
 
 } // namespace
 
 void register_datasource_nodes(NodeRegistry& registry) {
-    // ── Register Data Source connectors dynamically ────────────────
-    // Ensure all connectors are registered first
+    // Ensure all connection types are registered first.
     fincept::screens::datasources::register_all_connectors();
+    auto& catalog = fincept::services::connectors::ConnectorCatalog::instance();
+    const bool catalog_ok = catalog.ensure_loaded();
 
     const auto& connectors = fincept::screens::datasources::ConnectorRegistry::instance().all();
     for (const auto& c : connectors) {
-        // Construct ParamDefs from connector fields
+        const QString live_name = catalog_ok ? ds_node_connector_for(c.id) : QString();
+        const auto* live = live_name.isEmpty() ? nullptr : catalog.find(live_name);
+
         QVector<ParamDef> parameters;
         // First parameter: Saved Connection selector
         parameters.append({.key = "connection_id",
@@ -61,6 +75,24 @@ void register_datasource_nodes(NodeRegistry& registry) {
                            .options = {},
                            .placeholder = c.id, // pass the connector ID here so the widget filters by it
                            .required = false});
+
+        if (live) {
+            // What to fetch: the catalogue connector's commands, with the default preselected.
+            parameters.append({.key = "command",
+                               .label = "Command",
+                               .type = "select",
+                               .default_value = live->default_command,
+                               .options = live->command_names(),
+                               .placeholder = "",
+                               .required = false});
+            parameters.append({.key = "args",
+                               .label = "Arguments (space-separated)",
+                               .type = "string",
+                               .default_value = live->default_args.join(QLatin1Char(' ')),
+                               .options = {},
+                               .placeholder = live->args_hint(live->default_command),
+                               .required = false});
+        }
 
         // Add each field def as a parameter
         for (const auto& f : c.fields) {
@@ -95,134 +127,79 @@ void register_datasource_nodes(NodeRegistry& registry) {
             parameters.append(std::move(p));
         }
 
+        QString description = c.description;
+        if (live)
+            description += QStringLiteral(" Fetches live data through the %1 connector; the API key comes from "
+                                          "Settings › Credentials (saving a connection stores its key there).")
+                               .arg(live->name);
+        else
+            description += QStringLiteral(" (No live data connector behind this node yet.)");
+
         // Register the dynamic node type
         registry.register_type(
             {.type_id = "datasource." + c.id,
              .display_name = c.name,
              .category = "Data Source: " + fincept::screens::datasources::category_label(c.category),
-             .description = c.description,
+             .description = description,
              .icon_text = c.icon.isEmpty() ? "DS" : c.icon,
              .accent_color = c.color.isEmpty() ? "#10b981" : c.color,
              .version = 1,
              .inputs = {{"input_trigger", "Trigger In", PortDirection::Input, ConnectionType::Main, false}},
              .outputs = {{"output_main", "Data Out", PortDirection::Output, ConnectionType::Main}},
              .parameters = std::move(parameters),
-             .execute = [connector_id = c.id,
-                         connector_name = c.name](const QJsonObject& params, const QVector<QJsonValue>&,
-                                                  std::function<void(bool, QJsonValue, QString)> cb) {
-                 // Determine connection config
-                 QJsonObject final_config;
-                 QString conn_id = params.value("connection_id").toString();
+             .execute = [connector_name = c.name, live_name](const QJsonObject& params, const QVector<QJsonValue>&,
+                                                             std::function<void(bool, QJsonValue, QString)> cb) {
+                 namespace conn = fincept::services::connectors;
+                 if (live_name.isEmpty()) {
+                     // This used to answer {"status": "mocked"} as a SUCCESS with no data, so a
+                     // workflow silently carried on with nothing. Fail loudly instead.
+                     cb(false, {},
+                        QStringLiteral("No live connector for %1 yet — use a node backed by the Data Sources › "
+                                       "Catalog connectors (or a Python node) to fetch this data.")
+                            .arg(connector_name));
+                     return;
+                 }
+                 const conn::ConnectorInfo* info = conn::ConnectorCatalog::instance().find(live_name);
+                 if (!info) {
+                     cb(false, {}, QStringLiteral("Connector %1 is missing from the catalogue").arg(live_name));
+                     return;
+                 }
 
+                 // Saved connection config (non-secret fields such as default symbols), with the
+                 // node's own parameter overrides on top.
+                 QJsonObject config;
+                 const QString conn_id = params.value("connection_id").toString();
                  if (!conn_id.isEmpty()) {
-                     auto res = DataSourceRepository::instance().get(conn_id);
+                     const auto res = DataSourceRepository::instance().get(conn_id);
                      if (res.is_ok()) {
-                         const auto& ds = res.value();
-                         QJsonDocument doc = QJsonDocument::fromJson(ds.config.toUtf8());
-                         if (doc.isObject()) {
-                             final_config = doc.object();
-                         }
+                         const QJsonDocument doc = QJsonDocument::fromJson(res.value().config.toUtf8());
+                         if (doc.isObject())
+                             config = doc.object();
                      }
                  }
-
-                 // Merge in parameter overrides (anything that has a non-empty value and is not connection_id)
-                 for (auto it = params.begin(); it != params.end(); ++it) {
-                     if (it.key() != "connection_id" && !it.value().isNull() && !it.value().toString().isEmpty()) {
-                         final_config[it.key()] = it.value();
-                     }
+                 for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
+                     if (it.key() != QLatin1String("connection_id") && !it.value().isNull() &&
+                         !it.value().toString().isEmpty())
+                         config[it.key()] = it.value();
                  }
 
-                 // Define standard script execution naming via static QHash instead of if/else
-                 static const QHash<QString, QString> script_mappings = {{"yahoo-finance", "yfinance_data.py"},
-                                                                         {"alpha-vantage", "alphavantage_data.py"},
-                                                                         {"eod-historical", "eodhd_data.py"}};
-
-                 QString script_name = script_mappings.value(connector_id);
-                 if (script_name.isEmpty()) {
-                     // check if standard file exists
-                     QString clean_id = connector_id;
-                     clean_id.replace("-", "_");
-                     QString candidate1 = clean_id + "_data.py";
-                     QString candidate2 = clean_id + ".py";
-                     QString candidate3 = connector_id + "_data.py";
-                     QString candidate4 = connector_id + ".py";
-
-                     // check which one exists in scripts directory using cross-platform QDir::filePath
-                     QString scripts_dir = PythonRunner::instance().scripts_dir();
-                     QDir dir(scripts_dir);
-                     if (QFileInfo::exists(dir.filePath(candidate1)))
-                         script_name = candidate1;
-                     else if (QFileInfo::exists(dir.filePath(candidate2)))
-                         script_name = candidate2;
-                     else if (QFileInfo::exists(dir.filePath(candidate3)))
-                         script_name = candidate3;
-                     else if (QFileInfo::exists(dir.filePath(candidate4)))
-                         script_name = candidate4;
+                 QString command = config.value("command").toString().trimmed();
+                 if (command.isEmpty())
+                     command = info->default_command;
+                 QStringList args = QProcess::splitCommand(config.value("args").toString().trimmed());
+                 if (args.isEmpty()) {
+                     args = ds_node_symbols(config);
+                     if (args.size() > 1 && command == QLatin1String("quote") && info->has_command("batch_quotes"))
+                         command = QStringLiteral("batch_quotes");
                  }
 
-                 if (!script_name.isEmpty()) {
-                     // Execute specific script
-                     QString args_json = QString::fromUtf8(QJsonDocument(final_config).toJson(QJsonDocument::Compact));
-                     PythonRunner::instance().run(
-                         script_name, {"--args", args_json}, [cb, connector_name](const PythonResult& res) {
-                             if (!res.success) {
-                                 cb(false, {}, res.error.isEmpty() ? "Script execution failed" : res.error);
-                                 return;
-                             }
-                             QString out = fincept::python::extract_json(res.output).trimmed();
-                             auto doc = QJsonDocument::fromJson(out.toUtf8());
-                             if (doc.isNull()) {
-                                 cb(false, {}, "Invalid JSON response: " + res.output.left(200));
-                                 return;
-                             }
-                             cb(true, doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), {});
-                         });
-                 } else {
-                     // Fallback to simulated data fetch or connectivity test
-                     // Let's perform a live TCP connectivity test or return resolved config
-                     // Try to resolve host/port
-                     QString host = final_config.value("host").toString();
-                     int port = final_config.value("port").toInt(0);
-                     if (host.isEmpty()) {
-                         // try to extract from url
-                         QString url = final_config.value("url").toString();
-                         if (!url.isEmpty()) {
-                             QUrl qurl(url);
-                             host = qurl.host();
-                             port = qurl.port(qurl.scheme() == "https" ? 443 : 80);
-                         }
-                     }
-
-                     if (!host.isEmpty() && port > 0) {
-                         // Run TCP reachability check asynchronously
-                         (void)QtConcurrent::run([host, port, final_config, connector_name, cb]() {
-                             QTcpSocket sock;
-                             sock.connectToHost(host, static_cast<quint16>(port));
-                             bool ok = sock.waitForConnected(3000);
-                             sock.disconnectFromHost();
-
-                             QJsonObject out;
-                             out["connector"] = connector_name;
-                             out["host"] = host;
-                             out["port"] = port;
-                             out["status"] = ok ? "connected" : "failed";
-                             out["message"] = ok ? "Successfully connected to data source server."
-                                                 : "Failed to connect to data source server: " + sock.errorString();
-                             out["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-                             out["config_applied"] = ds_node_redact_config(final_config);
-                             cb(ok, out, ok ? QString{} : out["message"].toString());
-                         });
-                     } else {
-                         // Return configuration directly
-                         QJsonObject out;
-                         out["connector"] = connector_name;
-                         out["status"] = "mocked";
-                         out["message"] = "No server endpoint configured. Returning applied config parameters.";
-                         out["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-                         out["config_applied"] = ds_node_redact_config(final_config);
-                         cb(true, out, {});
-                     }
-                 }
+                 conn::ConnectorService::instance().run(info->name, command, args, /*force=*/false,
+                                                        [cb](const conn::ConnectorResult& r) {
+                                                            if (r.success)
+                                                                cb(true, r.data, {});
+                                                            else
+                                                                cb(false, {}, r.error);
+                                                        });
              }});
     }
 }

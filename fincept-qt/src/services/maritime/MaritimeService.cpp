@@ -47,6 +47,16 @@ static double maritime_svc_json_num(const QJsonValue& v) {
     return v.isDouble() ? v.toDouble() : v.toString().toDouble();
 }
 
+// Credit balances are NUMERIC (fractional); toInt() turned every fractional balance
+// into "not reported". Absent / unparsable -> -1.
+static double maritime_svc_credits(const QJsonValue& v) {
+    if (v.isDouble())
+        return v.toDouble();
+    bool ok = false;
+    const double d = v.toString().trimmed().toDouble(&ok);
+    return ok ? d : -1.0;
+}
+
 // Serialise a vessel back into the API's own field names for the CacheManager. One
 // writer for every cached page: the multi-vessel and history writers each used to keep
 // their own subset, so a cached replay lost draught / route dates / progress.
@@ -139,7 +149,7 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
             page.vessels.append(parse_vessel(v.toObject()));
         page.total_count = root["total_count"].toInt(page.vessels.size());
         page.credits_used = root["credits_used"].toDouble(0.0);
-        page.remaining_credits = root["remaining_credits"].toInt(-1);
+        page.remaining_credits = -1; // cache hit: free, and the stored balance is stale
         emit vessels_loaded(page);
         return;
     }
@@ -173,7 +183,7 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
 
             page.total_count = data["vessel_count"].toInt(page.vessels.size());
             page.credits_used = data["credits_used"].toDouble(0.0);
-            page.remaining_credits = data["remaining_credits"].toInt(-1);
+            page.remaining_credits = maritime_svc_credits(data["remaining_credits"]);
 
             // Cache the (already-sorted) vessels + envelope.
             QJsonArray cached_arr;
@@ -183,7 +193,6 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
             cached_root["vessels"] = cached_arr;
             cached_root["total_count"] = page.total_count;
             cached_root["credits_used"] = page.credits_used;
-            cached_root["remaining_credits"] = page.remaining_credits;
             fincept::CacheManager::instance().put(
                 cache_key, QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
                 kVesselTtlSec, "maritime");
@@ -191,7 +200,7 @@ void MaritimeService::search_vessels_by_area(const AreaSearchParams& params) {
             LOG_INFO("Maritime", QString("Area search: %1 vessels (total %2, %3 credits left)")
                                      .arg(page.vessels.size())
                                      .arg(page.total_count)
-                                     .arg(page.remaining_credits));
+                                     .arg(page.remaining_credits, 0, 'f', 2));
 
             emit self->vessels_loaded(page);
             if (self->hub_registered_)
@@ -276,7 +285,7 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
         for (const auto& nf : root["not_found"].toArray())
             page.not_found.append(nf.toString());
         page.credits_used = root["credits_used"].toDouble(0.0);
-        page.remaining_credits = root["remaining_credits"].toInt(-1);
+        page.remaining_credits = -1; // cache hit: free, and the stored balance is stale
         emit vessels_loaded(page);
         return;
     }
@@ -312,7 +321,7 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
         for (const auto& nf : data["not_found"].toArray())
             page.not_found.append(nf.toString());
         page.credits_used = data["credits_used"].toDouble(0.0);
-        page.remaining_credits = data["remaining_credits"].toInt(-1);
+        page.remaining_credits = maritime_svc_credits(data["remaining_credits"]);
 
         // Cache the full envelope so cached replays carry not_found etc.
         QJsonArray cached_arr;
@@ -323,7 +332,6 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
         cached_root["found_count"] = page.found_count;
         cached_root["not_found"] = QJsonArray::fromStringList(page.not_found);
         cached_root["credits_used"] = page.credits_used;
-        cached_root["remaining_credits"] = page.remaining_credits;
         fincept::CacheManager::instance().put(
             cache_key, QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
             kVesselTtlSec, "maritime");
@@ -331,7 +339,7 @@ void MaritimeService::get_multi_vessel_positions(const QStringList& imos) {
         LOG_INFO("Maritime", QString("Multi vessel: %1 found, %2 missing (%3 credits left)")
                                  .arg(page.found_count)
                                  .arg(page.not_found.size())
-                                 .arg(page.remaining_credits));
+                                 .arg(page.remaining_credits, 0, 'f', 2));
 
         emit self->vessels_loaded(page);
         if (self->hub_registered_)
@@ -354,7 +362,7 @@ void MaritimeService::get_vessel_history(const QString& imo) {
             page.history.append(parse_vessel(v.toObject()));
         page.total_records = root["total_records"].toInt(page.history.size());
         page.credits_used = root["credits_used"].toDouble(0.0);
-        page.remaining_credits = root["remaining_credits"].toInt(-1);
+        page.remaining_credits = -1; // cache hit: free, and the stored balance is stale
         emit vessel_history_loaded(page);
         if (hub_registered_)
             publish_to_hub(QStringLiteral("maritime:history:") + imo_trimmed, QVariant::fromValue(page));
@@ -393,7 +401,7 @@ void MaritimeService::get_vessel_history(const QString& imo) {
 
             page.total_records = data["total_records"].toInt(page.history.size());
             page.credits_used = data["credits_used"].toDouble(0.0);
-            page.remaining_credits = data["remaining_credits"].toInt(-1);
+            page.remaining_credits = maritime_svc_credits(data["remaining_credits"]);
 
             QJsonArray cached_arr;
             for (const auto& v : page.history)
@@ -403,7 +411,6 @@ void MaritimeService::get_vessel_history(const QString& imo) {
             cached_root["history"] = cached_arr;
             cached_root["total_records"] = page.total_records;
             cached_root["credits_used"] = page.credits_used;
-            cached_root["remaining_credits"] = page.remaining_credits;
             fincept::CacheManager::instance().put(
                 cache_key, QVariant(QString::fromUtf8(QJsonDocument(cached_root).toJson(QJsonDocument::Compact))),
                 kHistoryTtlSec, "maritime");
@@ -412,7 +419,7 @@ void MaritimeService::get_vessel_history(const QString& imo) {
                                      .arg(page.imo)
                                      .arg(page.history.size())
                                      .arg(page.total_records)
-                                     .arg(page.remaining_credits));
+                                     .arg(page.remaining_credits, 0, 'f', 2));
 
             emit self->vessel_history_loaded(page);
             if (self->hub_registered_)

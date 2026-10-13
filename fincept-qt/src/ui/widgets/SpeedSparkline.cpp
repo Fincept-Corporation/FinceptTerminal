@@ -24,13 +24,6 @@ void SpeedSparkline::set_fill_color(const QColor& c) {
     update();
 }
 
-void SpeedSparkline::set_capacity(int samples) {
-    capacity_ = std::max(4, samples);
-    while (samples_.size() > capacity_)
-        samples_.pop_front();
-    update();
-}
-
 void SpeedSparkline::push(qint64 bytes_per_sec) {
     if (bytes_per_sec < 0)
         bytes_per_sec = 0;

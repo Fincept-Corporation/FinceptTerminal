@@ -9,7 +9,7 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 
-BASE_URL = "https://api.frankfurter.dev"
+BASE_URL = "https://api.frankfurter.dev/v1"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
@@ -99,10 +99,11 @@ def get_currencies() -> Any:
 
 def convert_amount(amount: float, from_currency: str, to_currency: str) -> Any:
     """Convert a specific amount between two currencies using latest ECB rates."""
+    # Ask for the unit rate (no `amount` param — with it the API returns the converted amount
+    # in `rates`, which would then be multiplied by the amount a second time).
     params = {
         "base": from_currency.upper(),
         "symbols": to_currency.upper(),
-        "amount": amount,
     }
     data = _make_request("latest", params=params)
     if isinstance(data, dict) and "rates" in data:

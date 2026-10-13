@@ -18,6 +18,8 @@ class RiskManagementView : public QWidget {
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
     void set_metrics(const portfolio::ComputedMetrics& metrics);
+    /// Per-holding ex-ante risk (volatility, beta, share of portfolio variance).
+    void set_analytics(const portfolio::MarketAnalytics& analytics);
 
   protected:
     void changeEvent(QEvent* event) override;
@@ -45,9 +47,11 @@ class RiskManagementView : public QWidget {
     // Risk contribution tab
     QTableWidget* contrib_table_ = nullptr;
     QLabel* contrib_title_ = nullptr;
+    QLabel* contrib_note_ = nullptr;
 
     portfolio::PortfolioSummary summary_;
     portfolio::ComputedMetrics metrics_;
+    portfolio::MarketAnalytics analytics_;
     QString currency_;
     bool has_data_ = false;
 };

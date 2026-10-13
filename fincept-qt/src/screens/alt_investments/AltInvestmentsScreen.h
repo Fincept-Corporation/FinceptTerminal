@@ -33,7 +33,9 @@ struct AltCategory {
 struct AltField {
     QString key;   // JSON key sent to Python
     QString label; // Display label
-    enum Type { Text, Spin, Combo } type = Spin;
+    /// Series: comma-separated numbers -> JSON array (divide_100 applies per value).
+    /// CashFlows: "YYYY-MM-DD:amount; ..." -> [{date, amount}].
+    enum Type { Text, Spin, Combo, Series, CashFlows } type = Spin;
     double default_val = 0.0;
     double min_val = 0.0;
     double max_val = 1e9;
@@ -87,7 +89,7 @@ class AltInvestmentsScreen : public QWidget, public IStatefulScreen {
     void display_error(const QString& error);
     void set_loading(bool loading);
     void append_metric_row(QWidget* parent, QVBoxLayout* vl, const QString& key, const QJsonValue& val, int depth = 0);
-    QString format_value(const QJsonValue& v) const;
+    QString format_value(const QString& key, const QJsonValue& v) const;
 
     // Category/analyzer data
     QList<AltCategory> categories_;

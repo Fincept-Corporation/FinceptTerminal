@@ -442,9 +442,10 @@ class EvaluationService:
             # Volatility
             volatility = returns.std() * np.sqrt(252)
 
-            # Downside deviation
-            downside_returns = returns[returns < 0]
-            downside_deviation = downside_returns.std() * np.sqrt(252)
+            # Downside deviation (target 0): sqrt(mean(min(r, 0)^2)) over ALL
+            # observations, annualised. The std of the negative subset measured
+            # dispersion among losing days, not downside risk.
+            downside_deviation = np.sqrt(np.mean(np.minimum(returns.values, 0.0) ** 2)) * np.sqrt(252)
 
             # Value at Risk (VaR)
             var = returns.quantile(1 - confidence_level)
@@ -454,7 +455,9 @@ class EvaluationService:
 
             # Maximum drawdown
             cumulative = (1 + returns).cumprod()
-            running_max = cumulative.expanding().max()
+            # The peak includes the starting capital (1.0): a loss on day one is a
+            # drawdown too.
+            running_max = cumulative.expanding().max().clip(lower=1.0)
             drawdown = (cumulative - running_max) / running_max
             max_drawdown = drawdown.min()
 
@@ -469,6 +472,10 @@ class EvaluationService:
                     if current_period > 0:
                         drawdown_periods.append(current_period)
                     current_period = 0
+            if current_period > 0:
+                # Still under water at the last observation — usually the longest
+                # episode, and it used to be dropped.
+                drawdown_periods.append(current_period)
             max_drawdown_duration = max(drawdown_periods) if drawdown_periods else 0
 
             metrics = {

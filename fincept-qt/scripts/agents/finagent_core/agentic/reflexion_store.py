@@ -17,11 +17,12 @@ import json
 import sqlite3
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from finagent_core.paths import agent_tasks_db_path
 
-_DEFAULT_DB = str(Path(__file__).parent.parent.parent.parent / "agent_tasks.db")
+
+# Shared agentic DB in the per-profile agent data dir — see finagent_core/paths.py.
 
 
 _CREATE_TABLE = """
@@ -66,8 +67,8 @@ _CREATE_TRIGGERS = [
 class ReflexionStore:
     """SQLite-backed Reflexion store with FTS5 retrieval over query+reason."""
 
-    def __init__(self, db_path: str = _DEFAULT_DB):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or agent_tasks_db_path()
         self._has_fts = False
         self._ensure_schema()
 

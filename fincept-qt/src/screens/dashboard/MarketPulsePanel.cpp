@@ -3,6 +3,7 @@
 #include "core/events/EventBus.h"
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
+#include "screens/dashboard/widgets/DashboardFormat.h"
 #include "screens/dashboard/widgets/LoadingOverlay.h"
 #include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
@@ -78,6 +79,15 @@ static const QStringList kBreadthSymbols = {
     "UPS",
     "FDX",
 };
+
+// setStyleSheet() only when the sheet changed — the data-driven colours below
+// are re-applied on every delivery burst / minute tick but rarely differ.
+static void pulse_set_css_cached(QWidget* w, const QString& css) {
+    if (!w || w->property("fincept_pulse_css").toString() == css)
+        return;
+    w->setProperty("fincept_pulse_css", css);
+    w->setStyleSheet(css);
+}
 
 // Movers: used for gainers/losers rows
 static const QStringList kMoverSymbols = services::MarketDataService::mover_symbols();
@@ -272,6 +282,8 @@ void MarketPulsePanel::refresh_theme() {
             sd.row.val->setStyleSheet(
                 QString("color: %1; font-size: 10px; font-weight: bold; background: transparent;").arg(sd.val_color));
         if (sd.row.chg)
+            sd.row.chg->setProperty("fincept_pulse_css", QVariant());
+        if (sd.row.chg)
             sd.row.chg->setStyleSheet(QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;")
                                           .arg(ui::colors::TEXT_TERTIARY()));
     }
@@ -385,7 +397,7 @@ QWidget* MarketPulsePanel::build_section_header(const QString& title, const QStr
     // Title is the English source key — keep it intact for retranslateUi().
     // Comparison must match the *source* string, not the translated one.
     SectionHeader* sh = nullptr;
-    if (title == "MARKET BREADTH")
+    if (title == "BASKET BREADTH")
         sh = &sh_breadth_;
     else if (title == "TOP GAINERS")
         sh = &sh_gainers_;
@@ -419,7 +431,10 @@ QWidget* MarketPulsePanel::build_fear_greed_section() {
     auto* hrl = new QHBoxLayout(header_row);
     hrl->setContentsMargins(0, 0, 0, 0);
 
-    fg_header_label_ = new QLabel(tr("FEAR & GREED INDEX"));
+    // Home-made composite — not CNN's Fear & Greed Index, so not named after it.
+    fg_header_label_ = new QLabel(tr("BASKET SENTIMENT"));
+    fg_header_label_->setToolTip(tr("0-100 score from the share of 50 US large caps up/down more than 0.3% "
+                                    "today, adjusted by the VIX level."));
     hrl->addWidget(fg_header_label_);
     hrl->addStretch();
 
@@ -463,7 +478,9 @@ QWidget* MarketPulsePanel::build_breadth_section() {
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
 
-    vl->addWidget(build_section_header("MARKET BREADTH", QChar(0x2593), ui::colors::CYAN()));
+    // A breadth PROXY over the 50-name basket above — not exchange A/D (NYSE
+    // alone lists ~3,000 issues). Header and rows say so.
+    vl->addWidget(build_section_header("BASKET BREADTH", QChar(0x2593), ui::colors::CYAN()));
 
     auto* bars = new QWidget(this);
     auto* bl = new QVBoxLayout(bars);
@@ -515,9 +532,11 @@ QWidget* MarketPulsePanel::build_breadth_section() {
         bl->addWidget(rw);
     };
 
-    make_row("NYSE", nyse_row_);
-    make_row("NASDAQ", nasdaq_row_);
-    make_row("S&P 500", sp500_row_);
+    make_row(tr("NYSE · 20 NAMES"), nyse_row_);
+    make_row(tr("NASDAQ · 10 TECH"), nasdaq_row_);
+    make_row(tr("S&P · TOP 20"), sp500_row_);
+    bars->setToolTip(tr("Advancers / decliners among the panel's fixed 50-stock basket (moves beyond ±0.3%), "
+                        "grouped by venue/size. A proxy, not exchange-wide breadth."));
 
     vl->addWidget(bars);
     return w;
@@ -826,7 +845,7 @@ void MarketPulsePanel::refresh_market_hours() {
         const QString color = (status_key == QLatin1String("OPEN"))  ? ui::colors::POSITIVE()
                               : (status_key == QLatin1String("PRE")) ? ui::colors::WARNING()
                                                                      : ui::colors::NEGATIVE();
-        hr.dot->setStyleSheet(QString("background: %1; border-radius: 2px;").arg(color));
+        pulse_set_css_cached(hr.dot, QString("background: %1; border-radius: 2px;").arg(color));
         // Translate at display time. retranslateUi() also calls back into this
         // function so a language switch picks up the new locale.
         if (status_key == QLatin1String("OPEN"))
@@ -835,7 +854,7 @@ void MarketPulsePanel::refresh_market_hours() {
             hr.status->setText(tr("PRE"));
         else
             hr.status->setText(tr("CLOSED"));
-        hr.status->setStyleSheet(
+        pulse_set_css_cached(hr.status, 
             QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;").arg(color));
     }
 }
@@ -1001,13 +1020,21 @@ void MarketPulsePanel::rebuild_movers_from_cache() {
 }
 
 void MarketPulsePanel::rebuild_snapshot_from_cache() {
+    // Full grouped prices: "$2.6K" for gold hid a $30 move, and a "$" on the
+    // 10Y yield / DXY / VIX was simply wrong.
     auto fmt_price = [](const services::QuoteData& q) -> QString {
-        if (q.price >= 1000)
-            return QString("$%1K").arg(q.price / 1000.0, 0, 'f', 1);
-        return QString("%1").arg(q.price, 0, 'f', 2);
+        if (q.price >= 10000)
+            return widgets::dash_fmt::grouped(q.price, 0);
+        return widgets::dash_fmt::price(q.price, q.symbol);
     };
     auto fmt_chg = [](const services::QuoteData& q) -> QString {
-        return QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2);
+        // ^TNX is a yield in percent: its move is quoted in basis points
+        // (a % change of a yield is not a number anyone trades on).
+        if (q.symbol == QLatin1String("^TNX")) {
+            const double bp = q.change * 100.0;
+            return QString("%1%2bp").arg(bp > 0 ? "+" : "").arg(bp, 0, 'f', 1);
+        }
+        return widgets::dash_fmt::signed_pct(q.change_pct);
     };
     auto update_stat = [&](const QString& sym, StatRow& row) {
         if (!snapshot_cache_.contains(sym) || !row.val)
@@ -1015,8 +1042,10 @@ void MarketPulsePanel::rebuild_snapshot_from_cache() {
         const auto& q = snapshot_cache_.value(sym);
         row.val->setText(fmt_price(q));
         row.chg->setText(fmt_chg(q));
-        QString chg_color = q.change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE();
-        row.chg->setStyleSheet(
+        QString chg_color = q.change_pct > 0   ? ui::colors::POSITIVE()
+                            : q.change_pct < 0 ? ui::colors::NEGATIVE()
+                                               : ui::colors::TEXT_TERTIARY();
+        pulse_set_css_cached(row.chg, 
             QString("color: %1; font-size: 8px; font-weight: bold; background: transparent;").arg(chg_color));
     };
     update_stat("^VIX", vix_row_);
@@ -1137,14 +1166,14 @@ void MarketPulsePanel::retranslateUi() {
     if (header_title_)
         header_title_->setText(tr("MARKET PULSE"));
     if (fg_header_label_)
-        fg_header_label_->setText(tr("FEAR & GREED INDEX"));
+        fg_header_label_->setText(tr("BASKET SENTIMENT"));
 
     auto set_sh = [](SectionHeader& sh) {
         if (!sh.title)
             return;
         const QString& k = sh.source_key;
-        if (k == QLatin1String("MARKET BREADTH"))
-            sh.title->setText(tr("MARKET BREADTH"));
+        if (k == QLatin1String("BASKET BREADTH"))
+            sh.title->setText(tr("BASKET BREADTH"));
         else if (k == QLatin1String("TOP GAINERS"))
             sh.title->setText(tr("TOP GAINERS"));
         else if (k == QLatin1String("TOP LOSERS"))

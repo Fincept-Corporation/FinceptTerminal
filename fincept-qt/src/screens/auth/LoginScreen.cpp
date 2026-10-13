@@ -3,6 +3,7 @@
 #include "auth/AuthManager.h"
 #include "auth/AuthTypes.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/EnterprisePromo.h"
 #include "ui/widgets/LanguageSwitcher.h"
 
 #include <QEvent>
@@ -440,6 +441,14 @@ void LoginScreen::build_login_page() {
     rrl->addWidget(signup_btn_);
     vl->addWidget(reg_row);
 
+    // Enterprise customers sometimes try their Enterprise login here. Point
+    // them at the right product instead of a failed sign-in. Text is set in
+    // retranslateUi().
+    auto* ent_hint = ui::enterprise::make_mention_label(page);
+    ent_hint->setObjectName("loginEnterpriseHint");
+    ent_hint->setAlignment(Qt::AlignCenter);
+    vl->addWidget(ent_hint);
+
     connect(password_input_, &QLineEdit::returnPressed, this, &LoginScreen::on_login);
     connect(email_input_, &QLineEdit::returnPressed, this, [this]() { password_input_->setFocus(); });
 
@@ -661,6 +670,11 @@ void LoginScreen::retranslateUi() {
         no_account_lbl_->setText(tr("No account?"));
     if (signup_btn_)
         signup_btn_->setText(tr("SIGN UP"));
+    if (auto* ent_hint = findChild<QLabel*>(QStringLiteral("loginEnterpriseHint")))
+        ui::enterprise::set_mention_text(
+            ent_hint, tr("Enterprise customer? Enterprise has its own sign-in and installer"),
+            tr("fincept.in/enterprise ↗"),
+            ui::enterprise::url_with_ref(ui::enterprise::site_url(), QStringLiteral("login")));
 
     if (mfa_title_)
         mfa_title_->setText(tr("TWO-FACTOR AUTH"));

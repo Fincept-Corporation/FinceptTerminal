@@ -16,6 +16,30 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import traceback
 
+
+def _restore_stock_ssl_context() -> None:
+    """Undo a truststore injection made by another copy of truststore before edgartools loads.
+
+    The app venv ships pip-system-certs, whose .pth hook injects *pip's vendored* truststore into
+    ``ssl.SSLContext`` at interpreter start. edgartools' HTTP stack (httpx2) then imports the
+    *standalone* truststore, which snapshots that already-patched class as its "original" and recurses
+    forever inside ``verify_mode`` on the first TLS handshake — every EDGAR request failed with
+    "maximum recursion depth exceeded". Restoring the stock class lets the standalone truststore wrap
+    it correctly; httpx2 still verifies against the OS trust store through it.
+    """
+    try:
+        import importlib
+        import ssl
+
+        owner = getattr(ssl.SSLContext, "__module__", "") or ""
+        if "truststore" in owner:
+            importlib.import_module(owner.rsplit(".", 1)[0]).extract_from_ssl()
+    except Exception:
+        pass  # best effort — the import below reports anything that is genuinely broken
+
+
+_restore_stock_ssl_context()
+
 # EdgarTools imports
 try:
     from edgar import (

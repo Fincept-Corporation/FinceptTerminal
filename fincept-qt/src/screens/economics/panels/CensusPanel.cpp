@@ -79,7 +79,7 @@ void CensusPanel::activate() {
 
 void CensusPanel::build_controls(QHBoxLayout* thl) {
     dataset_lbl_ = new QLabel(tr("DATASET"));
-    dataset_lbl_->setStyleSheet(ctrl_label_style());
+    dataset_lbl_->setObjectName(QStringLiteral("econCtrlLabel"));
 
     dataset_combo_ = new QComboBox;
     for (const auto& d : kCensusDatasets)

@@ -22,16 +22,13 @@ namespace fincept::screens::panels {
 ///   LOCKED · DURATION · UNLOCKS · WEIGHT · YIELD (LIFETIME)
 /// plus a TOTAL row at the bottom.
 ///
-/// Subscribes (visibility-driven, P3): `wallet:locks:<pubkey>`. Empty state
-/// shows "No active locks" with a CTA pointing at LockPanel above.
+/// Subscribes (visibility-driven, P3): `wallet:locks:<pubkey>` — only while
+/// `StakingService::staking_live()`. In this build staking is not live, so
+/// the panel never subscribes and shows a COMING SOON pill with an empty
+/// state that says why; it never shows positions that are not on-chain.
 ///
-/// Click an unexpired row → menu with Extend (Withdraw disabled with a
-/// tooltip "available after <date>"). Click an expired row → Withdraw
-/// enabled.
-///
-/// Mock-mode handling: when published `LockPosition::is_mock` is true, the
-/// head pill reads "DEMO" and any Extend/Withdraw click shows a toast
-/// "fincept_lock not deployed yet — see Settings" via the error strip.
+/// Row context menu: Extend / Withdraw, both disabled with a "coming soon"
+/// tooltip — the extend / withdraw transactions are not implemented.
 class ActiveLocksPanel : public QWidget {
     Q_OBJECT
   public:
@@ -57,7 +54,9 @@ class ActiveLocksPanel : public QWidget {
     void rebuild_table();
     void show_error_strip(const QString& msg);
     void clear_error_strip();
-    void update_demo_chip(bool is_mock);
+    /// Head pill: LIVE (staking live, feed healthy), UNAVAILABLE (feed error)
+    /// or COMING SOON (staking not live in this build).
+    void set_pill(const QString& text, bool highlighted);
 
     // Head
     QLabel* title_ = nullptr; // "ACTIVE LOCKS"

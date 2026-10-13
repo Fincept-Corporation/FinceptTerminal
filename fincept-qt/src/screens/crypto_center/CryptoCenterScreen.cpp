@@ -206,14 +206,15 @@ void CryptoCenterScreen::build_connected_page() {
     activity_tab_ = new ActivityTab(tab_widget_);
     settings_tab_ = new SettingsTab(tab_widget_);
 
-    // Phase 3 ships the real STAKE tab (veFNCPT lock + active locks + tier).
-    // Until the fincept_lock Anchor program is deployed, the producers ship
-    // mock data with `is_mock=true` and the panel pills read "DEMO".
+    // STAKE tab (veFNCPT lock calculator + active locks + planned tiers).
+    // On-chain staking is not live (StakingService::staking_live() == false):
+    // LOCK / EXTEND / WITHDRAW are disabled and labelled COMING SOON, and no
+    // lock position or tier is ever shown as the wallet's own.
     stake_tab_ = new StakeTab(tab_widget_);
     // Phase 4 §4.2: internal prediction markets. Ships in demo mode (curated
     // 3-market dataset) until `fincept.markets_endpoint` is configured and
-    // the `fincept_market` Anchor program is deployed. The status pill on
-    // MarketsListPanel reads "DEMO" until then.
+    // the `fincept_market` Anchor program is deployed. MarketsListPanel shows
+    // an amber DEMO pill and prefixes every sample row with "SAMPLE ·".
     markets_tab_ = new MarketsTab(tab_widget_);
     // Phase 5 ships the real roadmap dashboard (buyback ticker, supply
     // chart, treasury card). Until the buyback worker is deployed, the

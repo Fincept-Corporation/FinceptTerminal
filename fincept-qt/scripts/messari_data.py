@@ -1,142 +1,130 @@
 """
 Messari Data Fetcher
-Crypto asset metrics, profiles, market data, on-chain fundamentals.
-Free key optional via MESSARI_API_KEY.
+Crypto asset directory (sector, category, tags, rank) and the metrics catalogue keyless; asset details, market data, time series and news with a Messari API key (MESSARI_API_KEY).
 """
 import sys
 import json
 import os
 import requests
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any
 
 API_KEY = os.environ.get('MESSARI_API_KEY', '')
-BASE_URL = "https://data.messari.io/api/v1"
-BASE_URL_V2 = "https://data.messari.io/api/v2"
+# data.messari.io/api/v1 was retired; the current API lives at api.messari.io.
+BASE_URL = "https://api.messari.io"
 
 session = requests.Session()
 adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=3)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
-
+session.headers.update({"User-Agent": "FinceptTerminal/4.5 (+https://fincept.in)", "Accept": "application/json"})
 if API_KEY:
-    session.headers.update({"x-messari-api-key": API_KEY})
+    session.headers.update({"X-Messari-API-Key": API_KEY})
+
+KEY_MSG = ("This Messari endpoint requires an API key: create one at https://messari.io/api and save it as "
+           "MESSARI_API_KEY in Settings > Credentials (the asset list and metrics catalogue work without one)")
 
 
-def _make_request(endpoint: str, params: Dict = None, v2: bool = False) -> Any:
+def _make_request(endpoint: str, params: Dict = None, needs_key: bool = False) -> Any:
     """Make HTTP request with error handling."""
-    base = BASE_URL_V2 if v2 else BASE_URL
-    url = f"{base}/{endpoint}" if not endpoint.startswith('http') else endpoint
+    if needs_key and not API_KEY:
+        return {"error": KEY_MSG}
+    url = f"{BASE_URL}/{endpoint}"
     try:
         response = session.get(url, params=params, timeout=30)
+        if response.status_code == 402:
+            return {"error": KEY_MSG if not API_KEY else "Messari: this endpoint is not included in your plan (HTTP 402)"}
+        if response.status_code in (401, 403):
+            return {"error": "Messari rejected the API key (MESSARI_API_KEY) - check it in Settings > Credentials"}
         response.raise_for_status()
-        return response.json()
+        data = response.json()
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP {e.response.status_code}: {str(e)}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
     except (json.JSONDecodeError, ValueError) as e:
         return {"error": f"JSON decode error: {str(e)}"}
+    if isinstance(data, dict) and data.get("error"):
+        return {"error": f"Messari: {data['error']}"}
+    return data
 
 
 def get_all_assets(limit: int = 50, page: int = 1) -> Any:
-    """Get paginated list of all tracked assets with basic metrics."""
-    params = {
-        "limit": min(limit, 500),
-        "page": page,
-        "fields": "id,slug,symbol,name,metrics/market_data/price_usd,metrics/market_data/volume_last_24_hours,metrics/marketcap/current_marketcap_usd,metrics/market_data/percent_change_usd_last_24_hours"
-    }
-    data = _make_request("assets", params=params)
+    """Asset directory: name, slug, symbol, sector, category, tags and rank (keyless)."""
+    data = _make_request("metrics/v2/assets", params={"limit": min(limit, 500), "page": page})
     if isinstance(data, dict) and "data" in data:
-        assets = data["data"]
+        keep = ("id", "name", "slug", "symbol", "rank", "category", "sector", "sectorV2", "subSectorV2", "tags")
+        assets = [{k: a.get(k) for k in keep} for a in data["data"]]
         return {"assets": assets, "count": len(assets), "page": page}
     return data
 
 
 def get_asset(asset_key: str) -> Any:
-    """Get profile and metadata for a specific asset (slug, symbol, or ID)."""
-    params = {
-        "fields": "id,slug,symbol,name,profile/general/overview/project_details,profile/general/overview/official_links,profile/general/relevant_resources,profile/economics/token/token_type,profile/economics/token/block_reward,profile/technology/overview/technology_details"
-    }
-    data = _make_request(f"assets/{asset_key}/profile", params=params)
+    """Asset details (market data, supply, ATH, ROI, qualitative info) - needs a key."""
+    data = _make_request("metrics/v2/assets/details", params={"assets": asset_key}, needs_key=True)
     if isinstance(data, dict) and "data" in data:
-        return data["data"]
+        d = data["data"]
+        return d[0] if isinstance(d, list) and len(d) == 1 else d
     return data
 
 
 def get_asset_metrics(asset_key: str) -> Any:
-    """Get comprehensive on-chain and market metrics for an asset."""
-    params = {
-        "fields": "id,slug,symbol,metrics/market_data,metrics/marketcap,metrics/supply,metrics/blockchain_stats_24_hours,metrics/all_time_high,metrics/cycle_low,metrics/token_sale_stats,metrics/mining_stats,metrics/developer_activity,metrics/roi_data"
-    }
-    data = _make_request(f"assets/{asset_key}/metrics", params=params)
-    if isinstance(data, dict) and "data" in data:
-        return data["data"]
-    return data
+    """Asset details plus ROI and all-time-high snapshots - needs a key."""
+    details = get_asset(asset_key)
+    if isinstance(details, dict) and "error" in details:
+        return details
+    roi = _make_request("metrics/v2/assets/roi", params={"assets": asset_key}, needs_key=True)
+    ath = _make_request("metrics/v2/assets/ath", params={"assets": asset_key}, needs_key=True)
+    return {"details": details, "roi": roi.get("data", roi), "ath": ath.get("data", ath)}
 
 
 def get_asset_market_data(asset_key: str) -> Any:
-    """Get current market data (price, volume, market cap) for an asset."""
-    params = {
-        "fields": "id,slug,symbol,metrics/market_data"
-    }
-    data = _make_request(f"assets/{asset_key}/metrics", params=params)
+    """Current market data for an asset - needs a key."""
+    details = get_asset(asset_key)
+    if isinstance(details, dict) and "error" not in details:
+        md = details.get("marketData") or details.get("market_data")
+        if md is not None:
+            return {"id": details.get("id"), "slug": details.get("slug"), "symbol": details.get("symbol"),
+                    "market_data": md}
+    return details
+
+
+def get_metrics_catalog() -> Any:
+    """Available time-series datasets/metrics and their granularities (keyless)."""
+    data = _make_request("metrics/v2/assets/metrics")
     if isinstance(data, dict) and "data" in data:
-        asset = data["data"]
-        return {
-            "id": asset.get("id"),
-            "slug": asset.get("slug"),
-            "symbol": asset.get("symbol"),
-            "market_data": asset.get("metrics", {}).get("market_data", {}),
-        }
+        ds = data["data"].get("datasets", []) if isinstance(data["data"], dict) else data["data"]
+        return {"datasets": [{"slug": d.get("slug"), "granularities": d.get("granularities"),
+                              "metrics": [m.get("slug") for m in d.get("metrics", [])]} for d in ds],
+                "count": len(ds)}
     return data
 
 
-def get_asset_timeseries(asset_key: str, metric: str = "price", interval: str = "1d", after: str = None, before: str = None) -> Any:
-    """Get historical timeseries data for an asset metric.
-    Metrics: price, volume, marketcap, returns, price-btc, etc.
-    Intervals: 1m, 5m, 15m, 30m, 1h, 1d, 1w.
-    """
-    params = {"interval": interval}
+def get_asset_timeseries(asset_key: str, metric: str = "price", interval: str = "1d", after: str = None,
+                         before: str = None) -> Any:
+    """Historical time series for an asset dataset (see `catalog` for dataset slugs) - needs a key.
+    interval: 5m, 15m, 1h, 1d, 1w (dataset dependent); after/before: ISO dates."""
+    params = {}
     if after:
-        params["after"] = after
+        params["start"] = after
     if before:
-        params["before"] = before
-    data = _make_request(f"assets/{asset_key}/metrics/{metric}/time-series", params=params)
+        params["end"] = before
+    data = _make_request(f"metrics/v2/assets/{asset_key}/metrics/{metric}/time-series/{interval}", params=params,
+                         needs_key=True)
     if isinstance(data, dict) and "data" in data:
-        ts = data["data"]
-        values = ts.get("values", [])
-        return {
-            "asset": asset_key,
-            "metric": metric,
-            "interval": interval,
-            "parameters": ts.get("parameters", {}),
-            "values": values,
-            "count": len(values),
-        }
+        return {"asset": asset_key, "metric": metric, "interval": interval, "data": data["data"]}
     return data
 
 
 def get_news(asset_key: str = None) -> Any:
-    """Get latest crypto news, optionally filtered by asset."""
-    if asset_key:
-        endpoint = f"news/{asset_key}"
-    else:
-        endpoint = "news"
+    """Latest crypto news, optionally for one asset - needs a key."""
     params = {"limit": 30}
-    data = _make_request(endpoint, params=params)
+    if asset_key:
+        params["assetSlugs"] = asset_key
+    data = _make_request("news/v1/news/feed", params=params, needs_key=True)
     if isinstance(data, dict) and "data" in data:
         articles = data["data"]
-        return {"articles": articles, "count": len(articles), "asset": asset_key}
-    return data
-
-
-def get_markets(asset_key: str) -> Any:
-    """Get exchange markets for a specific asset with prices and volumes."""
-    params = {"limit": 50}
-    data = _make_request(f"assets/{asset_key}/markets", params=params)
-    if isinstance(data, dict) and "data" in data:
-        markets = data["data"]
-        return {"asset": asset_key, "markets": markets, "count": len(markets)}
+        return {"articles": articles, "count": len(articles) if isinstance(articles, list) else None,
+                "asset": asset_key}
     return data
 
 
@@ -144,7 +132,7 @@ def main(args=None):
     if args is None:
         args = sys.argv[1:]
     if not args:
-        print(json.dumps({"error": "No command provided. Available: assets, asset, metrics, market_data, timeseries, news, markets"}))
+        print(json.dumps({"error": "No command provided. Available: assets, asset, metrics, market_data, catalog, timeseries, news"}))
         return
 
     command = args[0]
@@ -155,7 +143,7 @@ def main(args=None):
         result = get_all_assets(limit, page)
     elif command == "asset":
         if len(args) < 2:
-            result = {"error": "Usage: asset <asset_key> (e.g. bitcoin, ethereum, btc)"}
+            result = {"error": "Usage: asset <asset_key> (e.g. bitcoin, ethereum)"}
         else:
             result = get_asset(args[1])
     elif command == "metrics":
@@ -168,9 +156,11 @@ def main(args=None):
             result = {"error": "Usage: market_data <asset_key>"}
         else:
             result = get_asset_market_data(args[1])
+    elif command == "catalog":
+        result = get_metrics_catalog()
     elif command == "timeseries":
         if len(args) < 2:
-            result = {"error": "Usage: timeseries <asset_key> [metric] [interval] [after] [before]"}
+            result = {"error": "Usage: timeseries <asset_key> [dataset] [interval] [start] [end]"}
         else:
             metric = args[2] if len(args) > 2 else "price"
             interval = args[3] if len(args) > 3 else "1d"
@@ -180,13 +170,8 @@ def main(args=None):
     elif command == "news":
         asset_key = args[1] if len(args) > 1 else None
         result = get_news(asset_key)
-    elif command == "markets":
-        if len(args) < 2:
-            result = {"error": "Usage: markets <asset_key>"}
-        else:
-            result = get_markets(args[1])
     else:
-        result = {"error": f"Unknown command: {command}. Available: assets, asset, metrics, market_data, timeseries, news, markets"}
+        result = {"error": f"Unknown command: {command}. Available: assets, asset, metrics, market_data, catalog, timeseries, news"}
 
     print(json.dumps(result))
 

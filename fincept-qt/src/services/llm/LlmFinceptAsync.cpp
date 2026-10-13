@@ -53,8 +53,10 @@
 #include "mcp/McpService.h"
 #include "mcp/ResultStore.h"
 #include "services/llm/LlmContentExtractors.h"
+#include "services/llm/LlmErrors.h"
 #include "services/llm/LlmRequestPolicy.h"
 #include "services/llm/LlmService.h"
+#include "services/llm/LlmToolActivity.h"
 
 #include <QByteArray>
 #include <QElapsedTimer>
@@ -125,6 +127,25 @@ constexpr int kSlowPollMs = 3000;
 // later round, so an unshaped result is re-billed for the rest of the turn.
 // Mirrors the structured path's transcript discipline (see fit_llm_payload).
 constexpr int kToolResultBudgetBytes = 4000;
+
+// The submit endpoint rate-limits to one request per second per user. A tool
+// loop that answers fast can trip it between rounds; one short wait recovers
+// that without failing a turn that already did real work.
+constexpr int kSubmitRateLimitBackoffMs = 1500;
+
+// Consecutive failed status polls (transport errors, 5xx) before the wait is
+// abandoned. Without a cap a dead connection burned the whole 120 s poll budget
+// before saying anything.
+constexpr int kMaxConsecutivePollFailures = 8;
+
+// Sum one successful round's usage into the turn total. Every round of the
+// loop re-sends the whole prompt and is billed for it; returning only the last
+// round's usage made a ten-round turn look ten times cheaper than it was.
+void fincept_add_usage(LlmResponse& total, const LlmResponse& round) {
+    total.prompt_tokens += round.prompt_tokens;
+    total.completion_tokens += round.completion_tokens;
+    total.total_tokens += round.total_tokens > 0 ? round.total_tokens : round.prompt_tokens + round.completion_tokens;
+}
 } // namespace
 
 // Build a compact tool catalog string for injection into the system prompt.
@@ -261,6 +282,45 @@ static QString fincept_extract_error(const QJsonObject& root) {
     return {};
 }
 
+// Turn a backend failure string into one readable sentence for the chat.
+//
+// Upstream failures arrive with the provider's raw envelope attached — e.g.
+//   LLM service error: {"type":"error","error":{"type":"invalid_request_error",
+//                       "message":"invalid params, function name is empty (2013)"}}
+// or, from the async worker, a Python dict repr. That used to be shown to the
+// user verbatim. Keep the lead-in, replace the blob with its message, and leave
+// the raw text to the log (the caller logs it).
+static QString fincept_humanize_error(const QString& raw) {
+    QString s = raw.trimmed();
+    const qsizetype open = s.indexOf(QLatin1Char('{'));
+    const qsizetype close = s.lastIndexOf(QLatin1Char('}'));
+    if (open >= 0 && close > open) {
+        QString lead = s.left(open).trimmed();
+        while (lead.endsWith(QLatin1Char(':')) || lead.endsWith(QLatin1Char('-')))
+            lead.chop(1);
+        lead = lead.trimmed();
+        QString inner;
+        const QJsonDocument doc = QJsonDocument::fromJson(s.mid(open, close - open + 1).toUtf8());
+        if (doc.isObject())
+            inner = fincept_extract_error(doc.object());
+        if (inner.isEmpty() || inner.startsWith(QLatin1Char('{'))) {
+            // Python repr: 'message': "..." or 'detail': '...'
+            static const QRegularExpression rx_kv(
+                QStringLiteral("['\"](?:message|detail|reason)['\"]\\s*:\\s*(?:'([^']*)'|\"([^\"]*)\")"));
+            const auto m = rx_kv.match(s);
+            inner = m.hasMatch() ? (m.captured(1).isEmpty() ? m.captured(2) : m.captured(1)) : QString();
+        }
+        if (!inner.isEmpty())
+            s = lead.isEmpty() ? inner : lead + QStringLiteral(": ") + inner;
+        else
+            s = (lead.isEmpty() ? QStringLiteral("The server returned an unreadable error") : lead) +
+                QStringLiteral(" (details in the log)");
+    }
+    if (s.size() > 300)
+        s = s.left(299) + QChar(0x2026);
+    return s;
+}
+
 // Render one tool result for splicing back into the prompt transcript.
 static QString fincept_render_tool_result(const mcp::ToolResult& tr) {
     // Failures are marked unmissably. A model that skims a JSON envelope for
@@ -307,16 +367,43 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
 
     QByteArray json_data = QJsonDocument(submit_body).toJson(QJsonDocument::Compact);
     auto submit = eventloop_request("POST", async_url, json_data, hdr, 30000);
+    if (!submit.success && !submit.cancelled && submit.status == 429) {
+        const int backoff = std::clamp(submit.retry_after_s * 1000, kSubmitRateLimitBackoffMs, 10000);
+        LOG_WARN(kLlmFinceptTag, QString("Fincept async submit rate-limited — retrying once in %1 ms").arg(backoff));
+        if (!detail::cancellable_sleep(backoff)) {
+            resp.cancelled = true;
+            resp.error = "Request cancelled";
+            return resp;
+        }
+        submit = eventloop_request("POST", async_url, json_data, hdr, 30000);
+    }
     if (!submit.success) {
-        resp.error = "Fincept async submit failed: " + submit.error;
-        LOG_ERROR(kLlmFinceptTag, resp.error);
+        if (submit.cancelled) {
+            resp.cancelled = true;
+            resp.error = "Request cancelled";
+            return resp;
+        }
+        LOG_ERROR(kLlmFinceptTag, QString("Fincept async submit failed (HTTP %1): %2 | body: %3")
+                                      .arg(submit.status)
+                                      .arg(submit.error, QString::fromUtf8(submit.body.left(600))));
+        const LlmErrorKind kind =
+            classify_fincept_failure(submit.status, submit.error + QLatin1Char(' ') + QString::fromUtf8(submit.body));
+        if (kind != LlmErrorKind::Other) {
+            // Not retryable: resubmitting cannot buy credits or fix a key.
+            resp.error = make_fincept_error(kind, QString::fromUtf8(submit.body) + QLatin1Char(' ') + submit.error);
+            return resp;
+        }
+        resp.error = "Fincept AI request failed: " + fincept_humanize_error(submit.error);
+        // 5xx / gateway / transport trouble may clear on a resubmit; a 4xx will not.
+        resp.retryable = submit.status == 0 || submit.status >= 500;
         return resp;
     }
 
     auto submit_doc = QJsonDocument::fromJson(submit.body);
     if (submit_doc.isNull()) {
-        resp.error = "Fincept async: failed to parse submit response";
-        LOG_ERROR(kLlmFinceptTag, resp.error);
+        resp.error = QStringLiteral("The Fincept server sent an unreadable reply (details in the log).");
+        LOG_ERROR(kLlmFinceptTag, "Fincept async: failed to parse submit response: " +
+                                      QString::fromUtf8(submit.body.left(600)));
         return resp;
     }
 
@@ -326,8 +413,9 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
     if (task_id.isEmpty())
         task_id = sj["data"].toObject()["task_id"].toString();
     if (task_id.isEmpty()) {
-        resp.error = "Fincept async: no task_id in submit response";
-        LOG_ERROR(kLlmFinceptTag, resp.error);
+        resp.error = QStringLiteral("The Fincept server did not accept the request (no task id; details in the log).");
+        LOG_ERROR(kLlmFinceptTag, "Fincept async: no task_id in submit response: " +
+                                      QString::fromUtf8(submit.body.left(600)));
         return resp;
     }
     LOG_INFO(kLlmFinceptTag, "Fincept async task_id: " + task_id);
@@ -335,6 +423,7 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
     const QString poll_url = status_base + task_id;
     QElapsedTimer clock;
     clock.start();
+    int poll_failures = 0;
     for (int i = 0; clock.elapsed() < kPollBudgetMs; ++i) {
         // Sliced sleep so a user's Stop lands within ~100 ms instead of after the poll gap.
         if (!detail::cancellable_sleep(i < kFastPollCount ? kFastPollMs : kSlowPollMs)) {
@@ -345,9 +434,35 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
 
         auto poll = eventloop_request("GET", poll_url, {}, hdr, 15000);
         if (!poll.success) {
-            LOG_WARN(kLlmFinceptTag, "Fincept async poll failed: " + poll.error);
+            if (poll.cancelled) {
+                resp.cancelled = true;
+                resp.error = "Request cancelled";
+                return resp;
+            }
+            LOG_WARN(kLlmFinceptTag, QString("Fincept async poll failed (HTTP %1): %2").arg(poll.status).arg(poll.error));
+            // A rejected key/session cannot recover by polling again (the old loop
+            // kept polling for the full two minutes and then reported a timeout).
+            const LlmErrorKind kind = classify_fincept_failure(poll.status, QString());
+            if (kind != LlmErrorKind::Other) {
+                resp.error = make_fincept_error(kind, QString::fromUtf8(poll.body));
+                return resp;
+            }
+            if (poll.status == 404) {
+                // The backend keeps tasks for 30 min and loses them on restart.
+                resp.error = QStringLiteral("The Fincept server lost this request before it finished (task expired). "
+                                            "Please try again.");
+                resp.retryable = true;
+                return resp;
+            }
+            if (++poll_failures >= kMaxConsecutivePollFailures) {
+                resp.error = "Lost contact with the Fincept server while waiting for the answer: " +
+                             fincept_humanize_error(poll.error);
+                resp.retryable = true;
+                return resp;
+            }
             continue;
         }
+        poll_failures = 0;
 
         auto poll_doc = QJsonDocument::fromJson(poll.body);
         if (poll_doc.isNull())
@@ -371,12 +486,21 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
                 LOG_ERROR(kLlmFinceptTag, QStringLiteral("Fincept async task failed with no reason field. Raw "
                                                          "status body: ") +
                                               QString::fromUtf8(poll.body.left(1200)));
+            } else {
+                LOG_ERROR(kLlmFinceptTag, "Fincept async task failed: " + err.left(1200));
             }
-            resp.error = "Fincept async task failed: " +
-                         (err.isEmpty() ? QStringLiteral("the server reported a failure but gave no reason "
-                                                         "(see log for the raw response)")
-                                        : err);
-            LOG_ERROR(kLlmFinceptTag, resp.error);
+            // The worker reports a failed credit check as text ("402: {...}").
+            // Classify it before anything else: it is final, and resubmitting
+            // it (the old behaviour) only doubled the wait for the same refusal.
+            const LlmErrorKind kind = classify_fincept_failure(0, err);
+            if (kind != LlmErrorKind::Other) {
+                resp.error = make_fincept_error(kind, err);
+                return resp;
+            }
+            resp.error = err.isEmpty() ? QStringLiteral("The Fincept AI service reported a failure but gave no reason "
+                                                        "(details in the log). Please try again.")
+                                       : "The Fincept AI service could not complete this request: " +
+                                             fincept_humanize_error(err);
             resp.retryable = true; // upstream/model failure, not a bad request
             return resp;
         }
@@ -403,7 +527,7 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
         }
 
         if (response.isEmpty() && (!out_tool_calls || out_tool_calls->isEmpty())) {
-            resp.error = "Fincept async completed but response is empty";
+            resp.error = QStringLiteral("The Fincept AI service returned an empty answer. Please try again.");
             LOG_WARN(kLlmFinceptTag, "Fincept async task completed with empty response field");
             return resp;
         }
@@ -420,8 +544,9 @@ LlmResponse LlmService::fincept_submit_poll(const QString& prompt, QJsonArray* o
         return resp;
     }
 
-    resp.error = "Fincept async timed out waiting for response";
-    LOG_ERROR(kLlmFinceptTag, resp.error);
+    resp.error = QStringLiteral("The Fincept AI service did not answer within %1 s. Please try again.")
+                     .arg(kPollBudgetMs / 1000);
+    LOG_ERROR(kLlmFinceptTag, "Fincept async timed out waiting for task " + task_id);
     return resp;
 }
 
@@ -586,6 +711,18 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     int real_failures = 0;
     bool challenged_fabrication = false;
 
+    // Token usage summed over every successful round (see fincept_add_usage).
+    LlmResponse usage;
+    const auto with_turn_usage = [&usage](LlmResponse r) {
+        r.prompt_tokens = usage.prompt_tokens;
+        r.completion_tokens = usage.completion_tokens;
+        r.total_tokens = usage.total_tokens;
+        return r;
+    };
+    // Success of each memoised call, so a served-from-cache repeat reports the
+    // same outcome on the chat's tool card as the original call did.
+    QHash<QString, bool> call_cache_ok;
+
     LlmResponse resp;
     // Wall-clock ceiling for the whole tool phase (mcp/tool_loop_deadline_ms, 0 = off).
     // This loop deliberately has no ROUND budget (see kFinceptHardStop), which left it
@@ -621,9 +758,10 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         }
         if (!resp.success)
             return resp;
+        fincept_add_usage(usage, resp);
 
         if (!tools_on)
-            return resp;
+            return with_turn_usage(resp);
 
         // ── Collect this round's tool calls ──
         std::vector<TextToolCall> calls;
@@ -704,7 +842,7 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                                          .arg(resp.content.length())
                                          .arg(real_failures)
                                          .arg(real_calls));
-            return resp;
+            return with_turn_usage(resp);
         }
 
         if (round == kFinceptHardStop - 1) {
@@ -736,6 +874,13 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                 block += "- " + display + " -> (ALREADY CALLED this turn with the same arguments; the result is "
                                           "unchanged and repeated here. Do not call it again.) " +
                          cached.value() + "\n";
+                ToolDoneRecord repeat;
+                repeat.outcome = call_cache_ok.value(cache_key, true) ? ToolDoneRecord::Outcome::Ok
+                                                                      : ToolDoneRecord::Outcome::Failed;
+                repeat.elapsed_ms = 0;
+                repeat.label = detail::tool_progress_label(display, tc.args);
+                repeat.detail = QStringLiteral("repeated call — reused this turn's earlier result");
+                detail::emit_progress(tool_stream_prefix() + encode_tool_done(repeat) + QStringLiteral("\n"));
                 continue;
             }
             ++fresh_calls;
@@ -746,12 +891,16 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
 
             // allow_defer stays false: this path has no job_* protocol wired in,
             // so a receipt would be mistaken for the result (see §M5).
+            QElapsedTimer call_clock;
+            call_clock.start();
             auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
+            emit_tool_done(display, tc.args, tr, call_clock.elapsed());
             LOG_INFO(kLlmFinceptTag, QString("Fincept tool round %1: %2 -> %3 (err=%4)")
                                          .arg(round)
                                          .arg(display, tr.success ? "OK" : "FAIL", tr.error.left(120)));
             const QString rendered = fincept_render_tool_result(tr);
             call_cache.insert(cache_key, rendered);
+            call_cache_ok.insert(cache_key, tr.success);
             block += "- " + display + " -> " + rendered + "\n";
 
             // Remember which real tools the model has already looked up, and
@@ -821,8 +970,12 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         LOG_WARN(kLlmFinceptTag, "Fincept: close-out turn failed upstream — resubmitting once");
         final_turn = fincept_submit_poll(final_prompt, nullptr);
     }
-    if (final_turn.success && !final_turn.content.isEmpty())
-        return final_turn;
+    if (final_turn.success && !final_turn.content.isEmpty()) {
+        fincept_add_usage(usage, final_turn);
+        return with_turn_usage(final_turn);
+    }
+    if (final_turn.cancelled)
+        return final_turn; // Stop pressed during the close-out — keep the cancelled flag
 
     // Nothing usable — surface the failure instead of leaking tool markup.
     LlmResponse err;

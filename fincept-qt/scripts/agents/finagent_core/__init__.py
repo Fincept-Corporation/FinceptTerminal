@@ -1,233 +1,100 @@
 """
-FinAgent Core - Full-Featured Agno Framework Implementation
+FinAgent Core - Agno-based agent runtime for Fincept Terminal.
 
-Complete agent system with all Agno capabilities:
-- 40+ Model Providers
-- 100+ Tools
-- 20+ Vector Databases
-- 18+ Embedders
-- Memory Management
-- Teams (Multi-Agent)
-- Workflows
-- Knowledge Bases (RAG)
-- Reasoning Strategies
+Entry point for the terminal is main.py (JSON payload on stdin); this package
+only re-exports the public building blocks for scripts and tests:
 
-Usage:
     from finagent_core import CoreAgent, CoreAgentBuilder
 
-    # Simple usage
     agent = CoreAgent(api_keys={"OPENAI_API_KEY": "..."})
     config = {
         "model": {"provider": "openai", "model_id": "gpt-4o"},
-        "instructions": "You are a helpful assistant"
+        "instructions": "You are a helpful assistant",
     }
     response = agent.run("Hello!", config)
 
-    # With builder
-    config = (CoreAgentBuilder()
-        .with_model("anthropic", "claude-sonnet-4-5")
-        .with_tools(["yfinance", "duckduckgo"])
-        .with_memory()
-        .with_reasoning("chain_of_thought")
-        .build())
-    response = agent.run("Analyze AAPL stock", config)
+Exports are resolved lazily (PEP 562). Importing any finagent_core submodule —
+e.g. finagent_core.paths for a schedule tick or a task listing — no longer drags
+in Agno, every registry, every module and the planner first; only the module a
+name actually lives in is imported, on first use.
 """
 
-# Core Agent
-from finagent_core.core_agent import CoreAgent, CoreAgentBuilder
-
-# Registries
-from finagent_core.registries import (
-    ToolsRegistry,
-    ModelsRegistry,
-    VectorDBRegistry,
-    EmbedderRegistry,
-)
-
-# Modules
-from finagent_core.modules import (
-    MemoryModule,
-    TeamModule,
-    WorkflowModule,
-    KnowledgeModule,
-    ReasoningModule,
-    SessionModule,
-    SessionManager,
-)
-
-# Builders from modules
-from finagent_core.modules.team_module import TeamBuilder
-from finagent_core.modules.workflow_module import WorkflowBuilder
-from finagent_core.modules.knowledge_module import KnowledgeBuilder
-from finagent_core.modules.reasoning_module import ReasoningBuilder
-
-# Legacy compatibility
-from finagent_core.agent_factory import AgentFactory
-from finagent_core.config_loader import ConfigLoader
-
-# New modules (v2.1)
-from finagent_core.agent_loader import (
-    AgentLoader,
-    AgentCard,
-    AgentRegistry,
-    get_loader,
-    discover_agents,
-    create_agent,
-    list_agents,
-    list_categories,
-)
-from finagent_core.super_agent import (
-    SuperAgent,
-    QueryIntent,
-    RouteConfig,
-    RoutingResult,
-    IntentClassifier,
-    route_query,
-    execute_query,
-)
-from finagent_core.execution_planner import (
-    ExecutionPlanner,
-    ExecutionPlan,
-    PlanStep,
-    PlanBuilder,
-    StepStatus,
-    StepType,
-    create_stock_analysis_plan,
-    execute_plan,
-)
-from finagent_core.repositories import (
-    Repository,
-    AgentSession,
-    AgentMemory,
-    TradeDecision,
-    PerformanceSnapshot,
-    AgentSessionRepository,
-    AgentMemoryRepository,
-    TradeDecisionRepository,
-    PerformanceSnapshotRepository,
-    RepositoryFactory,
-)
-from finagent_core.paper_trading_bridge import (
-    PaperTradingBridge,
-    Portfolio,
-    Order,
-    Position,
-    Trade,
-    Stats,
-    get_bridge,
-    execute_trade,
-    get_portfolio_value,
-    get_positions_summary,
-)
+import importlib
+from typing import Any, Dict
 
 __version__ = "2.1.0"
 
-__all__ = [
+# Public name -> defining module.
+_EXPORTS: Dict[str, str] = {
     # Core
-    "CoreAgent",
-    "CoreAgentBuilder",
-
+    "CoreAgent": "finagent_core.core_agent",
+    "CoreAgentBuilder": "finagent_core.core_agent",
     # Registries
-    "ToolsRegistry",
-    "ModelsRegistry",
-    "VectorDBRegistry",
-    "EmbedderRegistry",
-
+    "ToolsRegistry": "finagent_core.registries",
+    "ModelsRegistry": "finagent_core.registries",
+    "VectorDBRegistry": "finagent_core.registries",
+    "EmbedderRegistry": "finagent_core.registries",
     # Modules
-    "MemoryModule",
-    "TeamModule",
-    "WorkflowModule",
-    "KnowledgeModule",
-    "ReasoningModule",
-    "SessionModule",
-    "SessionManager",
-
+    "MemoryModule": "finagent_core.modules",
+    "TeamModule": "finagent_core.modules",
+    "WorkflowModule": "finagent_core.modules",
+    "KnowledgeModule": "finagent_core.modules",
+    "ReasoningModule": "finagent_core.modules",
     # Builders
-    "TeamBuilder",
-    "WorkflowBuilder",
-    "KnowledgeBuilder",
-    "ReasoningBuilder",
+    "TeamBuilder": "finagent_core.modules.team_module",
+    "WorkflowBuilder": "finagent_core.modules.workflow_module",
+    "KnowledgeBuilder": "finagent_core.modules.knowledge_module",
+    "ReasoningBuilder": "finagent_core.modules.reasoning_module",
+    # Dynamic agent loading
+    "AgentLoader": "finagent_core.agent_loader",
+    "AgentCard": "finagent_core.agent_loader",
+    "AgentRegistry": "finagent_core.agent_loader",
+    "get_loader": "finagent_core.agent_loader",
+    "discover_agents": "finagent_core.agent_loader",
+    "create_agent": "finagent_core.agent_loader",
+    "list_agents": "finagent_core.agent_loader",
+    "list_categories": "finagent_core.agent_loader",
+    # SuperAgent routing
+    "SuperAgent": "finagent_core.super_agent",
+    "QueryIntent": "finagent_core.super_agent",
+    "RouteConfig": "finagent_core.super_agent",
+    "RoutingResult": "finagent_core.super_agent",
+    "IntentClassifier": "finagent_core.super_agent",
+    "route_query": "finagent_core.super_agent",
+    "execute_query": "finagent_core.super_agent",
+    # Execution planner
+    "ExecutionPlanner": "finagent_core.execution_planner",
+    "ExecutionPlan": "finagent_core.execution_planner",
+    "PlanStep": "finagent_core.execution_planner",
+    "PlanBuilder": "finagent_core.execution_planner",
+    "StepStatus": "finagent_core.execution_planner",
+    "StepType": "finagent_core.execution_planner",
+    "create_stock_analysis_plan": "finagent_core.execution_planner",
+    "execute_plan": "finagent_core.execution_planner",
+    # Repository pattern
+    "Repository": "finagent_core.repositories",
+    "AgentSession": "finagent_core.repositories",
+    "AgentMemory": "finagent_core.repositories",
+    "TradeDecision": "finagent_core.repositories",
+    "PerformanceSnapshot": "finagent_core.repositories",
+    "AgentSessionRepository": "finagent_core.repositories",
+    "AgentMemoryRepository": "finagent_core.repositories",
+    "TradeDecisionRepository": "finagent_core.repositories",
+    "PerformanceSnapshotRepository": "finagent_core.repositories",
+    "RepositoryFactory": "finagent_core.repositories",
+}
 
-    # Legacy
-    "AgentFactory",
-    "ConfigLoader",
-
-    # Dynamic Agent Loading (v2.1)
-    "AgentLoader",
-    "AgentCard",
-    "AgentRegistry",
-    "get_loader",
-    "discover_agents",
-    "create_agent",
-    "list_agents",
-    "list_categories",
-
-    # SuperAgent Routing (v2.1)
-    "SuperAgent",
-    "QueryIntent",
-    "RouteConfig",
-    "RoutingResult",
-    "IntentClassifier",
-    "route_query",
-    "execute_query",
-
-    # Execution Planner (v2.1)
-    "ExecutionPlanner",
-    "ExecutionPlan",
-    "PlanStep",
-    "PlanBuilder",
-    "StepStatus",
-    "StepType",
-    "create_stock_analysis_plan",
-    "execute_plan",
-
-    # Repository Pattern (v2.1)
-    "Repository",
-    "AgentSession",
-    "AgentMemory",
-    "TradeDecision",
-    "PerformanceSnapshot",
-    "AgentSessionRepository",
-    "AgentMemoryRepository",
-    "TradeDecisionRepository",
-    "PerformanceSnapshotRepository",
-    "RepositoryFactory",
-
-    # Paper Trading Bridge (v2.1)
-    "PaperTradingBridge",
-    "Portfolio",
-    "Order",
-    "Position",
-    "Trade",
-    "Stats",
-    "get_bridge",
-    "execute_trade",
-    "get_portfolio_value",
-    "get_positions_summary",
-]
+__all__ = sorted(_EXPORTS)
 
 
-def get_system_info() -> dict:
-    """Get information about the finagent_core system"""
-    return {
-        "version": __version__,
-        "model_providers": ModelsRegistry.list_providers(),
-        "tool_categories": ToolsRegistry.list_categories(),
-        "vectordbs": VectorDBRegistry.list_vectordbs(),
-        "embedders": EmbedderRegistry.list_providers(),
-        "reasoning_strategies": ReasoningModule.list_strategies(),
-    }
+def __getattr__(name: str) -> Any:
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module 'finagent_core' has no attribute {name!r}")
+    value = getattr(importlib.import_module(module_name), name)
+    globals()[name] = value  # cache: later lookups skip __getattr__
+    return value
 
 
-def list_all_tools() -> dict:
-    """List all available tools by category"""
-    return ToolsRegistry.list_tools()
-
-
-def list_all_models() -> dict:
-    """List all model providers with their available models"""
-    providers = {}
-    for provider in ModelsRegistry.list_providers():
-        info = ModelsRegistry.get_provider_info(provider)
-        providers[provider] = info
-    return providers
+def __dir__():
+    return sorted(set(globals()) | set(_EXPORTS))

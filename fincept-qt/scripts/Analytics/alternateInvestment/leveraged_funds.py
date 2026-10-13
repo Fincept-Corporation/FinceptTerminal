@@ -66,7 +66,8 @@ class LeveragedFundAnalyzer(AlternativeInvestmentBase):
         return {
             'leverage_ratio': float(self.leverage_ratio),
             'scenarios': results,
-            'analysis_lesson': 'Volatility decay means leveraged funds ALWAYS underperform over time'
+            'analysis_lesson': ('Daily rebalancing makes returns path-dependent: in choppy markets a leveraged fund lags '
+                                'its multiple of the index (volatility decay); in a strong trend it can exceed it')
         }
 
     def analysis_verdict(self) -> Dict[str, Any]:

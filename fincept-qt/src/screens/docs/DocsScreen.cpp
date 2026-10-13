@@ -17,6 +17,8 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeyEvent>
+#include <QLabel>
 #include <QKeySequence>
 #include <QLineEdit>
 #include <QPushButton>
@@ -71,7 +73,7 @@ static QString docs_screen_target(const QString& topic) {
         "data_sources",  "asia_markets",    "trade_viz",     "geopolitics",     "maritime",
         "polymarket",    "alt_investments", "relationship_map", "report_builder", "node_editor",
         "code_editor",   "excel",           "notes",         "mcp_servers",     "data_mapping",
-        "file_manager",  "forum",           "settings",      "profile",
+        "file_manager",  "settings",      "profile",       "agent_workbench",
     };
     // Paper trading is a mode of the crypto terminal, not a screen of its own.
     if (topic == QLatin1String("paper_trading"))
@@ -302,6 +304,7 @@ void DocsScreen::build_sidebar() {
     add_item(ai, tr("AI Chat"), "ai_chat");
     add_item(ai, tr("Agent Studio"), "agent_config");
     add_item(ai, tr("Alpha Arena"), "alpha_arena");
+    add_item(ai, tr("Agent Workbench"), "agent_workbench");
 
     // ── Data Sources ─────────────────────────────────────────────────────────
     auto* data_cat = add_category(tr("DATA SOURCES"));
@@ -331,10 +334,6 @@ void DocsScreen::build_sidebar() {
     add_item(tools, tr("MCP Servers"), "mcp_servers");
     add_item(tools, tr("Data Mapping"), "data_mapping");
     add_item(tools, tr("File Manager"), "file_manager");
-
-    // ── Community ────────────────────────────────────────────────────────────
-    auto* community = add_category(tr("COMMUNITY"));
-    add_item(community, tr("Forum"), "forum");
 
     // ── Account ──────────────────────────────────────────────────────────────
     auto* account = add_category(tr("ACCOUNT"));
@@ -399,6 +398,7 @@ void DocsScreen::build_content_pages() {
     add("ai_chat", page_ai_chat());
     add("agent_config", page_agent_config());
     add("alpha_arena", page_alpha_arena());
+    add("agent_workbench", page_agent_workbench());
 
     // Data
     add("dbnomics", page_dbnomics());
@@ -425,9 +425,6 @@ void DocsScreen::build_content_pages() {
     add("mcp_servers", page_mcp_servers());
     add("data_mapping", page_data_mapping());
     add("file_manager", page_file_manager());
-
-    // Community
-    add("forum", page_forum());
 
     // Account
     add("settings", page_settings());
@@ -486,6 +483,51 @@ void DocsScreen::update_topic_count() {
     cmd_count_->setText(tr("%1 TOPICS  |  %2 CATEGORIES").arg(topics).arg(categories));
 }
 
+void DocsScreen::index_page_text() {
+    page_text_.clear();
+    if (!pages_)
+        return;
+    for (auto it = page_index_.cbegin(); it != page_index_.cend(); ++it) {
+        QWidget* page = pages_->widget(it.value());
+        if (!page)
+            continue;
+        QString text;
+        const auto labels = page->findChildren<QLabel*>();
+        for (const QLabel* l : labels)
+            text += l->text() + QLatin1Char('\n');
+        page_text_.insert(it.key(), text.toLower());
+    }
+}
+
+bool DocsScreen::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == search_input_ && event->type() == QEvent::KeyPress) {
+        const int key = static_cast<QKeyEvent*>(event)->key();
+        auto first_visible = [this]() -> QTreeWidgetItem* {
+            for (QTreeWidgetItemIterator it(sidebar_); *it; ++it)
+                if (!(*it)->isHidden() && !(*it)->data(0, Qt::UserRole).toString().isEmpty() &&
+                    !((*it)->parent() && (*it)->parent()->isHidden()))
+                    return *it;
+            return nullptr;
+        };
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            if (auto* item = first_visible())
+                sidebar_->setCurrentItem(item); // navigates via currentItemChanged
+            return true;
+        }
+        if (key == Qt::Key_Down) {
+            if (auto* item = first_visible())
+                sidebar_->setCurrentItem(item);
+            sidebar_->setFocus();
+            return true;
+        }
+        if (key == Qt::Key_Escape && !search_input_->text().isEmpty()) {
+            search_input_->clear();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void DocsScreen::apply_search(const QString& text) {
     if (!sidebar_)
         return;
@@ -509,8 +551,10 @@ void DocsScreen::apply_search(const QString& text) {
         int visible_children = 0;
         for (int j = 0; j < cat->childCount(); ++j) {
             auto* child = cat->child(j);
+            const QString id = child->data(0, Qt::UserRole).toString();
             const bool hit = cat_hit || child->text(0).contains(needle, Qt::CaseInsensitive) ||
-                             child->data(0, Qt::UserRole).toString().contains(needle, Qt::CaseInsensitive);
+                             id.contains(needle, Qt::CaseInsensitive) ||
+                             page_text_.value(id).contains(needle.toLower());
             child->setHidden(!hit);
             if (hit)
                 ++visible_children;
@@ -584,6 +628,9 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
                                          "QLineEdit:focus { border-color: %4; }")
                                      .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(),
                                           ui::colors::BORDER_DIM(), ui::colors::BORDER_BRIGHT()));
+    search_input_->setToolTip(tr("Matches topic titles and page text. Enter opens the first match, Down moves "
+                                 "into the list, Esc clears."));
+    search_input_->installEventFilter(this);
     connect(search_input_, &QLineEdit::textChanged, this, &DocsScreen::apply_search);
     cmd_hl->addWidget(search_input_);
 
@@ -617,6 +664,7 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
     // ── Splitter: sidebar + content ──────────────────────────────────────────
     build_sidebar();
     build_content_pages();
+    index_page_text();
     update_topic_count();
 
     auto* find_sc = new QShortcut(QKeySequence::Find, this);
@@ -692,6 +740,7 @@ void DocsScreen::retranslateUi() {
     page_index_.clear();
     build_sidebar();       // assigns a fresh sidebar_
     build_content_pages(); // assigns a fresh pages_
+    index_page_text();
 
     splitter_->insertWidget(0, sidebar_);
     splitter_->insertWidget(1, pages_);

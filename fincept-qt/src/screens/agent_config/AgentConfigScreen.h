@@ -30,6 +30,7 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
     Q_OBJECT
   public:
     explicit AgentConfigScreen(QWidget* parent = nullptr);
+    ~AgentConfigScreen() override;
 
     // IStatefulScreen — persists the currently active sub-view so users
     // return to the same panel after restart.
@@ -97,6 +98,9 @@ class AgentConfigScreen : public QWidget, public IStatefulScreen {
 
     services::AgentViewMode current_view_ = services::AgentViewMode::Agents;
     bool first_show_ = true;
+    /// Whether this instance has told AgentService it is visible (keeps the
+    /// service's visible-screen count balanced across show/hide/destroy).
+    bool reported_visible_ = false;
 };
 
 } // namespace fincept::screens

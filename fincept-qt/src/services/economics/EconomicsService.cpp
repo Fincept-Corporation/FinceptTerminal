@@ -39,12 +39,10 @@ EconomicsService::EconomicsService(QObject* parent) : QObject(parent) {}
 
 // ── Cache ─────────────────────────────────────────────────────────────────────
 
+// "v2" entries are {"fetched_at": <ISO UTC>, "data": {...}} so a cache hit can report when the data
+// was actually retrieved. The prefix keeps pre-v2 entries (bare data objects) from being misread.
 QString EconomicsService::cache_key(const QString& script, const QString& command, const QStringList& args) const {
-    return "economics:" + script + ":" + command + ":" + args.join(",");
-}
-
-void EconomicsService::invalidate(const QString& request_id) {
-    fincept::CacheManager::instance().remove(request_id);
+    return "economics:v2:" + script + ":" + command + ":" + args.join(",");
 }
 
 // ── Execute ───────────────────────────────────────────────────────────────────
@@ -61,9 +59,12 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
         const QVariant cached = fincept::CacheManager::instance().get(key);
         if (!cached.isNull()) {
             LOG_DEBUG("EconomicsService", "Cache hit: " + key);
+            const QJsonObject wrapper = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
             EconomicsResult res;
             res.success = true;
-            res.data = QJsonDocument::fromJson(cached.toString().toUtf8()).object();
+            res.data = wrapper.value(QStringLiteral("data")).toObject();
+            res.fetched_at = QDateTime::fromString(wrapper.value(QStringLiteral("fetched_at")).toString(), Qt::ISODate);
+            res.from_cache = true;
             res.source_id = source_id;
             emit result_ready(request_id, res);
             if (hub_registered_)
@@ -85,6 +86,7 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
 
             EconomicsResult res;
             res.source_id = source_id;
+            res.fetched_at = QDateTime::currentDateTimeUtc();
 
             // A failed refresh must clear the hub's in_flight flag, or the topic stays "busy" until the
             // scheduler's refresh_timeout fires and a retry is silently refused.
@@ -131,10 +133,10 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
 
             // Scripts echo provider/HTTP-library errors verbatim — scrub credentials before the text
             // is shown, logged or cached.
-            for (const char* key : {"error", "message"}) {
-                const QJsonValue v = res.data.value(QLatin1String(key));
+            for (const char* field : {"error", "message"}) {
+                const QJsonValue v = res.data.value(QLatin1String(field));
                 if (v.isString())
-                    res.data[QLatin1String(key)] = econ_svc_redact_secrets(v.toString());
+                    res.data[QLatin1String(field)] = econ_svc_redact_secrets(v.toString());
             }
 
             // Treat script-level error field as failure
@@ -151,8 +153,10 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
             }
 
             res.success = true;
+            const QJsonObject wrapper{{QStringLiteral("fetched_at"), res.fetched_at.toString(Qt::ISODate)},
+                                      {QStringLiteral("data"), res.data}};
             fincept::CacheManager::instance().put(
-                key, QVariant(QString::fromUtf8(QJsonDocument(res.data).toJson(QJsonDocument::Compact))), kCacheTtlSec,
+                key, QVariant(QString::fromUtf8(QJsonDocument(wrapper).toJson(QJsonDocument::Compact))), kCacheTtlSec,
                 "economics");
             LOG_INFO("EconomicsService", "Result ready: " + request_id);
             emit self->result_ready(request_id, res);

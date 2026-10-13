@@ -77,18 +77,18 @@ class OptionsStrategyBuilder {
     // UnifiedOrder with the supplied product type. The strategy name is copied to
     // BasketOrderRequest::strategy_name.
     //
-    // When broker_id is supplied and the instrument master is loaded, each leg's
-    // tradingsymbol is resolved from the master to the real, broker-tradable
-    // symbol. If a leg can't be resolved it falls back to the build_option_symbol()
-    // placeholder so behaviour never regresses (a warning is logged).
-    static BasketOrderRequest to_basket_order(const OptionsStrategy& strategy, ProductType product,
-                                              const QString& broker_id = {});
+    // Every leg's tradingsymbol is resolved from `broker_id`'s instrument master
+    // (underlying + expiry + strike + CE/PE). If ANY leg cannot be resolved (no
+    // broker, master not loaded, contract not found) the whole basket is REFUSED:
+    // returns false, `out` is empty and `error` names each unresolved leg. The
+    // build_option_symbol() placeholder is never sent to a broker.
+    static bool to_basket_order(const OptionsStrategy& strategy, ProductType product, const QString& broker_id,
+                                BasketOrderRequest& out, QString& error);
 
     // Build a readable placeholder option symbol of the form
     // "<UNDERLYING><EXPIRY-COMPACT><STRIKE><CE|PE>", e.g. "NIFTY28MAR25500CE".
-    // This is a human-readable label for previews and a last-resort fallback —
-    // the real, broker-tradable symbol is resolved from the instrument master in
-    // to_basket_order() (the path that actually reaches a broker).
+    // This is a human-readable label for previews only — never an order symbol;
+    // to_basket_order() resolves the real contract or refuses.
     static QString build_option_symbol(const QString& underlying, const QString& expiry, double strike,
                                        const QString& opt_type);
 };

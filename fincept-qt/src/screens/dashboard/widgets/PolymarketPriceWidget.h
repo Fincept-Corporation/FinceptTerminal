@@ -48,7 +48,8 @@ class PolymarketPriceWidget : public BaseWidget {
     void hub_unsubscribe_all();
 
     QVector<Entry> entries_;
-    QHash<QString, Row> rows_; // asset_id → widgets
+    QWidget* rows_host_ = nullptr; // owns the rows/hint + the one stylesheet styling them
+    QHash<QString, Row> rows_;     // asset_id → widgets
     bool hub_active_ = false;
 };
 

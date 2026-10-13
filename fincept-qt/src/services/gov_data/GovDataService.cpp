@@ -82,11 +82,19 @@ static const QVector<GovProviderInfo> kProviders = {
     // is not a CKAN portal; re-add once scripts/spain_data.py is aligned to the
     // GovDataProviderPanel CLI/response contract and validated against the live portal.
 
+    // Multi-portal CKAN client: the panel lists the portals the script serves (`portals` command)
+    // and passes the chosen one to every request. This entry used to run datagovuk_api.py, i.e.
+    // data.gov.uk only, under an "8 portals" label.
     {"universal-ckan", "CKAN Portals", "Universal CKAN Open Data Portals",
-     "8 CKAN portals: US, UK, Australia, Italy, Brazil & more", "#10B981", "Multi-Country", "CKAN", "datagovuk_api.py"},
+     "11 CKAN portals: UK, Ireland, Italy, Netherlands, Australia, Latin America & more", "#14B8A6",
+     "Multi-Country", "CKAN", "universal_ckan_api.py"},
 
     {"australia", "Australia Gov", "data.gov.au", "Australian government open data portal", "#0EA5E9", "Australia",
      "AU", "datagov_au_api.py"},
+
+    // Appended (not inserted) so provider positions saved by older builds keep their meaning.
+    {"uk", "UK Open Data", "data.gov.uk", "UK government open data: publishers, popular publishers, datasets",
+     "#10B981", "United Kingdom", "UK", "datagovuk_api.py"},
 };
 
 const QVector<GovProviderInfo>& GovDataService::providers() {

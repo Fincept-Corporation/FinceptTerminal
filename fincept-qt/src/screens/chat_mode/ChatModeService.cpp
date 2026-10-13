@@ -12,6 +12,9 @@
 #include <QUrl>
 #include <QUrlQuery>
 
+#include <algorithm>
+#include <cmath>
+
 namespace fincept::chat_mode {
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
@@ -722,8 +725,11 @@ void ChatModeService::get_credits(CreditsCallback cb) {
             cb(false, 0, err);
             return;
         }
-        const int credits = doc.object().value("data").toObject().value("credit_balance").toInt();
-        cb(true, credits, {});
+        // credit_balance is fractional (an AI call can cost 0.35). toInt()
+        // returns 0 for ANY non-integer JSON number, so a 349.65 balance used
+        // to show as "0 credits". Read and pass it as a double.
+        const double balance = doc.object().value("data").toObject().value("credit_balance").toDouble();
+        cb(true, std::max(0.0, balance), {});
     });
 }
 
@@ -787,16 +793,31 @@ void ChatModeService::add_mcp_server(const QString& name, const QJsonObject& con
     QJsonObject body;
     body["name"] = name;
     body["config"] = config;
-    post("/chat/agent/mcp/servers", body, [cb = std::move(cb), name](bool ok, QJsonDocument doc, QString err) {
+    const QString transport = config.value("transport").toString();
+    post("/chat/agent/mcp/servers", body, [cb = std::move(cb), name, transport](bool ok, QJsonDocument doc, QString err) {
         if (!ok) {
-            cb(false, {}, err);
+            // The backend explains a rejected server (non-https URL, private address,
+            // stdio not allowed, name/limit rules…) in the error body — pass that text
+            // through verbatim instead of the bare "HTTP 400 …" transport error.
+            const QJsonObject eo = doc.object();
+            QString reason;
+            const QJsonValue msg = eo.value("message");
+            if (msg.isString())
+                reason = msg.toString();
+            else if (msg.isObject())
+                reason = msg.toObject().value("message").toString();
+            if (reason.trimmed().isEmpty())
+                reason = eo.value("detail").toString();
+            cb(false, {}, reason.trimmed().isEmpty() ? err : reason.trimmed());
             return;
         }
         const QJsonObject root = doc.object();
         McpServer srv;
         srv.name = root["name"].toString(name);
+        srv.transport = transport;
         srv.tools_count = root["tools_loaded"].toInt();
-        srv.status = root.contains("error") && !root["error"].toString().isEmpty() ? "error" : "connected";
+        srv.error = root["error"].toString();
+        srv.status = srv.error.isEmpty() ? "connected" : "error";
         for (const auto& v : root["tools"].toArray())
             srv.tools.append(McpTool::from_json(v.toObject()));
         cb(true, srv, {});

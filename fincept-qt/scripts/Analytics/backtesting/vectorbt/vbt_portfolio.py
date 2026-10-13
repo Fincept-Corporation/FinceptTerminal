@@ -716,110 +716,69 @@ def build_portfolio(
     exits: pd.Series,
     initial_capital: float = 100000,
     request: Optional[Dict[str, Any]] = None,
+    open_series: Optional[pd.Series] = None,
 ) -> SimplePortfolio:
     """
     Build a portfolio from entry/exit signals.
 
-    Args:
-        vbt: vectorbt module reference (unused, kept for API compat)
-        close_series: Price series (pd.Series with DatetimeIndex)
-        entries: Boolean entry signals
-        exits: Boolean exit signals
-        initial_capital: Starting capital
-        request: Full request dict with advanced params
+    Execution model (stated in the result's `assumptions` block):
+      - signals are evaluated on the CLOSE of bar t (they are computed from it);
+      - the resulting order fills at the OPEN of bar t+1 (`open_series`), or at the
+        close of bar t+1 when no open prices are available. Filling at the close
+        that produced the signal is a look-ahead the old simulator made on every
+        trade. `request['execution'] == 'same_close'` restores it for comparison.
+      - stop-loss / take-profit / trailing stop are checked on each bar's close
+        against the ACTUAL entry fill and exit at the next bar's open.
 
-    Returns:
-        SimplePortfolio instance
+    Position sizing (request['positionSizing'] / ['positionSizeValue']) follows the
+    UI's units: percent = % of equity, fixed = currency amount, risk = % of equity
+    risked to the stop-loss, vol_target = target annualised volatility %, kelly =
+    Kelly fraction estimated from trades closed so far, capped at the value %.
     """
     import sys as _sys
     request = request or {}
 
-    commission = float(request.get('commission', 0.0))
-    slippage = float(request.get('slippage', 0.0))
-    allow_short = request.get('allowShort', False)
-    exit_reasons = None  # per-bar stop labels, filled in below when SL/TP/trailing are active
+    commission = float(request.get('commission', 0.0) or 0.0)
+    slippage = float(request.get('slippage', 0.0) or 0.0)
 
-    _sys.stderr.write(f'[PF-BUILD] === build_portfolio START ===\n')
-    _sys.stderr.write(f'[PF-BUILD] commission={commission}, slippage={slippage}, allow_short={allow_short}\n')
-    _sys.stderr.write(f'[PF-BUILD] close_series: len={len(close_series)}, dtype={close_series.dtype}\n')
-    _sys.stderr.write(f'[PF-BUILD] entries: sum={int(entries.sum())}, dtype={entries.dtype}\n')
-    _sys.stderr.write(f'[PF-BUILD] exits: sum={int(exits.sum())}, dtype={exits.dtype}\n')
-    _sys.stderr.write(f'[PF-BUILD] initial_capital={initial_capital}\n')
-    _sys.stderr.write(f'[PF-BUILD] index match: close={close_series.index.dtype}, entries={entries.index.dtype}, equal={close_series.index.equals(entries.index)}\n')
+    def _frac(key):
+        v = request.get(key, None)
+        try:
+            v = float(v) if v is not None else 0.0
+        except (TypeError, ValueError):
+            v = 0.0
+        return v if v > 0 else None
 
-    # Position sizing - handle both string ('fixed') and dict ({'mode': 'fixed', ...}) formats
-    position_sizing_raw = request.get('positionSizing', 'fixed')
-    if isinstance(position_sizing_raw, str):
-        size_mode = position_sizing_raw
-        position_sizing_params = {
-            'mode': position_sizing_raw,
-            'percentage': float(request.get('positionSizeValue', 1.0)) * 100,
-        }
-    elif isinstance(position_sizing_raw, dict):
-        size_mode = position_sizing_raw.get('mode', 'fixed')
-        position_sizing_params = position_sizing_raw
-    else:
-        size_mode = 'fixed'
-        position_sizing_params = {}
+    stop_loss = _frac('stopLoss')
+    take_profit = _frac('takeProfit')
+    trailing_stop = _frac('trailingStop')
 
-    _sys.stderr.write(f'[PF-BUILD] positionSizing raw={position_sizing_raw}, positionSizeValue={request.get("positionSizeValue")}\n')
-    _sys.stderr.write(f'[PF-BUILD] size_mode={size_mode}, position_sizing_params={position_sizing_params}\n')
+    sizing = resolve_sizing(request, stop_loss)
+    next_bar = str(request.get('execution', 'next_open')) != 'same_close'
 
-    # Stop-loss / Take-profit (filter out zero values which mean "disabled")
-    stop_loss = request.get('stopLoss', None)
-    take_profit = request.get('takeProfit', None)
-    trailing_stop = request.get('trailingStop', None)
-    if stop_loss is not None and float(stop_loss) == 0:
-        stop_loss = None
-    if take_profit is not None and float(take_profit) == 0:
-        take_profit = None
-    if trailing_stop is not None and float(trailing_stop) == 0:
-        trailing_stop = None
+    fill_prices = None
+    if next_bar and open_series is not None:
+        aligned = open_series.reindex(close_series.index).astype(float)
+        # A missing open (data gap) falls back to that bar's close.
+        fill_prices = aligned.where(np.isfinite(aligned) & (aligned > 0), close_series.astype(float)).values
 
-    _sys.stderr.write(f'[PF-BUILD] stop_loss={stop_loss}, take_profit={take_profit}, trailing_stop={trailing_stop}\n')
+    _sys.stderr.write(f'[PF-BUILD] commission={commission}, slippage={slippage}, sizing={sizing}, '
+                      f'next_bar={next_bar}, open_prices={fill_prices is not None}, '
+                      f'sl={stop_loss}, tp={take_profit}, ts={trailing_stop}\n')
 
-    # Apply stop-loss/take-profit
-    if stop_loss or take_profit or trailing_stop:
-        _sys.stderr.write(f'[PF-BUILD] Applying exit signals for SL/TP/TS\n')
-        entries_before = int(entries.sum())
-        exits_before = int(exits.sum())
-        stop_mask, exit_reasons = _manual_stops(
-            close_series, entries, stop_loss, take_profit, trailing_stop, return_reasons=True
-        )
-        exits = exits | stop_mask
-        _sys.stderr.write(f'[PF-BUILD] After SL/TP: entries {entries_before}->{int(entries.sum())}, exits {exits_before}->{int(exits.sum())}\n')
-
-    # Calculate position sizes
-    size_series = _calculate_position_size(
-        close_series, initial_capital, size_mode, position_sizing_params, entries
-    )
-    _sys.stderr.write(f'[PF-BUILD] size_series is None: {size_series is None}\n')
-    if size_series is not None:
-        nonzero = (size_series > 0).sum()
-        _sys.stderr.write(f'[PF-BUILD] size_series: len={len(size_series)}, nonzero={nonzero}, min={size_series.min():.4f}, max={size_series.max():.4f}\n')
-
-    # Simulate
-    _sys.stderr.write(f'[PF-BUILD] === Calling _simulate_signals ===\n')
     equity, trade_records, total_fees, per_bar = _simulate_signals(
         close_series, entries, exits,
         initial_capital=initial_capital,
         commission=commission,
         slippage=slippage,
-        size_series=size_series,
-        allow_short=allow_short,
         track_per_bar=True,
-        exit_reasons=exit_reasons,
+        next_bar=next_bar,
+        fill_prices=fill_prices,
+        stop_loss=stop_loss,
+        take_profit=take_profit,
+        trailing_stop=trailing_stop,
+        sizing=sizing,
     )
-
-    _sys.stderr.write(f'[PF-BUILD] === _simulate_signals returned ===\n')
-    _sys.stderr.write(f'[PF-BUILD] equity: len={len(equity)}, first={equity.iloc[0]:.2f}, last={equity.iloc[-1]:.2f}\n')
-    _sys.stderr.write(f'[PF-BUILD] trade_records: {len(trade_records)} trades\n')
-    _sys.stderr.write(f'[PF-BUILD] total_fees: {total_fees:.4f}\n')
-    if len(trade_records) > 0:
-        _sys.stderr.write(f'[PF-BUILD] trade_records columns: {list(trade_records.columns)}\n')
-        _sys.stderr.write(f'[PF-BUILD] first trade: {trade_records.iloc[0].to_dict()}\n')
-    else:
-        _sys.stderr.write(f'[PF-BUILD] WARNING: ZERO TRADES produced!\n')
 
     return SimplePortfolio(
         equity_series=equity,
@@ -832,6 +791,56 @@ def build_portfolio(
         cash_flow_series=per_bar['cash_flow'] if per_bar else None,
         asset_flow_series=per_bar['asset_flow'] if per_bar else None,
     )
+
+
+def resolve_sizing(request: Dict[str, Any], stop_loss: Optional[float]) -> Dict[str, Any]:
+    """Translate the UI's sizing mode + value into the simulator's sizing spec.
+
+    Every mode used to fall through to "100% of cash": 'percent', 'vol_target' and
+    'risk' matched no branch, and 'fixed' multiplied the currency amount by 100 and
+    then treated anything >= 100% as all-in. A 10% sizing therefore ran (and
+    reported) a 10x larger position than the user asked for.
+    """
+    mode = request.get('positionSizing', 'percent')
+    if isinstance(mode, dict):
+        mode = mode.get('mode', 'percent')
+    mode = str(mode or 'percent').lower()
+    try:
+        value = float(request.get('positionSizeValue', 100) or 100)
+    except (TypeError, ValueError):
+        value = 100.0
+
+    if mode == 'fixed':
+        return {'mode': 'fixed', 'amount': max(0.0, value)}
+    if mode == 'risk':
+        if not stop_loss:
+            raise ValueError('Risk-per-trade sizing needs a STOP LOSS: the position size is the amount '
+                             'risked divided by the distance to the stop. Set a stop-loss or choose '
+                             'another sizing method.')
+        return {'mode': 'risk', 'risk': min(max(value, 0.0), 100.0) / 100.0, 'stop': stop_loss}
+    if mode in ('vol_target', 'volatility'):
+        return {'mode': 'vol_target', 'target': max(value, 0.0) / 100.0, 'lookback': 20}
+    if mode == 'kelly':
+        return {'mode': 'kelly', 'cap': min(max(value, 0.0), 100.0) / 100.0, 'min_trades': 10}
+    # percent (default)
+    return {'mode': 'percent', 'fraction': min(max(value, 0.0), 100.0) / 100.0}
+
+
+def describe_sizing(sizing: Dict[str, Any]) -> str:
+    """One-line description of a resolve_sizing() spec for the assumptions block."""
+    m = sizing.get('mode')
+    if m == 'fixed':
+        return f"fixed: {sizing['amount']:,.2f} per entry (capped at available cash)"
+    if m == 'risk':
+        return (f"risk: {sizing['risk'] * 100:.2f}% of equity lost if the {sizing['stop'] * 100:.2f}% "
+                f"stop is hit (capped at available cash)")
+    if m == 'vol_target':
+        return (f"vol_target: exposure = {sizing['target'] * 100:.1f}% / realised {sizing['lookback']}-bar "
+                f"volatility, max 100% of equity (no leverage)")
+    if m == 'kelly':
+        return (f"kelly: Kelly fraction from trades closed so far (no look-ahead), capped at "
+                f"{sizing['cap'] * 100:.1f}% of equity; the cap is used until {sizing['min_trades']} trades closed")
+    return f"percent: {sizing.get('fraction', 1.0) * 100:.1f}% of equity per entry"
 
 
 def build_portfolio_from_orders(
@@ -1015,6 +1024,9 @@ def get_random_benchmark_stats(
         'min': float(np.min(returns_arr)),
         'max': float(np.max(returns_arr)),
         'nTrials': n_trials,
+        # Kept so callers can compute an empirical p-value (share of random runs
+        # that did at least as well as the strategy).
+        '_returns': returns_arr,
     }
 
 
@@ -1029,45 +1041,48 @@ def _simulate_signals(
     initial_capital: float = 100000,
     commission: float = 0.0,
     slippage: float = 0.0,
-    size_series: Optional[pd.Series] = None,
-    allow_short: bool = False,
     track_per_bar: bool = False,
-    exit_reasons: Optional[List[str]] = None,
+    next_bar: bool = False,
+    fill_prices: Optional[np.ndarray] = None,
+    stop_loss: Optional[float] = None,
+    take_profit: Optional[float] = None,
+    trailing_stop: Optional[float] = None,
+    sizing: Optional[Dict[str, Any]] = None,
 ) -> Tuple[pd.Series, pd.DataFrame, float, Optional[Dict]]:
     """
-    Simulate a long-only (or long/short) portfolio from boolean signals.
+    Simulate a long-only portfolio from boolean signals.
+
+    next_bar=False: an order fills at the close of the bar whose signal produced it
+                    (legacy, look-ahead-prone; used by the random benchmark only).
+    next_bar=True : the signal on bar t's close is executed on bar t+1 at
+                    fill_prices[t+1] (the open; the close when no open is given).
+    Stops are evaluated on each bar's close against the actual entry fill and,
+    like signals, execute on the next bar when next_bar is set.
 
     Returns:
         (equity_series, trade_records_df, total_fees, per_bar_data_or_None)
     """
-    import sys as _sys
-
     close_vals = close_series.values.astype(float)
-    entry_mask = entries.values.astype(bool)
-    exit_mask = exits.values.astype(bool)
+    entry_mask = entries.reindex(close_series.index).fillna(False).values.astype(bool)
+    exit_mask = exits.reindex(close_series.index).fillna(False).values.astype(bool)
     n = len(close_vals)
+    fills = fill_prices if fill_prices is not None else close_vals
+    sizing = sizing or {'mode': 'percent', 'fraction': 1.0}
 
-    _sys.stderr.write(f'[SIMULATE] === _simulate_signals START ===\n')
-    _sys.stderr.write(f'[SIMULATE] n={n}, entry_mask sum={int(entry_mask.sum())}, exit_mask sum={int(exit_mask.sum())}\n')
-    _sys.stderr.write(f'[SIMULATE] initial_capital={initial_capital}, commission={commission}, slippage={slippage}\n')
-    _sys.stderr.write(f'[SIMULATE] size_series is None: {size_series is None}, allow_short={allow_short}\n')
-    _sys.stderr.write(f'[SIMULATE] close_vals: dtype={close_vals.dtype}, first5={close_vals[:5].tolist()}, last5={close_vals[-5:].tolist()}\n')
-    _sys.stderr.write(f'[SIMULATE] entry_mask: dtype={entry_mask.dtype}, first20={entry_mask[:20].tolist()}\n')
-    _sys.stderr.write(f'[SIMULATE] exit_mask: dtype={exit_mask.dtype}, first20={exit_mask[:20].tolist()}\n')
+    # Realised volatility known at each bar's close (vol_target sizing).
+    vol_known = None
+    if sizing.get('mode') == 'vol_target':
+        ppy = periods_per_year(close_series.index)
+        rets = pd.Series(close_vals).pct_change()
+        vol_known = (rets.rolling(int(sizing.get('lookback', 20))).std() * np.sqrt(ppy)).values
 
-    # Find first entry and exit indices
-    entry_indices = [i for i in range(min(n, 50)) if entry_mask[i]]
-    exit_indices = [i for i in range(min(n, 50)) if exit_mask[i]]
-    _sys.stderr.write(f'[SIMULATE] First entry indices (up to bar 50): {entry_indices}\n')
-    _sys.stderr.write(f'[SIMULATE] First exit indices (up to bar 50): {exit_indices}\n')
-
-    cash = initial_capital
+    cash = float(initial_capital)
     position = 0.0
     equity_vals = np.zeros(n)
     total_fees = 0.0
     trades = []
+    closed_pnl_returns = []  # per-trade returns of closed trades (kelly sizing)
 
-    # Per-bar tracking arrays
     cash_vals = np.zeros(n) if track_per_bar else None
     asset_vals = np.zeros(n) if track_per_bar else None
     cash_flow_vals = np.zeros(n) if track_per_bar else None
@@ -1076,121 +1091,142 @@ def _simulate_signals(
     entry_price = 0.0
     entry_fee = 0.0
     entry_idx = 0
+    peak_close = 0.0
     in_position = False
-    prev_position = 0.0
+    pend_entry = False
+    pend_exit = False
+    pend_reason = ''
+    n_skipped = 0
 
-    n_entries_triggered = 0
-    n_exits_triggered = 0
-    n_entries_skipped = 0
+    def stop_reason(i):
+        c = close_vals[i]
+        if stop_loss and c <= entry_price * (1 - stop_loss):
+            return 'stop_loss'
+        if take_profit and c >= entry_price * (1 + take_profit):
+            return 'take_profit'
+        if trailing_stop and c <= peak_close * (1 - trailing_stop):
+            return 'trailing_stop'
+        return ''
+
+    def target_fraction(decision_idx):
+        mode = sizing.get('mode')
+        if mode == 'vol_target':
+            v = vol_known[decision_idx] if vol_known is not None and decision_idx >= 0 else np.nan
+            if not np.isfinite(v) or v <= 0:
+                return 0.0  # not enough history to measure volatility yet: stay flat
+            return float(min(1.0, sizing.get('target', 0.0) / v))
+        if mode == 'kelly':
+            cap = float(sizing.get('cap', 1.0))
+            if len(closed_pnl_returns) < int(sizing.get('min_trades', 10)):
+                return cap
+            r = np.asarray(closed_pnl_returns)
+            wins, losses = r[r > 0], r[r <= 0]
+            if len(wins) == 0:
+                return 0.0
+            if len(losses) == 0 or abs(losses.mean()) < 1e-12:
+                return cap
+            w = len(wins) / len(r)
+            payoff = wins.mean() / abs(losses.mean())
+            return float(min(cap, max(0.0, w - (1 - w) / payoff)))
+        if mode == 'percent':
+            return float(sizing.get('fraction', 1.0))
+        return 1.0
+
+    def open_long(i, price_raw, decision_idx):
+        nonlocal cash, position, entry_price, entry_fee, entry_idx, in_position, total_fees, peak_close, n_skipped
+        buy_price = price_raw * (1 + slippage)
+        if buy_price <= 0:
+            n_skipped += 1
+            return
+        max_shares = cash / (buy_price * (1 + commission))
+        mode = sizing.get('mode')
+        if mode == 'fixed':
+            shares = min(float(sizing.get('amount', 0.0)), cash) / (buy_price * (1 + commission))
+        elif mode == 'risk':
+            shares = (cash * float(sizing['risk'])) / (buy_price * float(sizing['stop']))
+        else:
+            shares = max_shares * target_fraction(decision_idx)
+        shares = min(shares, max_shares)
+        if shares <= 0:
+            n_skipped += 1
+            return
+        fee = shares * buy_price * commission
+        cost = shares * buy_price + fee
+        total_fees += fee
+        cash = max(cash - cost, 0.0)
+        position = shares
+        entry_price = buy_price
+        entry_fee = fee
+        entry_idx = i
+        peak_close = buy_price
+        in_position = True
+
+    def close_long(i, price_raw, reason):
+        nonlocal cash, position, in_position, total_fees
+        sell_price = price_raw * (1 - slippage)
+        fee = abs(position) * sell_price * commission
+        total_fees += fee
+        # Trade P&L is NET of both legs' commission.
+        pnl = (sell_price - entry_price) * position - entry_fee - fee
+        cost_basis = entry_price * position + entry_fee
+        ret = (pnl / cost_basis) if cost_basis > 0 else 0.0
+        trades.append(_make_trade_record(
+            entry_idx, i, entry_price, sell_price, position, pnl, entry_fee + fee,
+            duration=max(1, i - entry_idx), ret=ret, entry_fee=entry_fee, exit_reason=reason,
+        ))
+        closed_pnl_returns.append(ret)
+        cash += position * sell_price - fee
+        position = 0.0
+        in_position = False
 
     for i in range(n):
-        price = close_vals[i]
         prev_position = position
 
-        # Apply slippage
-        buy_price = price * (1 + slippage)
-        sell_price = price * (1 - slippage)
-
-        if in_position:
-            # Check exit
-            if exit_mask[i]:
-                n_exits_triggered += 1
-                # Close position
-                fee = abs(position) * sell_price * commission
-                total_fees += fee
-                # Trade P&L is NET of both legs' commission. It used to subtract only the
-                # exit fee, so Σ(trade PnL) overshot the equity curve by every entry fee and
-                # win rate / profit factor / expectancy all read better than the account did.
-                pnl = (sell_price - entry_price) * position - entry_fee - fee
-                duration = max(1, i - entry_idx)  # bars (integer)
-                cost_basis = entry_price * position + entry_fee
-                ret = (pnl / cost_basis) if cost_basis > 0 else 0.0
-
-                reason = exit_reasons[i] if (exit_reasons is not None and exit_reasons[i]) else 'signal'
-                trades.append(_make_trade_record(
-                    entry_idx, i, entry_price, sell_price, position, pnl, entry_fee + fee,
-                    duration=duration, ret=ret, entry_fee=entry_fee, exit_reason=reason,
-                ))
-                _sys.stderr.write(f'[SIMULATE] EXIT #{n_exits_triggered} at bar {i}: sell_price={sell_price:.2f}, shares={position:.4f}, pnl={pnl:.2f}\n')
-                cash += position * sell_price - fee
-                position = 0.0
-                in_position = False
+        if next_bar:
+            # 1) Execute what was decided on the previous bar's close.
+            if pend_exit and in_position:
+                close_long(i, fills[i], pend_reason or 'signal')
+            elif pend_entry and not in_position:
+                open_long(i, fills[i], i - 1)
+            pend_entry = pend_exit = False
+            pend_reason = ''
+            # 2) Decide on this bar's close.
+            if in_position:
+                peak_close = max(peak_close, close_vals[i])
+                reason = stop_reason(i)
+                if reason or exit_mask[i]:
+                    pend_exit = True
+                    pend_reason = reason or 'signal'
+            elif entry_mask[i]:
+                pend_entry = True
         else:
-            # Check entry
-            if entry_mask[i]:
-                if size_series is not None:
-                    shares = float(size_series.iloc[i])
-                    if shares <= 0:
-                        # Reserve commission & slippage when calculating max shares
-                        # buy_price already includes slippage (price * (1 + slippage))
-                        shares = (cash / (buy_price * (1 + commission))) if buy_price > 0 else 0
-                else:
-                    # Reserve commission & slippage when calculating max shares
-                    # buy_price already includes slippage (price * (1 + slippage))
-                    shares = (cash / (buy_price * (1 + commission))) if buy_price > 0 else 0
+            if in_position:
+                peak_close = max(peak_close, close_vals[i])
+                reason = stop_reason(i)
+                if reason or exit_mask[i]:
+                    close_long(i, close_vals[i], reason or 'signal')
+            elif entry_mask[i]:
+                open_long(i, close_vals[i], i)
 
-                if shares > 0:
-                    fee = shares * buy_price * commission
-                    total_fees += fee
-                    cost = shares * buy_price + fee
-                    # All-in sizing computes shares = cash / (price*(1+commission)), so cost
-                    # equals cash up to float round-off; a strict `cost <= cash` then rejected
-                    # roughly one re-entry in six ("ENTRY SKIPPED: cost=93941.79 > cash=93941.79")
-                    # and silently dropped those trades from every backtest. Allow a relative
-                    # 1e-9 tolerance and clamp the dust so cash never goes negative.
-                    if cost <= cash * (1.0 + 1e-9):
-                        n_entries_triggered += 1
-                        cash = max(cash - cost, 0.0)
-                        position = shares
-                        entry_price = buy_price
-                        entry_fee = fee
-                        entry_idx = i
-                        in_position = True
-                        _sys.stderr.write(f'[SIMULATE] ENTRY #{n_entries_triggered} at bar {i}: buy_price={buy_price:.2f}, shares={shares:.4f}, cost={cost:.2f}, cash_left={cash:.2f}\n')
-                    else:
-                        n_entries_skipped += 1
-                        _sys.stderr.write(f'[SIMULATE] ENTRY SKIPPED at bar {i}: cost={cost:.2f} > cash={cash:.2f}\n')
-                else:
-                    n_entries_skipped += 1
-                    _sys.stderr.write(f'[SIMULATE] ENTRY SKIPPED at bar {i}: shares={shares} <= 0\n')
-
-        equity_vals[i] = cash + position * price
-
-        # Track per-bar data
+        equity_vals[i] = cash + position * close_vals[i]
         if track_per_bar:
             cash_vals[i] = cash
             asset_vals[i] = position
             cash_flow_vals[i] = cash - (cash_vals[i - 1] if i > 0 else initial_capital)
             asset_flow_vals[i] = position - prev_position
 
-    # Close any open position at end
+    # Mark an open position out at the last close (with exit costs) so the final
+    # equity and the trade list agree.
     if in_position and position > 0:
-        # Same exit slippage as every in-loop exit (the end-of-data liquidation used to be
-        # filled at the raw close, a free price improvement on the final trade).
-        final_price = close_vals[-1] * (1 - slippage)
-        fee = position * final_price * commission
-        total_fees += fee
-        pnl = (final_price - entry_price) * position - entry_fee - fee
-        duration = max(1, n - 1 - entry_idx)  # bars (integer)
-        cost_basis = entry_price * position + entry_fee
-        ret = (pnl / cost_basis) if cost_basis > 0 else 0.0
-
-        trades.append(_make_trade_record(
-            entry_idx, n - 1, entry_price, final_price, position, pnl, entry_fee + fee,
-            duration=duration, ret=ret, entry_fee=entry_fee, exit_reason='end_of_data',
-        ))
-        cash += position * final_price - fee
+        close_long(n - 1, close_vals[-1], 'end_of_data')
         equity_vals[-1] = cash
         if track_per_bar:
             cash_vals[-1] = cash
             asset_vals[-1] = 0.0
 
-    _sys.stderr.write(f'[SIMULATE] === SIMULATION SUMMARY ===\n')
-    _sys.stderr.write(f'[SIMULATE] entries_triggered={n_entries_triggered}, exits_triggered={n_exits_triggered}, entries_skipped={n_entries_skipped}\n')
-    _sys.stderr.write(f'[SIMULATE] total trades recorded: {len(trades)}\n')
-    _sys.stderr.write(f'[SIMULATE] final cash={cash:.2f}, final position={position:.4f}\n')
-    _sys.stderr.write(f'[SIMULATE] equity[0]={equity_vals[0]:.2f}, equity[-1]={equity_vals[-1]:.2f}\n')
-    _sys.stderr.write(f'[SIMULATE] total_fees={total_fees:.4f}\n')
+    if n_skipped:
+        import sys as _sys
+        _sys.stderr.write(f'[SIMULATE] {n_skipped} entry signal(s) skipped (zero size)\n')
 
     equity = pd.Series(equity_vals, index=close_series.index, name='Equity')
     trade_df = pd.DataFrame(trades) if trades else _empty_trade_df()
@@ -1261,141 +1297,6 @@ def _empty_trade_df() -> pd.DataFrame:
         'Size', 'PnL', 'Return', 'Entry Fees', 'Exit Fees',
         'Duration', 'Status',
     ])
-
-
-def _apply_exit_signals(
-    close_series: pd.Series,
-    entries: pd.Series,
-    exits: pd.Series,
-    stop_loss: Optional[float] = None,
-    take_profit: Optional[float] = None,
-    trailing_stop: Optional[float] = None,
-) -> Tuple[pd.Series, pd.Series]:
-    """Apply stop-loss/take-profit exits manually."""
-    if stop_loss or take_profit or trailing_stop:
-        new_exits = _manual_stops(
-            close_series, entries, stop_loss, take_profit, trailing_stop
-        )
-        combined_exits = exits | new_exits
-        return entries, combined_exits
-    return entries, exits
-
-
-def _manual_stops(
-    close_series: pd.Series,
-    entries: pd.Series,
-    stop_loss: Optional[float],
-    take_profit: Optional[float],
-    trailing_stop: Optional[float],
-    return_reasons: bool = False,
-):
-    """Calculate stop-loss/take-profit exits manually.
-
-    stop_loss / take_profit / trailing_stop are FRACTIONS of price (0.05 = 5%) — the unit the
-    request carries (BacktestingScreen sends spinbox% / 100) and that vbt_signals uses. They
-    were divided by 100 again here, so a 5% stop in the UI armed a 0.05% stop and nearly
-    every trade was stopped out on the first tick.
-    """
-    n = len(close_series)
-    close_vals = close_series.values.astype(float)
-    entry_mask = entries.values.astype(bool)
-    exit_mask = np.zeros(n, dtype=bool)
-    reasons = [''] * n  # 'stop_loss' | 'take_profit' | 'trailing_stop' per exit bar
-
-    in_position = False
-    entry_price = 0.0
-    peak_price = 0.0
-
-    for i in range(n):
-        if entry_mask[i] and not in_position:
-            in_position = True
-            entry_price = close_vals[i]
-            peak_price = close_vals[i]
-
-        if in_position:
-            peak_price = max(peak_price, close_vals[i])
-
-            # Stop-loss check
-            if stop_loss and close_vals[i] <= entry_price * (1 - stop_loss):
-                exit_mask[i] = True
-                reasons[i] = 'stop_loss'
-                in_position = False
-                continue
-
-            # Take-profit check
-            if take_profit and close_vals[i] >= entry_price * (1 + take_profit):
-                exit_mask[i] = True
-                reasons[i] = 'take_profit'
-                in_position = False
-                continue
-
-            # Trailing stop check
-            if trailing_stop and close_vals[i] <= peak_price * (1 - trailing_stop):
-                exit_mask[i] = True
-                reasons[i] = 'trailing_stop'
-                in_position = False
-                continue
-
-    result = pd.Series(exit_mask, index=close_series.index)
-    return (result, reasons) if return_reasons else result
-
-
-def _calculate_position_size(
-    close_series: pd.Series,
-    initial_capital: float,
-    mode: str,
-    params: Dict[str, Any],
-    entries: pd.Series,
-) -> Optional[pd.Series]:
-    """
-    Calculate position sizes based on sizing mode.
-
-    Returns None for default (100% of available capital).
-    """
-    if not isinstance(params, dict):
-        return None  # Use default: 100% capital
-
-    if mode == 'fixed':
-        pct = float(params.get('percentage', 100))
-        # percentage may already be 0-1 scale or 0-100 scale
-        if pct > 1.0 and pct <= 100.0:
-            pct = pct / 100.0
-        elif pct <= 0:
-            return None  # Default: 100% capital
-        if pct >= 1.0:
-            return None  # 100% capital = default behavior
-        shares = (initial_capital * pct) / close_series
-        return shares.where(entries, 0)
-
-    elif mode == 'kelly':
-        win_rate = float(params.get('winRate', 0.5))
-        avg_win = float(params.get('avgWin', 0.02))
-        avg_loss = float(params.get('avgLoss', 0.01))
-        if avg_loss > 0:
-            kelly_f = win_rate - (1 - win_rate) / (avg_win / avg_loss)
-        else:
-            kelly_f = 0.5
-        kelly_f = max(0.0, min(kelly_f, 1.0))
-        shares = (initial_capital * kelly_f) / close_series
-        return shares.where(entries, 0)
-
-    elif mode == 'volatility':
-        target_vol = float(params.get('targetVol', 0.15))
-        lookback = int(params.get('lookback', 20))
-        daily_returns = close_series.pct_change()
-        rolling_vol = daily_returns.rolling(lookback).std() * np.sqrt(252)
-        rolling_vol = rolling_vol.replace(0, np.nan).fillna(target_vol)
-        vol_scalar = target_vol / rolling_vol
-        vol_scalar = vol_scalar.clip(0.1, 3.0)
-        shares = (initial_capital * vol_scalar) / close_series
-        return shares.where(entries, 0)
-
-    elif mode == 'fractional':
-        risk_pct = float(params.get('riskPercent', 1.0)) / 100.0
-        shares = (initial_capital * risk_pct) / close_series
-        return shares.where(entries, 0)
-
-    return None
 
 
 # ============================================================================

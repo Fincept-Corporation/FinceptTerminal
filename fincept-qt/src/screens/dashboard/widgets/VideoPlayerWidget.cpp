@@ -308,6 +308,19 @@ void VideoPlayerWidget::resolve_youtube_and_play(const QString& youtube_url, con
     // --no-playlist: single video only
     // -g: print URL only, don't download
     proc->start(ytdlp_program, {"-f", "best[ext=mp4]/best", "--no-playlist", "-g", youtube_url});
+
+    // yt-dlp has no overall deadline of its own: on a stalled network it can
+    // sit there indefinitely, leaving "Resolving stream…" on screen forever.
+    QPointer<QProcess> guard(proc);
+    QTimer::singleShot(45000, this, [this, guard]() {
+        if (!guard || ytdlp_proc_.data() != guard.data())
+            return; // finished, failed or superseded
+        cancel_ytdlp();
+        set_loading(false);
+        status_label_->setText(tr("yt-dlp did not answer within 45 s — check the network and try again."));
+        status_label_->show();
+        LOG_WARN("VideoPlayer", "yt-dlp stream resolution timed out");
+    });
 }
 
 void VideoPlayerWidget::cancel_ytdlp() {

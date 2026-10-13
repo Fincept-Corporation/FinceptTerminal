@@ -869,7 +869,6 @@ QString MarketDataService::currency_prefix(const QString& symbol) {
 void MarketDataService::resolve_names(const QStringList& symbols, NamesCallback cb) {
     load_name_cache();
 
-    // Build the cached subset for the requested symbols only.
     auto subset_for = [this](const QStringList& syms) {
         QHash<QString, QString> m;
         for (const auto& s : syms)
@@ -882,53 +881,116 @@ void MarketDataService::resolve_names(const QStringList& symbols, NamesCallback 
     if (cb)
         cb(subset_for(symbols));
 
-    // Collect the symbols we still need a name for.
-    QStringList missing;
-    for (const auto& s : symbols)
-        if (!s.isEmpty() && !name_cache_.contains(s))
-            missing.append(s);
-    if (missing.isEmpty())
+    // Symbols still unnamed that nobody has asked for yet this session. A symbol
+    // yfinance cannot name is asked once, not on every panel refresh.
+    QStringList waiting_on;
+    for (const auto& s : symbols) {
+        if (s.isEmpty() || name_cache_.contains(s))
+            continue;
+        if (names_queued_.contains(s) || names_inflight_.contains(s)) {
+            waiting_on.append(s);
+        } else if (!names_attempted_.contains(s)) {
+            names_queued_.insert(s);
+            waiting_on.append(s);
+        }
+    }
+    if (waiting_on.isEmpty())
+        return;
+    if (cb)
+        name_waiters_.append({waiting_on, std::move(cb)});
+
+    if (!names_flush_scheduled_ && !names_queued_.isEmpty()) {
+        names_flush_scheduled_ = true;
+        // Long enough to gather every panel of a screen that is being built.
+        QTimer::singleShot(250, this, &MarketDataService::flush_name_requests);
+    }
+}
+
+void MarketDataService::flush_name_requests() {
+    names_flush_scheduled_ = false;
+    if (names_queued_.isEmpty())
         return;
 
+    QStringList batch = names_queued_.values();
+    batch.sort();
+    names_queued_.clear();
+    for (const auto& s : batch) {
+        names_inflight_.insert(s);
+        names_attempted_.insert(s);
+    }
+
+    LOG_INFO("MarketData", QString("Resolving display names for %1 symbol(s) in one call").arg(batch.size()));
+
     QStringList args;
-    args << "quote_names" << missing;
+    args << "quote_names" << batch;
 
     QPointer<MarketDataService> self = this;
-    python::PythonRunner::instance().run(
-        "yfinance_data.py", args, [self, symbols, cb, subset_for](python::PythonResult result) {
-            if (!self)
-                return;
-            if (result.success && !result.output.trimmed().isEmpty()) {
-                auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
-                if (doc.isObject()) {
-                    const QJsonObject root = doc.object();
-                    const QJsonObject names = root.value("names").toObject();
-                    const QJsonObject currs = root.value("currencies").toObject();
-                    bool changed = false;
-                    for (auto it = names.begin(); it != names.end(); ++it) {
-                        const QString name = it.value().toString().trimmed();
-                        if (!name.isEmpty()) {
-                            self->name_cache_.insert(it.key(), name);
-                            changed = true;
-                        }
+    python::PythonRunner::instance().run("yfinance_data.py", args, [self, batch](python::PythonResult result) {
+        if (!self)
+            return;
+        if (result.success && !result.output.trimmed().isEmpty()) {
+            auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
+            if (doc.isObject()) {
+                const QJsonObject root = doc.object();
+                const QJsonObject names = root.value("names").toObject();
+                const QJsonObject currs = root.value("currencies").toObject();
+                bool changed = false;
+                for (auto it = names.begin(); it != names.end(); ++it) {
+                    const QString name = it.value().toString().trimmed();
+                    if (!name.isEmpty()) {
+                        self->name_cache_.insert(it.key(), name);
+                        changed = true;
                     }
-                    for (auto it = currs.begin(); it != currs.end(); ++it) {
-                        const QString code = it.value().toString().trimmed();
-                        if (!code.isEmpty()) {
-                            self->currency_cache_.insert(it.key(), code);
-                            changed = true;
-                        }
-                    }
-                    if (changed)
-                        self->persist_name_cache();
                 }
-            } else if (!result.success) {
-                LOG_WARN("MarketData", "quote_names failed: " + result.error.left(200));
+                for (auto it = currs.begin(); it != currs.end(); ++it) {
+                    const QString code = it.value().toString().trimmed();
+                    if (!code.isEmpty()) {
+                        self->currency_cache_.insert(it.key(), code);
+                        changed = true;
+                    }
+                }
+                if (changed)
+                    self->persist_name_cache();
             }
-            // Re-deliver with whatever resolved (cached subset now richer).
-            if (cb)
-                cb(subset_for(symbols));
-        });
+        } else if (!result.success) {
+            LOG_WARN("MarketData", "quote_names failed: " + result.error.left(200));
+            // A failed call (network down, rate limit) is not "unresolvable":
+            // allow these symbols to be asked again on a later refresh.
+            for (const auto& s : batch)
+                self->names_attempted_.remove(s);
+        }
+        for (const auto& s : batch)
+            self->names_inflight_.remove(s);
+
+        // Re-deliver to every waiter that was waiting on this batch; keep a
+        // waiter only while some of its symbols are still queued or in flight.
+        const QSet<QString> done(batch.cbegin(), batch.cend());
+        QVector<NameWaiter> still_waiting;
+        QVector<NameWaiter> to_notify;
+        for (auto& w : self->name_waiters_) {
+            bool touched = false;
+            bool pending = false;
+            for (const auto& s : w.symbols) {
+                if (done.contains(s))
+                    touched = true;
+                if (self->names_queued_.contains(s) || self->names_inflight_.contains(s))
+                    pending = true;
+            }
+            if (touched)
+                to_notify.append(w);
+            if (pending)
+                still_waiting.append(std::move(w));
+        }
+        self->name_waiters_ = std::move(still_waiting);
+        for (const auto& w : to_notify) {
+            QHash<QString, QString> m;
+            for (const auto& s : w.symbols)
+                if (self->name_cache_.contains(s))
+                    m.insert(s, self->name_cache_.value(s));
+            if (w.cb)
+                w.cb(m);
+        }
+    });
 }
 
 } // namespace fincept::services

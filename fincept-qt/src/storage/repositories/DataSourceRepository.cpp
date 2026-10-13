@@ -1,5 +1,6 @@
 #include "storage/repositories/DataSourceRepository.h"
 
+#include "services/connectors/ConnectorCredentialBridge.h"
 #include "storage/secure/SecureStorage.h"
 
 #include <QJsonDocument>
@@ -195,24 +196,32 @@ Result<DataSource> DataSourceRepository::get(const QString& id) {
 Result<void> DataSourceRepository::save(const DataSource& ds) {
     // Credentials go to SecureStorage; the column keeps the non-secret fields.
     const QString column_config = ds_config_for_column(ds.id, ds.config);
-    return exec_write("INSERT INTO data_sources "
-                      "(id, alias, display_name, description, type, provider, category, config, enabled, tags, "
-                      "created_at, updated_at) "
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-                      "COALESCE((SELECT created_at FROM data_sources WHERE id = ?), datetime('now')), datetime('now')) "
-                      "ON CONFLICT(id) DO UPDATE SET "
-                      "alias = excluded.alias, "
-                      "display_name = excluded.display_name, "
-                      "description = excluded.description, "
-                      "type = excluded.type, "
-                      "provider = excluded.provider, "
-                      "category = excluded.category, "
-                      "config = excluded.config, "
-                      "enabled = excluded.enabled, "
-                      "tags = excluded.tags, "
-                      "updated_at = datetime('now')",
-                      {ds.id, ds.alias, ds.display_name, ds.description, ds.type, ds.provider, ds.category, column_config,
-                       ds.enabled ? 1 : 0, ds.tags, ds.id});
+    auto result =
+        exec_write("INSERT INTO data_sources "
+                   "(id, alias, display_name, description, type, provider, category, config, enabled, tags, "
+                   "created_at, updated_at) "
+                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                   "COALESCE((SELECT created_at FROM data_sources WHERE id = ?), datetime('now')), datetime('now')) "
+                   "ON CONFLICT(id) DO UPDATE SET "
+                   "alias = excluded.alias, "
+                   "display_name = excluded.display_name, "
+                   "description = excluded.description, "
+                   "type = excluded.type, "
+                   "provider = excluded.provider, "
+                   "category = excluded.category, "
+                   "config = excluded.config, "
+                   "enabled = excluded.enabled, "
+                   "tags = excluded.tags, "
+                   "updated_at = datetime('now')",
+                   {ds.id, ds.alias, ds.display_name, ds.description, ds.type, ds.provider, ds.category, column_config,
+                    ds.enabled ? 1 : 0, ds.tags, ds.id});
+    // A market-data key typed into a connection (Finnhub, Polygon, Alpha Vantage, ...) used to
+    // stay in this store only, so the Python connectors that read FINNHUB_API_KEY etc. never
+    // saw it. Copy it to the env-named SecureStorage slot PythonRunner injects — only when that
+    // slot is still empty. Covers every save path: the dialog, import and the MCP ds_* tools.
+    if (result.is_ok())
+        services::connectors::bridge_connection_credentials(ds.provider, ds.config);
+    return result;
 }
 
 Result<void> DataSourceRepository::remove(const QString& id) {

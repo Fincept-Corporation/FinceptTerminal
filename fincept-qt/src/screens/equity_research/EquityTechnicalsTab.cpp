@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QProgressBar>
 #include <QScrollArea>
+#include <QStyle>
 #include <QVBoxLayout>
 
 namespace fincept::screens {
@@ -24,6 +25,31 @@ static constexpr const char* GRAY = "#6b7280";
 
 // ── Signal helpers ───────────────────────────────────────────────────────────
 
+namespace technicals_tab_detail {
+void tech_repolish(QWidget* w) {
+    w->style()->unpolish(w);
+    w->style()->polish(w);
+}
+} // namespace technicals_tab_detail
+using technicals_tab_detail::tech_repolish;
+
+/// Stylesheet property value for a signal (QLabel[sig="buy"] …).
+const char* EquityTechnicalsTab::signal_key(services::equity::TechSignal s) {
+    using S = services::equity::TechSignal;
+    switch (s) {
+        case S::StrongBuy:
+            return "strong_buy";
+        case S::Buy:
+            return "buy";
+        case S::Sell:
+            return "sell";
+        case S::StrongSell:
+            return "strong_sell";
+        default:
+            return "neutral";
+    }
+}
+
 QString EquityTechnicalsTab::signal_text(services::equity::TechSignal s) const {
     using S = services::equity::TechSignal;
     switch (s) {
@@ -37,22 +63,6 @@ QString EquityTechnicalsTab::signal_text(services::equity::TechSignal s) const {
             return tr("STRONG SELL");
         default:
             return tr("NEUTRAL");
-    }
-}
-
-const char* EquityTechnicalsTab::signal_color(services::equity::TechSignal s) {
-    using S = services::equity::TechSignal;
-    switch (s) {
-        case S::StrongBuy:
-            return ui::colors::POSITIVE;
-        case S::Buy:
-            return LTGREEN;
-        case S::Sell:
-            return LTRED;
-        case S::StrongSell:
-            return ui::colors::NEGATIVE;
-        default:
-            return GRAY;
     }
 }
 
@@ -73,15 +83,13 @@ QString EquityTechnicalsTab::interpretation(const QString& col_key, double value
             return tr("Overbought — watch for bearish divergence");
         return tr("Deeply overbought — potential reversal zone");
     }
-    if (col_key == "macd") {
-        if (value > 2)
-            return tr("Strong bullish momentum — histogram expanding");
-        if (value > 0)
-            return tr("Bullish — MACD above signal line");
-        if (value > -2)
-            return tr("Bearish — MACD below signal line");
-        return tr("Strong bearish momentum — histogram expanding");
-    }
+    // MACD values are in price units, so only the sign is comparable across stocks.
+    if (col_key == "macd")
+        return value >= 0 ? tr("Above zero — 12-EMA over 26-EMA (uptrend bias)")
+                          : tr("Below zero — 12-EMA under 26-EMA (downtrend bias)");
+    if (col_key == "macd_diff")
+        return value >= 0 ? tr("MACD above its signal line — bullish crossover state")
+                          : tr("MACD below its signal line — bearish crossover state");
     if (col_key == "stoch_k" || col_key == "stoch_d") {
         if (value <= 20)
             return tr("Oversold zone — potential bounce");
@@ -144,12 +152,13 @@ QString EquityTechnicalsTab::interpretation(const QString& col_key, double value
             return tr("Near upper band — overbought zone");
         return tr("Within bands — normal range");
     }
+    // bb_wband is (upper − lower) / middle × 100 — already a percentage.
     if (col_key == "bb_wband") {
-        if (value < 0.05)
-            return tr("Tight squeeze — breakout imminent");
-        if (value < 0.1)
+        if (value < 5.0)
+            return tr("Tight squeeze — volatility compressed, watch for a breakout");
+        if (value < 10.0)
             return tr("Narrowing bands — volatility contracting");
-        if (value > 0.3)
+        if (value > 30.0)
             return tr("Wide bands — high volatility");
         return tr("Normal bandwidth");
     }
@@ -186,7 +195,7 @@ QString EquityTechnicalsTab::interpretation(const QString& col_key, double value
     if (col_key == "obv")
         return tr("On-balance volume — confirms price trend with volume");
     if (col_key == "vwap")
-        return tr("Volume-weighted avg price — institutional reference");
+        return tr("14-bar rolling volume-weighted price (not the intraday session VWAP)");
     if (col_key == "adi")
         return tr("Accumulation/distribution — confirms money flow");
     if (col_key.startsWith("sma_") || col_key.startsWith("ema_") || col_key.startsWith("wma_") || col_key == "kama")
@@ -240,7 +249,49 @@ void EquityTechnicalsTab::set_symbol(const QString& symbol) {
 // ── build_ui ─────────────────────────────────────────────────────────────────
 
 void EquityTechnicalsTab::build_ui() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    setObjectName(QStringLiteral("equityTechnicalsTab"));
+    // One stylesheet for every dynamic card / row populate() builds: they are styled by
+    // objectName and a "sig"/"cat"/"alt" property. populate() used to issue ~10 setStyleSheet
+    // calls per indicator — a full CSS re-parse each — on every load.
+    setStyleSheet(
+        QString("QWidget { background:%1; }"
+                "QLabel { background:transparent; border:0; }"
+                "QFrame#techCard { background:%2; border:1px solid %3; border-left:3px solid %4; }"
+                "QFrame#techCard[sig=\"strong_buy\"] { border-left-color:%5; }"
+                "QFrame#techCard[sig=\"buy\"] { border-left-color:%6; }"
+                "QFrame#techCard[sig=\"sell\"] { border-left-color:%7; }"
+                "QFrame#techCard[sig=\"strong_sell\"] { border-left-color:%8; }"
+                "QLabel#techCardName { color:%9; font-size:10px; font-weight:600; letter-spacing:0.5px; }"
+                "QLabel#techCardValue { color:%10; font-size:16px; font-weight:700; font-family:'Consolas',monospace; }"
+                "QLabel#techCardDesc { color:%11; font-size:10px; }"
+                "QLabel#techRowInterp { color:%11; font-size:11px; }"
+                "QLabel[sig=\"strong_buy\"] { color:%5; } QLabel[sig=\"buy\"] { color:%6; }"
+                "QLabel[sig=\"neutral\"] { color:%4; } QLabel[sig=\"sell\"] { color:%7; }"
+                "QLabel[sig=\"strong_sell\"] { color:%8; }"
+                "QLabel#techSig { font-size:10px; font-weight:700; }"
+                "QLabel#techSigPill { font-size:10px; font-weight:700; background:%2; padding:2px 6px; }"
+                "QLabel#techRating { font-size:22px; font-weight:700; letter-spacing:2px; color:%4; }"
+                "QFrame#techSection { background:%12; border:1px solid %3; }"
+                "QWidget#techSectionHdr { background:%2; border:0; border-bottom:1px solid %3; }"
+                "QLabel#techSectionTitle { font-size:12px; font-weight:700; letter-spacing:1px; }"
+                "QLabel#techSectionTitle[cat=\"trend\"] { color:%13; }"
+                "QLabel#techSectionTitle[cat=\"momentum\"] { color:%5; }"
+                "QLabel#techSectionTitle[cat=\"volatility\"] { color:%14; }"
+                "QLabel#techSectionTitle[cat=\"volume\"] { color:%15; }"
+                "QLabel#techMuted { color:%11; font-size:10px; }"
+                "QLabel#techColHdr { color:%11; font-size:10px; font-weight:600; letter-spacing:0.5px; }"
+                "QLabel#techBadge { font-size:10px; font-weight:700; padding:2px 6px; }"
+                "QWidget#techTblHdr { background:%1; border:0; border-bottom:1px solid %3; }"
+                "QWidget#techRow { background:%1; border:0; border-bottom:1px solid %3; }"
+                "QWidget#techRow[alt=\"true\"] { background:%2; }"
+                "QWidget#techSigCell { background:transparent; border:0; }"
+                "QLabel#techRowName { color:%10; font-size:12px; font-weight:600; }"
+                "QLabel#techRowValue { color:%9; font-size:12px; font-family:'Consolas',monospace; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), QString(GRAY),
+                 ui::colors::POSITIVE(), QString(LTGREEN), QString(LTRED), ui::colors::NEGATIVE(),
+                 ui::colors::TEXT_SECONDARY())
+            .arg(ui::colors::TEXT_PRIMARY(), ui::colors::TEXT_TERTIARY(), ui::colors::BG_SURFACE(), QString(CYAN),
+                 QString(YELLOW), QString(BLUE)));
     loading_overlay_ = new ui::LoadingOverlay(this);
 
     auto* outer = new QVBoxLayout(this);
@@ -282,10 +333,8 @@ void EquityTechnicalsTab::build_ui() {
     rp_vl->addWidget(sep);
 
     rating_label_ = new QLabel("\xe2\x80\x94");
+    rating_label_->setObjectName(QStringLiteral("techRating"));
     rating_label_->setAlignment(Qt::AlignCenter);
-    rating_label_->setStyleSheet(
-        QString("color:%1;font-size:22px;font-weight:700;letter-spacing:2px;background:transparent;border:0;")
-            .arg(GRAY));
     rp_vl->addWidget(rating_label_);
 
     // Gauge bar
@@ -411,26 +460,17 @@ void EquityTechnicalsTab::clear_sections() {
 void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& payload) {
     clear_sections();
 
-    // Flatten all
     QVector<services::equity::TechIndicator> all;
     all << payload.trend << payload.momentum << payload.volatility << payload.volume;
 
     // ── Rating ───────────────────────────────────────────────────────────────
-    int sb = payload.strong_buy, b = payload.buy, n = payload.neutral, s = payload.sell, ss = payload.strong_sell;
-    int total = sb + b + n + s + ss;
-
-    const char* rec_color = GRAY;
-    QString rec_text = signal_text(payload.overall_signal);
-    rec_color = signal_color(payload.overall_signal);
-
-    rating_label_->setText(rec_text);
-    rating_label_->setStyleSheet(
-        QString("color:%1;font-size:22px;font-weight:700;letter-spacing:2px;background:transparent;border:0;")
-            .arg(rec_color));
-
-    int bulls = sb + b;
-    gauge_bar_->setValue(total > 0 ? static_cast<int>(100.0 * bulls / total) : 50);
-
+    const int sb = payload.strong_buy, b = payload.buy, n = payload.neutral, s = payload.sell,
+              ss = payload.strong_sell;
+    const int total = sb + b + n + s + ss;
+    rating_label_->setText(signal_text(payload.overall_signal));
+    rating_label_->setProperty("sig", QString::fromLatin1(signal_key(payload.overall_signal)));
+    tech_repolish(rating_label_);
+    gauge_bar_->setValue(total > 0 ? static_cast<int>(100.0 * (sb + b) / total) : 50);
     strong_buy_count_->setText(QString::number(sb));
     buy_count_->setText(QString::number(b));
     neutral_count_->setText(QString::number(n));
@@ -438,164 +478,128 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& paylo
     strong_sell_count_->setText(QString::number(ss));
     total_label_->setText(tr("%1 INDICATORS ANALYZED").arg(total));
 
-    // ── Key indicators — pick the most decision-relevant ones ────────────────
-    // These are column keys we look for in the flattened indicators
-    static const QStringList key_names = {"RSI", "MACD",  "Stoch %K",    "ADX", "CCI",
-                                          "MFI", "BB %B", "Williams %R", "ATR", "CMF"};
-
+    // ── Key indicators — the most decision-relevant ones ─────────────────────
+    static const QStringList key_names = {"RSI", "MACD Hist", "Stoch %K",    "ADX", "CCI",
+                                          "MFI", "BB %B",     "Williams %R", "ATR", "CMF"};
     QMap<QString, services::equity::TechIndicator> name_map;
     for (const auto& ti : all)
         name_map[ti.name] = ti;
 
     auto* kg = qobject_cast<QGridLayout*>(key_container_->layout());
     int ki_row = 0, ki_col = 0;
-
     for (const auto& key : key_names) {
         auto it = name_map.find(key);
         if (it == name_map.end())
             continue;
         const auto& ti = it.value();
+        const QString sig = QString::fromLatin1(signal_key(ti.signal));
 
         auto* card = new QFrame;
-        const char* sc = signal_color(ti.signal);
-        card->setStyleSheet(
-            QString("QFrame{background:%1;border:1px solid %2;border-left:3px solid %3;border-radius:2px;}")
-                .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), sc));
+        card->setObjectName(QStringLiteral("techCard"));
+        card->setProperty("sig", sig);
         auto* cl = new QVBoxLayout(card);
         cl->setContentsMargins(10, 6, 10, 6);
         cl->setSpacing(2);
-
-        // Name
         auto* nm = new QLabel(ti.name.toUpper());
-        nm->setStyleSheet(
-            QString("color:%1;font-size:10px;font-weight:600;letter-spacing:0.5px;background:transparent;border:0;")
-                .arg(ui::colors::TEXT_SECONDARY()));
+        nm->setObjectName(QStringLiteral("techCardName"));
         cl->addWidget(nm);
 
-        // Value + signal row
         auto* vr = new QHBoxLayout;
         vr->setSpacing(8);
         auto* val = new QLabel(QString::number(ti.value, 'f', 2));
-        val->setStyleSheet(QString("color:%1;font-size:16px;font-weight:700;font-family:'Consolas',monospace;"
-                                   "background:transparent;border:0;")
-                               .arg(ui::colors::TEXT_PRIMARY()));
-        auto* sig = new QLabel(signal_text(ti.signal));
-        sig->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;background:transparent;border:0;").arg(sc));
-        sig->setAlignment(Qt::AlignRight | Qt::AlignBottom);
+        val->setObjectName(QStringLiteral("techCardValue"));
+        auto* sig_lbl = new QLabel(signal_text(ti.signal));
+        sig_lbl->setObjectName(QStringLiteral("techSig"));
+        sig_lbl->setProperty("sig", sig);
+        sig_lbl->setAlignment(Qt::AlignRight | Qt::AlignBottom);
         vr->addWidget(val);
         vr->addStretch();
-        vr->addWidget(sig);
+        vr->addWidget(sig_lbl);
         cl->addLayout(vr);
 
-        // Interpretation
-        QString interp = interpretation(ti.category == "trend" && ti.name == "MACD" ? "macd"
-                                        : ti.category == "momentum" && ti.name == "RSI"
-                                            ? "rsi"
-                                            : ti.name.toLower().replace(' ', '_').replace(QString("%"), QString()),
-                                        ti.value);
+        const QString interp = interpretation(ti.key, ti.value);
         if (!interp.isEmpty()) {
             auto* desc = new QLabel(interp);
+            desc->setObjectName(QStringLiteral("techCardDesc"));
             desc->setWordWrap(true);
-            desc->setStyleSheet(
-                QString("color:%1;font-size:10px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY()));
             cl->addWidget(desc);
         }
-
         kg->addWidget(card, ki_row, ki_col);
-        ki_col++;
-        if (ki_col == 5) {
+        if (++ki_col == 5) {
             ki_col = 0;
-            ki_row++;
+            ++ki_row;
         }
     }
 
     // ── Category sections ────────────────────────────────────────────────────
     auto* sc_vl = qobject_cast<QVBoxLayout*>(sections_container_->layout());
-
     struct CatDef {
         QString title;
         const QVector<services::equity::TechIndicator>* inds;
-        const char* color;
+        const char* cat;
     };
-    QList<CatDef> cats = {
-        {tr("TREND INDICATORS"), &payload.trend, CYAN},
-        {tr("MOMENTUM INDICATORS"), &payload.momentum, ui::colors::POSITIVE},
-        {tr("VOLATILITY INDICATORS"), &payload.volatility, YELLOW},
-        {tr("VOLUME INDICATORS"), &payload.volume, BLUE},
+    const QList<CatDef> cats = {
+        {tr("TREND INDICATORS"), &payload.trend, "trend"},
+        {tr("MOMENTUM INDICATORS"), &payload.momentum, "momentum"},
+        {tr("VOLATILITY INDICATORS"), &payload.volatility, "volatility"},
+        {tr("VOLUME INDICATORS"), &payload.volume, "volume"},
     };
 
     for (const auto& cat : cats) {
         if (!cat.inds || cat.inds->isEmpty())
             continue;
-
-        // Count per category
         int cb = 0, cs = 0, cn = 0;
         for (const auto& ti : *cat.inds) {
             using S = services::equity::TechSignal;
             if (ti.signal == S::StrongBuy || ti.signal == S::Buy)
-                cb++;
+                ++cb;
             else if (ti.signal == S::StrongSell || ti.signal == S::Sell)
-                cs++;
+                ++cs;
             else
-                cn++;
+                ++cn;
         }
 
         auto* section = new QFrame;
-        section->setStyleSheet(QString("QFrame{background:%1;border:1px solid %2;border-radius:2px;}")
-                                   .arg(ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
+        section->setObjectName(QStringLiteral("techSection"));
         auto* svl = new QVBoxLayout(section);
         svl->setContentsMargins(0, 0, 0, 0);
         svl->setSpacing(0);
 
-        // Header
         auto* hdr = new QWidget(this);
-        hdr->setStyleSheet(QString("background:%1;border:0;border-bottom:1px solid %2;")
-                               .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM()));
+        hdr->setObjectName(QStringLiteral("techSectionHdr"));
         auto* hl = new QHBoxLayout(hdr);
         hl->setContentsMargins(12, 8, 12, 8);
         hl->setSpacing(10);
-
         auto* htitle = new QLabel(cat.title);
-        htitle->setStyleSheet(
-            QString("color:%1;font-size:12px;font-weight:700;letter-spacing:1px;background:transparent;border:0;")
-                .arg(cat.color));
+        htitle->setObjectName(QStringLiteral("techSectionTitle"));
+        htitle->setProperty("cat", QString::fromLatin1(cat.cat));
         hl->addWidget(htitle);
-
         auto* cnt = new QLabel(tr("%1 indicators").arg(cat.inds->size()));
-        cnt->setStyleSheet(
-            QString("color:%1;font-size:10px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY()));
+        cnt->setObjectName(QStringLiteral("techMuted"));
         hl->addWidget(cnt);
         hl->addStretch();
-
-        auto add_badge = [&](int count, const QString& label, const char* color) {
+        auto add_badge = [&](int count, const QString& label, const char* sig) {
             if (count == 0)
                 return;
             auto* badge = new QLabel(QString("%1 %2").arg(count).arg(label));
-            badge->setStyleSheet(
-                QString("color:%1;font-size:10px;font-weight:700;padding:2px 6px;background:transparent;border:0;")
-                    .arg(color));
+            badge->setObjectName(QStringLiteral("techBadge"));
+            badge->setProperty("sig", QString::fromLatin1(sig));
             hl->addWidget(badge);
         };
-        add_badge(cb, tr("BUY"), ui::colors::POSITIVE);
-        add_badge(cn, tr("HOLD"), GRAY);
-        add_badge(cs, tr("SELL"), ui::colors::NEGATIVE);
-
+        add_badge(cb, tr("BUY"), "strong_buy");
+        add_badge(cn, tr("HOLD"), "neutral");
+        add_badge(cs, tr("SELL"), "strong_sell");
         svl->addWidget(hdr);
 
-        // Table header
         auto* tbl_hdr = new QWidget(this);
-        tbl_hdr->setStyleSheet(QString("background:%1;border:0;border-bottom:1px solid %2;")
-                                   .arg(ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
+        tbl_hdr->setObjectName(QStringLiteral("techTblHdr"));
         auto* thl = new QHBoxLayout(tbl_hdr);
         thl->setContentsMargins(12, 4, 12, 4);
         thl->setSpacing(0);
-
         auto hdr_lbl = [&](const QString& text, int stretch, Qt::Alignment align = Qt::AlignLeft) {
             auto* l = new QLabel(text);
+            l->setObjectName(QStringLiteral("techColHdr"));
             l->setAlignment(align | Qt::AlignVCenter);
-            l->setStyleSheet(
-                QString("color:%1;font-size:10px;font-weight:600;letter-spacing:0.5px;background:transparent;border:0;")
-                    .arg(ui::colors::TEXT_TERTIARY()));
             thl->addWidget(l, stretch);
         };
         hdr_lbl(tr("INDICATOR"), 2);
@@ -604,84 +608,46 @@ void EquityTechnicalsTab::populate(const services::equity::TechnicalsData& paylo
         hdr_lbl(tr("INTERPRETATION"), 3);
         svl->addWidget(tbl_hdr);
 
-        // Rows
         bool alt = false;
         for (const auto& ti : *cat.inds) {
-            const char* sc = signal_color(ti.signal);
-
             auto* row = new QWidget(this);
-            row->setStyleSheet(
-                QString("background:%1;border:0;border-bottom:1px solid %2;")
-                    .arg(alt ? ui::colors::BG_RAISED() : ui::colors::BG_BASE(), ui::colors::BORDER_DIM()));
+            row->setObjectName(QStringLiteral("techRow"));
+            row->setProperty("alt", alt);
             auto* rl = new QHBoxLayout(row);
             rl->setContentsMargins(12, 5, 12, 5);
             rl->setSpacing(0);
 
-            // Name
             auto* name_lbl = new QLabel(ti.name);
-            name_lbl->setStyleSheet(QString("color:%1;font-size:12px;font-weight:600;background:transparent;border:0;")
-                                        .arg(ui::colors::TEXT_PRIMARY()));
+            name_lbl->setObjectName(QStringLiteral("techRowName"));
             rl->addWidget(name_lbl, 2);
 
-            // Value
             auto* val_lbl = new QLabel(QString::number(ti.value, 'f', 4));
+            val_lbl->setObjectName(QStringLiteral("techRowValue"));
             val_lbl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            val_lbl->setStyleSheet(
-                QString("color:%1;font-size:12px;font-family:'Consolas',monospace;background:transparent;border:0;")
-                    .arg(ui::colors::TEXT_SECONDARY()));
             rl->addWidget(val_lbl, 1);
 
-            // Signal badge
             auto* sig_w = new QWidget(this);
-            sig_w->setStyleSheet("background:transparent;border:0;");
+            sig_w->setObjectName(QStringLiteral("techSigCell"));
             auto* sig_hl = new QHBoxLayout(sig_w);
             sig_hl->setContentsMargins(0, 0, 0, 0);
             sig_hl->setAlignment(Qt::AlignCenter);
             auto* sig_lbl = new QLabel(signal_text(ti.signal));
+            sig_lbl->setObjectName(QStringLiteral("techSigPill"));
+            sig_lbl->setProperty("sig", QString::fromLatin1(signal_key(ti.signal)));
             sig_lbl->setAlignment(Qt::AlignCenter);
             sig_lbl->setFixedWidth(90);
-            sig_lbl->setStyleSheet(QString("color:%1;font-size:10px;font-weight:700;background:%2;"
-                                           "border-radius:2px;padding:2px 6px;border:0;")
-                                       .arg(sc, ui::colors::BG_RAISED()));
             sig_hl->addWidget(sig_lbl);
             rl->addWidget(sig_w, 1);
 
-            // Interpretation
-            // Build the column key from the indicator for interpretation lookup
-            QString col_key = ti.name.toLower().replace(' ', '_').replace(QString("%"), QString());
-            // Special mappings
-            if (ti.name == "Stoch %K")
-                col_key = "stoch_k";
-            else if (ti.name == "Stoch %D")
-                col_key = "stoch_d";
-            else if (ti.name == "Williams %R")
-                col_key = "williams_r";
-            else if (ti.name == "BB %B")
-                col_key = "bb_pband";
-            else if (ti.name == "BB Width")
-                col_key = "bb_wband";
-            else if (ti.name == "BB Mid")
-                col_key = "bb_mavg";
-            else if (ti.name == "BB Upper")
-                col_key = "bb_hband";
-            else if (ti.name == "BB Lower")
-                col_key = "bb_lband";
-            else if (ti.name == "Awesome Osc")
-                col_key = "ao";
-            else if (ti.name == "MACD Signal")
-                col_key = "macd_signal";
-
-            QString interp = interpretation(col_key, ti.value);
-            auto* interp_lbl = new QLabel(interp.isEmpty() ? "\xe2\x80\x94" : interp);
+            const QString interp = interpretation(ti.key, ti.value);
+            auto* interp_lbl = new QLabel(interp.isEmpty() ? QString::fromUtf8("\xe2\x80\x94") : interp);
+            interp_lbl->setObjectName(QStringLiteral("techRowInterp"));
             interp_lbl->setWordWrap(true);
-            interp_lbl->setStyleSheet(
-                QString("color:%1;font-size:11px;background:transparent;border:0;").arg(ui::colors::TEXT_TERTIARY()));
             rl->addWidget(interp_lbl, 3);
 
             svl->addWidget(row);
             alt = !alt;
         }
-
         sc_vl->addWidget(section);
     }
 }

@@ -14,8 +14,16 @@
 #include <QLineEdit>
 #include <QSpinBox>
 #include <QTableWidget>
+#include <QTimer>
+
+#include <algorithm>
 
 namespace fincept::screens::widgets {
+
+namespace {
+// A busy pair delivers a trade batch every ~100 ms; never redraw faster.
+constexpr qint64 kTradeTapeMinRenderMs = 100;
+} // namespace
 
 TradeTapeWidget::TradeTapeWidget(const QJsonObject& cfg, QWidget* parent) : BaseWidget(tr("TRADES"), parent) {
     auto* vl = content_layout();
@@ -55,7 +63,7 @@ void TradeTapeWidget::apply_config(const QJsonObject& cfg) {
     max_rows_ = qBound(5, cfg.value("max_rows").toInt(20), 200);
 
     trades_.clear();
-    render();
+    render_all();
 
     if (isVisible())
         hub_resubscribe();
@@ -87,9 +95,21 @@ void TradeTapeWidget::hideEvent(QHideEvent* e) {
 }
 
 void TradeTapeWidget::on_trade(const QVariant& v) {
-    if (!v.canConvert<fincept::trading::TradeData>())
+    using fincept::trading::TradeData;
+    if (v.metaType() == QMetaType::fromType<QVector<TradeData>>()) {
+        // Batch in arrival order: prepending each leaves the newest on top.
+        const auto batch = v.value<QVector<TradeData>>();
+        for (const auto& td : batch)
+            prepend_trade(td);
+    } else if (v.canConvert<TradeData>()) {
+        prepend_trade(v.value<TradeData>());
+    } else {
         return;
-    const auto td = v.value<fincept::trading::TradeData>();
+    }
+    request_render();
+}
+
+void TradeTapeWidget::prepend_trade(const fincept::trading::TradeData& td) {
     Trade t;
     t.when = (td.timestamp > 0) ? QDateTime::fromMSecsSinceEpoch(td.timestamp) : QDateTime::currentDateTime();
     t.side = td.side;
@@ -98,29 +118,78 @@ void TradeTapeWidget::on_trade(const QVariant& v) {
     trades_.prepend(t);
     while (trades_.size() > max_rows_)
         trades_.removeLast();
-    // Coalesce a burst of prints into one table rebuild — render() re-creates
-    // every cell, and a busy pair delivers many trades per event-loop turn.
-    schedule_render([this]() { render(); });
+    unrendered_ = std::min(unrendered_ + 1, max_rows_);
+}
+
+void TradeTapeWidget::request_render() {
+    if (render_armed_)
+        return;
+    render_armed_ = true;
+    const qint64 since = last_render_.isValid() ? last_render_.elapsed() : kTradeTapeMinRenderMs;
+    const int delay = since >= kTradeTapeMinRenderMs ? 0 : static_cast<int>(kTradeTapeMinRenderMs - since);
+    // `this` as context: the pending render is dropped if the widget dies first.
+    QTimer::singleShot(delay, this, [this]() {
+        render_armed_ = false;
+        render();
+    });
+}
+
+void TradeTapeWidget::fill_row(int row, const Trade& t, const QColor& buy, const QColor& sell) {
+    auto cell = [this, row](int column) {
+        QTableWidgetItem* item = table_->item(row, column);
+        if (!item) {
+            item = new QTableWidgetItem;
+            table_->setItem(row, column, item);
+        }
+        return item;
+    };
+    const QColor& col = (t.side.compare("buy", Qt::CaseInsensitive) == 0) ? buy : sell;
+    cell(0)->setText(t.when.toString("HH:mm:ss"));
+    QTableWidgetItem* px = cell(1);
+    px->setText(QString::number(t.price, 'f', 2));
+    px->setForeground(col);
+    px->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    QTableWidgetItem* sz = cell(2);
+    sz->setText(QString::number(t.amount, 'f', 4));
+    sz->setForeground(col);
+    sz->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 }
 
 void TradeTapeWidget::render() {
-    table_->setRowCount(trades_.size());
+    // The table mirrors trades_ as of the last render; since then `fresh` trades
+    // were prepended and the tail trimmed to max_rows_. Shift the existing rows
+    // down instead of re-creating every cell (up to 600 items per tick).
+    const int n = static_cast<int>(trades_.size());
+    const int fresh = std::min(unrendered_, n);
+    if (fresh >= max_rows_ || fresh >= n) {
+        render_all(); // every visible row is new anyway
+        return;
+    }
+    unrendered_ = 0;
+    last_render_.start();
+    if (fresh > 0) {
+        auto* model = table_->model();
+        model->insertRows(0, fresh);
+        const int overflow = table_->rowCount() - n;
+        if (overflow > 0)
+            model->removeRows(n, overflow);
+        const QColor buy = ui::colors::POSITIVE();
+        const QColor sell = ui::colors::NEGATIVE();
+        for (int i = 0; i < fresh; ++i)
+            fill_row(i, trades_[i], buy, sell);
+    }
+    set_loading(false);
+}
+
+void TradeTapeWidget::render_all() {
+    unrendered_ = 0;
+    last_render_.start();
+    const int n = static_cast<int>(trades_.size());
+    table_->setRowCount(n);
     const QColor buy = ui::colors::POSITIVE();
     const QColor sell = ui::colors::NEGATIVE();
-    for (int i = 0; i < trades_.size(); ++i) {
-        const auto& t = trades_[i];
-        auto* tm = new QTableWidgetItem(t.when.toString("HH:mm:ss"));
-        auto* px = new QTableWidgetItem(QString::number(t.price, 'f', 2));
-        auto* sz = new QTableWidgetItem(QString::number(t.amount, 'f', 4));
-        const QColor col = (t.side.compare("buy", Qt::CaseInsensitive) == 0) ? buy : sell;
-        px->setForeground(col);
-        sz->setForeground(col);
-        px->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        sz->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        table_->setItem(i, 0, tm);
-        table_->setItem(i, 1, px);
-        table_->setItem(i, 2, sz);
-    }
+    for (int i = 0; i < n; ++i)
+        fill_row(i, trades_[i], buy, sell);
     set_loading(false);
 }
 
@@ -162,6 +231,7 @@ QDialog* TradeTapeWidget::make_config_dialog(QWidget* parent) {
 
 void TradeTapeWidget::on_theme_changed() {
     apply_styles();
+    render_all(); // existing rows keep their buy/sell colours otherwise
 }
 
 void TradeTapeWidget::apply_styles() {
@@ -177,7 +247,7 @@ void TradeTapeWidget::apply_styles() {
 void TradeTapeWidget::retranslateUi() {
     BaseWidget::retranslateUi();
     set_title(tr("TRADES"));
-    render(); // re-renders header + side labels in the new language
+    render_all(); // re-renders header + side labels in the new language
 }
 
 } // namespace fincept::screens::widgets

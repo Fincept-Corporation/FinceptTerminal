@@ -34,22 +34,6 @@ class EquityFinancialsTab : public QWidget {
     QWidget* build_balance_view();
     QWidget* build_cashflow_view();
 
-    // Section builders
-    QWidget* build_key_metrics_section();
-    QWidget* build_profitability_section();
-    QWidget* build_dupont_section();
-    QWidget* build_liquidity_section();
-    QWidget* build_balance_section();
-    QWidget* build_cashflow_detail_section();
-    QWidget* build_raw_table_section(QTableWidget*& tbl_out);
-
-    // Chart builders
-    QChartView* build_revenue_trend_chart();
-    QChartView* build_margin_trend_chart();
-    QChartView* build_balance_trend_chart();
-    QChartView* build_cashflow_trend_chart();
-    QChartView* build_return_trend_chart();
-
     // Populate helpers
     void populate_income_view(const services::equity::FinancialsData& d);
     void populate_balance_view(const services::equity::FinancialsData& d);
@@ -62,15 +46,10 @@ class EquityFinancialsTab : public QWidget {
     void rebuild_return_chart(const services::equity::FinancialsData& d);
 
     // Helpers
-    static QFrame* make_section(const QString& title, const QString& color);
-    static QLabel* make_metric_card(QWidget* parent, const QString& label, const QString& value, const QString& color,
-                                    const QString& subtitle = {});
-    static void set_metric(QLabel* lbl, const QString& val);
     static double get_val(const QJsonObject& o, const QStringList& keys);
     static QString fmt_large(double v);
     static QString fmt_pct(double v);
     static QString fmt_ratio(double v);
-    static QColor growth_color(double v);
 
     QString current_symbol_;
     bool loaded_ = false;
@@ -80,6 +59,7 @@ class EquityFinancialsTab : public QWidget {
     QPushButton* btn_balance_ = nullptr;
     QPushButton* btn_cashflow_ = nullptr;
     QPushButton* btn_export_csv_ = nullptr;
+    QLabel* period_note_ = nullptr; ///< "Annual · fiscal years · as reported" + freshness
 
     QStackedWidget* stack_ = nullptr;
 

@@ -19,7 +19,11 @@ namespace fincept::screens::widgets {
 class QuickTradeWidget : public BaseWidget {
     Q_OBJECT
   public:
-    explicit QuickTradeWidget(QWidget* parent = nullptr);
+    explicit QuickTradeWidget(const QJsonObject& cfg = {}, QWidget* parent = nullptr);
+
+    /// Persists the looked-up symbol so the tile comes back on it.
+    QJsonObject config() const override;
+    void apply_config(const QJsonObject& cfg) override;
 
   protected:
     void on_theme_changed() override;
@@ -32,6 +36,8 @@ class QuickTradeWidget : public BaseWidget {
     void lookup_symbol();
     void on_side_changed(int idx);
     void submit_order();
+    /// EST. TOTAL = qty x (limit/stop price when one is entered, else last).
+    void update_estimate();
 
     /// Render the current_symbol_ quote card from a QuoteData snapshot.
     void apply_quote(const services::QuoteData& q);

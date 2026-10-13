@@ -6,10 +6,23 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QStyle>
 
 #include <algorithm>
 
 namespace fincept::screens::widgets {
+
+namespace {
+// The CHG% label's colour is a "dir" property matched by the list stylesheet;
+// re-polish only when it flips.
+void screener_set_dir(QLabel* label, const char* dir) {
+    if (label->property("dir").toString() == QLatin1String(dir))
+        return;
+    label->setProperty("dir", QString::fromLatin1(dir));
+    label->style()->unpolish(label);
+    label->style()->polish(label);
+}
+} // namespace
 
 // Broad basket: large-caps across sectors for screening
 static const QStringList kScreenerSymbols = {
@@ -43,6 +56,7 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget(tr("STOCK SCREENER"
 
     // Column headers
     header_ = new QWidget(this);
+    header_->setObjectName("scHeader");
     auto* hl = new QHBoxLayout(header_);
     hl->setContentsMargins(8, 3, 8, 3);
 
@@ -101,13 +115,13 @@ void ScreenerWidget::apply_styles() {
     count_lbl_->setStyleSheet(
         QString("color: %1; font-size: 9px; background: transparent;").arg(ui::colors::TEXT_TERTIARY()));
 
-    header_->setStyleSheet(QString("background: %1; border-bottom: 1px solid %2;")
-                               .arg(ui::colors::BG_RAISED())
-                               .arg(ui::colors::BORDER_DIM()));
-    for (auto* lbl : header_labels_) {
-        lbl->setStyleSheet(QString("color: %1; font-size: 9px; font-weight: bold; background: transparent;")
-                               .arg(ui::colors::TEXT_TERTIARY()));
-    }
+    // The header used to carry a selector-less sheet, which Qt also applies to its
+    // labels (so they drew the bottom border too) — the label rule keeps that.
+    header_->setStyleSheet(
+        QString("QWidget#scHeader{background:%1;border-bottom:1px solid %2;}"
+                "QWidget#scHeader QLabel{border-bottom:1px solid %2;color:%3;font-size:9px;font-weight:bold;"
+                "background:transparent;}")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::TEXT_TERTIARY()));
 
     scroll_->setStyleSheet(
         "QScrollArea { border: none; background: transparent; }"
@@ -129,9 +143,9 @@ void ScreenerWidget::apply_styles() {
                     "#screenerList QLabel{font-size:10px;background:transparent;}"
                     "#screenerList QLabel#scSym{color:%2;font-weight:bold;}"
                     "#screenerList QLabel#scPrice{color:%3;}"
-                    "#screenerList QLabel#scChgPos{color:%4;font-weight:bold;}"
-                    "#screenerList QLabel#scChgNeg{color:%5;font-weight:bold;}"
-                    "#screenerList QLabel#scChgFlat{color:%3;font-weight:bold;}"
+                    "#screenerList QLabel#scChg{color:%3;font-weight:bold;}"
+                    "#screenerList QLabel#scChg[dir=\"pos\"]{color:%4;}"
+                    "#screenerList QLabel#scChg[dir=\"neg\"]{color:%5;}"
                     "#screenerList QLabel#scVol{color:%6;}"
                     "#screenerList QLabel#scEmpty{color:%7;font-size:11px;padding:20px;}")
                 .arg(ui::colors::BG_RAISED(), ui::colors::INFO(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),
@@ -236,52 +250,57 @@ void ScreenerWidget::apply_filter() {
     render_rows(sorted);
 }
 
-void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
-    while (list_layout_->count() > 0) {
-        auto* item = list_layout_->takeAt(0);
-        // empty_lbl_ is reused across renders — take it out of the layout but
-        // never delete it.
-        if (item->widget() && item->widget() != empty_lbl_)
-            item->widget()->deleteLater();
-        delete item;
-    }
-
-    if (rows.isEmpty()) {
-        if (empty_lbl_) {
-            empty_lbl_->setVisible(true);
-            list_layout_->addWidget(empty_lbl_);
-        }
-        list_layout_->addStretch();
-        return;
-    }
-    if (empty_lbl_)
-        empty_lbl_->setVisible(false);
-
-    // No setStyleSheet in this loop — every colour/size comes from the single
+ScreenerWidget::ScreenerRow ScreenerWidget::make_row(int rank) {
+    // No setStyleSheet here — every colour/size comes from the single
     // stylesheet on list_widget_ (see apply_styles) via these object names.
-    bool alt = false;
-    for (const auto& q : rows) {
-        auto* row = new QWidget(list_widget_);
-        row->setObjectName(alt ? QStringLiteral("scRowAlt") : QStringLiteral("scRow"));
-        link_symbol(row, q.symbol);
-        auto* rl = new QHBoxLayout(row);
-        rl->setContentsMargins(8, 4, 8, 4);
+    ScreenerRow r;
+    r.row = new QWidget(list_widget_);
+    r.row->setObjectName(rank % 2 ? QStringLiteral("scRowAlt") : QStringLiteral("scRow"));
+    auto* rl = new QHBoxLayout(r.row);
+    rl->setContentsMargins(8, 4, 8, 4);
 
-        auto* sym = new QLabel(q.symbol);
-        sym->setObjectName("scSym");
-        rl->addWidget(sym, 2);
+    r.sym = new QLabel(r.row);
+    r.sym->setObjectName("scSym");
+    rl->addWidget(r.sym, 2);
 
-        auto* price = new QLabel(QString("$%1").arg(q.price, 0, 'f', 2));
-        price->setObjectName("scPrice");
-        price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        rl->addWidget(price, 2);
+    r.price = new QLabel(r.row);
+    r.price->setObjectName("scPrice");
+    r.price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    rl->addWidget(r.price, 2);
 
-        auto* chg = new QLabel(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
-        chg->setObjectName(q.change_pct > 0   ? QStringLiteral("scChgPos")
-                           : q.change_pct < 0 ? QStringLiteral("scChgNeg")
-                                              : QStringLiteral("scChgFlat"));
-        chg->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        rl->addWidget(chg, 1);
+    r.chg = new QLabel(r.row);
+    r.chg->setObjectName("scChg");
+    r.chg->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    rl->addWidget(r.chg, 1);
+
+    r.vol = new QLabel(r.row);
+    r.vol->setObjectName("scVol");
+    r.vol->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    rl->addWidget(r.vol, 2);
+
+    // Rows sit between the empty-state label and the trailing stretch.
+    list_layout_->insertWidget(list_layout_->count() - 1, r.row);
+    return r;
+}
+
+void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
+    // empty_lbl_ stays in the layout for the widget's lifetime; it is shown
+    // only while there is nothing to list.
+    if (empty_lbl_)
+        empty_lbl_->setVisible(rows.isEmpty());
+
+    // Refill the pooled rank rows in place (QLabel::setText is a no-op for
+    // unchanged text); rows beyond this render's count are hidden.
+    for (int i = 0; i < rows.size(); ++i) {
+        if (i >= rows_.size())
+            rows_.append(make_row(i));
+        const auto& q = rows[i];
+        const ScreenerRow& r = rows_[i];
+        link_symbol(r.row, q.symbol);
+        r.sym->setText(q.symbol);
+        r.price->setText(QString("$%1").arg(q.price, 0, 'f', 2));
+        r.chg->setText(QString("%1%2%").arg(q.change_pct >= 0 ? "+" : "").arg(q.change_pct, 0, 'f', 2));
+        screener_set_dir(r.chg, q.change_pct > 0 ? "pos" : (q.change_pct < 0 ? "neg" : "flat"));
 
         // Format volume: e.g. 45.2M
         QString vol_str;
@@ -293,17 +312,12 @@ void ScreenerWidget::render_rows(const QVector<services::QuoteData>& rows) {
             vol_str = QString("%1K").arg(q.volume / 1e3, 0, 'f', 0);
         else
             vol_str = QString::number(static_cast<long long>(q.volume));
+        r.vol->setText(vol_str);
 
-        auto* vol = new QLabel(vol_str);
-        vol->setObjectName("scVol");
-        vol->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        rl->addWidget(vol, 2);
-
-        list_layout_->addWidget(row);
-        alt = !alt;
+        r.row->setVisible(true);
     }
-
-    list_layout_->addStretch();
+    for (int i = static_cast<int>(rows.size()); i < rows_.size(); ++i)
+        rows_[i].row->setVisible(false);
 }
 
 void ScreenerWidget::retranslateUi() {

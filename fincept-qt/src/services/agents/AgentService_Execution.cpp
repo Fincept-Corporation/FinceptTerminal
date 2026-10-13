@@ -20,6 +20,7 @@
 #include "storage/repositories/LlmConfigRepository.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -30,6 +31,7 @@
 #include <QUuid>
 #include <QVariant>
 
+#include <algorithm>
 #include <memory>
 
 namespace fincept::services {
@@ -112,8 +114,8 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
     auto* proc = new QProcess(this);
     // Share the standard Python env + cwd + Windows console suppression with
     // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
-    // FINAGENT_DATA_DIR, and PYTHONPATH.
-    proc->setProcessEnvironment(py.build_python_env());
+    // FINAGENT_DATA_DIR, PYTHONPATH and FINCEPT_AGENT_DATA_DIR.
+    proc->setProcessEnvironment(agent_process_env());
     proc->setWorkingDirectory(py.scripts_dir());
 #ifdef _WIN32
     proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
@@ -127,6 +129,9 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
     auto done_emitted = std::make_shared<bool>(false);
     timer->start();
     active_runs_.insert(req_id, ActiveRun{proc, done_emitted});
+    // Started from Agent Studio → notify on finish if the user has moved on.
+    if (visible_agent_screens_ > 0)
+        notify_runs_.insert(req_id);
 
     // Read stdout line by line as process writes
     connect(proc, &QProcess::readyReadStandardOutput, this,
@@ -375,8 +380,8 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
     auto* proc = new QProcess(this);
     // Share the standard Python env + cwd + Windows console suppression with
     // PythonRunner so every finagent spawn sees the same FINCEPT_DATA_DIR,
-    // FINAGENT_DATA_DIR, and PYTHONPATH.
-    proc->setProcessEnvironment(py.build_python_env());
+    // FINAGENT_DATA_DIR, PYTHONPATH and FINCEPT_AGENT_DATA_DIR.
+    proc->setProcessEnvironment(agent_process_env());
     proc->setWorkingDirectory(py.scripts_dir());
 #ifdef _WIN32
     proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
@@ -390,6 +395,9 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
     auto done_emitted = std::make_shared<bool>(false);
     timer->start();
     active_runs_.insert(req_id, ActiveRun{proc, done_emitted});
+    // Started from Agent Studio → notify on finish if the user has moved on.
+    if (visible_agent_screens_ > 0)
+        notify_runs_.insert(req_id);
 
     connect(proc, &QProcess::readyReadStandardOutput, this,
             [self, proc, accumulated, final_json, done_emitted, req_id]() {
@@ -616,7 +624,7 @@ QString AgentService::run_agentic_streaming(const QString& action, const QJsonOb
     QString script_path = py.scripts_dir() + "/agents/finagent_core/main.py";
 
     auto* proc = new QProcess(this);
-    proc->setProcessEnvironment(py.build_python_env());
+    proc->setProcessEnvironment(agent_process_env());
     proc->setWorkingDirectory(py.scripts_dir());
 #ifdef _WIN32
     proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
@@ -739,17 +747,37 @@ QString AgentService::start_task(const QString& query, const QJsonObject& config
     return run_agentic_streaming(QStringLiteral("agentic_start_task"), params, config);
 }
 
-QString AgentService::resume_task(const QString& task_id) {
+namespace {
+/// The stored task config minus everything that is minted per run. Python
+/// never persists credentials or bridge wiring (AgenticRunner strips them), but
+/// `model` IS kept without its key — dropping it here makes build_payload
+/// re-resolve a model WITH credentials (agent profile, else the active LLM),
+/// exactly as when the task was started.
+QJsonObject agent_svc_resume_config(const QJsonObject& task_config) {
+    QJsonObject cfg = task_config;
+    cfg.remove(QStringLiteral("model"));
+    cfg.remove(QStringLiteral("terminal_tools"));
+    for (const QString& k : cfg.keys()) {
+        if (k.startsWith(QLatin1String("terminal_mcp_")))
+            cfg.remove(k);
+    }
+    return cfg;
+}
+} // namespace
+
+QString AgentService::resume_task(const QString& task_id, const QJsonObject& task_config) {
     QJsonObject params;
     params["task_id"] = task_id;
-    return run_agentic_streaming(QStringLiteral("agentic_resume_task"), params, {}, task_id);
+    return run_agentic_streaming(QStringLiteral("agentic_resume_task"), params, agent_svc_resume_config(task_config),
+                                 task_id);
 }
 
-QString AgentService::reply_to_question(const QString& task_id, const QString& answer) {
+QString AgentService::reply_to_question(const QString& task_id, const QString& answer, const QJsonObject& task_config) {
     QJsonObject params;
     params["task_id"] = task_id;
     params["answer"] = answer;
-    return run_agentic_streaming(QStringLiteral("agentic_reply_question"), params, {}, task_id);
+    return run_agentic_streaming(QStringLiteral("agentic_reply_question"), params, agent_svc_resume_config(task_config),
+                                 task_id);
 }
 
 // ── Scheduled recurring tasks ────────────────────────────────────────────────
@@ -767,13 +795,15 @@ QString AgentService::schedule_create_task(const QString& name, const QString& q
     run_python_stdin(QStringLiteral("agentic_schedule_create"), params, {}, [self](bool ok, QJsonObject result) {
         if (!self)
             return;
-        if (ok)
+        if (ok) {
             emit self->schedule_created(result.value("schedule_id").toString());
-        else
+            // Python reports the earliest due time across all schedules, so the
+            // new one (start_now included) arms the timer without a re-list.
+            self->apply_schedule_due(static_cast<qint64>(result.value("next_run_epoch_ms").toDouble()));
+        } else {
             emit self->error_occurred("schedule_create", result["error"].toString());
+        }
     });
-    // Make sure the polling timer is on now that there might be schedules.
-    ensure_schedule_timer();
     return req_id;
 }
 
@@ -785,23 +815,9 @@ QString AgentService::schedule_list() {
             return;
         if (ok) {
             const QJsonArray schedules = result.value("schedules").toArray();
-            // Schedules are persisted, but the 30 s tick timer only existed in the
-            // session that created one — after a restart nothing fired them. Arm it
-            // as soon as the list shows an enabled schedule, and disarm it when none
-            // is left (each tick spawns a Python process).
-            bool any_enabled = false;
-            for (const auto& s : schedules) {
-                if (s.toObject().value("enabled").toBool()) {
-                    any_enabled = true;
-                    break;
-                }
-            }
-            if (any_enabled) {
-                self->ensure_schedule_timer();
-            } else if (self->schedule_timer_) {
-                self->schedule_timer_->deleteLater();
-                self->schedule_timer_ = nullptr;
-            }
+            // Every listing re-syncs the due-time timer (create / enable /
+            // disable / delete all end in a list), so it always reflects the DB.
+            self->apply_schedule_due(static_cast<qint64>(result.value("next_run_epoch_ms").toDouble()));
             emit self->schedules_listed(schedules);
         } else {
             emit self->error_occurred("schedule_list", result["error"].toString());
@@ -850,10 +866,22 @@ QString AgentService::schedule_set_enabled(const QString& schedule_id, bool enab
 }
 
 void AgentService::tick_schedules() {
+    if (schedule_tick_in_flight_)
+        return;
+    schedule_tick_in_flight_ = true;
     QPointer<AgentService> self = this;
     run_python_stdin(QStringLiteral("agentic_schedule_tick"), {}, {}, [self](bool ok, QJsonObject result) {
-        if (!self || !ok)
+        if (!self)
             return;
+        self->schedule_tick_in_flight_ = false;
+        if (!ok) {
+            // Keep the schedule alive: retry on the safety re-check instead of
+            // dropping it (a transient Python failure must not stop a cadence).
+            LOG_WARN("AgentService", "Schedule tick failed: " + result.value("error").toString().left(200));
+            self->next_schedule_due_ms_ = QDateTime::currentMSecsSinceEpoch() + 60 * 1000;
+            self->rearm_schedule_timer();
+            return;
+        }
         const QJsonArray due = result.value("due").toArray();
         for (const auto& v : due) {
             QJsonObject row = v.toObject();
@@ -868,7 +896,56 @@ void AgentService::tick_schedules() {
             const QString task_req = self->start_task(query, cfg);
             emit self->scheduled_task_fired(sid, name, task_req);
         }
+        self->apply_schedule_due(static_cast<qint64>(result.value("next_run_epoch_ms").toDouble()));
     });
+}
+
+// Longest single sleep. The timer is re-armed from the cached due time when it
+// wakes early, WITHOUT spawning Python, so this only bounds drift from sleep /
+// clock changes; it never costs a process.
+static constexpr qint64 kScheduleRecheckMs = 15LL * 60 * 1000;
+
+void AgentService::apply_schedule_due(qint64 next_due_ms) {
+    next_schedule_due_ms_ = next_due_ms > 0 ? next_due_ms : 0;
+    rearm_schedule_timer();
+}
+
+void AgentService::rearm_schedule_timer() {
+    if (!schedule_timer_) {
+        schedule_timer_ = new QTimer(this);
+        schedule_timer_->setSingleShot(true);
+        QPointer<AgentService> self = this;
+        connect(schedule_timer_, &QTimer::timeout, this, [self]() {
+            if (self)
+                self->on_schedule_timer();
+        });
+    }
+    if (next_schedule_due_ms_ <= 0) {
+        schedule_timer_->stop();
+        return;
+    }
+    const qint64 delay =
+        std::clamp<qint64>(next_schedule_due_ms_ - QDateTime::currentMSecsSinceEpoch(), 0, kScheduleRecheckMs);
+    schedule_timer_->start(static_cast<int>(delay));
+}
+
+void AgentService::on_schedule_timer() {
+    if (next_schedule_due_ms_ <= 0)
+        return;
+    // Agentic Mode switched off since the timer was armed: fire nothing. The
+    // schedules stay in the DB; initialize_deferred / the AGENTIC tab re-arm
+    // them once it is back on.
+    if (!agentic_mode_enabled()) {
+        apply_schedule_due(0);
+        return;
+    }
+    // Woke for the periodic re-check rather than a due schedule: re-arm from
+    // the cached time, no Python. (1 s slack absorbs timer coarseness.)
+    if (QDateTime::currentMSecsSinceEpoch() + 1000 < next_schedule_due_ms_) {
+        rearm_schedule_timer();
+        return;
+    }
+    tick_schedules();
 }
 
 // ── Library inspection (Phase 3 management UI) ───────────────────────────────
@@ -925,29 +1002,6 @@ QString AgentService::reflexion_list() {
         emit self->reflexion_listed(result.value("reflections").toArray());
     });
     return req_id;
-}
-
-void AgentService::ensure_schedule_timer() {
-    if (schedule_timer_)
-        return;
-    auto* t = new QTimer(this);
-    t->setInterval(30 * 1000); // 30s — finer than this is overkill at the minute granularity DSL
-    QPointer<AgentService> self = this;
-    QObject::connect(t, &QTimer::timeout, this, [self]() {
-        if (self)
-            self->tick_schedules();
-    });
-    t->start();
-    schedule_timer_ = t;
-    // Fire one immediate tick so a freshly-created `start_now=true` schedule
-    // doesn't wait the full 30s.
-    QMetaObject::invokeMethod(
-        this,
-        [self]() {
-            if (self)
-                self->tick_schedules();
-        },
-        Qt::QueuedConnection);
 }
 
 QString AgentService::pause_task(const QString& task_id) {

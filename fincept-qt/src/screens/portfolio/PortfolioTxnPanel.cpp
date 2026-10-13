@@ -8,9 +8,12 @@
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QMenu>
 #include <QScrollBar>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 namespace fincept::screens {
 
@@ -102,6 +105,46 @@ void PortfolioTxnPanel::build_ui() {
             emit symbol_activated(sym_item->text());
     });
 
+    // Row menu: cross-link the symbol, edit/delete the ledger row (the service
+    // re-derives the position), export the full ledger.
+    table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(table_, &QTableWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        const int row = table_->rowAt(pos.y());
+        const auto* date_item = row >= 0 ? table_->item(row, 0) : nullptr;
+        const auto* sym_item = row >= 0 ? table_->item(row, 1) : nullptr;
+        const QString id = date_item ? date_item->data(Qt::UserRole).toString() : QString();
+        const QString symbol = sym_item ? sym_item->text() : QString();
+
+        QMenu menu(this);
+        if (!symbol.isEmpty()) {
+            QMenu* open_in = menu.addMenu(tr("Open %1 in").arg(symbol));
+            const struct {
+                const char* screen;
+                const char* label;
+            } kTargets[] = {
+                {"equity_research", QT_TR_NOOP("Equity Research")}, {"equity_trading", QT_TR_NOOP("Equity Trading")},
+                {"news", QT_TR_NOOP("News")},                       {"watchlist", QT_TR_NOOP("Watchlist")},
+                {"backtesting", QT_TR_NOOP("Backtesting")},
+            };
+            for (const auto& t : kTargets) {
+                const QString screen = QString::fromLatin1(t.screen);
+                connect(open_in->addAction(tr(t.label)), &QAction::triggered, this,
+                        [this, screen, symbol]() { emit open_symbol_requested(screen, symbol); });
+            }
+        }
+        if (!id.isEmpty()) {
+            menu.addSeparator();
+            connect(menu.addAction(tr("Edit Transaction…")), &QAction::triggered, this,
+                    [this, id]() { emit edit_transaction_requested(id); });
+            connect(menu.addAction(tr("Delete Transaction…")), &QAction::triggered, this,
+                    [this, id]() { emit delete_transaction_requested(id); });
+        }
+        menu.addSeparator();
+        connect(menu.addAction(tr("Export Full Ledger (CSV)…")), &QAction::triggered, this,
+                &PortfolioTxnPanel::export_requested);
+        menu.exec(table_->viewport()->mapToGlobal(pos));
+    });
+
     layout->addWidget(table_, 1);
 }
 
@@ -148,6 +191,7 @@ void PortfolioTxnPanel::populate() {
         // Date (ISO → display)
         auto* date_item = new QTableWidgetItem(t.transaction_date.left(10));
         date_item->setForeground(QColor(ui::colors::TEXT_SECONDARY()));
+        date_item->setData(Qt::UserRole, t.id); // row menu edits/deletes by ledger id
         table_->setItem(row, 0, date_item);
 
         // Symbol
@@ -179,7 +223,9 @@ void PortfolioTxnPanel::populate() {
         table_->setItem(row, 3, qty_item);
 
         // Price
-        auto* price_item = new ui::NumericTableWidgetItem(QString::number(t.price, 'f', 2), t.price);
+        // Sub-unit prices (crypto, FX, penny stocks) lost their digits at 2 dp.
+        const int price_dp = std::abs(t.price) < 1.0 ? 6 : 2;
+        auto* price_item = new ui::NumericTableWidgetItem(QString::number(t.price, 'f', price_dp), t.price);
         price_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         price_item->setForeground(QColor(ui::colors::TEXT_PRIMARY()));
         table_->setItem(row, 4, price_item);
@@ -200,7 +246,10 @@ void PortfolioTxnPanel::populate() {
     }
 
     table_->setSortingEnabled(true);
-    count_label_->setText(tr("%n transaction(s)", "", static_cast<int>(txns_.size())));
+    // The panel is fed the most recent rows only; say so when the page is full.
+    count_label_->setText(txns_.size() >= kRecentRows
+                              ? tr("latest %1 — right-click to export the full ledger").arg(txns_.size())
+                              : tr("%n transaction(s)", "", static_cast<int>(txns_.size())));
 
     // Restore selection + scroll position after the rebuild.
     if (!prev_key.isEmpty()) {

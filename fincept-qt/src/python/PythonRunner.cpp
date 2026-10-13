@@ -150,7 +150,7 @@ static bool route_yfinance_to_daemon(const QStringList& args, std::function<void
 // Python script reads them, and it future-proofs new scripts.
 static const QStringList kManagedCredentialKeys = {
     "ALPHA_VANTAGE_API_KEY", "POLYGON_API_KEY",    "DATABENTO_API_KEY", "FRED_API_KEY",       "NEWSAPI_KEY",
-    "BINANCE_API_KEY",       "BINANCE_SECRET_KEY", "KRAKEN_API_KEY",    "KRAKEN_SECRET_KEY",  "IEX_CLOUD_TOKEN",
+    "BINANCE_API_KEY",       "BINANCE_SECRET_KEY", "KRAKEN_API_KEY",    "KRAKEN_SECRET_KEY",
     "FINNHUB_API_KEY",       "TIINGO_API_KEY",     "QUANDL_API_KEY",    "POLYMARKET_API_KEY", "POLYMARKET_SECRET",
     "POLYMARKET_PASSPHRASE", "POLYMARKET_WALLET",
 // Keyed data-connector provider keys (auto-generated; see MCP data_* tools /
@@ -216,7 +216,6 @@ static bool script_supports_arg_spill(const QString& script, const QStringList& 
     static const QStringList kSpillCapableScripts = {
         // scripts/*.py — resolve_arg()
         QStringLiteral("news_nlp.py"),
-        QStringLiteral("news_correlation.py"),
         QStringLiteral("news_geolocation.py"),
         // scripts/Analytics/options/*.py — resolve_arg(), invoked via
         // MAAnalyticsService::run_python_json()
@@ -226,10 +225,6 @@ static bool script_supports_arg_spill(const QString& script, const QStringList& 
         QStringLiteral("Analytics/options/oi_tracker.py"),
         QStringLiteral("Analytics/options/straddle_simulator.py"),
         QStringLiteral("Analytics/options/strategy_chart.py"),
-        // scripts/agents/finagent_core/main.py — payload_str.startswith("@").
-        // AgentService reaches it via its own stdin QProcess, not through here,
-        // but the reader exists so the flag stays correct for any other caller.
-        QStringLiteral("agents/finagent_core/main.py"),
     };
     return kSpillCapableScripts.contains(script);
 }
@@ -317,6 +312,20 @@ static bool extract_error_envelope(const QJsonDocument& doc, QString* out) {
     return true;
 }
 
+// While PythonSetupManager is still installing libraries (first run after an
+// early launch, or a background sync), an import failure means "not installed
+// yet", not "broken" — tell the user that instead of a traceback.
+static bool pyrunner_is_import_error(const QString& text) {
+    return text.contains(QLatin1String("ModuleNotFoundError")) || text.contains(QLatin1String("No module named")) ||
+           text.contains(QLatin1String("ImportError"));
+}
+
+static QString pyrunner_setup_pending_message() {
+    return PythonRunner::tr("Analytics libraries are still installing (%1%). This feature will work when setup "
+                            "finishes.")
+        .arg(PythonSetupManager::instance().overall_percent());
+}
+
 // Scripts that require NumPy 1.x environment
 static const QStringList kNumpy1Scripts = {
     "vectorbt", "backtesting", "gluonts", "functime", "pyportfolioopt", "financepy", "ffn", "ffn_wrapper",
@@ -341,6 +350,29 @@ PythonRunner::PythonRunner() {
         // System python detection requires a process spawn — do it async
         find_python_async();
     }
+
+    // Both signals are emitted on the GUI thread (PythonSetupManager lives
+    // there), and `this` as context makes the slots run on our own thread.
+    auto& setup = PythonSetupManager::instance();
+    connect(&setup, &PythonSetupManager::core_ready, this, &PythonRunner::refresh_interpreter);
+    connect(&setup, &PythonSetupManager::setup_complete, this, [this](bool success, const QString&) {
+        if (success)
+            refresh_interpreter();
+    });
+}
+
+void PythonRunner::refresh_interpreter() {
+    const QString resolved = find_python_sync();
+    if (resolved.isEmpty())
+        return;
+    if (resolved != python_path_)
+        LOG_INFO("Python", "Interpreter re-resolved after setup: " + resolved);
+    python_path_ = resolved;
+    python_init_done_ = true;
+    // PythonWorker restarts its daemon on python_ready; AgentService resumes
+    // requests parked while no interpreter existed.
+    emit python_ready();
+    start_next();
 }
 
 bool PythonRunner::is_available() const {
@@ -479,7 +511,10 @@ void PythonRunner::find_python_async() {
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
             [this, proc, sys_python](int exit_code, QProcess::ExitStatus) {
                 proc->deleteLater();
-                if (exit_code == 0) {
+                if (!python_path_.isEmpty()) {
+                    // refresh_interpreter() found the managed venv while this probe
+                    // ran — never downgrade it to the system interpreter.
+                } else if (exit_code == 0) {
                     python_path_ = sys_python;
                     LOG_INFO("Python", "System Python found: " + sys_python);
                 } else {
@@ -518,6 +553,7 @@ QString PythonRunner::find_scripts_dir() const {
     // Mach-Os in MacOS/ makes codesign reject the bundle as malformed.
     QStringList candidates = {
         exe_dir + "/../Resources/scripts", // macOS canonical (.app/Contents/Resources/scripts)
+        exe_dir + "/../share/fincept-terminal/scripts", // Linux FHS / Flatpak (cmake --install)
         exe_dir + "/scripts",
         exe_dir + "/../scripts",
         exe_dir + "/../../scripts",
@@ -586,7 +622,11 @@ void PythonRunner::run_with_options(const QString& script, const QStringList& ar
     }
 
     if (python_init_done_ && python_path_.isEmpty()) {
-        cb({false, {}, "Python not available — run first-time setup from the app", -1});
+        cb({false, {},
+            PythonSetupManager::instance().is_running()
+                ? pyrunner_setup_pending_message()
+                : QStringLiteral("Python not available — run first-time setup from the app"),
+            -1});
         return;
     }
 
@@ -631,14 +671,17 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
     }
 
     if (python_init_done_ && python_path_.isEmpty()) {
-        cb({false, {}, "Python not available — run first-time setup from the app", -1});
+        cb({false, {},
+            PythonSetupManager::instance().is_running()
+                ? pyrunner_setup_pending_message()
+                : QStringLiteral("Python not available — run first-time setup from the app"),
+            -1});
         return;
     }
 
     // Write code to a temp file. The filename must be unique even when several
-    // run_code() calls fire within the same millisecond (e.g. on portfolio load
-    // fetch_correlation + benchmark history + risk-free rate all kick off at
-    // once). A bare millisecond timestamp collided, so one cell's completion
+    // run_code() calls fire within the same millisecond (e.g. several notebook
+    // cells or tool calls started together). A bare millisecond timestamp collided, so one cell's completion
     // would delete the temp file out from under another still-pending cell
     // ("can't open file … No such file or directory"). A UUID guarantees
     // uniqueness regardless of timing.
@@ -672,7 +715,10 @@ void PythonRunner::start_next() {
 
         if (python_path_.isEmpty()) {
             // Python became unavailable — fail the request
-            req.cb({false, {}, "Python not available", -1});
+            req.cb({false, {},
+                    PythonSetupManager::instance().is_running() ? pyrunner_setup_pending_message()
+                                                                : QStringLiteral("Python not available"),
+                    -1});
             continue;
         }
 
@@ -974,6 +1020,10 @@ void PythonRunner::start_next() {
                             result.error = QString("Script timed out after %1 s and was killed").arg(budget_ms / 1000);
                     }
 
+                    if (!result.success && PythonSetupManager::instance().is_running() &&
+                        (pyrunner_is_import_error(result.error) || pyrunner_is_import_error(result.output)))
+                        result.error = pyrunner_setup_pending_message();
+
                     if (!result.success && !is_code) {
                         LOG_ERROR("Python", QString("Script %1 failed in %2ms (exit=%3): %4")
                                                 .arg(script_name)
@@ -1024,6 +1074,8 @@ void PythonRunner::start_next() {
                     QString message = "Process error: " + error_msg;
                     if (timed_out->load())
                         message = QString("Script timed out after %1 s and was killed").arg(budget_ms / 1000);
+                    else if (err == QProcess::FailedToStart && PythonSetupManager::instance().is_running())
+                        message = pyrunner_setup_pending_message(); // venv still being created
                     else if (err == QProcess::Crashed && !stderr_tail.isEmpty())
                         message += "\n" + stderr_tail;
                     (*cb)({false, {}, message, -1});

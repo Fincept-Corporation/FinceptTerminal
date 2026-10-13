@@ -176,10 +176,13 @@ QWidget* GovDataScreen::make_panel(int index) {
         } else if (prov.id == "hk") {
             panel = new GovDataHKPanel(panel_stack_);
         } else if (prov.id == "universal-ckan") {
-            // The universal CKAN connector (datagovuk_api.py) hardcodes the
-            // data.gov.uk endpoint, so serve this provider with the dedicated UK
-            // panel (Publishers → Datasets → Resources + search) instead of the
-            // generic provider panel with its non-functional portal selector.
+            // universal_ckan_api.py serves several national CKAN portals: the panel asks it for the
+            // portal list and sends the selected portal code with every request.
+            GovProviderOptions ckan_opts;
+            ckan_opts.portals_command = QStringLiteral("portals");
+            panel = new GovDataProviderPanel(prov.script, prov.color, "Publishers", ckan_opts, panel_stack_);
+        } else if (prov.id == "uk") {
+            // data.gov.uk keeps its dedicated panel (pagination + popular publishers).
             panel = new GovDataUKPanel(panel_stack_);
         } else if (prov.id == "australia") {
             panel = new GovDataAustraliaPanel(panel_stack_);
@@ -466,11 +469,26 @@ void GovDataScreen::activate_provider(int index) {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap GovDataScreen::save_state() const {
-    return {{"provider_index", active_index_}};
+    const auto& providers = services::GovDataService::providers();
+    const QString id = (active_index_ >= 0 && active_index_ < providers.size()) ? providers[active_index_].id : QString();
+    // The id survives reordering of the provider list; the index is kept for older builds.
+    return {{"provider_id", id}, {"provider_index", active_index_}};
 }
 
 void GovDataScreen::restore_state(const QVariantMap& state) {
-    const int idx = state.value("provider_index", -1).toInt();
+    int idx = -1;
+    const QString id = state.value("provider_id").toString();
+    if (!id.isEmpty()) {
+        const auto& providers = services::GovDataService::providers();
+        for (int i = 0; i < providers.size(); ++i) {
+            if (providers[i].id == id) {
+                idx = i;
+                break;
+            }
+        }
+    } else {
+        idx = state.value("provider_index", -1).toInt();
+    }
     if (idx >= 0)
         activate_provider(idx);
 }

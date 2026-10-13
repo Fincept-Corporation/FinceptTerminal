@@ -278,7 +278,9 @@ void TreasuryPanel::on_runway_update(const QVariant& v) {
     update_demo_chip();
 
     if (w.months <= 0.0) {
-        runway_value_->setText(QStringLiteral("—"));
+        // No configured burn rate → runway is unknown, not a number we invent.
+        runway_value_->setText(w.monthly_opex_usd <= 0.0 ? tr("— (monthly opex not configured)")
+                                                         : QStringLiteral("—"));
         return;
     }
     runway_value_->setText(QStringLiteral("%1 months  ($%2/mo)")

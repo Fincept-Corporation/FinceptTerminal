@@ -7,15 +7,19 @@
 #include "screens/geopolitics/HDXDataPanel.h"
 #include "screens/geopolitics/RelationshipPanel.h"
 #include "screens/geopolitics/TradeAnalysisPanel.h"
+#include "auth/AuthTypes.h"
+#include "network/http/HttpClient.h"
 #include "services/geopolitics/GeopoliticsService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/EnterprisePromo.h"
 
 #include <QCompleter>
 #include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
+#include <QStyle>
 
 namespace fincept::screens {
 
@@ -25,6 +29,8 @@ namespace {
 // Page size the screen requests - passed explicitly so the request key it records
 // matches the one the service stamps on the reply.
 constexpr int kGeoScreenEventsLimit = 100;
+/// Below this balance the credit counter turns red and PLANS appears.
+constexpr double kGeoLowCredits = 20.0;
 } // namespace
 
 // ── Constructor ──────────────────────────────────────────────────────────────
@@ -50,7 +56,9 @@ GeopoliticsScreen::GeopoliticsScreen(QWidget* parent) : QWidget(parent) {
 
 void GeopoliticsScreen::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
-    refresh_timer_->start();
+    // Auto-refresh is opt-in: every events fetch costs API credits.
+    if (auto_refresh_btn_ && auto_refresh_btn_->isChecked())
+        refresh_timer_->start();
     clock_timer_->start();
     if (first_show_) {
         first_show_ = false;
@@ -70,7 +78,22 @@ void GeopoliticsScreen::hideEvent(QHideEvent* e) {
 }
 
 void GeopoliticsScreen::refresh_theme() {
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
+    // "* { }" = the old bare "background:" declaration, now that the sheet also has rules.
+    setStyleSheet(QString("* { background:%1; }"
+                          "QLabel#geoCredits { color:%2; font-size:%3px; font-weight:700; font-family:%4; }"
+                          "QLabel#geoCredits[state=\"ok\"] { color:%5; }"
+                          "QLabel#geoCredits[state=\"warn\"] { color:%6; }"
+                          "QLabel#geoCredits[state=\"low\"] { color:%7; }"
+                          "QPushButton#geoPlansBtn { color:%8; background:%6; border:none; padding:0 8px;"
+                          " font-size:%3px; font-weight:700; font-family:%4; }"
+                          "QPushButton#geoAutoBtn { color:%9; background:transparent; border:1px solid %10;"
+                          " padding:0 8px; font-size:%3px; font-weight:700; font-family:%4; }"
+                          "QPushButton#geoAutoBtn:checked { color:%6; border-color:%6; }")
+                      .arg(ui::colors::BG_BASE(), ui::colors::TEXT_TERTIARY())
+                      .arg(ui::fonts::TINY)
+                      .arg(ui::fonts::DATA_FAMILY(), ui::colors::POSITIVE(), ui::colors::WARNING(),
+                           ui::colors::NEGATIVE(), ui::colors::BG_BASE(), ui::colors::TEXT_SECONDARY(),
+                           ui::colors::BORDER_DIM()));
     // Re-apply tab highlight so colors remain correct after theme change
     on_tab_changed(active_tab_);
 }
@@ -189,8 +212,7 @@ void GeopoliticsScreen::build_ui() {
 
     root->addWidget(build_status_bar());
 
-    setStyleSheet(QString("background:%1;").arg(ui::colors::BG_BASE()));
-    on_tab_changed(0);
+    refresh_theme(); // root sheet + tab highlight
 }
 
 // ── Top Bar ──────────────────────────────────────────────────────────────────
@@ -498,12 +520,35 @@ QWidget* GeopoliticsScreen::build_status_bar() {
     hl->addWidget(pager);
     update_pager();
 
+    // Opt-in auto refresh: each events fetch costs API credits (the 5-min timer
+    // used to run whenever the screen was visible).
+    auto_refresh_btn_ = new QPushButton(tr("AUTO ⟳ OFF"), bar);
+    auto_refresh_btn_->setObjectName("geoAutoBtn");
+    auto_refresh_btn_->setCheckable(true);
+    auto_refresh_btn_->setFixedHeight(18);
+    auto_refresh_btn_->setCursor(Qt::PointingHandCursor);
+    auto_refresh_btn_->setToolTip(tr("Re-fetch the current events page every 5 minutes while this screen is "
+                                     "visible. Each fetch uses API credits; off by default."));
+    connect(auto_refresh_btn_, &QPushButton::toggled, this, [this](bool on) {
+        set_auto_refresh(on);
+        ScreenStateManager::instance().notify_changed(this);
+    });
+    hl->addWidget(auto_refresh_btn_);
+
+    // Styled by the root sheet (#geoCredits[state=...]).
     credits_label_ = new QLabel(tr("CREDITS: —"), bar);
-    credits_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                      .arg(ui::colors::TEXT_TERTIARY())
-                                      .arg(ui::fonts::TINY)
-                                      .arg(ui::fonts::DATA_FAMILY));
+    credits_label_->setObjectName("geoCredits");
+    credits_label_->setToolTip(tr("Fincept API credit balance after the last events request"));
     hl->addWidget(credits_label_);
+
+    plans_btn_ = new QPushButton(tr("PLANS"), bar);
+    plans_btn_->setObjectName("geoPlansBtn");
+    plans_btn_->setFixedHeight(18);
+    plans_btn_->setCursor(Qt::PointingHandCursor);
+    plans_btn_->setToolTip(tr("Credits are running low — see Plans & Pricing"));
+    plans_btn_->hide();
+    connect(plans_btn_, &QPushButton::clicked, this, [this]() { ui::billing::open_plans(this); });
+    hl->addWidget(plans_btn_);
 
     status_label_ = new QLabel(tr("READY"), bar);
     set_status_color(ui::colors::POSITIVE());
@@ -655,18 +700,7 @@ void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
             .arg(ui::fonts::DATA_FAMILY)
             .arg(clr_rgb));
 
-    // Credits — colour-coded so depletion is glanceable.
-    if (page.remaining_credits >= 0 && credits_label_) {
-        const int rc = page.remaining_credits;
-        const QString credit_color = rc < 20    ? ui::colors::NEGATIVE()
-                                     : rc < 100 ? ui::colors::WARNING()
-                                                : ui::colors::POSITIVE();
-        credits_label_->setText(tr("CREDITS: %1").arg(rc));
-        credits_label_->setStyleSheet(QString("color:%1; font-size:%2px; font-weight:700; font-family:%3;")
-                                          .arg(credit_color)
-                                          .arg(ui::fonts::TINY)
-                                          .arg(ui::fonts::DATA_FAMILY));
-    }
+    update_credits(page.remaining_credits, page.credits_used);
 
     status_label_->setText(tr("READY"));
     status_label_->setToolTip(QString()); // clear any stale error detail
@@ -674,6 +708,35 @@ void GeopoliticsScreen::on_events_loaded(services::geo::EventsPage page) {
     // The 5-minute refresh must not throw away the user's pan/zoom.
     monitor_panel_->set_events(page.events, /*fit_map=*/!auto_refresh_pending_);
     auto_refresh_pending_ = false;
+}
+
+void GeopoliticsScreen::update_credits(double remaining, double used) {
+    if (!credits_label_ || remaining < 0)
+        return;
+    // Colour-coded so depletion is glanceable; fractional balances (0.35-credit
+    // calls) used to be dropped entirely because they were parsed with toInt().
+    const char* state = remaining < kGeoLowCredits ? "low" : (remaining < 100.0 ? "warn" : "ok");
+    credits_label_->setText(tr("CREDITS: %1").arg(auth::format_credits(remaining)));
+    credits_label_->setToolTip(used > 0 ? tr("Balance after the last request (it used %1 credits)")
+                                              .arg(auth::format_credits(used))
+                                        : tr("Fincept API credit balance"));
+    credits_label_->setProperty("state", QString::fromLatin1(state));
+    credits_label_->style()->unpolish(credits_label_);
+    credits_label_->style()->polish(credits_label_);
+    if (plans_btn_)
+        plans_btn_->setVisible(remaining < kGeoLowCredits);
+}
+
+void GeopoliticsScreen::set_auto_refresh(bool on) {
+    if (auto_refresh_btn_) {
+        QSignalBlocker block(auto_refresh_btn_);
+        auto_refresh_btn_->setChecked(on);
+        auto_refresh_btn_->setText(on ? tr("AUTO ⟳ 5m") : tr("AUTO ⟳ OFF"));
+    }
+    if (on && isVisible())
+        refresh_timer_->start();
+    else if (!on)
+        refresh_timer_->stop();
 }
 
 void GeopoliticsScreen::on_countries_loaded(QVector<services::geo::UniqueCountry> countries) {
@@ -796,10 +859,18 @@ void GeopoliticsScreen::on_error(const QString& context, const QString& message)
     // "ERROR" alone told the user nothing and left the real cause in a log
     // file they can't see. Surface a short reason inline, the full text on
     // hover, and point at the retry that actually exists (APPLY FILTERS).
-    const QString brief = message.simplified().left(72);
-    status_label_->setText(brief.isEmpty() ? tr("ERROR") : tr("ERROR: %1").arg(brief));
-    status_label_->setToolTip(tr("%1\n\n%2\n\nClick APPLY FILTERS to retry.").arg(context, message));
-    set_status_color(ui::colors::NEGATIVE());
+    if (HttpClient::status_from_error(message.toStdString()) == 402) {
+        // Out of credits — retrying cannot help; point at the plans instead.
+        status_label_->setText(tr("OUT OF CREDITS"));
+        status_label_->setToolTip(HttpClient::message_from_error(message.toStdString()));
+        set_status_color(ui::colors::NEGATIVE());
+        update_credits(0, 0);
+    } else {
+        const QString brief = message.simplified().left(72);
+        status_label_->setText(brief.isEmpty() ? tr("ERROR") : tr("ERROR: %1").arg(brief));
+        status_label_->setToolTip(tr("%1\n\n%2\n\nClick APPLY FILTERS to retry.").arg(context, message));
+        set_status_color(ui::colors::NEGATIVE());
+    }
     // A failed auto-refresh must not leave the flag set for the next manual apply.
     auto_refresh_pending_ = false;
     events_inflight_ = false;
@@ -814,6 +885,8 @@ QVariantMap GeopoliticsScreen::save_state() const {
         state["country"] = country_edit_->text();
     if (city_edit_)
         state["city"] = city_edit_->text();
+    if (auto_refresh_btn_)
+        state["auto_refresh"] = auto_refresh_btn_->isChecked();
     return state;
 }
 
@@ -825,6 +898,7 @@ void GeopoliticsScreen::restore_state(const QVariantMap& state) {
         country_edit_->setText(state.value("country").toString());
     if (city_edit_ && state.contains("city"))
         city_edit_->setText(state.value("city").toString());
+    set_auto_refresh(state.value("auto_refresh", false).toBool());
 }
 
 } // namespace fincept::screens

@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+from statistics import NormalDist
 from decimal import Decimal, getcontext
 from typing import List, Dict, Optional, Any, Tuple, Union
 from datetime import datetime, timedelta
@@ -44,7 +45,7 @@ class RiskAnalyzer:
         historical_var = {}
         for confidence in confidence_levels:
             var_value = self.math.var_historical(returns, confidence)
-            confidence_pct = int((1 - confidence) * 100)
+            confidence_pct = f"{float((1 - confidence) * 100):g}"
             historical_var[f"var_{confidence_pct}"] = float(var_value)
 
         var_analysis['historical_var'] = historical_var
@@ -62,9 +63,11 @@ class RiskAnalyzer:
                 Decimal('0.10'): Decimal('-1.282')  # 90% confidence
             }
 
-            z_score = z_scores.get(confidence, Decimal('-1.645'))
+            # Exact quantile for any tail probability (the table only covered 1/5/10%
+            # and silently used the 95% z-score for anything else).
+            z_score = z_scores.get(confidence) or Decimal(str(NormalDist().inv_cdf(float(confidence))))
             var_value = mean_return + z_score * volatility
-            confidence_pct = int((1 - confidence) * 100)
+            confidence_pct = f"{float((1 - confidence) * 100):g}"
             parametric_var[f"var_{confidence_pct}"] = float(abs(var_value))
 
         var_analysis['parametric_var'] = parametric_var
@@ -73,7 +76,7 @@ class RiskAnalyzer:
         conditional_var = {}
         for confidence in confidence_levels:
             cvar_value = self._calculate_conditional_var(returns, confidence)
-            confidence_pct = int((1 - confidence) * 100)
+            confidence_pct = f"{float((1 - confidence) * 100):g}"
             conditional_var[f"cvar_{confidence_pct}"] = float(cvar_value)
 
         var_analysis['conditional_var'] = conditional_var

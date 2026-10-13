@@ -72,9 +72,14 @@ inline constexpr std::array<SurfaceCapability, 35> SURFACE_CAPABILITIES = {{
      "IV skew across delta buckets and tenors", true, true, true, true, false, true, true, false},
     {ChartType::LocalVolSurface, SurfaceTier::COMPUTED, "OPRA.PILLAR", "definition+cbbo-1s", "parent",
      "Dupire local vol from BS implied vol surface", true, true, true, true, false, true, true, false},
-    // ── Fixed Income (DEMO) ─────────────────────────────────────────────────
-    {ChartType::YieldCurve, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false, false,
-     false, false, true, true, true},
+    // ── Fixed Income ────────────────────────────────────────────────────────
+    // YieldCurve / ForwardRate / FXForwardPoints / MonetaryPolicyPath are derived in
+    // DatabentoService from CME continuous-futures daily settlements (fetched only on FETCH with a
+    // Databento key; until then they show the DEMO sample like every other unfetched surface).
+    {ChartType::YieldCurve, SurfaceTier::COMPUTED, "GLBX.MDP3", "ohlcv-1d", "continuous",
+     "Approx. yields of CBOT Treasury futures (ZT/ZF/ZN/TN/ZB/UB): 6% notional bond at each settlement, "
+     "CTD-like maturity - not a cash curve (typically within ~5-20 bp)",
+     false, false, false, false, false, true, true, true},
     {ChartType::SwaptionVol, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false, false,
      false, false, true, true, false},
     {ChartType::CapFloorVol, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false, false,
@@ -85,13 +90,17 @@ inline constexpr std::array<SurfaceCapability, 35> SURFACE_CAPABILITIES = {{
      false, false, true, true, false},
     {ChartType::RealYield, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false, false,
      false, false, true, true, false},
-    {ChartType::ForwardRate, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false, false,
-     false, false, true, true, false},
-    // ── FX (DEMO) ───────────────────────────────────────────────────────────
+    {ChartType::ForwardRate, SurfaceTier::COMPUTED, "GLBX.MDP3", "ohlcv-1d", "continuous",
+     "Average fed funds rate implied by CME 30-day fed funds futures (ZQ, 100 - price) over each forward "
+     "window",
+     false, false, false, false, false, true, true, false},
+    // ── FX ──────────────────────────────────────────────────────────────────
     {ChartType::FXVol, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false, false,
      false, false, true, true, false},
-    {ChartType::FXForwardPoints, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false,
-     false, false, false, true, true, true},
+    {ChartType::FXForwardPoints, SurfaceTier::COMPUTED, "GLBX.MDP3", "ohlcv-1d", "continuous",
+     "CME FX futures (6E/6B/6J/6A/6C/6S): deferred minus front contract settlement, in quote points "
+     "(contracts counted in expiry order, not months)",
+     false, false, false, false, false, true, true, true},
     {ChartType::CrossCurrencyBasis, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false,
      false, false, false, true, true, false},
     // ── Credit (DEMO) ───────────────────────────────────────────────────────
@@ -129,11 +138,13 @@ inline constexpr std::array<SurfaceCapability, 35> SURFACE_CAPABILITIES = {{
      "Rolling beta vs SPY across horizons", false, true, false, false, true, true, true, false},
     {ChartType::ImpliedDividend, SurfaceTier::COMPUTED, "OPRA.PILLAR", "definition+cbbo-1s", "parent",
      "Implied dividend yield from put-call parity", true, true, true, true, false, true, true, false},
-    // ── Macro (DEMO) ────────────────────────────────────────────────────────
+    // ── Macro ───────────────────────────────────────────────────────────────
     {ChartType::InflationExpectations, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false,
      false, false, false, false, true, true, true},
-    {ChartType::MonetaryPolicyPath, SurfaceTier::DEMO, "", "", "", "No Databento source — synthetic data", false, false,
-     false, false, false, true, true, true},
+    {ChartType::MonetaryPolicyPath, SurfaceTier::COMPUTED, "GLBX.MDP3", "ohlcv-1d", "continuous",
+     "US policy-rate path by contract month implied by CME fed funds (ZQ) and 1M SOFR (SR1) futures - "
+     "US only (no GLBX source for other central banks)",
+     false, false, false, false, false, true, true, true},
 }};
 
 inline const SurfaceCapability& capability_for(ChartType t) {

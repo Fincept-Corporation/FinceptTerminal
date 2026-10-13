@@ -19,6 +19,12 @@ namespace fincept {
 class IGroupLinked;
 struct SymbolRef;
 
+namespace dock_router_link_defaults {
+/// Record that the user chose link groups themselves (tab badge, panel menu or
+/// command palette). Ends the one-time "core screens join group A" default.
+void mark_user_configured_links();
+} // namespace dock_router_link_defaults
+
 /// ADS-aware screen router. Each screen is wrapped in a CDockWidget that can be
 /// docked, tabbed, floated, or auto-hidden. Mirrors ScreenRouter's API so the
 /// transition is straightforward.
@@ -183,6 +189,11 @@ class DockScreenRouter : public QObject {
     /// target side; not generally useful elsewhere.
     void adopt_panel_instance(const QString& id, PanelInstanceId instance_id);
 
+    /// Link group saved with a layout for a panel that is not materialised yet.
+    /// Applied when the screen is built (before the default-group rule), so a
+    /// restored layout keeps its colour links across restarts.
+    void set_pending_link_group(const QString& id, SymbolGroup group);
+
     /// Phase 4b: PanelInstanceId for the panel registered under string id.
     /// Returns null UUID if the id isn't known. The router maintains a
     /// 1:1 mapping (one PanelInstanceId per string id, including the
@@ -286,6 +297,7 @@ class DockScreenRouter : public QObject {
     // routed back. Held as raw pointer since lifetime matches the wrapped
     // QWidget in screens_, which we already manage.
     QHash<QString, IGroupLinked*> group_linked_;
+    QHash<QString, SymbolGroup> pending_link_groups_; // from a restored layout
     QHash<QString, QPointer<ui::GroupBadge>> group_badges_;
 
     void on_group_symbol_changed_external(fincept::SymbolGroup g, const fincept::SymbolRef& ref, QObject* source);

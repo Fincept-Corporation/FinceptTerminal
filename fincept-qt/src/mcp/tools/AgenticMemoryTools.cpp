@@ -4,15 +4,17 @@
 //   archival_memory_save(content, type?, metadata?)
 //   archival_memory_search(query, k?, user_id?)
 //
-// Storage: agent_tasks.db sibling to the Python module. FTS5 search with a
-// LIKE fallback for builds without FTS5. We open a fresh per-handler
+// Storage: agent_tasks.db in the per-profile agent data dir
+// (AgentService::agent_data_dir(), shared with the Python agents through
+// FINCEPT_AGENT_DATA_DIR). FTS5 search with a LIKE fallback for builds
+// without FTS5. We open a fresh per-handler
 // connection (tagged by thread id) so MCP's worker-thread invocations don't
 // clash with the Qt main-thread.
 
 #include "mcp/tools/AgenticMemoryTools.h"
 
 #include "core/logging/Logger.h"
-#include "python/PythonRunner.h"
+#include "services/agents/AgentService.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -35,13 +37,11 @@ namespace {
 constexpr const char* TAG = "AgenticMemoryTools";
 
 QString db_path() {
-    // Mirrors archival_memory.py:_DEFAULT_DB = Path(__file__).parent.parent.parent.parent /
-    // "agent_tasks.db". __file__ is <scripts>/agents/finagent_core/agentic/archival_memory.py,
-    // so four parents up is <scripts> itself: <scripts>/agent_tasks.db (task_state.py resolves
-    // to the same file). This used to say <scripts>/agents/agent_tasks.db — a different
-    // database, so saves made here were invisible to the Python agents and vice versa.
-    const QString scripts = python::PythonRunner::instance().scripts_dir();
-    return QDir(scripts).filePath("agent_tasks.db");
+    // Same file the Python agents use: finagent_core/paths.py resolves
+    // agent_tasks.db inside FINCEPT_AGENT_DATA_DIR, which AgentService sets to
+    // agent_data_dir() on every spawn. The old <scripts>/agent_tasks.db location
+    // was pruned by dev builds and read-only in installs.
+    return QDir(services::AgentService::agent_data_dir()).filePath(QStringLiteral("agent_tasks.db"));
 }
 
 QSqlDatabase open_conn() {

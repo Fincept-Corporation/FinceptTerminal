@@ -141,7 +141,7 @@ void HoldingsBar::build_ui() {
 
     root->addStretch(1);
 
-    discount_chip_ = new QLabel(QStringLiteral("30% OFF"), this);
+    discount_chip_ = new QLabel(this); // text set when eligibility arrives
     discount_chip_->setObjectName(QStringLiteral("holdingsBarDiscountChip"));
     discount_chip_->hide();
     root->addWidget(discount_chip_);
@@ -171,10 +171,11 @@ void HoldingsBar::apply_theme() {
                                       "QLabel#holdingsBarValueDim { color:%7; font-family:%4; font-size:12px;"
                                       "  background:transparent; }"
 
-                                      // Discount chip
-                                      "QLabel#holdingsBarDiscountChip { color:%8; font-family:%4; font-size:10px;"
-                                      "  font-weight:700; letter-spacing:1.2px; background:rgba(34,197,94,0.10);"
-                                      "  border:1px solid %8; padding:2px 8px; }"
+                                      // Discount chip — amber/neutral, not "money saved" green:
+                                      // the discount is planned, not applied.
+                                      "QLabel#holdingsBarDiscountChip { color:%6; font-family:%4; font-size:10px;"
+                                      "  font-weight:700; letter-spacing:1.2px; background:rgba(217,119,6,0.08);"
+                                      "  border:1px solid %2; padding:2px 8px; }"
 
                                       // Feed status (5 variants)
                                       "QLabel#holdingsBarFeedIdle { color:%3; font-family:%4; font-size:10px;"
@@ -265,13 +266,17 @@ void HoldingsBar::refresh_subscription() {
     if (current_pubkey_.isEmpty())
         return;
     current_balance_topic_ = QStringLiteral("wallet:balance:%1").arg(current_pubkey_);
+    // subscribe() delivers the cached value and cold-starts a fetch when it is
+    // stale. force=false lets the hub's min_interval coalesce this bar with the
+    // HOME / TRADE panels into one RPC round-trip instead of a forced refetch
+    // per panel on every show. REFRESH stays a forced, user-driven fetch.
     hub.subscribe(this, current_balance_topic_, [this](const QVariant& v) { on_balance_update(v); });
-    hub.request(current_balance_topic_, /*force=*/true);
+    hub.request(current_balance_topic_, /*force=*/false);
 
     // Phase 2 §2C: subscribe to fee-discount eligibility for this pubkey.
     const auto discount_topic = QStringLiteral("billing:fncpt_discount:%1").arg(current_pubkey_);
     hub.subscribe(this, discount_topic, [this](const QVariant& v) { on_discount_update(v); });
-    hub.request(discount_topic, /*force=*/true);
+    hub.request(discount_topic, /*force=*/false);
 }
 
 void HoldingsBar::on_discount_update(const QVariant& v) {
@@ -281,9 +286,11 @@ void HoldingsBar::on_discount_update(const QVariant& v) {
     if (!discount_chip_)
         return;
     if (d.eligible) {
-        discount_chip_->setText(QStringLiteral("%1% OFF").arg(d.discount_pct));
-        discount_chip_->setToolTip(tr("Holding ≥ %1 $FNCPT — you qualify for the fee discount. "
-                                      "Projected only: it is not applied automatically at checkout yet.")
+        // The discount is planned only — nothing applies it — so the chip must
+        // not read like an active "30% OFF" entitlement.
+        discount_chip_->setText(tr("%1% OFF · PLANNED").arg(d.discount_pct));
+        discount_chip_->setToolTip(tr("Holding ≥ %1 $FNCPT qualifies for the planned fee discount. "
+                                      "Not active yet — no purchase in the terminal is discounted.")
                                        .arg(d.threshold_raw / std::pow(10.0, d.threshold_decimals), 0, 'f', 0));
         discount_chip_->show();
     } else {
@@ -321,7 +328,7 @@ void HoldingsBar::resubscribe_prices() {
         const auto topic = QStringLiteral("market:price:token:%1").arg(mint);
         price_topic_.insert(mint, topic);
         hub.subscribe(this, topic, [this, mint](const QVariant& v) { on_price_update(mint, v); });
-        hub.request(topic, /*force=*/true);
+        hub.request(topic, /*force=*/false);
     }
 }
 

@@ -43,6 +43,14 @@ void NodeItem::set_parameter(const QString& key, const QJsonValue& value) {
 
 void NodeItem::set_execution_state(const QString& state) {
     execution_state_ = state;
+    if (state != QLatin1String("invalid"))
+        setToolTip(QString());
+    invalidate_cache();
+}
+
+void NodeItem::set_validation_error(const QString& message) {
+    execution_state_ = QStringLiteral("invalid");
+    setToolTip(message);
     invalidate_cache();
 }
 
@@ -179,8 +187,10 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
                 state_color = QColor(t.accent);
             else if (execution_state_ == "completed")
                 state_color = QColor(t.positive);
-            else if (execution_state_ == "error")
+            else if (execution_state_ == "error" || execution_state_ == "invalid")
                 state_color = QColor(t.negative);
+            else
+                state_color = QColor(t.text_tertiary); // skipped
 
             cp.setPen(Qt::NoPen);
             cp.setBrush(state_color);
@@ -201,7 +211,7 @@ void NodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
         border_color = QColor(t2.border_med);
     else if (isSelected())
         border_color = QColor(t2.accent);
-    else if (execution_state_ == "error")
+    else if (execution_state_ == "error" || execution_state_ == "invalid")
         border_color = QColor(t2.negative);
     else if (hovered_)
         border_color = QColor(t2.border_bright);
@@ -233,8 +243,6 @@ QVariant NodeItem::itemChange(GraphicsItemChange change, const QVariant& value) 
     if (change == ItemSelectedHasChanged) {
         if (value.toBool())
             emit node_selected(def_.id);
-        else
-            emit node_deselected(def_.id);
     }
 
     return QGraphicsObject::itemChange(change, value);
