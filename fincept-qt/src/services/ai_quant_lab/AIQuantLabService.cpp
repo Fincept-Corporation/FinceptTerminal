@@ -27,12 +27,6 @@ namespace {
 QString aiq_cache_prefix(const QString& module_id) {
     return QStringLiteral("aiquant:") + module_id + QLatin1Char(':');
 }
-
-// {"task_id": "<id>"} built with a JSON encoder -- the old QString("{\"task_id\":\"%1\"}") produced
-// invalid JSON (or an injectable key) for any id containing a quote or backslash.
-QString aiq_task_id_json(const QString& task_id) {
-    return QString::fromUtf8(QJsonDocument(QJsonObject{{"task_id", task_id}}).toJson(QJsonDocument::Compact));
-}
 } // namespace
 
 // ── Singleton ────────────────────────────────────────────────────────────────
