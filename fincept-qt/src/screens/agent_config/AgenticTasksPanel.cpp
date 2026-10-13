@@ -889,7 +889,7 @@ void AgenticTasksPanel::on_schedules_clicked() {
             return;
         svc.schedule_set_enabled(head->data(Qt::UserRole).toString(), !head->data(Qt::UserRole + 1).toBool());
     });
-    QObject::connect(delete_btn, &QPushButton::clicked, &dlg, [this, &dlg, table, &svc]() {
+    QObject::connect(delete_btn, &QPushButton::clicked, &dlg, [&dlg, table, &svc]() {
         const auto sel = table->selectedItems();
         if (sel.isEmpty())
             return;
