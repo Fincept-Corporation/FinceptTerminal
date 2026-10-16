@@ -560,6 +560,7 @@ struct PythonSetupManager::StepOptions {
     bool capture_stdout = false; // keep raw stdout (uv --version, uv pip freeze)
     bool background = false;     // below-normal priority (never on the launch-critical path)
     bool local8bit = false;      // non-uv tools print in the local code page
+    QString working_dir;         // child cwd; lets callers pass space-free relative paths to uv
 };
 
 struct PythonSetupManager::StepResult {
@@ -1076,6 +1077,8 @@ QProcess* PythonSetupManager::start_step(const QString& program, const QStringLi
     proc->setProcessEnvironment(opts.env);
     proc->setProgram(program);
     proc->setArguments(args);
+    if (!opts.working_dir.isEmpty())
+        proc->setWorkingDirectory(opts.working_dir);
 #ifdef Q_OS_WIN
     const bool low_priority = opts.background;
     proc->setCreateProcessArgumentsModifier([low_priority](QProcess::CreateProcessArguments* cpa) {
@@ -2142,6 +2145,9 @@ void PythonSetupManager::lane_install_core(int lane) {
     StepOptions opts;
     opts.env = uv_environment();
     opts.timeout_ms = kPsmInstallTimeoutMs;
+    // uv 0.7.x mis-parses a constraints/requirements path containing a space
+    // ("Application Support" on macOS): run from the venv dir, pass the lock relatively.
+    opts.working_dir = QFileInfo(lock_path(L.venv)).absolutePath();
     // No --compile-bytecode here: this is the launch-critical path. The full pass
     // compiles the whole site-packages (core included) in the background.
     const QStringList args = {QStringLiteral("pip"),
@@ -2151,7 +2157,7 @@ void PythonSetupManager::lane_install_core(int lane) {
                               QStringLiteral("-r"),
                               find_requirements_file(L.core_file),
                               QStringLiteral("-c"),
-                              lock_path(L.venv),
+                              QFileInfo(lock_path(L.venv)).fileName(),
                               QStringLiteral("-v")};
     start_step(
         uv_path(), args, opts,
@@ -2262,7 +2268,10 @@ void PythonSetupManager::lane_install_full(int lane) {
     // --compile-bytecode: PythonRunner sets PYTHONDONTWRITEBYTECODE=1, so .pyc
     // files are never written at runtime — without precompiling, every script
     // run would recompile pandas & co. from source (~0.6 s per process).
-    const QString source = L.fallback ? find_requirements_file(L.req_file) : lock_path(L.venv);
+    // See lane_install_core: run from the venv dir so the lock is passed without spaces.
+    if (!L.fallback)
+        opts.working_dir = QFileInfo(lock_path(L.venv)).absolutePath();
+    const QString source = L.fallback ? find_requirements_file(L.req_file) : QFileInfo(lock_path(L.venv)).fileName();
     const QStringList args = {QStringLiteral("pip"),
                               QStringLiteral("install"),
                               QStringLiteral("--python"),
