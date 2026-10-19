@@ -469,6 +469,19 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
 }
 
 // ── Peers ─────────────────────────────────────────────────────────────────────
+void EquityResearchService::fetch_suggested_peers(const QString& symbol, int count) {
+    run_python("fetch_peers.py", {symbol, QString::number(count)}, [this, symbol](bool ok, const QString& out) {
+        QStringList peers;
+        if (ok) {
+            const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();
+            for (const auto& v : obj.value("peers").toArray())
+                if (!v.toString().trimmed().isEmpty())
+                    peers.append(v.toString().trimmed().toUpper());
+        }
+        emit suggested_peers_loaded(symbol, peers);
+    });
+}
+
 void EquityResearchService::fetch_peers(const QString& symbol, const QStringList& peer_symbols) {
     QStringList all;
     all << symbol;
@@ -642,7 +655,9 @@ void EquityResearchService::fetch_news(const QString& symbol, int count, NewsPro
     const QString query = news_query_for_symbol(symbol);
 
     run_python("fetch_company_news.py",
-               {"search", query, QString::number(count), QStringLiteral("1M"), QStringLiteral("en"), country},
+               // GNews periods are h/d/m/y with "m" meaning minutes on Google News, so "1M"
+               // returned zero articles for every symbol. 30 days gives a month of coverage.
+               {"search", query, QString::number(count), QStringLiteral("30d"), QStringLiteral("en"), country},
                [this, symbol, count](bool ok, const QString& out) {
                    if (ok) {
                        const auto obj = QJsonDocument::fromJson(python::extract_json(out).toUtf8()).object();

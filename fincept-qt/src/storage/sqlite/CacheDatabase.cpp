@@ -1,4 +1,5 @@
 #include "storage/sqlite/CacheDatabase.h"
+#include <QCoreApplication>
 
 #include "core/logging/Logger.h"
 
@@ -76,6 +77,11 @@ QSqlDatabase CacheDatabase::connection() {
     struct Guard {
         QString name;
         ~Guard() {
+            // Worker threads can exit after QCoreApplication (and Qt SQL's connection
+            // registry) are gone; removeDatabase() then dereferenced freed state and
+            // crashed every quit. The process is ending, so the OS reclaims the handle.
+            if (QCoreApplication::instance() == nullptr || QCoreApplication::closingDown())
+                return;
             if (!name.isEmpty())
                 QSqlDatabase::removeDatabase(name);
         }

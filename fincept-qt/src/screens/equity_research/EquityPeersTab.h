@@ -20,6 +20,8 @@ class EquityPeersTab : public QWidget {
     void set_symbol(const QString& symbol);
     QString peers_text() const;
     void set_peers_text(const QString& text);
+    /// Replace the peer list and load it now, as if typed and LOAD pressed.
+    void apply_peers(const QString& text);
 
   signals:
     /// A peer row asked to be researched in this screen (`show_chart` → open its Overview chart).
@@ -54,6 +56,7 @@ class EquityPeersTab : public QWidget {
     QString pending_peers_; ///< restored peer list, applied on the first set_symbol()
     QVector<services::equity::PeerData> cached_peers_;
     bool peers_loaded_ = false;
+    bool awaiting_suggested_peers_ = false; ///< industry-peer lookup in flight for current_symbol_
 
     ui::LoadingOverlay* loading_overlay_ = nullptr;
 };

@@ -201,7 +201,17 @@ static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
             fincept::screens::LaunchpadScreen::instance()->surface();
         } else {
             // "quit" or any unknown value → quit (the safe default).
-            QCoreApplication::quit();
+            //
+            // On macOS quit() goes through NSApplication terminate:, which calls exit()
+            // directly: exec() never returns, and the just-closed windows (WA_DeleteOnClose
+            // → deleteLater) were destroyed from inside exit() after the app style was gone,
+            // crashing on every Cmd+Q in chart / node-canvas teardown. Run the pending
+            // deferred deletes first, on the next loop turn while everything is alive, then
+            // quit.
+            QTimer::singleShot(0, qApp, []() {
+                QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+                QCoreApplication::quit();
+            });
         }
     });
 }
@@ -361,6 +371,16 @@ int main(int argc, char* argv[]) {
         // read exactly those. Draining MCP first guarantees no tool call is
         // in flight against a half-torn-down shell.
         fincept::mcp::shutdown_mcp();
+
+        // Destroy the windows now, while QApplication, its style and the stylesheet
+        // engine are still alive. Left to WA_DeleteOnClose (deleteLater), the frames were
+        // destroyed during ~QApplication after the app style was gone, so any screen with
+        // a QGraphicsScene (Equity Research Financials charts, the Node Editor canvas)
+        // crashed in QGraphicsWidget / QStyleSheetStyle teardown and macOS reported
+        // "Fincept Terminal quit unexpectedly" on every Cmd+Q. frames() returns a copy, and
+        // each frame unregisters itself in its destructor.
+        for (fincept::WindowFrame* frame : fincept::WindowRegistry::instance().frames())
+            delete frame;
 
         // Stop the Python daemons before the shell tears anything down.
         //
