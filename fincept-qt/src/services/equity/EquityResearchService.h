@@ -40,6 +40,9 @@ class EquityResearchService : public QObject {
     void fetch_financials(const QString& symbol);
     void fetch_technicals(const QString& symbol, const QString& period = "1y");
     void fetch_peers(const QString& symbol, const QStringList& peer_symbols);
+    /// Same-industry companies for `symbol` (largest first), from Yahoo's industry
+    /// grouping. Emits suggested_peers_loaded; an empty list means none were found.
+    void fetch_suggested_peers(const QString& symbol, int count = 5);
     /// `force` drops the cached result first, so a user-pressed REFRESH really re-fetches.
     void fetch_news(const QString& symbol, int count = 20, NewsProvider provider = NewsProvider::Auto,
                     bool force = false);
@@ -65,6 +68,7 @@ class EquityResearchService : public QObject {
     void financials_loaded(fincept::services::equity::FinancialsData data);
     void technicals_loaded(fincept::services::equity::TechnicalsData data);
     void peers_loaded(QVector<fincept::services::equity::PeerData> peers);
+    void suggested_peers_loaded(QString symbol, QStringList peers);
     void news_loaded(QString symbol, QVector<fincept::services::equity::NewsArticle> articles);
     void error_occurred(QString context, QString message);
 
