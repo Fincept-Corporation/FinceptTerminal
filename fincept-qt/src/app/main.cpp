@@ -201,7 +201,17 @@ static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
             fincept::screens::LaunchpadScreen::instance()->surface();
         } else {
             // "quit" or any unknown value → quit (the safe default).
-            QCoreApplication::quit();
+            //
+            // On macOS quit() goes through NSApplication terminate:, which calls exit()
+            // directly: exec() never returns, and the just-closed windows (WA_DeleteOnClose
+            // → deleteLater) were destroyed from inside exit() after the app style was gone,
+            // crashing on every Cmd+Q in chart / node-canvas teardown. Run the pending
+            // deferred deletes first, on the next loop turn while everything is alive, then
+            // quit.
+            QTimer::singleShot(0, qApp, []() {
+                QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+                QCoreApplication::quit();
+            });
         }
     });
 }
