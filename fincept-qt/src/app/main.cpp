@@ -362,6 +362,16 @@ int main(int argc, char* argv[]) {
         // in flight against a half-torn-down shell.
         fincept::mcp::shutdown_mcp();
 
+        // Destroy the windows now, while QApplication, its style and the stylesheet
+        // engine are still alive. Left to WA_DeleteOnClose (deleteLater), the frames were
+        // destroyed during ~QApplication after the app style was gone, so any screen with
+        // a QGraphicsScene (Equity Research Financials charts, the Node Editor canvas)
+        // crashed in QGraphicsWidget / QStyleSheetStyle teardown and macOS reported
+        // "Fincept Terminal quit unexpectedly" on every Cmd+Q. frames() returns a copy, and
+        // each frame unregisters itself in its destructor.
+        for (fincept::WindowFrame* frame : fincept::WindowRegistry::instance().frames())
+            delete frame;
+
         // Stop the Python daemons before the shell tears anything down.
         //
         // Both own a QProcess plus repeating QTimers (PythonWorker gained a
