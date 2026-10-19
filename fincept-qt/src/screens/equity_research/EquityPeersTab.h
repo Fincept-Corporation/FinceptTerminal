@@ -20,6 +20,8 @@ class EquityPeersTab : public QWidget {
     void set_symbol(const QString& symbol);
     QString peers_text() const;
     void set_peers_text(const QString& text);
+    /// Replace the peer list and load it now, as if typed and LOAD pressed.
+    void apply_peers(const QString& text);
 
   signals:
     /// A peer row asked to be researched in this screen (`show_chart` → open its Overview chart).

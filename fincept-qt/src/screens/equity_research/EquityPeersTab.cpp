@@ -357,6 +357,17 @@ void EquityPeersTab::show_row_menu(const QPoint& pos) {
     menu.exec(peer_table_->viewport()->mapToGlobal(pos));
 }
 
+void EquityPeersTab::apply_peers(const QString& text) {
+    awaiting_suggested_peers_ = false; // an explicit list wins over a pending industry lookup
+    peers_edit_->setText(text);
+    if (current_symbol_.isEmpty()) {
+        pending_peers_ = text; // set_symbol() applies and loads it once a symbol arrives
+        return;
+    }
+    loading_overlay_->show_loading(tr("LOADING PEERS…"));
+    on_load_clicked();
+}
+
 QStringList EquityPeersTab::default_peers(const QString& symbol) const {
     static const QHash<QString, QStringList> kPeers = {
         {"AAPL", {"MSFT", "GOOGL", "META", "AMZN", "NVDA"}},
