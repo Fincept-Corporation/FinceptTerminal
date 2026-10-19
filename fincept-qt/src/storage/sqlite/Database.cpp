@@ -1,4 +1,5 @@
 #include "storage/sqlite/Database.h"
+#include <QCoreApplication>
 
 #include "core/logging/Logger.h"
 #include "storage/sqlite/migrations/MigrationRunner.h"
@@ -68,6 +69,11 @@ QSqlDatabase Database::connection() {
     struct Guard {
         QString name;
         ~Guard() {
+            // Worker threads can exit after QCoreApplication (and Qt SQL's connection
+            // registry) are gone; removeDatabase() then dereferenced freed state and
+            // crashed every quit. The process is ending, so the OS reclaims the handle.
+            if (QCoreApplication::instance() == nullptr || QCoreApplication::closingDown())
+                return;
             if (!name.isEmpty()) {
                 // Remove from Qt's connection registry so file descriptors
                 // and the QSqlDriver are released. Logs an inert warning if
