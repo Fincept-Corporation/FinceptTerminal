@@ -93,7 +93,7 @@ def estimate_erp():
             if dy is None and hasattr(spy, "info") and isinstance(spy.info, dict):
                 dy = spy.info.get("dividendYield", None)
             if dy and dy > 0:
-                div_yield = float(dy)
+                div_yield = float(dy) / 100.0
         except Exception:
             pass
 
