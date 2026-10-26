@@ -5,6 +5,7 @@
 #include "app/DockScreenRouter.h"
 #include "app/WindowFrame.h"
 #include "core/events/EventBus.h"
+#include "core/window/WindowRegistry.h"
 #include "core/logging/Logger.h"
 #include "mcp/ToolSchemaBuilder.h"
 #include "mcp/tools/ThreadHelper.h"
@@ -42,6 +43,14 @@ fincept::DockScreenRouter* find_active_router_main_thread() {
             if (mw->window_id() == 0)
                 return mw->dock_router();
         }
+    }
+    // No primary frame found (e.g. a session restore re-numbered the window) and the app
+    // is in the background, which is the normal case for an MCP client: use the first
+    // registered frame, the same last resort wf_app_event_target() uses for events.
+    const auto frames = fincept::WindowRegistry::instance().frames();
+    for (auto* mw : frames) {
+        if (mw && mw->dock_router())
+            return mw->dock_router();
     }
     return nullptr;
 }
@@ -205,6 +214,53 @@ std::vector<ToolDef> get_navigation_tools() {
             return ToolResult::ok("Opened " + resolved + " and handed it " + symbol +
                                       " (a screen without symbol support just opens normally)",
                                   QJsonObject{{"tab", resolved}, {"symbol", symbol}, {"asset_class", asset_class}});
+        };
+        tools.push_back(std::move(t));
+    }
+
+    // ── set_research_peers ──────────────────────────────────────────────
+    // Fill Equity Research's Peers box and press LOAD, the same as a user typing a peer
+    // list. Optionally opens a symbol first. Read-only research: it changes what the
+    // Peers tab compares, nothing else (no orders, settings or stored data).
+    {
+        ToolDef t;
+        t.name = "set_research_peers";
+        t.description = "Set the peer list on the Equity Research Peers tab and load the comparison "
+                        "(\"compare ASML with AMAT, LRCX, KLAC\"). Optionally opens `symbol` first. "
+                        "Switches the screen to the Peers tab so the user sees the result.";
+        t.category = "navigation";
+        t.input_schema = ToolSchemaBuilder()
+                             .string("peers", "Comma-separated peer tickers (e.g. AMAT, LRCX, KLAC)")
+                             .required()
+                             .length(1, 256)
+                             .string("symbol", "Optional ticker to open in Equity Research first")
+                             .default_str("")
+                             .length(0, 32)
+                             .build();
+        t.handler = [](const QJsonObject& args) -> ToolResult {
+            const QString peers = args["peers"].toString().trimmed();
+            const QString symbol = args["symbol"].toString().trimmed();
+            if (peers.isEmpty())
+                return ToolResult::fail("Missing 'peers'");
+
+            auto snap = snapshot_screens();
+            if (snap.ids.isEmpty())
+                return ToolResult::fail("No terminal window — DockScreenRouter unavailable");
+
+            // Open (or bring forward) Equity Research, on the symbol if one was given.
+            if (!symbol.isEmpty())
+                EventBus::instance().publish("nav.open_symbol",
+                                             QVariantMap{{"screen_id", QStringLiteral("equity_research")},
+                                                         {"symbol", symbol},
+                                                         {"asset_class", QStringLiteral("equity")}});
+            else
+                EventBus::instance().publish("nav.switch_screen",
+                                             QVariantMap{{"screen_id", QStringLiteral("equity_research")}});
+            EventBus::instance().publish("equity_research.set_peers", QVariantMap{{"peers", peers}});
+
+            LOG_INFO(TAG, "Set research peers: " + peers);
+            return ToolResult::ok("Peers set to " + peers + " on Equity Research",
+                                  QJsonObject{{"peers", peers}, {"symbol", symbol}});
         };
         tools.push_back(std::move(t));
     }

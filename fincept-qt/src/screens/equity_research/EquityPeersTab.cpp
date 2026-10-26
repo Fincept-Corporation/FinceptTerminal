@@ -38,6 +38,17 @@ EquityPeersTab::EquityPeersTab(QWidget* parent) : QWidget(parent) {
     build_ui();
     auto& svc = services::equity::EquityResearchService::instance();
     connect(&svc, &services::equity::EquityResearchService::peers_loaded, this, &EquityPeersTab::on_peers_loaded);
+    // Industry peers arrive after the tab opened; apply them only if they are for the
+    // symbol still on screen and the user has not typed their own list meanwhile.
+    connect(&svc, &services::equity::EquityResearchService::suggested_peers_loaded, this,
+            [this](const QString& symbol, const QStringList& peers) {
+                if (symbol.compare(current_symbol_, Qt::CaseInsensitive) != 0 || !awaiting_suggested_peers_)
+                    return;
+                awaiting_suggested_peers_ = false;
+                peers_edit_->setText((peers.isEmpty() ? QStringList{"SPY", "QQQ", "DIA"} : peers).join(", "));
+                on_load_clicked();
+            });
+    connect(peers_edit_, &QLineEdit::textEdited, this, [this]() { awaiting_suggested_peers_ = false; });
     // Dismiss the "LOADING PEERS…" overlay on failure — it's hidden only on success.
     connect(&svc, &services::equity::EquityResearchService::error_occurred, this,
             [this](const QString& ctx, const QString&) {
@@ -60,7 +71,18 @@ void EquityPeersTab::set_symbol(const QString& symbol) {
     peers_loaded_ = false;
     cached_peers_.clear();
     // A peer list restored from the saved session wins once over the curated defaults.
-    peers_edit_->setText(pending_peers_.isEmpty() ? default_peers(symbol).join(", ") : pending_peers_);
+    const QStringList curated = default_peers(symbol);
+    if (pending_peers_.isEmpty() && curated.isEmpty()) {
+        // No curated group: look up same-industry companies instead of comparing
+        // against market ETFs. The list fills in (and loads) when the lookup returns.
+        awaiting_suggested_peers_ = true;
+        peers_edit_->clear();
+        loading_overlay_->show_loading(tr("FINDING INDUSTRY PEERS…"));
+        services::equity::EquityResearchService::instance().fetch_suggested_peers(symbol);
+        return;
+    }
+    awaiting_suggested_peers_ = false;
+    peers_edit_->setText(pending_peers_.isEmpty() ? curated.join(", ") : pending_peers_);
     pending_peers_.clear();
     loading_overlay_->show_loading(tr("LOADING PEERS…"));
     on_load_clicked();
@@ -335,6 +357,17 @@ void EquityPeersTab::show_row_menu(const QPoint& pos) {
     menu.exec(peer_table_->viewport()->mapToGlobal(pos));
 }
 
+void EquityPeersTab::apply_peers(const QString& text) {
+    awaiting_suggested_peers_ = false; // an explicit list wins over a pending industry lookup
+    peers_edit_->setText(text);
+    if (current_symbol_.isEmpty()) {
+        pending_peers_ = text; // set_symbol() applies and loads it once a symbol arrives
+        return;
+    }
+    loading_overlay_->show_loading(tr("LOADING PEERS…"));
+    on_load_clicked();
+}
+
 QStringList EquityPeersTab::default_peers(const QString& symbol) const {
     static const QHash<QString, QStringList> kPeers = {
         {"AAPL", {"MSFT", "GOOGL", "META", "AMZN", "NVDA"}},
@@ -350,8 +383,8 @@ QStringList EquityPeersTab::default_peers(const QString& symbol) const {
         {"RELIANCE.NS", {"TCS.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "HINDUNILVR.NS"}},
         {"TCS.NS", {"INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS", "RELIANCE.NS"}},
     };
-    // No curated group: compare against the broad market ETFs until the user types peers.
-    return kPeers.value(symbol.toUpper(), {"SPY", "QQQ", "DIA"});
+    // No curated group: empty, and set_symbol() looks up same-industry peers instead.
+    return kPeers.value(symbol.toUpper());
 }
 
 // ── Re-translation ───────────────────────────────────────────────────────────
