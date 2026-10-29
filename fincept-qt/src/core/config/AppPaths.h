@@ -23,6 +23,7 @@ namespace fincept {
 class AppPaths {
   public:
     /// Root: %LOCALAPPDATA%\com.fincept.terminal  (Windows)
+    /// Overridable via FINCEPT_DATA_DIR environment variable.
     static QString root();
 
     /// root/data  — persistent databases

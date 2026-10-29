@@ -11,6 +11,10 @@
 namespace fincept {
 
 QString AppPaths::root() {
+    const QString env_dir = qEnvironmentVariable("FINCEPT_DATA_DIR");
+    if (!env_dir.trimmed().isEmpty()) {
+        return QDir::cleanPath(env_dir.trimmed());
+    }
 #ifdef _WIN32
     // Use GenericDataLocation which returns %LOCALAPPDATA% directly on Windows,
     // avoiding the fragile double-cdUp() from AppLocalDataLocation.

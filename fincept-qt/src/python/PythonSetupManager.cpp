@@ -2144,6 +2144,11 @@ void PythonSetupManager::lane_install_core(int lane) {
     opts.timeout_ms = kPsmInstallTimeoutMs;
     // No --compile-bytecode here: this is the launch-critical path. The full pass
     // compiles the whole site-packages (core included) in the background.
+    // uv's `-c` / `--constraint` flag splits arguments on whitespace (clap delimiter
+    // behavior), failing when the username or data path contains spaces (e.g.
+    // `C:/Users/First Last/...` -> `error: File not found: C:/Users/First`).
+    // Passing the constraint file as a `file://` URI prevents whitespace splitting.
+    const QString constraint_file = QUrl::fromLocalFile(lock_path(L.venv)).toString();
     const QStringList args = {QStringLiteral("pip"),
                               QStringLiteral("install"),
                               QStringLiteral("--python"),
@@ -2151,7 +2156,7 @@ void PythonSetupManager::lane_install_core(int lane) {
                               QStringLiteral("-r"),
                               find_requirements_file(L.core_file),
                               QStringLiteral("-c"),
-                              lock_path(L.venv),
+                              constraint_file,
                               QStringLiteral("-v")};
     start_step(
         uv_path(), args, opts,
