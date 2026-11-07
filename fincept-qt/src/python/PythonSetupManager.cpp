@@ -560,6 +560,7 @@ struct PythonSetupManager::StepOptions {
     bool capture_stdout = false; // keep raw stdout (uv --version, uv pip freeze)
     bool background = false;     // below-normal priority (never on the launch-critical path)
     bool local8bit = false;      // non-uv tools print in the local code page
+    QString working_dir;         // empty → inherit the terminal's cwd
 };
 
 struct PythonSetupManager::StepResult {
@@ -1076,6 +1077,8 @@ QProcess* PythonSetupManager::start_step(const QString& program, const QStringLi
     proc->setProcessEnvironment(opts.env);
     proc->setProgram(program);
     proc->setArguments(args);
+    if (!opts.working_dir.isEmpty())
+        proc->setWorkingDirectory(opts.working_dir);
 #ifdef Q_OS_WIN
     const bool low_priority = opts.background;
     proc->setCreateProcessArgumentsModifier([low_priority](QProcess::CreateProcessArguments* cpa) {
@@ -2144,6 +2147,13 @@ void PythonSetupManager::lane_install_core(int lane) {
     opts.timeout_ms = kPsmInstallTimeoutMs;
     // No --compile-bytecode here: this is the launch-critical path. The full pass
     // compiles the whole site-packages (core included) in the background.
+    //
+    // uv splits `-c` / `--constraint` values on spaces (it shares the
+    // space-delimited UV_CONSTRAINT parser), so an absolute lock path under
+    // e.g. `C:/Users/First Last/...` becomes two missing files (#416). Run uv
+    // from the venv directory and pass the lock by its bare, space-free name.
+    const QFileInfo lock_info(lock_path(L.venv));
+    opts.working_dir = lock_info.absolutePath();
     const QStringList args = {QStringLiteral("pip"),
                               QStringLiteral("install"),
                               QStringLiteral("--python"),
@@ -2151,7 +2161,7 @@ void PythonSetupManager::lane_install_core(int lane) {
                               QStringLiteral("-r"),
                               find_requirements_file(L.core_file),
                               QStringLiteral("-c"),
-                              lock_path(L.venv),
+                              lock_info.fileName(),
                               QStringLiteral("-v")};
     start_step(
         uv_path(), args, opts,
