@@ -54,6 +54,7 @@ class EquityPeersTab : public QWidget {
     QString pending_peers_; ///< restored peer list, applied on the first set_symbol()
     QVector<services::equity::PeerData> cached_peers_;
     bool peers_loaded_ = false;
+    bool awaiting_suggested_peers_ = false; ///< industry-peer lookup in flight for current_symbol_
 
     ui::LoadingOverlay* loading_overlay_ = nullptr;
 };

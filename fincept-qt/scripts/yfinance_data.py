@@ -236,11 +236,78 @@ def get_historical_price(symbol, target_date):
     except Exception as e:
         return {"found": False, "error": str(e), "symbol": symbol}
 
+def _fx_rate(from_ccy, to_ccy):
+    """Spot rate to convert from_ccy amounts into to_ccy (e.g. EUR -> USD)."""
+    if not from_ccy or not to_ccy or from_ccy == to_ccy:
+        return 1.0
+    try:
+        rate = yf.Ticker(f"{from_ccy}{to_ccy}=X").fast_info.get("lastPrice")
+        if rate and rate > 0:
+            return float(rate)
+    except Exception:
+        pass
+    return None
+
+
+def _cross_currency_ratios(ticker, info):
+    """Recompute price-vs-statement ratios when the stock trades in one currency and
+    reports in another (ASML: USD price, EUR statements; TSM: USD ADR, TWD statements).
+
+    Yahoo divides the trading-currency price by statement-currency figures, which gives
+    a P/B of 1,430 for ASML and a P/S of 0.44 for TSM. Here the statement figures are
+    converted to the trading currency first, and book value comes from the balance
+    sheet. Returns {} when the currencies match or the FX rate is unavailable, so the
+    caller keeps Yahoo's values.
+    """
+    trade_ccy = info.get("currency")
+    fin_ccy = info.get("financialCurrency")
+    if not trade_ccy or not fin_ccy or trade_ccy == fin_ccy:
+        return {}
+    fx = _fx_rate(fin_ccy, trade_ccy)
+    if not fx:
+        return {}
+    out = {"fx_rate_statement_to_price": fx}
+    mcap = info.get("marketCap")
+    shares = info.get("sharesOutstanding")
+    revenue = info.get("totalRevenue")
+    ebitda = info.get("ebitda")
+    cash = info.get("totalCash") or 0
+    debt = info.get("totalDebt") or 0
+    equity = None
+    try:
+        bs = ticker.balance_sheet
+        for row in ("Stockholders Equity", "Common Stock Equity", "Total Equity Gross Minority Interest"):
+            if bs is not None and row in bs.index:
+                val = bs.loc[row].dropna()
+                if len(val):
+                    equity = float(val.iloc[0])
+                    break
+    except Exception:
+        pass
+    if equity and equity > 0:
+        # Company-level ratio (market cap / equity) so ADRs that bundle several
+        # ordinary shares (TSM: 1 ADR = 5 shares) are not off by the ADR ratio.
+        if mcap:
+            out["priceToBook"] = mcap / (equity * fx)
+        if shares:
+            out["bookValue"] = equity * fx / shares
+    if mcap:
+        ev = mcap + (debt - cash) * fx
+        out["enterpriseValue"] = ev
+        if revenue:
+            out["priceToSalesTrailing12Months"] = mcap / (revenue * fx)
+            out["enterpriseToRevenue"] = ev / (revenue * fx)
+        if ebitda:
+            out["enterpriseToEbitda"] = ev / (ebitda * fx)
+    return out
+
+
 def get_info(symbol):
     """Fetch company info for a symbol"""
     try:
         ticker = yf.Ticker(symbol)
-        info = ticker.info
+        info = dict(ticker.info or {})
+        info.update(_cross_currency_ratios(ticker, info))
 
         # Extract comprehensive information - many more fields available from yfinance
         info_data = {
@@ -637,6 +704,8 @@ def get_financial_ratios(symbol):
 
         if not info or 'symbol' not in info:
             return {"error": f"No data found for symbol: {symbol}"}
+        info = dict(info)
+        info.update(_cross_currency_ratios(ticker, info))
 
         # Calculate free cash flow per share
         free_cashflow = info.get("freeCashflow", 0)
