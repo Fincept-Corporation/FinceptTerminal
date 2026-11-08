@@ -41,6 +41,21 @@
 
 namespace fincept::workflow {
 
+// The scene is a child of this screen and the views (canvas, minimap) live in the splitter,
+// so on quit the scene can be destroyed while both views are still attached.
+// ~QGraphicsScene() then calls setScene(nullptr) on each view, which re-reads the
+// stylesheet of a window that is already half torn down and crashed Fincept on every
+// Cmd+Q ("quit unexpectedly"). Detach the views and drop the scene first, while
+// everything around them is still intact.
+NodeEditorScreen::~NodeEditorScreen() {
+    if (minimap_)
+        minimap_->setScene(nullptr);
+    if (canvas_)
+        canvas_->setScene(nullptr);
+    delete scene_;
+    scene_ = nullptr;
+}
+
 NodeEditorScreen::NodeEditorScreen(QWidget* parent)
     : QWidget(parent), undo_stack_(new QUndoStack(this)), auto_save_timer_(new QTimer(this)) {
     build_ui();

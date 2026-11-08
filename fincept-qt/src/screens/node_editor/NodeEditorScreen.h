@@ -26,6 +26,7 @@ class NodeEditorScreen : public QWidget, public fincept::screens::IStatefulScree
     Q_OBJECT
   public:
     explicit NodeEditorScreen(QWidget* parent = nullptr);
+    ~NodeEditorScreen() override;
 
     void restore_state(const QVariantMap& state) override;
     QVariantMap save_state() const override;

@@ -169,6 +169,23 @@ EquityResearchScreen::EquityResearchScreen(QWidget* parent) : QWidget(parent) {
     connect(&am, &trading::AccountManager::account_updated, this, [this](const QString&) { update_trade_buttons(); });
 
     // "Load this symbol" requests from elsewhere in the app (command bar search).
+    // Peer list pushed by the set_research_peers tool. Queued so a symbol opened in the
+    // same call (nav.open_symbol, also queued) is loaded first and the list lands on it.
+    EventBus::instance().subscribe(this, "equity_research.set_peers", [this](const QVariantMap& payload) {
+        const QString peers = payload.value("peers").toString().trimmed();
+        if (peers.isEmpty())
+            return;
+        QMetaObject::invokeMethod(
+            this,
+            [this, peers]() {
+                if (!peers_tab_ || !tab_widget_)
+                    return;
+                tab_widget_->setCurrentWidget(peers_tab_);
+                peers_tab_->apply_peers(peers);
+            },
+            Qt::QueuedConnection);
+    });
+
     EventBus::instance().subscribe(this, "equity_research.load_symbol", [this](const QVariantMap& payload) {
         const QString symbol = payload.value("symbol").toString();
         if (!symbol.isEmpty())
@@ -552,6 +569,13 @@ void EquityResearchScreen::on_group_symbol_changed(const SymbolRef& ref) {
     if (!ref.is_valid())
         return;
     const QString mapped = research_symbol_from_ref(ref);
+    // Echo guard: after this screen publishes NBIX to its link group, a linked Equity
+    // Trading panel adopts it and re-broadcasts it tagged with its own default exchange
+    // (NSE), which mapped NBIX to NBIX.NS and swapped the listing the user had opened.
+    // The same bare ticker coming back with an exchange is that echo, not a new request.
+    if (!current_symbol_.isEmpty() && mapped != current_symbol_ &&
+        ref.symbol.trimmed().compare(current_symbol_, Qt::CaseInsensitive) == 0)
+        return;
     // A translated symbol (".NS" suffix, "BTC-USD") is not the form the group uses — don't echo it back.
     load_symbol(mapped, /*publish_to_group=*/mapped == ref.symbol.trimmed());
 }
