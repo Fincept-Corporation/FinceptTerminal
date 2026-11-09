@@ -1508,7 +1508,7 @@ std::optional<Prepared> prepare(const Step& s, const Target& t, QString* error) 
 
     // ── Dialog-level ──
     if (s.action == QLatin1String("close")) {
-        if (auto* menu = qobject_cast<QMenu*>(w)) {
+        if (qobject_cast<QMenu*>(w)) {
             p.perform = [wg]() {
                 if (wg)
                     wg->close();
