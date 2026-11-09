@@ -328,9 +328,8 @@ void CryptoCredentials::set_status(const QString& text, const QString& object_na
 }
 
 void CryptoCredentials::on_totp_tick() {
-    // The code only changes once per window. This tick fires every second and used to
-    // spawn a Python process (totp_gen.py) each time; count the window down locally and
-    // ask Python again only when it has rolled over.
+    // The code only changes once per window: count the window down locally and
+    // regenerate only when it has rolled over.
     if (totp_remaining_ > 1) {
         --totp_remaining_;
         totp_countdown_label_->setText(QString("(%1s)").arg(totp_remaining_));
@@ -352,7 +351,7 @@ void CryptoCredentials::refresh_totp() {
         if (!r.success) {
             self->totp_code_label_->setText(tr("CODE: ERR"));
             self->totp_countdown_label_->setText("");
-            self->totp_remaining_ = 5; // don't respawn Python every second while it is failing
+            self->totp_remaining_ = 5; // invalid secret: retry every 5 s, not every tick
             return;
         }
         self->totp_code_label_->setText(tr("CODE: %1").arg(r.code));

@@ -133,12 +133,26 @@ def get_quote(symbol):
             "open": _px(hist['Open'].iloc[-1], d) if not hist['Open'].empty else None,
             "previous_close": _px(previous_close, d),
             "timestamp": int(datetime.now().timestamp()),
-            "exchange": info.get('exchange', '')
+            "exchange": info.get('exchange', ''),
+            # Top of book from the same info call (no extra request). Yahoo reports 0 or nothing
+            # when a side is not quoted; that is "no quote", never a price.
+            "bid": _num(info.get('bid')) if _positive(info.get('bid')) else None,
+            "ask": _num(info.get('ask')) if _positive(info.get('ask')) else None,
+            "quote_type": info.get('quoteType'),
         }
 
         return quote_data
     except Exception as e:
         return {"error": str(e), "symbol": symbol}
+
+
+def _positive(value):
+    """True for a finite number > 0."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(v) and v > 0
 
 def get_historical(symbol, start_date, end_date, interval='1d'):
     """Fetch historical data for a symbol with specified interval
@@ -731,6 +745,11 @@ def get_financial_ratios(symbol):
             "revenuePerShare": info.get("revenuePerShare", 0),
             "bookValuePerShare": info.get("bookValue", 0),
             "freeCashFlowPerShare": fcf_per_share,
+            # Growth is what justifies a premium multiple — the peer table compares it
+            # side by side with P/E and P/S (fractions, latest quarter YoY).
+            "revenueGrowth": info.get("revenueGrowth", 0),
+            "earningsGrowth": info.get("earningsGrowth", 0),
+            "enterpriseToEbitda": info.get("enterpriseToEbitda", 0),
         }
 
         return ratios
@@ -862,7 +881,43 @@ def get_news(symbol, count=20):
 
         return {"articles": articles, "symbol": symbol}
     except Exception as e:
-        return {"error": str(e), "symbol": symbol, "articles": []}
+        # Ticker.news posts to finance.yahoo.com/xhr/ncp, which answers HTTP 404 (Nov 2026):
+        # yfinance then raises "YAHOO! FINANCE IS CURRENTLY DOWN" for every symbol. Yahoo's
+        # search API still serves ticker news, so fall back to it before reporting the error.
+        try:
+            return {"articles": _search_news(symbol, count), "symbol": symbol, "source": "yahoo_search"}
+        except Exception:
+            return {"error": str(e), "symbol": symbol, "articles": []}
+
+
+def _search_news(symbol, count):
+    """News for `symbol` from Yahoo's search API, keeping only the articles Yahoo tags with that
+    ticker (the search itself is fuzzy: "RELIANCE" also finds Reliance Steel stories)."""
+    import io, contextlib
+    from datetime import timezone
+    wanted = str(symbol or "").strip().upper()
+    if not wanted:
+        raise ValueError("Empty ticker name")
+    with contextlib.redirect_stdout(io.StringIO()):
+        items = yf.Search(wanted, max_results=1, news_count=max(int(count), 1) * 2,
+                          enable_fuzzy_query=False).news or []
+    articles = []
+    for item in items:
+        related = [str(t).upper() for t in (item.get("relatedTickers") or [])]
+        if wanted not in related or not item.get("title"):
+            continue
+        published = item.get("providerPublishTime")
+        articles.append({
+            "title": item.get("title", ""),
+            "description": "",  # the search API carries no summary
+            "url": item.get("link", ""),
+            "publisher": item.get("publisher", ""),
+            "published_date": datetime.fromtimestamp(published, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if isinstance(published, (int, float)) else ""
+        })
+        if len(articles) >= int(count):
+            break
+    return articles
 
 def _candidate_yf_symbols(symbol):
     """Generate yfinance ticker candidates for a portfolio symbol.

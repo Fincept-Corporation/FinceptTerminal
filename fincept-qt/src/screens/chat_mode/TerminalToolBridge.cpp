@@ -15,27 +15,19 @@
 
 namespace fincept::chat_mode {
 
-// Categories that are UI-only and should not be exposed to Finagent.
-// `profile` and `data-sources` are here because both hand back credential
-// material verbatim (profile_get_api_key returns the session API key;
-// ds_list_connections mapped every saved connector's config — including
-// passwords and tokens — with no arguments at all, i.e. a one-call bulk
-// credential dump). Neither belongs in a cloud agent's tool catalog.
-const QStringList TerminalToolBridge::EXCLUDED_CATEGORIES = {"navigation", "system", "settings", "profile",
-                                                             "data-sources"};
+// The cloud agent (Finagent, chat mode) may look at the terminal — the ui-read
+// tools: overview, snapshot, read, wait, screenshot — but never drive it.
+// Operating the user's screens ("ui-control": ui_act / ui_invoke) and opening
+// or rearranging them ("navigation": ui_open / ui_workspace) stay with agents
+// running on this machine, where risky steps are approved in the terminal.
+const QStringList TerminalToolBridge::EXCLUDED_CATEGORIES = {"navigation", "ui-control"};
 
-// Real money (live broker order placement/cancel/close) and local process
-// control (install/start external MCP servers). See the header for why these
-// fail closed on this path but not on the local-agent path.
-const QStringList TerminalToolBridge::BLOCKED_CATEGORIES = {"live-trading", "mcp-servers"};
+// No whole category is blocked beyond the exclusions above.
+const QStringList TerminalToolBridge::BLOCKED_CATEGORIES = {};
 
-// Arbitrary local code execution + irreversible file deletion, plus
-// download_managed_file: it writes a caller-named path on the local disk, and
-// chained with write_managed_text_file (whose bytes the model authors) that is
-// a write-what-where primitive. It is confined to the export directory now,
-// but a remote agent has no business writing local files at all.
-const QStringList TerminalToolBridge::BLOCKED_TOOLS = {"run_python_script", "delete_managed_file",
-                                                       "bulk_delete_managed_files", "download_managed_file"};
+// The bundled Python scripts run local code with the user's stored API keys
+// (and the exchange/ ones can place orders): never on a remote agent's say-so.
+const QStringList TerminalToolBridge::BLOCKED_TOOLS = {"python"};
 
 bool TerminalToolBridge::is_remote_blocked(const QString& name, const QString& category) {
     // EXCLUDED_CATEGORIES was previously applied ONLY while building the

@@ -1996,14 +1996,6 @@ Märkte, Aktien, Portfolio, Makro-Einblicke.</translation>
         <translation>Netzwerknutzung gilt als Verbreitung</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>KOMMERZIELLE LIZENZ</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Für kommerziellen Einsatz erforderlich</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>Keine Weitergabe des Quellcodes erforderlich</translation>
     </message>
@@ -2050,18 +2042,6 @@ Märkte, Aktien, Portfolio, Makro-Einblicke.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Lizenz (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Kommerzielle Lizenz</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Markenrichtlinie</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>Mitwirkenden-CLA</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32211,10 +32191,6 @@ Erstellen Sie ein echtes Ticket, und unser Team antwortet innerhalb von 24 Stund
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Copyright 2024-2026 Fincept Corporation. Alle Rechte vorbehalten.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Diese Software ist für die Open-Source-Nutzung unter AGPL-3.0-or-later lizenziert; für den Unternehmenseinsatz ist eine separate kommerzielle Lizenz verfügbar.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

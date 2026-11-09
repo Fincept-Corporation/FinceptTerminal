@@ -1,6 +1,7 @@
 # CBOE (Chicago Board Options Exchange) Data Wrapper
 # Based on OpenBB CBOE provider - https://github.com/OpenBB-finance/OpenBB/tree/main/openbb_platform/providers/cboe
 
+import os
 import sys
 import json
 import requests
@@ -9,11 +10,19 @@ from typing import Dict, List, Optional, Union, Any, Literal
 from io import StringIO
 import pandas as pd
 
+try:
+    import fincept_json
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_json
+
 # CBOE API URLs
 BASE_URL = "https://cdn.cboe.com/api/global/delayed_quotes"
 EU_BASE_URL = "https://cdn.cboe.com/api/global/european_indices"
 US_INDICES_URL = "https://cdn.cboe.com/api/global/delayed_quotes/quotes/all_us_indices.json"
 EU_INDICES_URL = "https://cdn.cboe.com/api/global/european_indices/index_quotes/all-indices.json"
+SYMBOL_BOOK_URL = "https://cdn.cboe.com/api/global/delayed_quotes/symbol_book/symbol-book.json"
+INDEX_DIRECTORY_URL = "https://cdn.cboe.com/api/global/us_indices/definitions/all_indices.json"
 
 # CBOE European Index Constituents (from OpenBB constants)
 EU_INDEX_CONSTITUENTS = [
@@ -109,6 +118,22 @@ class CBOEDataAPI:
         except Exception as e:
             return CBOEError(url, f"Unexpected error: {str(e)}").to_dict()
 
+    @staticmethod
+    def _payload(result: Dict[str, Any]) -> Any:
+        """The endpoint's own records from a _make_request result.
+
+        _make_request keeps the whole response body under "data", and the Cboe CDN wraps its
+        records once more ({"timestamp": ..., "data": <records>, "symbol": ...}). Reading
+        result["data"] directly returned that envelope: equity_quote answered success with
+        every field null, options_chains never found an option, and index_constituents /
+        index_snapshots rows came back as {"timestamp", "data"} pairs. Bodies that are the
+        records themselves (the index directory is a bare list) are returned as they are.
+        """
+        body = result.get("data")
+        if isinstance(body, dict) and "data" in body:
+            return body["data"]
+        return body
+
     def _parse_dataframe_response(self, data: Dict) -> pd.DataFrame:
         """Parse response into DataFrame"""
         if "data" not in data or not isinstance(data["data"], list):
@@ -140,9 +165,10 @@ class CBOEDataAPI:
                 return result
 
             # Extract the quote data from response
-            quote_data = result.get("data", {})
-            if not quote_data:
-                return CBOEError("equity_quote", "No data found for symbol").to_dict()
+            quote_data = self._payload(result)
+            if not isinstance(quote_data, dict) or all(
+                    quote_data.get(k) is None for k in ("current_price", "close", "bid", "ask")):
+                return CBOEError("equity_quote", f"No quote data found for {symbol}").to_dict()
 
             return {
                 "success": True,
@@ -286,15 +312,14 @@ class CBOEDataAPI:
             if "error" in result:
                 return result
 
-            constituents_data = result.get("data", [])
-            if not constituents_data:
+            constituents_data = self._payload(result)
+            if not isinstance(constituents_data, list) or not constituents_data:
                 return CBOEError("index_constituents", f"No constituents found for {symbol}").to_dict()
 
             df = pd.DataFrame(constituents_data)
 
-            # Transform percentage fields
-            if "price_change_percent" in df.columns:
-                df["price_change_percent"] = df["price_change_percent"] / 100
+            # price_change_percent stays in percent points, as Cboe sends it and as
+            # equity_quote reports it (dividing by 100 would label a fraction "percent").
 
             # Remove exchange_id column
             if "exchange_id" in df.columns:
@@ -429,19 +454,14 @@ class CBOEDataAPI:
             if "error" in result:
                 return result
 
-            indices_data = result.get("data", [])
-            if not indices_data:
+            indices_data = self._payload(result)
+            if not isinstance(indices_data, list) or not indices_data:
                 return CBOEError("index_snapshots", f"No indices data found for region: {region}").to_dict()
 
             df = pd.DataFrame(indices_data)
 
-            # Transform percentage fields
-            percent_cols = [
-                "price_change_percent", "iv30", "iv30_change", "iv30_change_percent"
-            ]
-            for col in percent_cols:
-                if col in df.columns:
-                    df[col] = round(df[col] / 100, 6)
+            # price_change_percent / iv30 stay in percent points, as Cboe sends them and as
+            # equity_quote reports them (dividing by 100 would label a fraction "percent").
 
             # Clean data
             df = df.replace(0, None).replace("", None)
@@ -495,8 +515,8 @@ class CBOEDataAPI:
             if "error" in result:
                 return result
 
-            futures_data = result.get("data", [])
-            if not futures_data:
+            futures_data = self._payload(result)
+            if not isinstance(futures_data, list) or not futures_data:
                 return CBOEError("futures_curve", "No futures curve data found").to_dict()
 
             df = pd.DataFrame(futures_data)
@@ -513,17 +533,40 @@ class CBOEDataAPI:
         except Exception as e:
             return CBOEError("futures_curve", str(e)).to_dict()
 
-    def get_options_chains(self, symbol: str) -> Dict[str, Any]:
+    def get_options_chains(self, symbol: str, expiration: str = "", option_type: str = "") -> Dict[str, Any]:
         """Get options chains data for a symbol
 
         Args:
-            symbol: Stock symbol (e.g., "AAPL", "MSFT")
+            symbol: Stock, ETF or index symbol (e.g., "AAPL", "SPY", "^SPX")
+            expiration: "" or "all" for every expiration, "nearest" for the first one on or
+                        after today, or a date YYYY-MM-DD
+            option_type: "" or "both" for calls and puts, "call" or "put"
 
         Returns:
-            Dict containing options chains data with metadata
+            Dict containing options chains data with metadata. implied_volatility is a
+            fraction (0.25 = 25%); change_percent is in percent points.
         """
         try:
+            import re
+
             symbol_clean = symbol.replace("^", "").upper()
+            if not symbol_clean:
+                return CBOEError("options_chains", "Symbol is required").to_dict()
+
+            exp_filter = (expiration or "").strip().lower()
+            if exp_filter == "all":
+                exp_filter = ""
+            elif exp_filter and exp_filter != "nearest":
+                try:
+                    exp_filter = datetime.strptime(exp_filter, "%Y-%m-%d").strftime("%Y-%m-%d")
+                except ValueError:
+                    return CBOEError("options_chains",
+                                     f"Invalid expiration '{expiration}': use YYYY-MM-DD, 'nearest' or 'all'").to_dict()
+            type_aliases = {"": "", "both": "", "all": "", "call": "call", "calls": "call", "c": "call",
+                            "put": "put", "puts": "put", "p": "put"}
+            type_filter = type_aliases.get((option_type or "").strip().lower())
+            if type_filter is None:
+                return CBOEError("options_chains", f"Invalid option type '{option_type}': use call, put or both").to_dict()
 
             # Determine URL pattern
             if symbol_clean in TICKER_EXCEPTIONS:
@@ -536,8 +579,8 @@ class CBOEDataAPI:
             if "error" in result:
                 return result
 
-            data = result.get("data", {})
-            if not data:
+            data = self._payload(result)
+            if not isinstance(data, dict) or not data:
                 return CBOEError("options_chains", "No options data found for symbol").to_dict()
 
             # Extract metadata
@@ -564,77 +607,87 @@ class CBOEDataAPI:
             }
 
             # Extract options data
-            options = data.get("options", [])
+            options = data.get("options") or []
             if not options:
-                return CBOEError("options_chains", "No options chains found").to_dict()
+                return CBOEError("options_chains", f"No options chains found for {symbol}").to_dict()
 
-            # Parse options data
-            options_df = pd.DataFrame(options)
+            # OCC contract symbol: root, YYMMDD expiration, C/P, strike x 1000 in 8 digits.
+            # (Roots of adjusted contracts can contain digits, e.g. "AAPL1".)
+            occ = re.compile(r"^(?P<root>.+?)(?P<exp>\d{6})(?P<cp>[CP])(?P<strike>\d{8})$")
+            today = datetime.now().date()
 
-            # Parse option symbols to extract expiration, strike, and type
-            def parse_option_symbol(option_symbol):
-                """Parse option symbol to extract components"""
-                import re
-                pattern = r"^(?P<ticker>\D*)(?P<expiration>\d*)(?P<option_type>\D*)(?P<strike>\d*)$"
-                match = re.match(pattern, option_symbol)
-                if match:
-                    ticker = match.group('ticker')
-                    expiration = match.group('expiration')
-                    option_type = match.group('option_type').replace('C', 'call').replace('P', 'put')
-                    strike = match.group('strike').lstrip('0')
-                    if strike:
-                        strike = float(strike) / 1000  # Convert to actual strike price
-                    return ticker, expiration, option_type, strike
-                return None, None, None, None
+            def number(value):
+                return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
-            # Parse option symbols
             parsed_data = []
-            for _, row in options_df.iterrows():
-                ticker, expiration, option_type, strike = parse_option_symbol(row['option'])
-                if ticker and expiration and option_type and strike:
-                    # Calculate days to expiration
-                    try:
-                        exp_date = pd.to_datetime(expiration, format='%y%m%d')
-                        dte = (exp_date - datetime.now()).days + 1
-                    except:
-                        dte = None
-
-                    option_data = {
-                        "contract_symbol": row['option'],
-                        "underlying_symbol": ticker,
-                        "expiration": expiration,
-                        "strike": strike,
-                        "option_type": option_type,
-                        "dte": dte,
-                        "last": row.get("last"),
-                        "bid": row.get("bid"),
-                        "ask": row.get("ask"),
-                        "mid": row.get("mid"),
-                        "change": row.get("change"),
-                        "change_percent": row.get("percent_change") / 100 if row.get("percent_change") else None,
-                        "volume": row.get("volume"),
-                        "open_interest": row.get("open_interest"),
-                        "implied_volatility": row.get("iv"),
-                        "theoretical_price": row.get("theo"),
-                        "delta": row.get("delta"),
-                        "gamma": row.get("gamma"),
-                        "theta": row.get("theta"),
-                        "vega": row.get("vega"),
-                        "prev_close": row.get("prev_day_close"),
-                        "last_trade_time": row.get("last_trade_time")
-                    }
-                    parsed_data.append(option_data)
+            for opt in options:
+                match = occ.match(str(opt.get("option", "")))
+                if not match:
+                    continue
+                try:
+                    exp_date = datetime.strptime(match.group("exp"), "%y%m%d").date()
+                except ValueError:
+                    continue
+                bid, ask = number(opt.get("bid")), number(opt.get("ask"))
+                parsed_data.append({
+                    "contract_symbol": opt.get("option"),
+                    "underlying_symbol": match.group("root"),
+                    "expiration": exp_date.isoformat(),
+                    "strike": int(match.group("strike")) / 1000,
+                    "option_type": "call" if match.group("cp") == "C" else "put",
+                    "dte": (exp_date - today).days,
+                    "last": opt.get("last_trade_price"),
+                    "bid": bid,
+                    "bid_size": opt.get("bid_size"),
+                    "ask": ask,
+                    "ask_size": opt.get("ask_size"),
+                    "mid": round((bid + ask) / 2, 4) if bid and ask and bid > 0 and ask > 0 else None,
+                    "change": opt.get("change"),
+                    "change_percent": opt.get("percent_change"),
+                    "volume": opt.get("volume"),
+                    "open_interest": opt.get("open_interest"),
+                    "implied_volatility": opt.get("iv"),
+                    "theoretical_price": opt.get("theo"),
+                    "delta": opt.get("delta"),
+                    "gamma": opt.get("gamma"),
+                    "theta": opt.get("theta"),
+                    "vega": opt.get("vega"),
+                    "rho": opt.get("rho"),
+                    "prev_close": opt.get("prev_day_close"),
+                    "last_trade_time": opt.get("last_trade_time")
+                })
 
             if not parsed_data:
                 return CBOEError("options_chains", "Failed to parse options data").to_dict()
 
-            options_parsed_df = pd.DataFrame(parsed_data)
+            expirations = sorted({o["expiration"] for o in parsed_data})
+            if exp_filter == "nearest":
+                upcoming = [e for e in expirations if e >= today.isoformat()]
+                if not upcoming:
+                    return CBOEError("options_chains", f"No {symbol_clean} expiration on or after today").to_dict()
+                selected = {upcoming[0]}
+            elif exp_filter:
+                if exp_filter not in expirations:
+                    shown = ", ".join(expirations[:12]) + (" ..." if len(expirations) > 12 else "")
+                    return CBOEError("options_chains",
+                                     f"No {symbol_clean} options expire on {exp_filter}. Available: {shown}").to_dict()
+                selected = {exp_filter}
+            else:
+                selected = set(expirations)
+            rows = [o for o in parsed_data
+                    if o["expiration"] in selected and (not type_filter or o["option_type"] == type_filter)]
+            rows.sort(key=lambda o: (o["expiration"], o["strike"], o["option_type"]))
 
             return {
                 "success": True,
                 "data": {
                     "metadata": {k: v for k, v in metadata.items() if v is not None},
-                    "options": options_parsed_df.to_dict("records")
+                    "expirations": expirations,
+                    "expiration_filter": exp_filter or "all",
+                    "option_type_filter": type_filter or "both",
+                    "count": len(rows),
+                    "units": {"implied_volatility": "fraction (0.25 = 25%)", "change_percent": "percent points"},
+                    "options": rows
                 }
             }
 
@@ -657,25 +710,24 @@ class CBOEDataAPI:
             symbols_df = self._get_cached_data(cache_key)
 
             if symbols_df is None:
-                url = f"{BASE_URL}/directory/symbol_search.json"
-                result = self._make_request(url)
+                # directory/symbol_search.json was retired (HTTP 403); the symbol book lists
+                # every Cboe-quoted symbol as {"name": <symbol>, "company_name": <name>}.
+                result = self._make_request(SYMBOL_BOOK_URL)
 
                 if "error" in result:
                     return result
 
-                data = result.get("data", [])
-                symbols_df = pd.DataFrame(data)
+                data = self._payload(result)
+                symbols_df = pd.DataFrame(data if isinstance(data, list) else [])
+                symbols_df = symbols_df.rename(columns={"name": "symbol", "company_name": "name"})
                 self._set_cache_data(cache_key, symbols_df)
 
             if symbols_df.empty:
                 return CBOEError("equity_search", "Company directory not available").to_dict()
 
-            # Reset index to make symbol column available
-            symbols_df = symbols_df.reset_index()
-
-            # Search
+            # Search (the query is literal text, not a regular expression)
             target = "name" if not is_symbol else "symbol"
-            mask = symbols_df[target].str.contains(query, case=False, na=False)
+            mask = symbols_df[target].str.contains(query, case=False, na=False, regex=False)
             results_df = symbols_df[mask]
 
             return {
@@ -705,14 +757,15 @@ class CBOEDataAPI:
             indices_df = self._get_cached_data(cache_key)
 
             if indices_df is None:
-                url = f"{BASE_URL}/directory/index_search.json"
-                result = self._make_request(url)
+                # directory/index_search.json was retired (HTTP 403); the index definitions
+                # file lists every Cboe index (index_symbol, name, description, ...).
+                result = self._make_request(INDEX_DIRECTORY_URL)
 
                 if "error" in result:
                     return result
 
-                data = result.get("data", [])
-                indices_df = pd.DataFrame(data)
+                data = self._payload(result)
+                indices_df = pd.DataFrame(data if isinstance(data, list) else [])
 
                 # Drop source column like OpenBB
                 if "source" in indices_df.columns:
@@ -723,14 +776,14 @@ class CBOEDataAPI:
             if indices_df.empty:
                 return CBOEError("index_search", "Index directory not available").to_dict()
 
-            # Search
+            # Search (the query is literal text, not a regular expression)
             if is_symbol:
-                mask = indices_df["index_symbol"].str.contains(query, case=False, na=False)
+                mask = indices_df["index_symbol"].str.contains(query, case=False, na=False, regex=False)
             else:
                 mask = (
-                    indices_df["name"].str.contains(query, case=False, na=False) |
-                    indices_df["index_symbol"].str.contains(query, case=False, na=False) |
-                    indices_df["description"].str.contains(query, case=False, na=False)
+                    indices_df["name"].str.contains(query, case=False, na=False, regex=False) |
+                    indices_df["index_symbol"].str.contains(query, case=False, na=False, regex=False) |
+                    indices_df["description"].str.contains(query, case=False, na=False, regex=False)
                 )
 
             results_df = indices_df[mask]
@@ -758,14 +811,14 @@ class CBOEDataAPI:
             indices_df = self._get_cached_data(cache_key)
 
             if indices_df is None:
-                url = f"{BASE_URL}/directory/index_search.json"
-                result = self._make_request(url)
+                # directory/index_search.json was retired (HTTP 403) — see search_indices.
+                result = self._make_request(INDEX_DIRECTORY_URL)
 
                 if "error" in result:
                     return result
 
-                data = result.get("data", [])
-                indices_df = pd.DataFrame(data)
+                data = self._payload(result)
+                indices_df = pd.DataFrame(data if isinstance(data, list) else [])
                 self._set_cache_data(cache_key, indices_df)
 
             if indices_df.empty:
@@ -823,7 +876,11 @@ def main(args=None):
             args[1] if len(args) + 1 > 2 else "VX_EOD",
             args[2] if len(args) + 1 > 3 else None
         ),
-        "options_chains": lambda: api.get_options_chains(args[1] if len(args) + 1 > 2 else ""),
+        "options_chains": lambda: api.get_options_chains(
+            args[1] if len(args) + 1 > 2 else "",
+            args[2] if len(args) + 1 > 3 else "",
+            args[3] if len(args) + 1 > 4 else ""
+        ),
         "available_indices": lambda: api.get_available_indices()
     }
 
@@ -833,7 +890,9 @@ def main(args=None):
 
     try:
         result = command_map[command]()
-        print(json.dumps(result, indent=2, default=str))
+        # fincept_json: a missing cell (pandas NaN) prints null instead of the bare NaN
+        # token, which is not JSON and makes the terminal discard the whole payload.
+        print(fincept_json.dumps(result, indent=2, default=str, ensure_ascii=True))
     except Exception as e:
         print(json.dumps(CBOEError(command, str(e)).to_dict(), indent=2))
         sys.exit(1)

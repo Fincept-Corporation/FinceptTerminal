@@ -1,4 +1,5 @@
 #pragma once
+#include "services/news/NewsNlpEngine.h"
 #include "services/news/NewsService.h"
 
 #include <QHash>
@@ -11,15 +12,10 @@
 
 namespace fincept::services {
 
-// ── NER Result Types ────────────────────────────────────────────────────────
+// EntityResult, GeoLocation, ArticleGeo, InfrastructureItem and the sentiment result
+// types are declared in NewsNlpEngine.h.
 
-struct EntityResult {
-    QString id;                                 // article id
-    QVector<QPair<QString, QString>> countries; // (name, code)
-    QStringList organizations;
-    QStringList people;
-    QStringList tickers;
-};
+// ── NER aggregates ──────────────────────────────────────────────────────────
 
 struct TopEntity {
     QString name;
@@ -33,53 +29,10 @@ struct NerResult {
     QVector<TopEntity> top_people;
 };
 
-// ── Geolocation Types ───────────────────────────────────────────────────────
-
-struct GeoLocation {
-    QString name;
-    QString code;
-    double lat = 0;
-    double lon = 0;
-    QString type; // "city" or "country"
-};
-
-struct ArticleGeo {
-    QString id;
-    QVector<GeoLocation> locations;
-    double primary_lat = 0;
-    double primary_lon = 0;
-};
-
-struct InfrastructureItem {
-    QString name;
-    QString type; // "airport", "military", "power_plant", "port"
-    double lat = 0;
-    double lon = 0;
-    double distance_km = 0;
-};
-
 /// NER + geolocation for a set of articles (see NewsNlpService::enrich_articles).
 struct NewsEnrichment {
     NerResult ner;               // per_article for every input article; top_* over the set
     QVector<ArticleGeo> geo;     // only articles that mention a known place
-};
-
-// ── Sentiment Types ───────────────────────────────────────────────────────────
-
-struct ArticleSentimentResult {
-    QString id;
-    QString label;           // "BULLISH" | "BEARISH" | "NEUTRAL"
-    double score = 0.0;      // -1..1
-    double confidence = 0.0; // 0..1
-};
-
-struct NewsSentimentResult {
-    QString engine;             // "vader" | "lexicon"
-    double overall_score = 0.0; // -1..1
-    int bullish = 0;
-    int bearish = 0;
-    int neutral = 0;
-    QVector<ArticleSentimentResult> per_article;
 };
 
 // ── Service ─────────────────────────────────────────────────────────────────
@@ -97,10 +50,10 @@ class NewsNlpService : public QObject {
     /// Entities (countries, orgs, people, tickers) + places for `articles`.
     ///
     /// Results are cached per article (id + content hash). Only articles not seen
-    /// before are sent to Python — all of them in ONE news_nlp.py `enrich_batch`
-    /// process — so a filter change over already-enriched articles costs no process
-    /// at all. While a batch is running, a newer request replaces any queued one and
-    /// runs when the batch lands (at most one enrichment process at a time).
+    /// before are processed — all of them in one batch on a worker thread — so a
+    /// filter change over already-enriched articles answers synchronously from the
+    /// cache. While a batch is running, a newer request replaces any queued one and
+    /// runs when the batch lands (at most one batch at a time).
     void enrich_articles(const QVector<NewsArticle>& articles, EnrichCallback cb);
 
     /// Cached per-article results (populated by enrich_articles).
@@ -108,14 +61,15 @@ class NewsNlpService : public QObject {
     /// Cached places for an article; nullopt when unknown or when it names no place.
     std::optional<ArticleGeo> cached_geo(const QString& article_id) const;
 
-    /// Headline sentiment (VADER when available, keyword fallback) via
-    /// news_nlp.py. Per-article results are keyed by NewsArticle::id.
+    /// Headline sentiment (finance-tuned VADER) computed on a worker thread; the
+    /// callback runs on this object's thread. Per-article results are keyed by
+    /// NewsArticle::id.
     void analyze_sentiment(const QVector<NewsArticle>& articles, SentimentCallback cb);
 
-    /// Find nearby infrastructure for a coordinate.
+    /// Find nearby infrastructure for a coordinate (OpenStreetMap Overpass).
     void nearby_infrastructure(double lat, double lon, int radius_km, InfraCallback cb);
 
-    /// Translate text to target language.
+    /// Translate text to target language (Google's keyless gtx endpoint).
     void translate_text(const QString& text, const QString& target_lang, TranslateCallback cb);
 
   private:
@@ -131,14 +85,13 @@ class NewsNlpService : public QObject {
         EnrichCallback cb;
     };
 
-    static size_t content_hash(const NewsArticle& a);
+    static size_t content_hash(const QString& headline, const QString& summary);
     NewsEnrichment build_enrichment(const QVector<NewsArticle>& articles) const;
     void trim_cache(const QVector<NewsArticle>& keep);
     void run_pending_enrich();
 
     QHash<QString, CacheEntry> enrich_cache_; // article id -> results
     bool enrich_inflight_ = false;
-    qint64 enrich_failed_at_ = 0; // unix secs of the last failed batch; 0 = none
     std::optional<PendingEnrich> pending_enrich_;
 };
 

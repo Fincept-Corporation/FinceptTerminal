@@ -25,7 +25,7 @@ class QStackedWidget;
 
 namespace fincept::screens {
 
-class AgentConnectPanel;
+class AgentConnectSection;
 class AgentRunPanel;
 class AgentRunsPanel;
 class AgentSchedulesPanel;
@@ -62,7 +62,7 @@ class AgentWorkbenchScreen : public QWidget, public IStatefulScreen {
     AgentRunPanel* run_panel_ = nullptr;
     AgentRunsPanel* runs_panel_ = nullptr;
     AgentSchedulesPanel* schedules_panel_ = nullptr;
-    AgentConnectPanel* connect_panel_ = nullptr;
+    AgentConnectSection* connect_panel_ = nullptr;
 
     int tab_ = 0;
     bool visibility_reported_ = false;

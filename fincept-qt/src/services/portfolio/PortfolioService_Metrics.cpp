@@ -116,6 +116,10 @@ portfolio::MarketAnalytics parse_analytics(const QJsonObject& o, const QString& 
     a.var_95_1d = opt_double(p.value("var_95_1d"));
     a.cvar_95_1d = opt_double(p.value("cvar_95_1d"));
     a.beta = opt_double(p.value("beta"));
+    a.param_var_95_1d = opt_double(p.value("param_var_95_1d"));
+    a.diversification_ratio = opt_double(p.value("diversification_ratio"));
+    a.tracking_error = opt_double(p.value("tracking_error"));
+    a.benchmark_corr = opt_double(p.value("benchmark_corr"));
     a.observations = p.value("observations").toInt();
     a.coverage = p.value("coverage").toDouble();
     const auto hs = o.value("holdings").toObject();
@@ -371,6 +375,16 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
         conc += weights[i];
     m.concentration_top3 = conc;
 
+    // Effective number of positions, 1/Σw² (inverse Herfindahl): ten holdings with one
+    // at 80% behave like ~1.5 positions, not ten.
+    {
+        double hhi = 0.0;
+        for (double w : weights)
+            hhi += (w / 100.0) * (w / 100.0);
+        if (hhi > 1e-12)
+            m.effective_n = 1.0 / hhi;
+    }
+
     // ── Realised, flow-adjusted (time-weighted) returns ──────────────────────
     auto& repo = PortfolioRepository::instance();
     QVector<portfolio::PortfolioSnapshot> snaps;
@@ -415,13 +429,25 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
 
     if (n >= pmd::kMinDrawdownObs) {
         double idx = 1.0, peak = 1.0, mdd = 0.0;
+        int wins = 0;
+        double best = rets.first(), worst = rets.first();
         for (double r : rets) {
             idx *= (1.0 + r);
             peak = std::max(peak, idx);
             mdd = std::min(mdd, idx / peak - 1.0);
+            if (r > 0.0)
+                ++wins;
+            best = std::max(best, r);
+            worst = std::min(worst, r);
         }
         m.max_drawdown = mdd * 100.0;
         m.total_return = (idx - 1.0) * 100.0;
+        // Where the book stands NOW relative to its high-water mark — the number a risk
+        // manager acts on; MDD alone can describe a slump long since recovered.
+        m.current_drawdown = (idx / peak - 1.0) * 100.0;
+        m.win_rate = 100.0 * wins / n;
+        m.best_period = best * 100.0;
+        m.worst_period = worst * 100.0;
     }
 
     double ppy = 252.0;
@@ -461,6 +487,9 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
 
         if (span_days >= pmd::kMinAnnualiseDays && m.total_return.has_value())
             m.annualized_return = (std::pow(1.0 + *m.total_return / 100.0, 1.0 / years) - 1.0) * 100.0;
+        // Calmar: annualised return per unit of worst drawdown (needs a real drawdown).
+        if (m.annualized_return && m.max_drawdown && *m.max_drawdown < -0.1)
+            m.calmar = *m.annualized_return / std::abs(*m.max_drawdown);
 
         // Historical VaR/CVaR from the realised series (used only when the
         // ex-ante figures below are unavailable).
@@ -492,15 +521,43 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
             if (mc >= pmd::kMinPerfObs) {
                 const double pm = std::accumulate(pr.begin(), pr.end(), 0.0) / mc;
                 const double bm = std::accumulate(br.begin(), br.end(), 0.0) / mc;
-                double cov = 0, var_b = 0;
+                double cov = 0, var_b = 0, var_p = 0;
+                double grow_p = 1.0, grow_b = 1.0;
                 for (int i = 0; i < mc; ++i) {
                     cov += (pr[i] - pm) * (br[i] - bm);
                     var_b += (br[i] - bm) * (br[i] - bm);
+                    var_p += (pr[i] - pm) * (pr[i] - pm);
+                    grow_p *= 1.0 + pr[i];
+                    grow_b *= 1.0 + br[i];
                 }
                 if (var_b > 1e-14) {
                     const double beta = cov / var_b;
                     realised_beta = beta;
                     m.alpha = ((pm - rf_p) - beta * (bm - rf_p)) * ppy * 100.0;
+                    if (var_p > 1e-14)
+                        m.r_squared = (cov * cov) / (var_b * var_p);
+                    // Treynor: annualised excess return per unit of market risk — only
+                    // meaningful when the book actually carries market risk.
+                    if (std::abs(beta) > 0.1)
+                        m.treynor = (pm - rf_p) * ppy / beta * 100.0;
+                }
+                // Same periods, same dates: what the benchmark did, and the gap.
+                m.benchmark_return = (grow_b - 1.0) * 100.0;
+                m.excess_return = (grow_p - grow_b) * 100.0;
+                // Active returns → tracking error and information ratio.
+                double am = 0.0;
+                for (int i = 0; i < mc; ++i)
+                    am += pr[i] - br[i];
+                am /= mc;
+                double ass = 0.0;
+                for (int i = 0; i < mc; ++i) {
+                    const double d = (pr[i] - br[i]) - am;
+                    ass += d * d;
+                }
+                const double te = std::sqrt(ass / (mc - 1)) * std::sqrt(ppy);
+                if (te > 1e-9) {
+                    m.tracking_error = te * 100.0;
+                    m.information_ratio = am * ppy / te;
                 }
             }
         }
@@ -517,10 +574,20 @@ void PortfolioService::compute_metrics(const portfolio::PortfolioSummary& summar
             m.var_95 = *a.var_95_1d * summary.total_market_value;
         if (a.cvar_95_1d && summary.total_market_value > 0)
             m.cvar_95 = *a.cvar_95_1d * summary.total_market_value;
+        m.diversification_ratio = a.diversification_ratio;
+        // No realised benchmark history yet: fall back to the ex-ante tracking error.
+        if (!m.tracking_error && a.tracking_error) {
+            m.tracking_error = *a.tracking_error * 100.0;
+            m.tracking_error_ex_ante = true;
+        }
     } else {
         m.volatility = realised_vol_pct;
         m.beta = realised_beta;
     }
+    // Square-root-of-time scaling — the regulatory 10-day horizon convention (assumes
+    // i.i.d. daily returns, so it understates risk in trending / fat-tailed markets).
+    if (m.var_95)
+        m.var_95_10d = *m.var_95 * std::sqrt(10.0);
 
     // ── Composite risk score (0-100) — only with a real volatility ───────────
     if (m.volatility.has_value()) {

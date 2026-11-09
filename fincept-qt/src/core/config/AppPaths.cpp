@@ -2,6 +2,7 @@
 
 #include "core/config/ProfileManager.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
@@ -74,6 +75,27 @@ void AppPaths::ensure_all() {
     try_mkpath(cache());
     try_mkpath(workspaces());
     try_mkpath(crashdumps());
+}
+
+QString AppPaths::bundled_resource(const QString& relative_path) {
+    // Same layout list ConnectorCatalog / PythonSetupManager / NotebookLibrary
+    // search. A plain "<exe>/resources/..." lookup is wrong on the shipped macOS
+    // bundle (the release job moves Contents/MacOS/resources/* into
+    // Contents/Resources/ for codesign) and on .deb/.rpm installs (binary in
+    // <prefix>/bin, data in <prefix>/share/fincept-terminal/resources).
+    const QString exe = QCoreApplication::applicationDirPath();
+    const QString primary = exe + QStringLiteral("/resources/") + relative_path;
+    const QStringList candidates = {
+        primary,
+        exe + QStringLiteral("/../Resources/") + relative_path,
+        exe + QStringLiteral("/../Resources/resources/") + relative_path,
+        exe + QStringLiteral("/../share/fincept-terminal/resources/") + relative_path,
+    };
+    for (const QString& c : candidates) {
+        if (QFileInfo::exists(c))
+            return QDir::cleanPath(c);
+    }
+    return QDir::cleanPath(primary);
 }
 
 } // namespace fincept

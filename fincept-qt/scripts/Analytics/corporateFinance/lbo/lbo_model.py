@@ -1,4 +1,17 @@
-"""Complete LBO Model"""
+"""Complete LBO Model - projections, debt paydown (cash sweep), exit and returns.
+
+CLI (python lbo_model.py <command> <args>):
+  build <json>        LBO Model tab. Keys: ebitda (or revenue + ebitda_margin), entry_multiple, exit_multiple,
+                      revenue_growth, ebitda_margin, holding_period, senior_debt + senior_rate (100% cash sweep),
+                      sub_debt + sub_rate (bullet); optional capex_pct_revenue, nwc_pct_revenue, tax_rate,
+                      hurdle_irr; without senior/sub debt: debt_multiple (x EBITDA, template tranches).
+  sensitivity <json>  Sensitivity tab: the same keys plus entry_base, exit_base, range, steps -> IRR / MOIC grid
+                      over entry multiple x exit multiple (debt held fixed, equity = entry EV - debt).
+  build <target_json> <assumptions_json> [years]               native positional form.
+  sensitivity <base_json> <growth_scenarios> <exit_multiples>  native: revenue growth x exit multiple.
+Rates are fractions; IRRs in the output are percents (irr / irr_pct), null when no IRR exists.
+"""
+import os
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -6,6 +19,11 @@ from typing import Dict, Any, List, Optional
 # Add Analytics path for absolute imports
 analytics_path = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(analytics_path))
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(str(analytics_path)))
+    import fincept_json
 
 # Use absolute imports instead of relative imports
 from corporateFinance.lbo.capital_structure import CapitalStructureBuilder
@@ -30,12 +48,34 @@ class LBOModel:
         self.exit_analyzer = None
 
     def build_complete_model(self, projection_years: int = 5) -> Dict[str, Any]:
-        """Build complete LBO model"""
+        """Build complete LBO model.
 
-        target_leverage = self.assumptions.get('target_leverage', 5.5)
+        Capital structure: `assumptions['debt_tranches']` ([{name, type, amount, rate, sweep_percentage,
+        mandatory_amortization, amortization_years}]) when given, equity = entry EV - debt; otherwise the template
+        structure at `target_leverage` x EBITDA. Each year interest is charged on opening balances, levered free
+        cash flow pays mandatory amortisation, then the cash sweep, and whatever is left accumulates as cash, so
+        exit equity = exit EV - (debt - cash). Returns are measured on total equity (sponsor + rollover +
+        management), the same claim the exit equity value represents.
+        """
 
         self.capital_structure = CapitalStructureBuilder(self.entry_ev, self.entry_ebitda)
-        cap_structure = self.capital_structure.optimize_capital_structure(target_leverage)
+        tranches_in = self.assumptions.get('debt_tranches')
+        if tranches_in:
+            for t in tranches_in:
+                self.capital_structure.add_debt_tranche(
+                    name=t['name'], amount=float(t['amount']), interest_rate=float(t['rate']),
+                    amortization_years=t.get('amortization_years', 10), debt_type=t.get('type', 'Term Loan B'),
+                    mandatory_amortization=float(t.get('mandatory_amortization', 0.0)),
+                    sweep_percentage=float(t.get('sweep_percentage', 0.0)))
+            total_debt_in = sum(t.amount for t in self.capital_structure.debt_tranches)
+            if total_debt_in >= self.entry_ev:
+                raise ValueError("Debt (%.0f) must be below the entry enterprise value (%.0f = EBITDA x entry "
+                                 "multiple)." % (total_debt_in, self.entry_ev))
+            self.capital_structure.set_equity(sponsor_equity=self.entry_ev - total_debt_in)
+            cap_structure = self.capital_structure.build_capital_structure_table()
+        else:
+            target_leverage = self.assumptions.get('target_leverage', 5.5)
+            cap_structure = self.capital_structure.optimize_capital_structure(target_leverage)
 
         revenue_growth_raw = self.assumptions.get('revenue_growth', 0.05)
         if isinstance(revenue_growth_raw, (int, float)):
@@ -47,19 +87,16 @@ class LBOModel:
         nwc_pct = self.assumptions.get('nwc_pct_revenue', 0.05)
         tax_rate = self.assumptions.get('tax_rate', 0.21)
 
-        financials = self._project_financials(
+        financials, debt_schedule = self._project(
             revenue_growth, ebitda_margin, capex_pct, nwc_pct, tax_rate, projection_years
         )
 
-        fcf_projection = [fin['free_cash_flow'] for fin in financials.values()]
-
         self.debt_schedule = DebtSchedule(self.capital_structure.debt_tranches)
-        debt_schedule = self.debt_schedule.calculate_annual_schedule(fcf_projection, projection_years)
-
         ebitda_projection = [fin['ebitda'] for fin in financials.values()]
         interest_coverage = self.debt_schedule.calculate_interest_coverage(ebitda_projection, debt_schedule)
         leverage_progression = self.debt_schedule.calculate_leverage_progression(ebitda_projection, debt_schedule)
         debt_summary = self.debt_schedule.summarize_debt_paydown(debt_schedule)
+        debt_summary['exit_cash'] = debt_schedule[max(debt_schedule)]['cash_ending']
 
         exit_year = self.assumptions.get('exit_year', 5)
         exit_ebitda = financials[exit_year]['ebitda']
@@ -67,11 +104,15 @@ class LBOModel:
 
         self.exit_analyzer = ExitAnalyzer(exit_ebitda)
 
-        exit_year_debt = debt_schedule[exit_year]['total_debt_ending']
-        exit_scenarios = self.exit_analyzer.multiples_exit_analysis(exit_multiples, exit_year_debt)
+        exit_net_debt = debt_schedule[exit_year]['net_debt_ending']
+        exit_scenarios = self.exit_analyzer.multiples_exit_analysis(exit_multiples, exit_net_debt)
+        for scenario in exit_scenarios.values():
+            scenario['exit_debt'] = debt_schedule[exit_year]['total_debt_ending']
+            scenario['exit_cash'] = debt_schedule[exit_year]['cash_ending']
+            scenario['exit_net_debt'] = exit_net_debt
 
         returns_analysis = {}
-        initial_equity = cap_structure['leverage_metrics']['sponsor_equity_contribution']
+        initial_equity = cap_structure['leverage_metrics']['total_equity']
 
         for multiple, scenario in exit_scenarios.items():
             exit_equity = scenario['exit_equity_value']
@@ -87,15 +128,15 @@ class LBOModel:
             initial_equity, exit_year, ebitda_projection, debt_schedule
         )
 
-        # Build a consolidated 'returns' dict for the base exit multiple
+        # Build a consolidated 'returns' dict for the base (middle) exit multiple; returns_analysis is keyed by
+        # the multiple itself (a float), not its string form.
         base_exit_mult = self.assumptions.get('exit_multiples', [10.0])
-        base_mult_key = str(float(base_exit_mult[len(base_exit_mult) // 2])) if base_exit_mult else None
-        base_returns = returns_analysis.get(base_mult_key, {}) if base_mult_key else {}
+        base_returns = returns_analysis.get(base_exit_mult[len(base_exit_mult) // 2], {}) if base_exit_mult else {}
         if not base_returns and returns_analysis:
             base_returns = next(iter(returns_analysis.values()))
 
-        # Build sources & uses for frontend
-        total_debt = cap_structure.get('leverage_metrics', {}).get('total_debt', 0)
+        # Sources & uses: transaction/financing fees are not modelled (nothing funds them and the returns exclude
+        # them), so they are not listed as uses; uses = entry EV = debt + equity.
         sources_uses = {
             'sources': {
                 'senior_debt': sum(t['amount'] for t in cap_structure.get('debt_tranches', []) if t.get('type') in ['Term Loan A', 'Term Loan B', 'Senior Notes']),
@@ -107,8 +148,6 @@ class LBOModel:
             },
             'uses': {
                 'enterprise_value': self.entry_ev,
-                'transaction_fees': self.entry_ev * 0.02,
-                'financing_fees': total_debt * 0.015,
             }
         }
 
@@ -132,31 +171,38 @@ class LBOModel:
             'exit_scenarios': exit_scenarios,
             'returns_analysis': returns_analysis,
             'returns': {
-                'irr': base_returns.get('irr', 0) / 100,
-                'moic': base_returns.get('moic', 0),
+                # percent (the generic M&A result view labels *_pct keys as percents without rescaling)
+                'irr_pct': base_returns.get('irr'),
+                'moic': base_returns.get('moic'),
                 'entry_equity': initial_equity,
-                'exit_equity': base_returns.get('exit_equity_value', 0),
+                'exit_equity': base_returns.get('exit_equity_value'),
             },
             'sources_uses': sources_uses,
             'sensitivity_analysis': sensitivity
         }
 
-    def _project_financials(self, revenue_growth: List[float], ebitda_margin: float,
-                           capex_pct: float, nwc_pct: float, tax_rate: float,
-                           years: int) -> Dict[int, Dict[str, float]]:
-        """Project financial statements"""
+    def _project(self, revenue_growth: List[float], ebitda_margin: float, capex_pct: float, nwc_pct: float,
+                 tax_rate: float, years: int):
+        """Project the income statement and the debt/cash schedule together, year by year.
 
-        base_revenue = self.target.get('revenue', self.entry_ebitda / ebitda_margin)
+        Interest is charged on each tranche's opening balance; levered FCF = EBITDA - taxes - capex - change in
+        NWC - interest; it pays mandatory amortisation, then each sweeping tranche takes its share of the cash
+        left (a dollar is swept once), and the remainder accumulates as cash (negative = a funding need that no
+        revolver draw covers in this model). Returns ({year: income lines}, {year: debt schedule row}).
+        """
+
+        base_revenue = self.target.get('revenue') or self.entry_ebitda / ebitda_margin
+        tranches = self.capital_structure.debt_tranches
+        balances = {t.name: t.amount for t in tranches}
+        cash = 0.0
+        prev_revenue = base_revenue
 
         financials = {}
+        schedule = {}
 
         for year in range(1, years + 1):
             growth = revenue_growth[year - 1] if year <= len(revenue_growth) else revenue_growth[-1]
-
-            if year == 1:
-                revenue = base_revenue * (1 + growth)
-            else:
-                revenue = financials[year - 1]['revenue'] * (1 + growth)
+            revenue = prev_revenue * (1 + growth)
 
             ebitda = revenue * ebitda_margin
 
@@ -164,7 +210,12 @@ class LBOModel:
 
             ebit = ebitda - depreciation
 
-            interest = self.capital_structure.calculate_annual_interest_expense(year) if self.capital_structure else 0
+            row = {}
+            opening = dict(balances)
+            interest = 0.0
+            for t in tranches:
+                row[f'{t.name}_interest'] = opening[t.name] * t.interest_rate
+                interest += row[f'{t.name}_interest']
 
             ebt = ebit - interest
 
@@ -174,12 +225,42 @@ class LBOModel:
 
             capex = revenue * capex_pct
 
-            if year == 1:
-                nwc_change = revenue * nwc_pct
-            else:
-                nwc_change = (revenue - financials[year - 1]['revenue']) * nwc_pct
+            # Working capital tracks revenue, so only its change consumes cash (year 1 included).
+            nwc_change = (revenue - prev_revenue) * nwc_pct
 
             fcf = ebitda - taxes - capex - nwc_change - interest
+
+            cash_available = cash + fcf
+            mandatory_total = 0.0
+            for t in tranches:
+                due = t.amount * t.mandatory_amortization if year <= t.amortization_years else 0.0
+                paid = min(due, balances[t.name])
+                balances[t.name] -= paid
+                mandatory_total += paid
+                row[f'{t.name}_mandatory_amort'] = paid
+            cash_available -= mandatory_total
+            sweep_total = 0.0
+            for t in tranches:
+                swept = min(max(cash_available, 0.0) * t.sweep_percentage, balances[t.name]) if t.sweep_percentage > 0 else 0.0
+                balances[t.name] -= swept
+                cash_available -= swept
+                sweep_total += swept
+                row[f'{t.name}_sweep'] = swept
+            cash = cash_available
+            for t in tranches:
+                row[f'{t.name}_beginning'] = opening[t.name]
+                row[f'{t.name}_ending'] = balances[t.name]
+                row[f'{t.name}_total_paydown'] = row[f'{t.name}_mandatory_amort'] + row[f'{t.name}_sweep']
+            row['total_debt_beginning'] = sum(opening.values())
+            row['total_debt_ending'] = sum(balances.values())
+            row['total_interest_expense'] = interest
+            row['total_mandatory_amort'] = mandatory_total
+            row['total_sweep'] = sweep_total
+            row['total_debt_paydown'] = mandatory_total + sweep_total
+            row['cash_ending'] = cash
+            row['net_debt_ending'] = row['total_debt_ending'] - cash
+            schedule[year] = row
+            prev_revenue = revenue
 
             financials[year] = {
                 'year': year,
@@ -195,10 +276,11 @@ class LBOModel:
                 'net_income': net_income,
                 'capex': capex,
                 'nwc_change': nwc_change,
-                'free_cash_flow': fcf
+                'free_cash_flow': fcf,
+                'cash_balance': cash
             }
 
-        return financials
+        return financials, schedule
 
     def _build_sensitivity_analysis(self, initial_equity: float, exit_year: int,
                                    ebitda_projection: List[float],
@@ -206,7 +288,7 @@ class LBOModel:
         """Build IRR sensitivity tables"""
 
         exit_ebitda_base = ebitda_projection[exit_year - 1]
-        exit_debt = debt_schedule[exit_year]['total_debt_ending']
+        exit_debt = debt_schedule[exit_year]['net_debt_ending']
 
         ebitda_variations = [exit_ebitda_base * (1 + delta) for delta in [-0.20, -0.10, 0, 0.10, 0.20]]
         multiple_variations = [8.0, 9.0, 10.0, 11.0, 12.0, 13.0]
@@ -244,13 +326,9 @@ class LBOModel:
         }
 
 # ---- service ABI shim (MAAnalyticsService) BEGIN ----
-# The Qt MAAnalyticsService calls `lbo_model.py <command> <flat-params-json>` (argv length 3). The native forms are
-# positional (`build target_company assumptions [years]`, `sensitivity base_case growth_scenarios exit_multiples`),
-# so a service-style call is translated here and then falls through to the native dispatch. Native invocations
-# (any other argv shape) are untouched.
-_SERVICE_COMMANDS = ("build", "sensitivity")
-
-
+# The Qt MAAnalyticsService calls `lbo_model.py <command> <flat-params-json>` (argv length 3). `build` is translated
+# to the native positional form and falls through to the native dispatch; `sensitivity` (entry x exit multiple, the
+# tab's contract) is answered here. Native invocations (any other argv shape) are untouched.
 def _svc_num(p, *keys, default=None):
     for k in keys:
         v = p.get(k)
@@ -278,9 +356,74 @@ def _svc_entry(p):
             "exit_multiple": exit_multiple, "hold": max(hold, 1)}
 
 
+def _svc_assumptions(p, e):
+    """LBOModel assumptions from the flat params `p` and the entry/exit/hold values in `e`."""
+    a = {
+        "entry_multiple": e["entry_multiple"], "exit_multiples": [e["exit_multiple"]],
+        "revenue_growth": _svc_num(p, "revenue_growth", default=0.05), "ebitda_margin": e["margin"],
+        "capex_pct_revenue": _svc_num(p, "capex_pct_revenue", default=0.03),
+        "nwc_pct_revenue": _svc_num(p, "nwc_pct_revenue", default=0.05),
+        "tax_rate": _svc_num(p, "tax_rate", default=0.21), "exit_year": e["hold"],
+        "hurdle_irr": _svc_num(p, "hurdle_irr", default=0.20), "projection_years": e["hold"],
+    }
+    senior = _svc_num(p, "senior_debt", default=0.0)
+    sub = _svc_num(p, "sub_debt", default=0.0)
+    tranches = []
+    if senior > 0:  # prepayable term loan: 100% of excess cash sweeps it down
+        tranches.append({"name": "Senior", "type": "Term Loan B", "amount": senior, "amortization_years": 7,
+                         "rate": _svc_num(p, "senior_rate", default=0.055), "sweep_percentage": 1.0})
+    if sub > 0:  # bullet: repaid at exit
+        tranches.append({"name": "Subordinated", "type": "Subordinated", "amount": sub, "amortization_years": 10,
+                         "rate": _svc_num(p, "sub_rate", default=0.085)})
+    if tranches:
+        a["debt_tranches"] = tranches
+    else:
+        # Template structure: leverage can never exceed what the entry price funds.
+        leverage = _svc_num(p, "debt_multiple", "target_leverage", default=5.0)
+        a["target_leverage"] = min(leverage, max(e["entry_multiple"] - 1.0, 1.0))
+    return a
+
+
+def _svc_target(p, e):
+    return {"company_name": str(p.get("company_name", "Target")), "revenue": e["revenue"], "ebitda": e["ebitda"]}
+
+
+def _service_sensitivity(p):
+    """IRR / MOIC over entry multiple x exit multiple, each `entry_base`/`exit_base` +/- `range` in `steps` points."""
+    e = _svc_entry(p)
+    span = _svc_num(p, "range", default=2.0)
+    steps = min(max(int(_svc_num(p, "steps", default=5.0)), 3), 11)
+
+    def axis(centre):
+        return [round(max(centre - span + 2.0 * span * i / (steps - 1), 0.5), 2) for i in range(steps)]
+
+    entries, exits = axis(e["entry_multiple"]), axis(e["exit_multiple"])
+    target = _svc_target(p, e)
+    base = LBOModel(target, _svc_assumptions(p, e)).build_complete_model(e["hold"])
+    rows, irr_matrix, moic_matrix = [], [], []
+    for entry_multiple in entries:
+        irr_row, moic_row = [], []
+        for exit_multiple in exits:
+            cell = dict(e, entry_multiple=entry_multiple, exit_multiple=exit_multiple)
+            try:
+                r = LBOModel(target, _svc_assumptions(p, cell)).build_complete_model(e["hold"])["returns"]
+            except ValueError:  # the debt does not fit under this entry price
+                r = {}
+            rows.append({"entry_multiple": entry_multiple, "exit_multiple": exit_multiple,
+                         "irr_pct": r.get("irr_pct"), "moic": r.get("moic"),
+                         "equity_invested": r.get("entry_equity"), "exit_equity_value": r.get("exit_equity")})
+            irr_row.append(r.get("irr_pct"))
+            moic_row.append(r.get("moic"))
+        irr_matrix.append(irr_row)
+        moic_matrix.append(moic_row)
+    return {"base_case": base, "sensitivity_matrix": rows, "irr_pct_matrix": irr_matrix, "moic_matrix": moic_matrix,
+            "entry_multiple_range": entries, "exit_multiple_range": exits}
+
+
 def _service_argv(argv):
+    """Service `build` -> native positional `build` argv; any other argv is returned untouched."""
     import json
-    if len(argv) != 3 or argv[1] not in _SERVICE_COMMANDS:
+    if len(argv) != 3 or argv[1] != "build":
         return argv
     try:
         p = json.loads(argv[2])
@@ -288,36 +431,27 @@ def _service_argv(argv):
         return argv
     if not isinstance(p, dict):
         return argv
-    if argv[1] == "build":
-        e = _svc_entry(p)
-        debt = _svc_num(p, "senior_debt", default=0.0) + _svc_num(p, "sub_debt", default=0.0)
-        leverage = debt / e["ebitda"] if (debt and e["ebitda"]) else _svc_num(p, "debt_multiple", "target_leverage", default=5.0)
-        # Leverage can never exceed what the entry price funds.
-        leverage = min(leverage, max(e["entry_multiple"] - 1.0, 1.0))
-        assumptions = {
-            "entry_multiple": e["entry_multiple"], "exit_multiples": [e["exit_multiple"]], "target_leverage": leverage,
-            "revenue_growth": _svc_num(p, "revenue_growth", default=0.05), "ebitda_margin": e["margin"],
-            "capex_pct_revenue": _svc_num(p, "capex_pct_revenue", default=0.03),
-            "nwc_pct_revenue": _svc_num(p, "nwc_pct_revenue", default=0.05),
-            "tax_rate": _svc_num(p, "tax_rate", default=0.21), "exit_year": e["hold"],
-            "hurdle_irr": _svc_num(p, "hurdle_irr", default=0.20), "projection_years": e["hold"],
-        }
-        target = {"company_name": str(p.get("company_name", "Target")), "revenue": e["revenue"], "ebitda": e["ebitda"]}
-        return [argv[0], "build", json.dumps(target), json.dumps(assumptions), str(e["hold"])]
-    # sensitivity: vary revenue growth against exit multiple around the base case.
     e = _svc_entry(p)
-    base = {"revenue": e["revenue"], "ebitda_margin": e["margin"], "entry_multiple": e["entry_multiple"],
-            "exit_multiple": e["exit_multiple"], "holding_period": e["hold"], "company_name": "Target"}
-    centre = _svc_num(p, "exit_base", default=e["exit_multiple"])
-    span = _svc_num(p, "range", default=2.0)
-    steps = int(_svc_num(p, "steps", default=5.0))
-    steps = min(max(steps, 3), 11)
-    exits = [round(max(centre - span + 2.0 * span * i / (steps - 1), 0.5), 2) for i in range(steps)]
-    growth = p.get("growth_scenarios")
-    if not isinstance(growth, list) or not growth:
-        g0 = _svc_num(p, "revenue_growth", default=0.08)
-        growth = [round(g0 + d, 4) for d in (-0.06, -0.03, 0.0, 0.03, 0.06)]
-    return [argv[0], "sensitivity", json.dumps(base), json.dumps(growth), json.dumps(exits)]
+    return [argv[0], "build", json.dumps(_svc_target(p, e)), json.dumps(_svc_assumptions(p, e)), str(e["hold"])]
+
+
+def _service_dispatch(argv) -> bool:
+    """Answer a service-style `sensitivity <flat-json>` call; False for every other argv."""
+    import json
+    if len(argv) != 3 or argv[1] != "sensitivity":
+        return False
+    try:
+        p = json.loads(argv[2])
+    except ValueError:
+        return False
+    if not isinstance(p, dict):
+        return False
+    try:
+        print(fincept_json.dumps({"success": True, "data": _service_sensitivity(p)}))
+    except Exception as e:
+        print(json.dumps({"success": False, "error": str(e), "command": argv[1]}))
+        sys.exit(1)
+    return True
 # ---- service ABI shim (MAAnalyticsService) END ----
 
 
@@ -325,6 +459,8 @@ def main():
     """CLI entry point - outputs JSON for C++ integration"""
     import json
 
+    if _service_dispatch(sys.argv):
+        return
     sys.argv = _service_argv(sys.argv)
     if len(sys.argv) < 2:
         result = {
@@ -353,7 +489,7 @@ def main():
                 "success": True,
                 "data": results
             }
-            print(json.dumps(result))
+            print(fincept_json.dumps(result))
 
         elif command == "sensitivity":
             # Host sends: "sensitivity" base_case revenue_growth_scenarios exit_multiple_scenarios
@@ -448,7 +584,7 @@ def main():
                     "exit_multiple_range": exit_multiple_scenarios
                 }
             }
-            print(json.dumps(result))
+            print(fincept_json.dumps(result))
 
         else:
             result = {

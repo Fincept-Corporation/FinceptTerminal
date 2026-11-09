@@ -3,7 +3,7 @@
 // Card-based result renderers for AI/ML category panels that previously
 // rendered plain QLabel text into the bottom results pane.
 //
-//   - rl_trading       — train (streaming progress + final result), evaluate
+//   - rl_trading       — train (streaming progress + final result)
 //   - online_learning  — list_models, create_model, train, predict, performance
 //   - meta_learning    — list_models, run_selection, create_ensemble,
 //                        tune_hyperparameters, get_results
@@ -66,8 +66,7 @@ using namespace fincept::screens::quant_advanced_helpers;
 // training_progress / training_log signals (NOT result_ready) — they update
 // the bespoke rl_progress_bar_ / rl_log_console_ widgets directly. By the time
 // payloads reach this renderer they are the FINAL `event:"result"` payload of
-// `train` (with the event field stripped by the service) or the single-shot
-// `evaluate` result.
+// `train` (with the event field stripped by the service).
 void QuantModulePanel::display_rl_trading_result(const QString& command, const QJsonObject& payload) {
     clear_results();
     if (!check_success(payload, [this](const QString& s) { display_error(s); }))
@@ -140,78 +139,6 @@ void QuantModulePanel::display_rl_trading_result(const QString& command, const Q
         status_label_->setText(tr("Trained %1 — %2 steps")
                                    .arg(payload.value("algorithm").toString())
                                    .arg(payload.value("timesteps").toInt()));
-        return;
-    }
-
-    // ── evaluate: rich card view of episode metrics ──────────────────────────
-    if (command == "evaluate") {
-        const double mean_reward = payload.value("mean_reward").toDouble();
-        const double std_reward = payload.value("std_reward").toDouble();
-        const double mean_pv = payload.value("mean_portfolio_value").toDouble();
-        const double port_ret = payload.value("portfolio_return").toDouble();
-        const int n_eps = payload.value("n_episodes").toInt();
-        const double mean_len = payload.value("mean_length").toDouble();
-
-        QList<QWidget*> top = {
-            gs_make_card(tr("EPISODES"), QString::number(n_eps), this, ui::colors::POSITIVE()),
-            gs_make_card(tr("MEAN REWARD"),
-                         QString::number(mean_reward, 'f', 4) + " ± " + QString::number(std_reward, 'f', 4), this,
-                         gs_pos_neg_color(mean_reward)),
-            // portfolio_return is already in percent (the script multiplies by 100); running it
-            // through fmt_pct_safe() scaled it by 100 a second time (5.7% showed as 567%).
-            gs_make_card(tr("PORTFOLIO RETURN"), QString::number(port_ret, 'f', 2) + "%", this,
-                         gs_pos_neg_color(port_ret)),
-            gs_make_card(tr("MEAN PORTFOLIO VAL"), QString::number(mean_pv, 'f', 2), this),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-
-        // Compute best/worst episode rewards once
-        const auto rewards = payload.value("all_rewards").toArray();
-        double best_ep = -std::numeric_limits<double>::infinity();
-        double worst_ep = std::numeric_limits<double>::infinity();
-        for (const auto& v : rewards) {
-            const double d = v.toDouble();
-            best_ep = std::max(best_ep, d);
-            worst_ep = std::min(worst_ep, d);
-        }
-        const bool has_eps = !rewards.isEmpty();
-
-        QList<QWidget*> stats = {
-            gs_make_card(tr("MEAN EP LENGTH"), tr("%1 steps").arg(mean_len, 0, 'f', 1), this),
-            gs_make_card(tr("REWARD STD"), QString::number(std_reward, 'f', 4), this),
-            gs_make_card(tr("BEST EP"), has_eps ? QString::number(best_ep, 'f', 4) : QString("—"), this,
-                         ui::colors::POSITIVE()),
-            gs_make_card(tr("WORST EP"), has_eps ? QString::number(worst_ep, 'f', 4) : QString("—"), this,
-                         ui::colors::NEGATIVE()),
-        };
-        results_layout_->addWidget(gs_card_row(stats, this));
-
-        // Per-episode rewards table (sampled if many episodes)
-        if (!rewards.isEmpty()) {
-            const int rows = std::min<int>(15, rewards.size());
-            const int step = std::max<int>(1, rewards.size() / rows);
-            auto* table = new QTableWidget(rows, 2, this);
-            table->setHorizontalHeaderLabels({tr("Episode"), tr("Reward")});
-            table->verticalHeader()->setVisible(false);
-            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-            table->setStyleSheet(table_ss());
-            table->setMaximumHeight(rows * 22 + 32);
-            for (int i = 0, r = 0; i < rewards.size() && r < rows; i += step, ++r) {
-                table->setItem(r, 0, new QTableWidgetItem(QString::number(i + 1)));
-                const double v = rewards[i].toDouble();
-                auto* it = new QTableWidgetItem(QString::number(v, 'f', 4));
-                it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                it->setForeground(QColor(gs_pos_neg_color(v)));
-                table->setItem(r, 1, it);
-                table->setRowHeight(r, 22);
-            }
-            results_layout_->addWidget(table);
-        }
-        status_label_->setText(tr("Eval %1 eps  reward=%2  return=%3%")
-                                   .arg(n_eps)
-                                   .arg(mean_reward, 0, 'f', 4)
-                                   .arg(port_ret, 0, 'f', 2));
         return;
     }
 

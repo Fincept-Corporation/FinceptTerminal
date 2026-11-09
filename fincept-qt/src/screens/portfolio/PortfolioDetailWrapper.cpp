@@ -132,11 +132,14 @@ void PortfolioDetailWrapper::update_data(const portfolio::PortfolioSummary& summ
         perf_v->set_data(summary, currency);
         perf_v->set_snapshots(current_snapshots_);
         perf_v->set_metrics(current_metrics_);
+        perf_v->set_benchmark(current_analytics_.benchmark, current_analytics_.benchmark_dates,
+                              current_analytics_.benchmark_closes);
     } else if (auto* risk_v = qobject_cast<RiskManagementView*>(current)) {
         risk_v->set_data(summary, currency);
         risk_v->set_metrics(current_metrics_);
         risk_v->set_analytics(current_analytics_);
     } else if (auto* opt_v = qobject_cast<PortfolioOptimizationView*>(current)) {
+        opt_v->set_analytics(current_analytics_); // per-holding betas for the STRESS tab
         opt_v->set_data(summary, currency);
     } else if (auto* quant_v = qobject_cast<QuantStatsView*>(current)) {
         quant_v->set_data(summary, currency);
@@ -175,6 +178,10 @@ void PortfolioDetailWrapper::update_analytics(const portfolio::MarketAnalytics& 
         v->set_correlation(analytics.correlation);
     else if (auto* r = qobject_cast<RiskManagementView*>(current))
         r->set_analytics(analytics);
+    else if (auto* p = qobject_cast<PerformanceRiskView*>(current))
+        p->set_benchmark(analytics.benchmark, analytics.benchmark_dates, analytics.benchmark_closes);
+    else if (auto* o = qobject_cast<PortfolioOptimizationView*>(current))
+        o->set_analytics(analytics);
 }
 
 void PortfolioDetailWrapper::set_optimization_target(double annual_return) {
@@ -204,6 +211,8 @@ QWidget* PortfolioDetailWrapper::get_or_create_view(portfolio::DetailView view) 
             if (!current_snapshots_.isEmpty())
                 prv->set_snapshots(current_snapshots_);
             prv->set_metrics(current_metrics_);
+            prv->set_benchmark(current_analytics_.benchmark, current_analytics_.benchmark_dates,
+                               current_analytics_.benchmark_closes);
             widget = prv;
             break;
         }

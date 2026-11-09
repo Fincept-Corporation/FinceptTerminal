@@ -30,6 +30,9 @@ class QuickTradeWidget : public BaseWidget {
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
     void retranslateUi() override;
+    /// Follows the tile's symbol link group (unlinked by default).
+    void on_linked_symbol(const SymbolRef& ref) override;
+    SymbolRef linked_symbol() const override;
 
   private:
     void apply_styles();

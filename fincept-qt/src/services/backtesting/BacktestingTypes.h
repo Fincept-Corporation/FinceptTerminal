@@ -46,11 +46,10 @@ inline QVector<Provider> all_providers() {
          // error when the dep is missing; kept in the provider list so users see
          // the option and can install it.
          {"backtest", "optimize", "walk_forward", "indicator"}},
-        {"fasttrade",
-         "FastTrade",
-         QColor("#FFC400"),
-         // Requires `pip install fast_trade`. Same rationale as backtestingpy.
-         {"backtest"}},
+        // (A "fasttrade" provider used to sit here. It needs fast-trade 2.x, which requires
+        // plotly >= 6.5 while the NumPy 1.x environment pins plotly < 6 for PyPortfolioOpt, so
+        // it could never be installed and every run failed. BacktestingScreen persists the
+        // provider by slug and maps the old index order — keep that table in sync.)
         {"zipline",
          "Zipline",
          QColor("#FF3B8E"),
@@ -208,7 +207,7 @@ inline QVector<Indicator> all_indicators() {
 
 // ── Command options ─────────────────────────────────────────────────────────
 // These are compile-time fallbacks used ONLY when a provider does not support
-// the "get_command_options" command (e.g. FastTrade, Zipline).
+// the "get_command_options" command (e.g. Zipline).
 // Real providers (bt, vectorbt, backtestingpy, fincept) override these at
 // runtime via BacktestingService::execute(provider, "get_command_options", {})
 // → result_ready → BacktestingScreen::on_command_options_loaded().
@@ -258,7 +257,7 @@ inline QStringList ratio_metric_keys() {
 /// Keys whose values are already percentages (0-100 scale or 0-1 scale)
 inline QStringList pct_metric_keys() {
     // pnlPercent / pnl_percent are per-trade return FRACTIONS in every provider
-    // (vectorbt Return, backtesting.py ReturnPct, zipline, fasttrade) — they rendered as a
+    // (vectorbt Return, backtesting.py ReturnPct, zipline) — they rendered as a
     // bare 0.0304 in the DETAILS table instead of 3.04%. lossRate is 1 - winRate.
     return {"total_return", "annualized_return", "max_drawdown", "win_rate",  "volatility",
             "totalReturn",  "annualizedReturn",  "maxDrawdown",  "winRate",   "pnlPercent",

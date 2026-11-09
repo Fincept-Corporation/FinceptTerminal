@@ -25,6 +25,9 @@ PARAMETERS:
   - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
   - max_weight: Maximum single asset weight (default: 0.10)
   - benchmark: Portfolio benchmark index (default: 'market_index')
+
+CLI: python risk_management.py comprehensive_risk_analysis <json>   {returns_data: {asset: [returns]},
+  weights: [...], portfolio_value}.
 """
 
 

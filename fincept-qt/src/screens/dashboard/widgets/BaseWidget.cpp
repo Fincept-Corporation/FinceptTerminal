@@ -1,12 +1,15 @@
 #include "screens/dashboard/widgets/BaseWidget.h"
 
 #include "core/events/EventBus.h"
+#include "core/symbol/SymbolContext.h"
+#include "core/symbol/SymbolGroupRegistry.h"
 #include "datahub/DataHub.h"
 #include "screens/dashboard/widgets/LoadingOverlay.h"
 #include "services/backtesting/BacktestingService.h"
 #include "storage/repositories/WatchlistRepository.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/widgets/GroupBadge.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -14,6 +17,7 @@
 #include <QCursor>
 #include <QJsonArray>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPalette>
 #include <QSize>
 #include <QStyle>
@@ -406,12 +410,15 @@ void BaseWidget::open_symbol(const QString& symbol, const QString& screen_id, co
 void BaseWidget::link_symbol(QWidget* w, const QString& symbol) {
     if (!w)
         return;
+    enable_symbol_link(false);
     // Recycled rows call this on every refresh — skip the no-op re-link.
     if (w->property(kBaseWidgetSymbolProp).toString() == symbol)
         return;
     w->setProperty(kBaseWidgetSymbolProp, symbol);
     w->setCursor(Qt::PointingHandCursor);
-    w->setToolTip(tr("Double-click to open %1 in Equity Research · right-click for more").arg(symbol));
+    w->setToolTip(tr("Click to send %1 to linked panels · double-click to open it in Equity Research · "
+                     "right-click for more")
+                      .arg(symbol));
     // installEventFilter() on an already-installed filter just moves it to the
     // front of the list, so re-linking a recycled row never stacks filters.
     w->installEventFilter(this);
@@ -506,6 +513,118 @@ void BaseWidget::install_symbol_menu(QTableWidget* table, int col, int role) {
         if (!sym.isEmpty())
             show_symbol_menu(sym, table->viewport()->mapToGlobal(pos));
     });
+    install_symbol_publish(table, col, role);
+}
+
+void BaseWidget::install_symbol_publish(QTableWidget* table, int col, int role) {
+    if (!table)
+        return;
+    enable_symbol_link(false);
+    connect(table, &QTableWidget::cellClicked, this, [this, table, col, role](int row, int /*column*/) {
+        if (auto* it = table->item(row, col))
+            publish_symbol(it->data(role).toString());
+    });
+}
+
+bool BaseWidget::is_tradable_equity(const QString& symbol) {
+    return base_widget_is_tradable_equity(symbol);
+}
+
+// ── Symbol link group ────────────────────────────────────────────────────────
+
+void BaseWidget::enable_symbol_link(bool follows, bool joins_default_group) {
+    if (follows && !link_follows_) {
+        link_follows_ = true;
+        connect(&SymbolContext::instance(), &SymbolContext::group_symbol_changed, this,
+                [this](SymbolGroup g, const SymbolRef& ref, QObject* source) {
+                    if (g == SymbolGroup::None || g != link_group_ || source == this || !ref.is_valid())
+                        return;
+                    on_linked_symbol(ref);
+                });
+    }
+    if (link_enabled_)
+        return;
+    link_enabled_ = true;
+    link_joins_default_ = joins_default_group;
+
+    group_badge_ = new ui::GroupBadge(title_bar_);
+    group_badge_->setFixedSize(16, 16);
+    group_badge_->setAccessibleName(tr("Symbol link group"));
+    if (auto* hl = qobject_cast<QHBoxLayout*>(title_bar_->layout()))
+        hl->insertWidget(1, group_badge_); // right after the accent bar
+    connect(group_badge_, &ui::GroupBadge::group_change_requested, this, &BaseWidget::on_badge_group_requested);
+
+    link_group_ = link_has_saved_ ? link_saved_ : default_link_group();
+    group_badge_->set_group_silent(link_group_);
+}
+
+SymbolGroup BaseWidget::default_link_group() const {
+    return link_joins_default_ && SymbolGroupRegistry::instance().enabled(SymbolGroup::A) ? SymbolGroup::A
+                                                                                          : SymbolGroup::None;
+}
+
+void BaseWidget::set_link_group(SymbolGroup g) {
+    if (!link_enabled_ || g == link_group_)
+        return;
+    link_group_ = g;
+    if (group_badge_)
+        group_badge_->set_group_silent(g);
+    emit link_group_changed(g);
+}
+
+void BaseWidget::restore_link_group(const QJsonObject& cfg) {
+    const QJsonValue v = cfg.value(QLatin1String(kLinkGroupKey));
+    link_has_saved_ = v.isString();
+    if (link_has_saved_) {
+        const QString s = v.toString();
+        link_saved_ = s.size() == 1 ? symbol_group_from_char(s.at(0)) : SymbolGroup::None;
+    }
+    if (!link_enabled_)
+        return; // applied when (if) the tile enables linking
+    const SymbolGroup g = link_has_saved_ ? link_saved_ : default_link_group();
+    if (g != link_group_) {
+        link_group_ = g;
+        if (group_badge_)
+            group_badge_->set_group_silent(g);
+    }
+}
+
+void BaseWidget::store_link_group(QJsonObject& cfg) const {
+    SymbolGroup g = SymbolGroup::None;
+    if (link_enabled_)
+        g = link_group_;
+    else if (link_has_saved_)
+        g = link_saved_;
+    else
+        return;
+    cfg.insert(QLatin1String(kLinkGroupKey),
+               g == SymbolGroup::None ? QStringLiteral("none") : QString(symbol_group_letter(g)));
+}
+
+void BaseWidget::on_badge_group_requested(SymbolGroup g) {
+    set_link_group(g);
+    if (g == SymbolGroup::None)
+        return;
+    // Joining a group that already has a symbol: follow it. Joining an empty
+    // group: seed it with this tile's own symbol.
+    const SymbolRef group_sym = SymbolContext::instance().group_symbol(g);
+    if (group_sym.is_valid()) {
+        if (link_follows_)
+            on_linked_symbol(group_sym);
+    } else {
+        const SymbolRef own = linked_symbol();
+        if (own.is_valid())
+            SymbolContext::instance().set_group_symbol(g, own, this);
+    }
+}
+
+void BaseWidget::publish_symbol(const QString& symbol, const QString& exchange) {
+    if (!link_enabled_ || link_group_ == SymbolGroup::None)
+        return;
+    const QString sym = symbol.trimmed();
+    if (sym.isEmpty())
+        return;
+    SymbolContext::instance().set_group_symbol(link_group_, SymbolRef::equity(sym, exchange), this);
 }
 
 void BaseWidget::link_screen(QWidget* w, const QString& screen_id, const QString& tooltip) {
@@ -518,6 +637,12 @@ void BaseWidget::link_screen(QWidget* w, const QString& screen_id, const QString
 }
 
 bool BaseWidget::eventFilter(QObject* obj, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonRelease && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+        // A plain click sends the symbol to the link group; not consumed.
+        const QString sym = obj->property(kBaseWidgetSymbolProp).toString();
+        if (!sym.isEmpty())
+            publish_symbol(sym);
+    }
     if (event->type() == QEvent::ContextMenu) {
         const QString sym = obj->property(kBaseWidgetSymbolProp).toString();
         if (!sym.isEmpty()) {

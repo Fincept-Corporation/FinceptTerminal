@@ -1,4 +1,8 @@
-"""Technology Industry-Specific M&A Metrics"""
+"""Technology Industry-Specific M&A Metrics (SaaS / marketplace / semiconductor)
+
+CLI: python technology.py calculate <json>  keys sector (saas|marketplace|semiconductor), arr, growth, gross_margin,
+     nrr (fractions), cac_payback (months), ltv_cac (ratio), rule_of_40 (score). Native form: tech <sector> <json>.
+"""
 from typing import Dict, Any, List, Optional
 from enum import Enum
 
@@ -21,20 +25,27 @@ class TechnologyMetrics:
                                revenue_growth_rate: float,
                                gross_margin: float,
                                net_retention_rate: float,
-                               cac: float,
-                               ltv: float,
-                               burn_multiple: Optional[float] = None) -> Dict[str, Any]:
-        """Calculate SaaS-specific metrics"""
+                               cac: Optional[float] = None,
+                               ltv: Optional[float] = None,
+                               burn_multiple: Optional[float] = None,
+                               cac_payback_months: Optional[float] = None,
+                               rule_of_40: Optional[float] = None,
+                               ltv_cac_ratio: Optional[float] = None) -> Dict[str, Any]:
+        """Calculate SaaS-specific metrics.
 
-        rule_of_40 = revenue_growth_rate + (gross_margin - 0.80) * 100
+        `rule_of_40`, `cac_payback_months` and `ltv_cac_ratio` are used as given when supplied (they are the
+        company's reported KPIs); otherwise they are derived where the inputs allow it and null where they do not.
+        """
 
-        ltv_cac_ratio = ltv / cac if cac > 0 else 0
+        if rule_of_40 is None:
+            # Proxy when not supplied: growth % + (gross margin - 80 %) in points.
+            rule_of_40 = revenue_growth_rate + (gross_margin - 0.80) * 100
 
-        cac_payback_months = (cac / (arr / 12)) if arr > 0 else 0
+        if ltv_cac_ratio is None:
+            ltv_cac_ratio = ltv / cac if (ltv is not None and cac) else None
 
-        magic_number = (arr * 0.25) / (arr * 0.20) if arr > 0 else revenue_growth_rate / 100
-
-        arr_per_employee = None
+        if cac_payback_months is None:
+            cac_payback_months = (cac / (arr / 12)) if (cac and arr > 0) else None
 
         efficiency_score = 0
         if rule_of_40 >= 40:
@@ -42,9 +53,9 @@ class TechnologyMetrics:
         elif rule_of_40 >= 30:
             efficiency_score += 20
 
-        if ltv_cac_ratio >= 3:
+        if ltv_cac_ratio is not None and ltv_cac_ratio >= 3:
             efficiency_score += 25
-        elif ltv_cac_ratio >= 2:
+        elif ltv_cac_ratio is not None and ltv_cac_ratio >= 2:
             efficiency_score += 15
 
         if net_retention_rate >= 120:
@@ -67,7 +78,6 @@ class TechnologyMetrics:
                 'rule_of_40': rule_of_40,
                 'ltv_cac_ratio': ltv_cac_ratio,
                 'cac_payback_months': cac_payback_months,
-                'magic_number': magic_number,
                 'burn_multiple': burn_multiple
             },
             'efficiency_score': efficiency_score,
@@ -370,12 +380,15 @@ def _build_standard_output(analysis: dict, sector: str) -> dict:
     vm = {}
     insights = []
 
+    def _round(value, digits):
+        return round(value, digits) if value is not None else None
+
     if sector == 'saas':
         km = analysis.get('key_metrics', {})
         vm = {
             'rule_of_40': round(km.get('rule_of_40', 0), 1),
-            'ltv_cac_ratio': round(km.get('ltv_cac_ratio', 0), 2),
-            'cac_payback_months': round(km.get('cac_payback_months', 0), 1),
+            'ltv_cac_ratio': _round(km.get('ltv_cac_ratio'), 2),
+            'cac_payback_months': _round(km.get('cac_payback_months'), 1),
             'efficiency_score': analysis.get('efficiency_score', 0),
             'gross_margin_pct': round(analysis.get('gross_margin', 0), 1),
             'net_retention_rate': round(analysis.get('net_retention_rate', 0), 1),
@@ -385,7 +398,7 @@ def _build_standard_output(analysis: dict, sector: str) -> dict:
         vm['arr_multiple_mid'] = round(mr.get('mid', 0), 1)
         if km.get('rule_of_40', 0) >= 40:
             insights.append(f"Rule of 40 score of {vm['rule_of_40']} indicates strong operational efficiency — premium multiple justified.")
-        if km.get('ltv_cac_ratio', 0) >= 3:
+        if (km.get('ltv_cac_ratio') or 0) >= 3:
             insights.append("LTV/CAC ratio >= 3x demonstrates healthy unit economics for SaaS growth.")
         if analysis.get('net_retention_rate', 0) >= 110:
             insights.append("Net revenue retention above 110% shows strong net expansion — customers spending more over time.")
@@ -534,27 +547,20 @@ def main():
                     if old_key in company_data and new_key not in company_data:
                         company_data[new_key] = company_data.pop(old_key)
 
-                # ltv_cac ratio: split into ltv=ratio and cac=1 so ltv/cac = ratio
-                if 'ltv_cac' in company_data and 'cac' not in company_data:
-                    company_data['cac'] = 1.0
-                    company_data['ltv'] = float(company_data.pop('ltv_cac'))
-                elif 'ltv_cac' in company_data:
-                    company_data.pop('ltv_cac')
+                # Reported KPIs are inputs: an LTV/CAC ratio, the CAC payback (months) and the Rule-of-40 score.
+                if 'ltv_cac' in company_data:
+                    company_data['ltv_cac_ratio'] = float(company_data.pop('ltv_cac'))
+                if 'cac_payback' in company_data:
+                    company_data['cac_payback_months'] = float(company_data.pop('cac_payback'))
 
                 # gross_margin: normalize to 0-1 fraction if given as percentage
                 if 'gross_margin' in company_data and company_data['gross_margin'] > 1:
                     company_data['gross_margin'] = company_data['gross_margin'] / 100.0
 
                 # net_retention_rate: keep as-is (Python compares >= 110 treating it as percentage)
-                # rule_of_40 and cac_payback are outputs, not inputs — drop them
-                for drop_key in ('rule_of_40', 'cac_payback'):
-                    company_data.pop(drop_key, None)
-
                 # Set defaults for required params not provided by frontend
                 company_data.setdefault('revenue_growth_rate', 30.0)
                 company_data.setdefault('net_retention_rate', 100.0)
-                company_data.setdefault('cac', 1.0)
-                company_data.setdefault('ltv', 3.0)
 
                 import inspect
                 valid_params = set(inspect.signature(analyzer.calculate_saas_metrics).parameters.keys())

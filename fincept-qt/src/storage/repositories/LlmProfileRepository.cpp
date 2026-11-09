@@ -97,7 +97,7 @@ Result<void> LlmProfileRepository::set_default(const QString& id) {
     // so a failure or an unknown id cannot leave the table with no default. If the
     // caller is already inside a transaction BEGIN fails and we run in theirs.
     const bool own_tx = db().begin_transaction().is_ok();
-    auto finish = [&](Result<void> r) {
+    auto finish = [&](const Result<void>& r) -> Result<void> {
         if (own_tx) {
             if (r.is_ok()) {
                 auto c = db().commit();

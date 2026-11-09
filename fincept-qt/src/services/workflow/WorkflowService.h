@@ -3,6 +3,7 @@
 #include "core/result/Result.h"
 #include "screens/node_editor/NodeEditorTypes.h"
 
+#include <QDateTime>
 #include <QObject>
 #include <QStringList>
 #include <QVector>
@@ -57,6 +58,20 @@ class WorkflowService : public QObject {
     void stop_execution();
     bool is_executing() const;
 
+    // ── Run history (read-only) ─────────────────────────────────────
+    /// The newest run event of one workflow, from the workflow audit log.
+    struct RunSummary {
+        QString workflow_id;
+        QString workflow_name; ///< empty when the workflow was never saved or has been deleted
+        QString last_action;   ///< workflow_started | workflow_completed | workflow_failed
+        QString details;       ///< audit text, e.g. "Completed in 840ms" / "Failed in 12ms: <error>"
+        bool paper = true;
+        QDateTime timestamp; ///< UTC
+    };
+    /// Latest run of each workflow, newest first. Queries on a worker thread and
+    /// answers with recent_runs_listed() on the GUI thread.
+    void list_recent_runs(int limit = 25);
+
   signals:
     void workflow_saved(const QString& id);
     void workflow_loaded(const WorkflowDef& wf);
@@ -70,6 +85,8 @@ class WorkflowService : public QObject {
     void node_execution_started(const QString& node_id);
     void node_execution_completed(const QString& node_id, const NodeExecutionResult& result);
     void execution_finished(const WorkflowExecutionResult& result);
+
+    void recent_runs_listed(const QVector<fincept::workflow::WorkflowService::RunSummary>& runs);
 
   private:
     WorkflowService();

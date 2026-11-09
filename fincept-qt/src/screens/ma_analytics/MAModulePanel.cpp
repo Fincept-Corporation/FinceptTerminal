@@ -533,13 +533,12 @@ void MAModulePanel::display_result(const QJsonObject& envelope) {
 static const QHash<ModuleId, QStringList>& get_context_map() {
     static const QHash<ModuleId, QStringList> map = {
         {ModuleId::Valuation,
-         {"dcf", "dcf_sensitivity", "football_field", "lbo_returns", "lbo_model", "lbo_debt_schedule",
-          "lbo_sensitivity", "trading_comps", "precedent_txns"}},
+         {"dcf", "lbo_returns", "lbo_model", "lbo_debt_schedule", "lbo_sensitivity", "trading_comps",
+          "precedent_txns"}},
         {ModuleId::Merger,
-         {"merger_model", "accretion_dilution", "pro_forma", "sources_uses", "contribution", "revenue_synergies",
-          "cost_synergies", "synergy_dcf", "integration_costs", "payment_structure", "earnout", "exchange_ratio",
-          "collar", "cvr"}},
-        {ModuleId::Deals, {"scan_filings", "all_deals", "search_deals", "create_deal", "update_deal", "parse_filing"}},
+         {"accretion_dilution", "pro_forma", "sources_uses", "contribution", "synergy_dcf", "payment_structure",
+          "earnout", "exchange_ratio", "collar", "cvr"}},
+        {ModuleId::Deals, {"scan_filings", "all_deals", "search_deals", "parse_filing"}},
         {ModuleId::Startup,
          {"berkus", "scorecard", "vc_method", "first_chicago", "risk_factor", "startup_comprehensive"}},
         {ModuleId::Fairness, {"fairness_opinion", "premium_analysis", "process_quality"}},

@@ -5,6 +5,7 @@
 #include "ui/theme/Theme.h"
 #include "ui/widgets/EnterprisePromo.h"
 #include "ui/widgets/LanguageSwitcher.h"
+#include "ui/widgets/VersionLabel.h"
 
 #include <QEvent>
 #include <QFrame>
@@ -172,6 +173,7 @@ LoginScreen::LoginScreen(QWidget* parent) : QWidget(parent) {
     // app-wide, which retranslates this screen via changeEvent below.
     auto* top_row = new QHBoxLayout;
     top_row->setContentsMargins(20, 20, 20, 0);
+    top_row->addWidget(ui::make_version_label(this));
     top_row->addStretch();
     top_row->addWidget(new ui::LanguageSwitcher(this));
     root->addLayout(top_row);
@@ -354,6 +356,7 @@ void LoginScreen::build_login_page() {
 
     password_input_ = new QLineEdit;
     password_input_->setEchoMode(QLineEdit::Password);
+    password_input_->setProperty("fincept_secret", true); // stays unreadable to agents after "SHOW"
     password_input_->setFixedHeight(34);
     password_input_->setStyleSheet(input_style());
     prl->addWidget(password_input_);

@@ -1,4 +1,9 @@
-"""Comprehensive Valuation Summary"""
+"""Comprehensive Valuation Summary
+
+CLI: python valuation_summary.py comprehensive <target_metrics_json>
+     python valuation_summary.py executive_summary | football_field <valuation_results_json>
+  target_metrics e.g. {ebitda, revenue, net_income, shares_outstanding, net_debt}.
+"""
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional

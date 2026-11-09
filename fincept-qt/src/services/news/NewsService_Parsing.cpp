@@ -11,6 +11,7 @@
 #include "datahub/DataHubMetaTypes.h"
 #include "network/http/HttpClient.h"
 #include "services/feeds/FeedParseUtil.h"
+#include "services/news/NewsNlpEngine.h"
 #include "services/news/NewsService.h"
 #include "storage/cache/CacheManager.h"
 
@@ -32,6 +33,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <utility>
 
 namespace fincept::services {
 
@@ -172,7 +174,9 @@ QVector<NewsArticle> NewsService::parse_rss_xml(const QByteArray& xml, const RSS
                 ids_in_feed.insert(current.id);
 
                 enrich_article(current);
-                articles.append(std::move(current));
+                // Move the finished item out and reset `current` in one step, so it is
+                // never left in a moved-from state.
+                articles.append(std::exchange(current, NewsArticle{}));
             }
         }
     }
@@ -200,94 +204,83 @@ void NewsService::enrich_article(NewsArticle& article) {
     // whole words: a bare substring test flagged "record-breaking", "alerted"
     // and the like as breaking news.
     static const QRegularExpression flash_re(QStringLiteral("(?<![\\w-])(?:breaking|alerts?)\\b"));
+    static const QRegularExpression urgent_re(QStringLiteral("\\b(?:urgent|emergency)"));
+    // BREAKING = a market-moving corporate / macro event. It used to be any text
+    // containing "announce" or "report" — reporter, reported, annual report — which
+    // tagged a large share of the feed BREAKING and flooded the ticker strip and the
+    // relevance sort with routine stories.
+    static const QRegularExpression event_re(QStringLiteral(
+        "\\b(?:acquires?|acquired|acquisition|merger|takeover|buyout|downgrades?|downgraded|upgrades?|upgraded|"
+        "profit warning|guidance|(?:beats?|miss(?:es)?|tops?) (?:estimates|expectations|forecasts)|earnings|"
+        "halts?|halted|bankruptcy|chapter 11|recalls?|recalled|lawsuit|antitrust|settlement|"
+        "rate (?:hike|cut|decision)|(?:raises|cuts|holds) rates|jobs report|nonfarm payrolls|cpi|inflation data|"
+        "defaults?|defaulted|sanctions?|tariffs?|layoffs?|ipo|buyback|dividend (?:cut|hike|increase|suspension))\\b"));
     if (flash_re.match(text).hasMatch())
         article.priority = Priority::FLASH;
-    else if (text.contains("urgent") || text.contains("emergency"))
+    else if (urgent_re.match(text).hasMatch())
         article.priority = Priority::URGENT;
-    else if (text.contains("announce") || text.contains("report"))
+    else if (event_re.match(text).hasMatch())
         article.priority = Priority::BREAKING;
 
-    // Weighted sentiment
-    struct WordWeight {
-        const char* word;
-        int weight;
-    };
-
-    static const WordWeight positives[] = {
-        {"surge", 3},       {"soar", 3},       {"skyrocket", 3}, {"breakthrough", 3}, {"boom", 3},
-        {"record high", 3}, {"rally", 2},      {"gain", 2},      {"rise", 2},         {"jump", 2},
-        {"climb", 2},       {"spike", 2},      {"rebound", 2},   {"boost", 2},        {"beat", 2},
-        {"exceed", 2},      {"upgrade", 2},    {"profit", 2},    {"growth", 2},       {"expand", 2},
-        {"recover", 2},     {"victory", 2},    {"ceasefire", 2}, {"treaty", 2},       {"reform", 2},
-        {"optimism", 2},    {"milestone", 2},  {"strong", 1},    {"robust", 1},       {"stellar", 1},
-        {"buy", 1},         {"positive", 1},   {"success", 1},   {"win", 1},          {"approval", 1},
-        {"deal", 1},        {"confidence", 1}, {"dividend", 1},  {"progress", 1},     {"improve", 1},
-        {"hope", 1},        {"support", 1},    {"bolster", 1},   {"outperform", 1},   {"bullish", 1},
-        {"upside", 1},      {"favorable", 1},  {"momentum", 1},  {"launch", 1},       {"unveil", 1},
-    };
-
-    static const WordWeight negatives[] = {
-        {"crash", 3},      {"plunge", 3},    {"collapse", 3},   {"devastat", 3},  {"catastroph", 3}, {"invasion", 3},
-        {"war crime", 3},  {"nuclear", 3},   {"bankruptcy", 3}, {"meltdown", 3},  {"fall", 2},       {"drop", 2},
-        {"decline", 2},    {"tumble", 2},    {"slide", 2},      {"slump", 2},     {"miss", 2},       {"disappoint", 2},
-        {"fail", 2},       {"recession", 2}, {"crisis", 2},     {"conflict", 2},  {"attack", 2},     {"kill", 2},
-        {"sanction", 2},   {"tariff", 2},    {"escalat", 2},    {"layoff", 2},    {"downgrade", 2},  {"default", 2},
-        {"fraud", 2},      {"scandal", 2},   {"coup", 2},       {"protest", 2},   {"disaster", 2},   {"worst", 1},
-        {"weak", 1},       {"loss", 1},      {"deficit", 1},    {"fear", 1},      {"risk", 1},       {"threat", 1},
-        {"warning", 1},    {"sell", 1},      {"debt", 1},       {"inflation", 1}, {"slowdown", 1},   {"bearish", 1},
-        {"negative", 1},   {"volatile", 1},  {"uncertain", 1},  {"reject", 1},    {"ban", 1},        {"suspend", 1},
-        {"investigat", 1}, {"probe", 1},     {"hack", 1},       {"leak", 1},      {"shortage", 1},   {"disrupt", 1},
-        {"shrink", 1},
-    };
-
-    int pos = 0, neg = 0;
-    for (const auto& [w, wt] : positives) {
-        if (text.contains(w))
-            pos += wt;
+    // Sentiment: the finance-tuned VADER engine the Equity Research sentiment tab
+    // uses, so the feed and the research tab label the same headline the same way.
+    // The previous scorer summed substring hits, which read "gain" in "again", "rise"
+    // in "enterprise", "fall" in "fallout" and "win" in "window", and ignored negation
+    // ("no recession") entirely.
+    double score = 0.0;
+    {
+        const news_nlp::TextItem item{article.id, article.headline, article.summary};
+        const NewsSentimentResult sr = news_nlp::analyze_sentiment({item});
+        if (!sr.per_article.isEmpty()) {
+            const ArticleSentimentResult& r = sr.per_article.first();
+            score = r.score;
+            article.sentiment = r.label == QLatin1String("BULLISH")   ? Sentiment::BULLISH
+                                : r.label == QLatin1String("BEARISH") ? Sentiment::BEARISH
+                                                                      : Sentiment::NEUTRAL;
+        }
     }
-    for (const auto& [w, wt] : negatives) {
-        if (text.contains(w))
-            neg += wt;
-    }
+    article.sentiment_score = score;
 
-    int net = pos - neg;
-    if (net >= 1)
-        article.sentiment = Sentiment::BULLISH;
-    else if (net <= -1)
-        article.sentiment = Sentiment::BEARISH;
-    // else stays NEUTRAL
-
-    // Impact
-    int strength = std::abs(net);
-    if (article.priority == Priority::FLASH || article.priority == Priority::URGENT || strength >= 6)
+    // Impact: event priority, else the strength of the sentiment signal.
+    const double magnitude = std::abs(score);
+    if (article.priority == Priority::FLASH || article.priority == Priority::URGENT || magnitude >= 0.7)
         article.impact = Impact::HIGH;
-    else if (article.priority == Priority::BREAKING || strength >= 3)
+    else if (article.priority == Priority::BREAKING || magnitude >= 0.4)
         article.impact = Impact::MEDIUM;
 
-    // Category refinement
-    if (text.contains("earnings") || text.contains("quarterly results") || text.contains("eps") ||
-        text.contains("guidance"))
+    // Category refinement — whole words: substring tests sent "steps"/"keeps" to
+    // EARNINGS (via "eps"), "technique" to TECH and "fed up" to ECONOMIC.
+    static const QRegularExpression earnings_re(
+        QStringLiteral("\\b(?:earnings|quarterly results|eps|guidance|revenue forecast)\\b"));
+    static const QRegularExpression crypto_re(
+        QStringLiteral("\\b(?:crypto\\w*|bitcoin|ethereum|blockchain|stablecoins?)\\b"));
+    static const QRegularExpression defense_re(QStringLiteral("\\b(?:missiles?|troops|pentagon|military)\\b"));
+    static const QRegularExpression economic_re(
+        QStringLiteral("\\b(?:fed|federal reserve|inflation|gdp|interest rates?|central bank|cpi|payrolls|"
+                       "unemployment rate)\\b"));
+    static const QRegularExpression markets_re(
+        QStringLiteral("(?:s&p 500|\\bnasdaq\\b|\\bdow jones\\b|\\bstock market\\b|\\bwall street\\b)"));
+    static const QRegularExpression energy_re(
+        QStringLiteral("\\b(?:energy|crude|opec\\+?|natural gas|oil prices?|brent|wti)\\b"));
+    static const QRegularExpression tech_re(
+        QStringLiteral("\\b(?:tech|technology|ai|artificial intelligence|semiconductors?|chipmakers?|startups?)\\b"));
+    static const QRegularExpression geo_re(
+        QStringLiteral("\\b(?:nato|ukraine|russia|china|gaza|israel|iran|sanctions|geopolit\\w*)\\b"));
+    if (earnings_re.match(text).hasMatch())
         article.category = "EARNINGS";
-    else if (text.contains("crypto") || text.contains("bitcoin") || text.contains("ethereum") ||
-             text.contains("blockchain"))
+    else if (crypto_re.match(text).hasMatch())
         article.category = "CRYPTO";
-    else if (text.contains("missile") || text.contains("troops") || text.contains("pentagon") ||
-             text.contains("military"))
+    else if (defense_re.match(text).hasMatch())
         article.category = "DEFENSE";
-    else if (text.contains("fed ") || text.contains("federal reserve") || text.contains("inflation") ||
-             text.contains("gdp") || text.contains("interest rate") || text.contains("central bank"))
+    else if (economic_re.match(text).hasMatch())
         article.category = "ECONOMIC";
-    else if (text.contains("s&p 500") || text.contains("nasdaq") || text.contains("dow jones") ||
-             text.contains("stock market"))
+    else if (markets_re.match(text).hasMatch())
         article.category = "MARKETS";
-    else if (text.contains("energy") || text.contains("crude") || text.contains("opec") ||
-             text.contains("natural gas") || text.contains("oil price"))
+    else if (energy_re.match(text).hasMatch())
         article.category = "ENERGY";
-    else if (text.contains("tech") || text.contains(" ai ") || text.contains("artificial intelligence") ||
-             text.contains("semiconductor") || text.contains("startup"))
+    else if (tech_re.match(text).hasMatch())
         article.category = "TECH";
-    else if (text.contains("nato") || text.contains("ukraine") || text.contains("russia") || text.contains("china") ||
-             text.contains("gaza") || text.contains("sanctions") || text.contains("geopolit"))
+    else if (geo_re.match(text).hasMatch())
         article.category = "GEOPOLITICS";
 
     // Extract tickers. Explicit cashtags ($AAPL) always count; bare uppercase
@@ -339,38 +332,9 @@ void NewsService::enrich_article(NewsArticle& article) {
     }
     article.tickers = found;
 
-    // Language detection — check for CJK, Cyrillic, Arabic, Devanagari characters
-    auto detect_lang = [](const QString& s) -> QString {
-        int cjk = 0, cyrillic = 0, arabic = 0, devanagari = 0;
-        for (const auto& ch : s) {
-            ushort u = ch.unicode();
-            if (u >= 0x4e00 && u <= 0x9fff)
-                cjk++;
-            else if (u >= 0x3040 && u <= 0x30ff)
-                return "ja"; // kana = definitely Japanese
-            else if (u >= 0xac00 && u <= 0xd7af)
-                return "ko"; // hangul = Korean
-            else if (u >= 0x0400 && u <= 0x04ff)
-                cyrillic++;
-            else if (u >= 0x0600 && u <= 0x06ff)
-                arabic++;
-            else if (u >= 0x0900 && u <= 0x097f)
-                devanagari++;
-        }
-        int total = s.size();
-        if (total == 0)
-            return "en";
-        if (cjk * 10 > total)
-            return "zh";
-        if (cyrillic * 10 > total)
-            return "ru";
-        if (arabic * 10 > total)
-            return "ar";
-        if (devanagari * 10 > total)
-            return "hi";
-        return "en";
-    };
-    article.lang = detect_lang(article.headline);
+    // Language detection by script range (CJK, kana, hangul, Cyrillic, Arabic,
+    // Devanagari) — the same rule the NLP engine applies before translating.
+    article.lang = news_nlp::detect_language(article.headline);
 
     // Threat classification — pass pre-built text to avoid a 3rd toLower()
     article.threat = classify_threat(article, text);

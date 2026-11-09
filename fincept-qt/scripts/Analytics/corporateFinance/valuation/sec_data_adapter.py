@@ -1,4 +1,9 @@
-"""SEC Data Adapter - Maps edgartools data to DCF model inputs"""
+"""SEC Data Adapter - Maps edgartools data to DCF model inputs
+
+CLI: python sec_data_adapter.py build_dcf_inputs '{"ticker": "AAPL", "fred_api_key": "..."}'  (FRED key optional)
+     native: python sec_data_adapter.py <ticker> [fred_api_key] [overrides_json]
+  Needs edgartools (full install) and network; answers {"success": false, "error"} without it.
+"""
 from typing import Dict, Any, Optional, List
 import sys
 from datetime import datetime, timedelta

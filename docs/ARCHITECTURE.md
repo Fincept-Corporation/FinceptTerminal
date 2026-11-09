@@ -201,7 +201,7 @@ fincept-qt/
 
 #### `python/`
 - `PythonRunner` — `QProcess`-based subprocess bridge.
-  - Two managed venvs: `venv-numpy1` (legacy NumPy 1.x libs like vectorbt/gluonts) and `venv-numpy2` (default).
+  - Two managed venvs: `venv-numpy1` (legacy NumPy 1.x libs like vectorbt/gluonts) and `venv-numpy2` (default). First run installs only the essentials into `venv-numpy2`; everything else is the opt-in full set (see §11 *Bundled Python*). A missing-module failure while the full set is absent is reported as "part of the optional full library set" and offers the install.
   - Concurrency cap of 3 processes; surplus queued.
   - Cold-start 0.5–1.5 s per call; result is JSON on stdout.
   - 22 API keys injected via `SecureStorage` per call; unmanaged credential-shaped env vars stripped to prevent leakage.
@@ -476,10 +476,10 @@ These are the deltas between current and target state. Each has a phase in [`REF
 
 ### Bundled Python
 
-- UV bootstraps `python-3.11.9` and creates two venvs in parallel under `.aqt-venv/`.
-- First-run installs ~150 packages; ~3–5 minutes on broadband.
-- Cached for subsequent runs.
-- Venvs live in the user data dir, not the install dir.
+- `PythonSetupManager` bootstraps uv 0.7.12 + `python-3.11.9`. First run installs only the **essentials** into `venv-numpy2` — `requirements-numpy2-core.txt` (yfinance + pandas/NumPy, `pip_system_certs`, `ta`; 27 packages, ~80 MB), constrained by `requirements-numpy2.txt`'s pins, no lock compile — and opens the terminal as soon as they are in (about 10 s on a fast connection, about a minute on a slow one). Bytecode precompile follows in the background.
+- The **full set** (rest of `venv-numpy2` + the NumPy 1.x `venv-numpy1`, several GB) is opt-in: Settings → Python Env → INSTALL ALL LIBRARIES, or the `PYTHON LIBS · INSTALL` status-bar chip that appears when a feature fails on a missing module. It installs in the background; the choice is remembered (`.full_libraries_requested`), so later launches keep it in sync. Installs made before this flow count as opted in.
+- Setup can be skipped entirely ("Skip for now"); the status-bar chip then offers `PYTHON ENV · SET UP`.
+- Cached for subsequent runs. Venvs live in the user data dir (`AppPaths::root()`), not the install dir.
 
 ### Updates
 

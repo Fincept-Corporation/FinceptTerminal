@@ -117,9 +117,13 @@ void ReportsView::build_ui() {
     attr_layout->addWidget(attr_title_);
 
     attr_table_ = new QTableWidget;
-    attr_table_->setColumnCount(6);
+    attr_table_->setColumnCount(7);
     attr_table_->setHorizontalHeaderLabels(
-        {tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"), tr("P&L"), tr("STATUS")});
+        {tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"), tr("DAY CONTRIB"), tr("P&L"), tr("VS BOOK")});
+    attr_table_->setToolTip(tr("CONTRIBUTION = the holding's P&L ÷ the book's total cost — percentage points of the "
+                               "portfolio's unrealized return; the column sums to the total.\n"
+                               "DAY CONTRIB = today's move of the holding ÷ yesterday's book value.\n"
+                               "VS BOOK = the holding's return against the portfolio's own return."));
     attr_table_->setSelectionMode(QAbstractItemView::NoSelection);
     attr_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     attr_table_->setShowGrid(false);
@@ -171,8 +175,8 @@ void ReportsView::retranslateUi() {
         txn_table_->setHorizontalHeaderLabels(
             {tr("DATE"), tr("SYMBOL"), tr("TYPE"), tr("QTY"), tr("PRICE"), tr("TOTAL"), tr("NOTES")});
     if (attr_table_)
-        attr_table_->setHorizontalHeaderLabels(
-            {tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"), tr("P&L"), tr("STATUS")});
+        attr_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("WEIGHT"), tr("RETURN"), tr("CONTRIBUTION"),
+                                                tr("DAY CONTRIB"), tr("P&L"), tr("VS BOOK")});
 
     // re-render dynamic content so tr() row labels and card titles pick up new locale
     if (has_data_) {
@@ -233,11 +237,31 @@ void ReportsView::update_summary() {
     add_card(1, 0, tr("POSITIONS"), QString::number(summary_.total_positions), ui::colors::TEXT_PRIMARY);
     add_card(1, 1, tr("GAINERS"), QString::number(summary_.gainers), ui::colors::POSITIVE);
     add_card(1, 2, tr("LOSERS"), QString::number(summary_.losers), ui::colors::NEGATIVE);
-    add_card(1, 3, tr("RETURN"),
+    add_card(1, 3, tr("UNREALIZED RETURN"),
              QString("%1%2%")
                  .arg(summary_.total_unrealized_pnl_percent >= 0 ? "+" : "")
                  .arg(fmt(summary_.total_unrealized_pnl_percent)),
              summary_.total_unrealized_pnl_percent >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+
+    // What the open positions alone do not show: P&L already banked, income received,
+    // and the all-in result. The ledger totals were computed but never reported here.
+    auto signed_money = [&](double v) {
+        return QString("%1%2 %3").arg(v >= 0 ? "+" : "-", currency_, fmt(std::abs(v)));
+    };
+    const double realized = summary_.total_realized_pnl;
+    const double dividends = summary_.total_dividends;
+    const double total_ret = summary_.total_unrealized_pnl + realized + dividends;
+    add_card(2, 0, tr("REALIZED P&L"), signed_money(realized),
+             realized >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+    add_card(2, 1, tr("DIVIDENDS RECEIVED"), signed_money(dividends), ui::colors::CYAN);
+    add_card(2, 2, tr("TOTAL RETURN (ALL-IN)"), signed_money(total_ret),
+             total_ret >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+    add_card(2, 3, tr("TODAY"),
+             QString("%1  (%2%3%)")
+                 .arg(signed_money(summary_.total_day_change))
+                 .arg(summary_.total_day_change_percent >= 0 ? "+" : "")
+                 .arg(fmt(summary_.total_day_change_percent)),
+             summary_.total_day_change >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
 
     layout->addLayout(grid);
 
@@ -324,55 +348,92 @@ void ReportsView::update_transactions() {
         set(0, t.transaction_date, ui::colors::TEXT_SECONDARY);
         set(1, t.symbol, ui::colors::CYAN);
         set(2, t.transaction_type, type_color);
-        set(3, QString::number(t.quantity, 'f', 2));
-        set(4, QString::number(t.price, 'f', 2));
+        // Fractional lots (crypto, funds) and sub-unit prices lost their digits at 2 dp.
+        set(3, QString::number(t.quantity, 'f', t.quantity == std::floor(t.quantity) ? 0 : 6));
+        set(4, QString::number(t.price, 'f', std::abs(t.price) < 1.0 ? 6 : 2));
         set(5, QString("%1 %2").arg(currency_, QString::number(t.total_value, 'f', 2)));
         set(6, t.notes, ui::colors::TEXT_TERTIARY);
     }
 }
 
 void ReportsView::update_attribution() {
-    auto sorted = summary_.holdings;
-    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });
+    // Contribution to return = the holding's P&L over the book's total cost, i.e. its
+    // cost weight × its own return. The column then sums to the portfolio's unrealized
+    // return. It used to be P&L ÷ |total P&L|: a share of the P&L, not of the return,
+    // which ran to ±1000% whenever the book was near break-even.
+    const double total_cost = summary_.total_cost_basis;
+    const double book_ret = summary_.total_unrealized_pnl_percent;
+    const double prev_nav = summary_.total_market_value - summary_.total_day_change;
 
-    attr_table_->setRowCount(sorted.size());
+    struct Row {
+        const portfolio::HoldingWithQuote* h;
+        double contribution; // percentage points of the book's return
+        double day_contrib;  // % of yesterday's book value
+    };
+    QVector<Row> rows;
+    rows.reserve(summary_.holdings.size());
+    for (const auto& h : summary_.holdings) {
+        const double c = total_cost > 0 ? h.unrealized_pnl / total_cost * 100.0 : 0.0;
+        const double d = prev_nav > 0 ? h.day_change * h.quantity / prev_nav * 100.0 : 0.0;
+        rows.append({&h, c, d});
+    }
+    // Largest contributors first, biggest detractors last — how attribution reads.
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.contribution > b.contribution; });
 
-    double total_pnl = summary_.total_unrealized_pnl;
+    attr_table_->setRowCount(static_cast<int>(rows.size()) + (rows.isEmpty() ? 0 : 1));
+    double sum_contrib = 0.0;
+    double sum_day = 0.0;
 
-    for (int r = 0; r < sorted.size(); ++r) {
-        const auto& h = sorted[r];
+    auto set = [&](int r, int col, const QString& text, const char* color = nullptr) {
+        auto* item = new QTableWidgetItem(text);
+        item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
+        if (color)
+            item->setForeground(QColor(color));
+        attr_table_->setItem(r, col, item);
+    };
+    auto signed_pct = [](double v, int dp) {
+        return QString("%1%2%").arg(v >= 0 ? "+" : "").arg(QString::number(v, 'f', dp));
+    };
+
+    for (int r = 0; r < rows.size(); ++r) {
+        const auto& h = *rows[r].h;
+        const double contribution = rows[r].contribution;
+        sum_contrib += contribution;
+        sum_day += rows[r].day_contrib;
         attr_table_->setRowHeight(r, 28);
-
-        auto set = [&](int col, const QString& text, const char* color = nullptr) {
-            auto* item = new QTableWidgetItem(text);
-            item->setTextAlignment(col == 0 ? (Qt::AlignLeft | Qt::AlignVCenter) : (Qt::AlignRight | Qt::AlignVCenter));
-            if (color)
-                item->setForeground(QColor(color));
-            attr_table_->setItem(r, col, item);
-        };
-
-        double contribution = (total_pnl != 0) ? (h.unrealized_pnl / std::abs(total_pnl)) * 100.0 : 0;
 
         const char* ret_color = h.unrealized_pnl_percent >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
         const char* contrib_color = contribution >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-        QString status = h.unrealized_pnl_percent > 5    ? tr("OUTPERFORM")
-                         : h.unrealized_pnl_percent < -5 ? tr("UNDERPERFORM")
-                                                         : tr("NEUTRAL");
-        const char* status_color = h.unrealized_pnl_percent > 5    ? ui::colors::POSITIVE
-                                   : h.unrealized_pnl_percent < -5 ? ui::colors::NEGATIVE
-                                                                   : ui::colors::TEXT_TERTIARY;
+        const char* day_color = rows[r].day_contrib >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+        // Judged against the book's own return, not against a fixed ±5%.
+        const double rel = h.unrealized_pnl_percent - book_ret;
+        const QString status = rel > 5.0 ? tr("OUTPERFORM") : rel < -5.0 ? tr("UNDERPERFORM") : tr("IN LINE");
+        const char* status_color = rel > 5.0    ? ui::colors::POSITIVE
+                                   : rel < -5.0 ? ui::colors::NEGATIVE
+                                                : ui::colors::TEXT_TERTIARY;
 
-        set(0, h.symbol, ui::colors::CYAN);
-        set(1, QString("%1%").arg(QString::number(h.weight, 'f', 1)));
-        set(2,
-            QString("%1%2%")
-                .arg(h.unrealized_pnl_percent >= 0 ? "+" : "")
-                .arg(QString::number(h.unrealized_pnl_percent, 'f', 2)),
-            ret_color);
-        set(3, QString("%1%2%").arg(contribution >= 0 ? "+" : "").arg(QString::number(contribution, 'f', 1)),
-            contrib_color);
-        set(4, QString("%1 %2").arg(currency_, QString::number(h.unrealized_pnl, 'f', 2)), ret_color);
-        set(5, status, status_color);
+        set(r, 0, h.symbol, ui::colors::CYAN);
+        set(r, 1, QString("%1%").arg(QString::number(h.weight, 'f', 1)));
+        set(r, 2, signed_pct(h.unrealized_pnl_percent, 2), ret_color);
+        set(r, 3, QString("%1 pp").arg(signed_pct(contribution, 2).chopped(1)), contrib_color);
+        set(r, 4, signed_pct(rows[r].day_contrib, 2), day_color);
+        set(r, 5, QString("%1 %2").arg(currency_, QString::number(h.unrealized_pnl, 'f', 2)), ret_color);
+        set(r, 6, QString("%1 (%2 pp)").arg(status, signed_pct(rel, 1).chopped(1)), status_color);
+    }
+
+    if (!rows.isEmpty()) {
+        // Totals row: the contributions add up to the book's return.
+        const int r = static_cast<int>(rows.size());
+        attr_table_->setRowHeight(r, 28);
+        set(r, 0, tr("TOTAL"), ui::colors::AMBER);
+        set(r, 1, QStringLiteral("100.0%"), ui::colors::AMBER);
+        set(r, 2, signed_pct(book_ret, 2), book_ret >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        set(r, 3, QString("%1 pp").arg(signed_pct(sum_contrib, 2).chopped(1)),
+            sum_contrib >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        set(r, 4, signed_pct(sum_day, 2), sum_day >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        set(r, 5, QString("%1 %2").arg(currency_, QString::number(summary_.total_unrealized_pnl, 'f', 2)),
+            summary_.total_unrealized_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        set(r, 6, QString(), ui::colors::TEXT_TERTIARY);
     }
 }
 

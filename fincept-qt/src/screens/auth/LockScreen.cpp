@@ -4,6 +4,7 @@
 #include "core/logging/Logger.h"
 #include "ui/theme/Theme.h"
 #include "ui/widgets/LanguageSwitcher.h"
+#include "ui/widgets/VersionLabel.h"
 
 #include <QEvent>
 #include <QFrame>
@@ -131,6 +132,7 @@ LockScreen::LockScreen(QWidget* parent) : QWidget(parent) {
     // returning to a non-English locale can switch before unlocking.
     auto* top_row = new QHBoxLayout;
     top_row->setContentsMargins(20, 20, 20, 0);
+    top_row->addWidget(ui::make_version_label(this));
     top_row->addStretch();
     top_row->addWidget(new ui::LanguageSwitcher(this));
     root->addLayout(top_row);

@@ -233,14 +233,8 @@ class LlmService : public QObject {
     // follow-up turns stay identical to the first turn (Anthropic/Gemini
     // previously dropped tools on the follow-up, so they could never chain a
     // second tool call). Honour the active ToolPolicy via apply_request_policy.
-    //
-    // `activated` carries the tools the model has discovered this turn via
-    // tool_list / tool_describe, exactly as the OpenAI path does. Without it
-    // these two providers saw a fixed slice of the catalogue and could never
-    // call anything they discovered — Tool RAG is on by default, so that slice
-    // is what "tools don't work on Gemini/Claude" actually looked like.
-    QJsonArray build_anthropic_tools(const QSet<QString>& activated = {}); // [{name, description, input_schema}]
-    QJsonArray build_gemini_tools(const QSet<QString>& activated = {});    // [{functionDeclarations:[...]}]
+    QJsonArray build_anthropic_tools(); // [{name, description, input_schema}]
+    QJsonArray build_gemini_tools();    // [{functionDeclarations:[...]}]
 
     /// Stamp the output-token cap onto an OpenAI-shaped request body using the
     /// field the target endpoint actually accepts.
@@ -265,12 +259,11 @@ class LlmService : public QObject {
     LlmResponse do_streaming_request(const QString& user_message, const std::vector<ConversationMessage>& history,
                                      StreamCallback on_chunk);
 
-    // `activated_tools` is seeded from the first round of tool calls (executed
-    // by the caller) and grows as the model discovers more via tool_list /
-    // tool_describe. In Tool RAG mode these names are force-declared to the
-    // model each round so it can actually call what it discovers.
-    LlmResponse do_tool_loop(QJsonArray loop_messages, const QString& url, const QMap<QString, QString>& headers,
-                             QSet<QString> activated_tools = {});
+    // Structured OpenAI-compatible follow-up rounds after the first round of
+    // tool calls (executed by the caller). The full tool set is declared on
+    // every round — the catalogue is the ten core tools plus any external
+    // servers', so there is nothing to discover mid-turn.
+    LlmResponse do_tool_loop(QJsonArray loop_messages, const QString& url, const QMap<QString, QString>& headers);
 
     /// Returns nullopt if the content had no text/XML tool calls.
     std::optional<LlmResponse> try_extract_and_execute_text_tool_calls(const QString& content,

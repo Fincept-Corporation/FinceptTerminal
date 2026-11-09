@@ -4,6 +4,9 @@ Statsmodels Service (econometrics backend)
 Self-contained econometric service for the Fincept Terminal "Statsmodels"
 sub-tab. Same response contract as gs_quant_service / functime_service.
 
+CLI: python statsmodels_service.py <operation> '<json params>'   (prints one JSON object)
+Operations: check_status, ols, arima, stationarity_tests, acf_pacf, granger_causality, descriptive
+
 Response contract (all ops):
     success: bool
     operation: str

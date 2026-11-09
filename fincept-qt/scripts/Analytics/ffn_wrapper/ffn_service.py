@@ -5,6 +5,10 @@ FFN Service - Python backend for analytics
 Provides JSON-RPC interface for C++ to call FFN analytics functions.
 """
 
+# Annotations stay unevaluated so a failed `ffn_analytics` import (FFNConfig undefined)
+# still reaches check_status()'s 'not available' answer instead of a NameError at import.
+from __future__ import annotations
+
 import json
 import sys
 import os

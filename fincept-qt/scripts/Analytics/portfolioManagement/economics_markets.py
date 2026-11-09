@@ -25,6 +25,10 @@ PARAMETERS:
   - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
   - max_weight: Maximum single asset weight (default: 0.10)
   - benchmark: Portfolio benchmark index (default: 'market_index')
+
+CLI: python economics_markets.py <command> <json>   business_cycle_analysis {cycle_phase_str};
+  comprehensive_analysis {cycle_phase_str, economic_data}; equity_risk_premium {risk_free_rate,
+  market_risk_premium} (currently fails: it calls a method that does not exist).
 """
 
 

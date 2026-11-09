@@ -49,9 +49,10 @@ inline QString format_strike(double strike) {
 
 // ── Greeks ────────────────────────────────────────────────────────────────
 //
-// Computed locally from BSM via the Python worker (`option_greeks_batch`
-// action, py_vollib backend). All values are per-share (not per-lot); the
-// strategy analytics layer multiplies by lot_size × lots when aggregating.
+// Computed in-process from BSM by OptionChainService::enrich_with_greeks
+// (pricing::bsm_implied_vol + pricing::bsm_greeks), unless the broker quotes
+// them (Fyers). All values are per-share (not per-lot); the strategy analytics
+// layer multiplies by lot_size × lots when aggregating.
 
 struct OptionGreeks {
     double delta = 0; // dV/dS                       — [-1, 1]

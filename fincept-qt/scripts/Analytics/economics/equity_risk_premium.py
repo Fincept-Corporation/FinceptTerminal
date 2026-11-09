@@ -2,6 +2,8 @@
 Equity Risk Premium (ERP) — Multiple estimation methods.
 Input: JSON via stdin (can be empty {})
 Output: JSON with ERP estimates from various models
+
+CLI: python equity_risk_premium.py estimate_erp '{}'   (historical 5y/10y ERP vs the 10y Treasury; no parameters)
 """
 import sys
 import json

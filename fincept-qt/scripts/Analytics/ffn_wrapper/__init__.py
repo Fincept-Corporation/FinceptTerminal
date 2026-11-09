@@ -34,8 +34,6 @@ PARAMETERS:
 __all__ = [
     'FFNAnalyticsEngine',
     'FFNConfig',
-    'FFNPerformanceAnalyzer',
-    'FFNPortfolioOptimizer',
 ]
 
 
@@ -48,8 +46,6 @@ __all__ = [
 _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "FFNAnalyticsEngine": ("ffn_analytics", "FFNAnalyticsEngine"),
     "FFNConfig": ("ffn_analytics", "FFNConfig"),
-    "FFNPerformanceAnalyzer": ("ffn_performance", "FFNPerformanceAnalyzer"),
-    "FFNPortfolioOptimizer": ("ffn_portfolio", "FFNPortfolioOptimizer"),
 }
 
 

@@ -79,13 +79,7 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     /// `AgentExecutionResult::error` of a run stopped by cancel_run().
     static constexpr const char* kCancelledError = "Cancelled by user";
 
-    // ── Multi-query & parallel ───────────────────────────────────────────────
-    void execute_multi_query(const QString& query, bool aggregate = true, const QJsonObject& config = {});
-
-    // ── Financial workflows ──────────────────────────────────────────────────
-    void run_stock_analysis(const QString& symbol, const QJsonObject& config = {});
-    void run_portfolio_rebalancing(const QJsonObject& portfolio_data = {});
-    void run_risk_assessment(const QJsonObject& portfolio_data = {});
+    // ── Portfolio analysis (Portfolio › Insights) ────────────────────────────
     void run_portfolio_analysis(const QString& analysis_type, const QJsonObject& portfolio_summary = {});
 
     // ── Team execution ───────────────────────────────────────────────────────
@@ -147,27 +141,7 @@ class AgentService : public QObject, public fincept::datahub::Producer {
 
     // ── Planner ──────────────────────────────────────────────────────────────
     QString create_plan(const QString& query, const QJsonObject& config = {});
-    QString create_stock_analysis_plan(const QString& symbol, const QJsonObject& config = {});
-    QString create_portfolio_plan(const QJsonObject& goals = {}, const QJsonObject& config = {});
     QString execute_plan(const QJsonObject& plan, const QJsonObject& config = {});
-
-    // ── Memory & Knowledge ───────────────────────────────────────────────────
-    void store_memory(const QString& content, const QString& memory_type = "general", const QJsonObject& metadata = {},
-                      const QString& agent_id = {});
-    void recall_memories(const QString& query, const QString& memory_type = {}, int limit = 10,
-                         const QString& agent_id = {});
-    void search_knowledge(const QString& query, int limit = 10);
-    void save_memory_repo(const QString& content, const QString& agent_id = {}, const QJsonObject& options = {});
-    void search_memories_repo(const QString& query, const QString& agent_id = {}, int limit = 10);
-
-    // ── Session management ───────────────────────────────────────────────────
-    void save_session(const QJsonObject& session_data);
-    void get_session(const QString& session_id);
-    void add_session_message(const QString& session_id, const QString& role, const QString& content);
-
-    // ── Trade decisions ──────────────────────────────────────────────────────
-    void save_trade_decision(const QJsonObject& decision);
-    void get_trade_decisions(const QString& competition_id = {}, const QString& model_name = {});
 
     // ── Config CRUD (delegates to AgentConfigRepository) ─────────────────────
     void save_config(const AgentConfig& config);
@@ -194,13 +168,6 @@ class AgentService : public QObject, public fincept::datahub::Producer {
     void plan_executed(ExecutionPlan plan);
     void config_saved();
     void config_deleted();
-    void memory_stored(bool success, QString message);
-    void memories_recalled(QJsonArray memories);
-    void knowledge_results(QJsonArray results);
-    void session_saved(bool success);
-    void session_loaded(QJsonObject session);
-    void trade_decisions_loaded(QJsonArray decisions);
-    void multi_query_result(QJsonObject result);
     void error_occurred(const QString& context, const QString& message);
 
     // ── Agentic Mode signals ─────────────────────────────────────────────────

@@ -8,6 +8,7 @@
 #include "core/keys/KeyConfigManager.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
+#include "screens/settings/AgentConnectSection.h"
 #include "screens/settings/AppearanceSection.h"
 #include "screens/settings/CloudSyncSection.h"
 #include "screens/settings/CredentialsSection.h"
@@ -85,7 +86,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     // One factory per stack index. Used at construction AND by the language-
     // change rebuild path so we don't hardcode the type list twice.
     section_factories_.clear();
-    section_factories_.resize(16);
+    section_factories_.resize(17);
     section_factories_[0] = [] { return new CredentialsSection; };
     section_factories_[1] = [] { return new AppearanceSection; };
     section_factories_[2] = [] { return new NotificationsSection; };
@@ -102,6 +103,7 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
     section_factories_[13] = [] { return new VoiceConfigSection; };
     section_factories_[14] = [] { return new GeneralSection; };
     section_factories_[15] = [] { return new CloudSyncSection; };
+    section_factories_[16] = [] { return new AgentConnectSection; };
 
     // Empty placeholders; the real section replaces its placeholder on first
     // visit (ensure_section_built).
@@ -192,6 +194,10 @@ SettingsScreen::SettingsScreen(QWidget* parent) : QWidget(parent) {
              QStringLiteral("ai model llm provider profile temperature max tokens system prompt tool rounds base url "
                             "fetch test connection mcp tools ") +
                  llm_terms.join(' '));
+    make_btn(
+        QStringLiteral("AI Agents (MCP)"), 16,
+        QStringLiteral("mcp server claude code codex gemini cli cursor vs code copilot windsurf claude desktop agent "
+                       "connect external token port permissions automation operate terminal ui tools python"));
     make_btn(QStringLiteral("MCP Servers"), 6,
              QStringLiteral("model context protocol tools external server stdio command env"));
     make_btn(QStringLiteral("Python Env"), 11,

@@ -3,8 +3,7 @@
 #include "core/currency/Currency.h"
 #include "core/logging/Logger.h"
 #include "core/session/ScreenStateManager.h"
-#include "services/python_cli/PythonCliService.h"
-#include "storage/cache/CacheManager.h"
+#include "services/options/DerivativesPricing.h"
 #include "ui/theme/StyleSheets.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -13,10 +12,8 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QKeySequence>
 #include <QLocale>
-#include <QPointer>
 #include <QScrollArea>
 #include <QShortcut>
 #include <QVBoxLayout>
@@ -114,11 +111,122 @@ static QString deriv_screen_style() {
         ;
 }
 
-// Spin-box value -> CLI argument. QString::number(double) defaults to 'g' with 6
-// significant digits, which silently rounds any input wider than that (an index
-// strike of 24350.55 went out as "24350.5", a 12,345,678 spot as "1.23457e+07").
-static QString deriv_num(double v) {
-    return QString::number(v, 'g', 12);
+// ── Calculator results → the JSON display_results() renders ─────────────────
+//
+// Keys and rounding are the screen's long-standing result contract (round_half_even:
+// Python round() semantics), so every figure on screen reads as it always has.
+
+static double deriv_round(double v, int decimals) {
+    return services::options::derivatives::round_half_even(v, decimals);
+}
+
+// Per 1.0 spot (delta, gamma), per calendar day (theta), per vol point (vega), per 1% rate (rho).
+static QJsonObject deriv_greeks_json(const services::options::pricing::BsmGreeks& g) {
+    QJsonObject o;
+    o["delta"] = deriv_round(g.delta, 6);
+    o["gamma"] = deriv_round(g.gamma, 6);
+    o["theta"] = deriv_round(g.theta, 6);
+    o["vega"] = deriv_round(g.vega * 0.01, 6);
+    o["rho"] = deriv_round(g.rho * 0.01, 6);
+    return o;
+}
+
+static QJsonObject deriv_bond_price_json(const services::options::derivatives::BondPrice& b, double ytm_pct) {
+    QJsonObject o;
+    o["clean_price"] = deriv_round(b.clean_price, 4);
+    o["dirty_price"] = deriv_round(b.dirty_price, 4);
+    o["accrued_interest"] = deriv_round(b.accrued_interest, 4);
+    o["duration"] = deriv_round(b.macaulay_duration, 4);
+    o["modified_duration"] = deriv_round(b.modified_duration, 4);
+    o["convexity"] = deriv_round(b.convexity, 4);
+    o["remaining_coupons"] = b.remaining_coupons;
+    o["next_coupon_date"] = b.next_coupon_date.toString(Qt::ISODate);
+    o["ytm"] = deriv_round(ytm_pct, 4);
+    return o;
+}
+
+static QJsonObject deriv_ytm_json(double ytm_pct) {
+    QJsonObject o;
+    o["ytm"] = deriv_round(ytm_pct, 6);
+    return o;
+}
+
+static QJsonObject deriv_option_json(const services::options::derivatives::OptionValue& v) {
+    QJsonObject o;
+    o["price"] = deriv_round(v.price, 6);
+    o["greeks"] = deriv_greeks_json(v.greeks);
+    return o;
+}
+
+static QJsonObject deriv_implied_vol_json(double sigma) {
+    QJsonObject o;
+    o["implied_volatility"] = deriv_round(sigma * 100, 4);
+    return o;
+}
+
+static QJsonObject deriv_fx_option_json(const services::options::derivatives::FxOptionValue& v, double spot,
+                                        double notional) {
+    const auto& g = v.greeks;
+    QJsonObject desk; // whole-notional desk units, from the unrounded per-unit Greeks
+    desk["delta_foreign"] = deriv_round(g.delta * notional, 2);
+    desk["gamma_1pct_foreign"] = deriv_round(g.gamma * spot * 0.01 * notional, 2);
+    desk["vega_domestic"] = deriv_round(g.vega * 0.01 * notional, 2);
+    desk["theta_domestic"] = deriv_round(g.theta * notional, 2);
+    desk["rho_domestic"] = deriv_round(g.rho * 0.01 * notional, 2);
+    QJsonObject o;
+    o["price"] = deriv_round(v.premium, 4);
+    o["price_per_unit"] = deriv_round(v.premium_per_unit, 6);
+    o["premium_pct_foreign"] = deriv_round(v.premium_pct_foreign, 4);
+    o["notional"] = notional;
+    o["greeks"] = deriv_greeks_json(g);
+    o["greeks_notional"] = desk;
+    return o;
+}
+
+static QJsonObject deriv_swap_json(const services::options::derivatives::SwapValue& v, double notional) {
+    QJsonObject o;
+    o["swap_value"] = deriv_round(v.value, 2);
+    o["fixed_leg_pv"] = deriv_round(v.fixed_leg_pv, 2);
+    o["floating_leg_pv"] = deriv_round(v.floating_leg_pv, 2);
+    o["par_swap_rate"] = deriv_round(v.par_rate_pct, 4);
+    o["notional"] = notional;
+    o["tenor_years"] = deriv_round(v.tenor_years, 2);
+    o["payments"] = v.payments;
+    o["position"] = QStringLiteral("payer of fixed / receiver of floating");
+    return o;
+}
+
+static QJsonObject deriv_cds_json(const services::options::derivatives::CdsValue& v, double notional, double coupon_bps,
+                                  double risk_free_pct) {
+    QJsonObject o;
+    o["upfront_value"] = deriv_round(v.upfront, 2);
+    o["upfront_points"] = deriv_round(v.upfront_points, 4);
+    o["premium_leg_pv"] = deriv_round(v.premium_leg_pv, 2);
+    o["protection_leg_pv"] = deriv_round(v.protection_leg_pv, 2);
+    o["breakeven_spread_bps"] = deriv_round(v.breakeven_spread_bps, 2);
+    o["risky_pv01"] = deriv_round(v.risky_pv01, 2);
+    o["hazard_rate"] = deriv_round(v.hazard_rate_pct, 4);
+    o["survival_probability"] = deriv_round(v.survival_pct, 2);
+    o["notional"] = notional;
+    o["coupon_bps"] = deriv_round(coupon_bps, 4);
+    o["risk_free_rate"] = deriv_round(risk_free_pct, 4);
+    o["premium_payments"] = v.premium_payments;
+    o["tenor_years"] = deriv_round(v.tenor_years, 4);
+    o["position"] = QStringLiteral("protection buyer");
+    return o;
+}
+
+// A calculator's Result as (JSON to render, error text to show instead).
+struct DerivOutcome {
+    QJsonObject json;
+    QString error;
+};
+
+template <typename T, typename ToJson>
+static DerivOutcome deriv_outcome(const Result<T>& r, ToJson&& to_json) {
+    if (r.is_err())
+        return {QJsonObject{}, QString::fromStdString(r.error())};
+    return {to_json(r.value()), QString()};
 }
 
 // ── Constructor ─────────────────────────────────────────────────────────────
@@ -218,8 +326,7 @@ QWidget* DerivativesScreen::create_header_bar() {
     hl->addLayout(title_col);
     hl->addStretch(1);
 
-    // Descriptive, not a status claim: nothing checks the interpreter before a run.
-    header_badge_ = new QLabel(tr("LOCAL PYTHON ENGINE"));
+    header_badge_ = new QLabel(tr("LOCAL C++ ENGINE"));
     header_badge_->setObjectName("derivHeaderBadge");
     hl->addWidget(header_badge_);
 
@@ -722,7 +829,7 @@ QWidget* DerivativesScreen::create_status_bar() {
     hl->addWidget(status_instrument_);
 
     hl->addSpacing(16);
-    status_engine_ = new QLabel(tr("PYTHON ENGINE"));
+    status_engine_ = new QLabel(tr("C++ ENGINE"));
     status_engine_->setObjectName("derivStatusEngine");
     hl->addWidget(status_engine_);
 
@@ -837,7 +944,7 @@ void DerivativesScreen::retranslateUi() {
     if (header_sub_)
         header_sub_->setText(tr("PROFESSIONAL VALUATION ENGINE"));
     if (header_badge_)
-        header_badge_->setText(tr("LOCAL PYTHON ENGINE"));
+        header_badge_->setText(tr("LOCAL C++ ENGINE"));
 
     // Instrument selector + status line (same source strings)
     const QStringList names = {tr("BONDS"), tr("EQUITY OPTIONS"), tr("FX OPTIONS"), tr("IR SWAPS"), tr("CREDIT")};
@@ -850,7 +957,7 @@ void DerivativesScreen::retranslateUi() {
     if (status_left_)
         status_left_->setText(tr("DERIVATIVES"));
     if (status_engine_)
-        status_engine_->setText(tr("PYTHON ENGINE"));
+        status_engine_->setText(tr("C++ ENGINE"));
     if (results_title_)
         results_title_->setText(tr("RESULTS"));
     // Panel titles / input labels are re-applied when the panel is rebuilt;
@@ -879,129 +986,75 @@ void DerivativesScreen::on_instrument_changed(int index) {
 }
 
 void DerivativesScreen::on_calculate() {
-    if (loading_)
-        return;
-
+    namespace deriv = services::options::derivatives;
     switch (active_instrument_) {
         case 0: { // Bonds — price from YTM
-            int freq_val = (bond_freq_->currentIndex() == 0) ? 1 : (bond_freq_->currentIndex() == 1) ? 2 : 4;
-            run_pricing("bond_price", {
-                                          "--issue-date",
-                                          bond_issue_date_->date().toString("yyyy-MM-dd"),
-                                          "--settlement-date",
-                                          bond_settle_date_->date().toString("yyyy-MM-dd"),
-                                          "--maturity-date",
-                                          bond_maturity_date_->date().toString("yyyy-MM-dd"),
-                                          "--coupon-rate",
-                                          deriv_num(bond_coupon_->value()),
-                                          "--ytm",
-                                          deriv_num(bond_ytm_->value()),
-                                          "--freq",
-                                          QString::number(freq_val),
-                                      });
+            const int freq_val = (bond_freq_->currentIndex() == 0) ? 1 : (bond_freq_->currentIndex() == 1) ? 2 : 4;
+            const double ytm = bond_ytm_->value();
+            const DerivOutcome o = deriv_outcome(
+                deriv::bond_price_from_ytm(bond_issue_date_->date(), bond_settle_date_->date(),
+                                           bond_maturity_date_->date(), bond_coupon_->value(), ytm, freq_val),
+                [ytm](const deriv::BondPrice& b) { return deriv_bond_price_json(b, ytm); });
+            show_calculation(o.json, o.error);
             break;
         }
         case 1: { // Equity options — price + greeks
-            run_pricing("option_price", {
-                                            "--spot",
-                                            deriv_num(opt_spot_->value()),
-                                            "--strike",
-                                            deriv_num(opt_strike_->value()),
-                                            "--time",
-                                            deriv_num(opt_time_->value()),
-                                            "--rate",
-                                            deriv_num(opt_rate_->value()),
-                                            "--vol",
-                                            deriv_num(opt_vol_->value()),
-                                            "--div-yield",
-                                            deriv_num(opt_div_->value()),
-                                            "--type",
-                                            opt_type_->currentIndex() == 0 ? "call" : "put",
-                                        });
+            const DerivOutcome o = deriv_outcome(
+                deriv::equity_option(opt_spot_->value(), opt_strike_->value(), opt_time_->value(), opt_rate_->value(),
+                                     opt_vol_->value(), opt_div_->value(), opt_type_->currentIndex() == 0),
+                [](const deriv::OptionValue& v) { return deriv_option_json(v); });
+            show_calculation(o.json, o.error);
             break;
         }
         case 2: { // FX options
-            run_pricing("fx_option_price", {
-                                               "--spot",
-                                               deriv_num(fx_spot_->value()),
-                                               "--strike",
-                                               deriv_num(fx_strike_->value()),
-                                               "--time",
-                                               deriv_num(fx_time_->value()),
-                                               "--domestic-rate",
-                                               deriv_num(fx_dom_rate_->value()),
-                                               "--foreign-rate",
-                                               deriv_num(fx_for_rate_->value()),
-                                               "--vol",
-                                               deriv_num(fx_vol_->value()),
-                                               "--type",
-                                               fx_type_->currentIndex() == 0 ? "call" : "put",
-                                               "--notional",
-                                               QString::number(fx_notional_->value(), 'f', 0),
-                                           });
+            const double spot = fx_spot_->value();
+            const double notional = fx_notional_->value();
+            const DerivOutcome o = deriv_outcome(
+                deriv::fx_option(spot, fx_strike_->value(), fx_time_->value(), fx_dom_rate_->value(),
+                                 fx_for_rate_->value(), fx_vol_->value(), fx_type_->currentIndex() == 0, notional),
+                [spot, notional](const deriv::FxOptionValue& v) { return deriv_fx_option_json(v, spot, notional); });
+            show_calculation(o.json, o.error);
             break;
         }
         case 3: { // Swaps
-            int freq_val = (swap_freq_->currentIndex() == 0) ? 1 : (swap_freq_->currentIndex() == 1) ? 2 : 4;
-            run_pricing("swap_value", {
-                                          "--effective-date",
-                                          swap_eff_date_->date().toString("yyyy-MM-dd"),
-                                          "--maturity-date",
-                                          swap_mat_date_->date().toString("yyyy-MM-dd"),
-                                          "--fixed-rate",
-                                          deriv_num(swap_fixed_rate_->value()),
-                                          "--freq",
-                                          QString::number(freq_val),
-                                          "--notional",
-                                          QString::number(swap_notional_->value(), 'f', 0),
-                                          "--discount-rate",
-                                          deriv_num(swap_discount_->value()),
-                                      });
+            const int freq_val = (swap_freq_->currentIndex() == 0) ? 1 : (swap_freq_->currentIndex() == 1) ? 2 : 4;
+            const double notional = swap_notional_->value();
+            const DerivOutcome o =
+                deriv_outcome(deriv::swap_value(swap_eff_date_->date(), swap_mat_date_->date(),
+                                                swap_fixed_rate_->value(), freq_val, notional, swap_discount_->value()),
+                              [notional](const deriv::SwapValue& v) { return deriv_swap_json(v, notional); });
+            show_calculation(o.json, o.error);
             break;
         }
         case 4: { // Credit (CDS)
-            run_pricing("cds_value", {
-                                         "--valuation-date",
-                                         cds_val_date_->date().toString("yyyy-MM-dd"),
-                                         "--maturity-date",
-                                         cds_mat_date_->date().toString("yyyy-MM-dd"),
-                                         "--recovery-rate",
-                                         deriv_num(cds_recovery_->value()),
-                                         "--notional",
-                                         QString::number(cds_notional_->value(), 'f', 0),
-                                         "--spread-bps",
-                                         deriv_num(cds_spread_->value()),
-                                         "--coupon-bps",
-                                         deriv_num(cds_coupon_->value()),
-                                         "--risk-free-rate",
-                                         deriv_num(cds_rate_->value()),
-                                     });
+            const double notional = cds_notional_->value();
+            const double coupon = cds_coupon_->value();
+            const double rate = cds_rate_->value();
+            const DerivOutcome o =
+                deriv_outcome(deriv::cds_value(cds_val_date_->date(), cds_mat_date_->date(), cds_recovery_->value(),
+                                               notional, cds_spread_->value(), rate, coupon),
+                              [notional, coupon, rate](const deriv::CdsValue& v) {
+                                  return deriv_cds_json(v, notional, coupon, rate);
+                              });
+            show_calculation(o.json, o.error);
             break;
         }
+        default: // no such instrument tab
+            break;
     }
 }
 
 void DerivativesScreen::on_calculate_secondary() {
-    if (loading_)
-        return;
-
+    namespace deriv = services::options::derivatives;
     switch (active_instrument_) {
         case 0: { // Bond YTM from price - solved from the YTM card's OWN inputs.
-            int freq_val = (ytm_freq_->currentIndex() == 0) ? 1 : (ytm_freq_->currentIndex() == 1) ? 2 : 4;
-            run_pricing("bond_ytm", {
-                                        "--issue-date",
-                                        ytm_issue_date_->date().toString("yyyy-MM-dd"),
-                                        "--settlement-date",
-                                        ytm_settle_date_->date().toString("yyyy-MM-dd"),
-                                        "--maturity-date",
-                                        ytm_maturity_date_->date().toString("yyyy-MM-dd"),
-                                        "--coupon-rate",
-                                        deriv_num(ytm_coupon_->value()),
-                                        "--clean-price",
-                                        deriv_num(bond_clean_price_->value()),
-                                        "--freq",
-                                        QString::number(freq_val),
-                                    });
+            const int freq_val = (ytm_freq_->currentIndex() == 0) ? 1 : (ytm_freq_->currentIndex() == 1) ? 2 : 4;
+            const DerivOutcome o =
+                deriv_outcome(deriv::bond_ytm_from_clean_price(ytm_issue_date_->date(), ytm_settle_date_->date(),
+                                                               ytm_maturity_date_->date(), ytm_coupon_->value(),
+                                                               bond_clean_price_->value(), freq_val),
+                              [](double ytm) { return deriv_ytm_json(ytm); });
+            show_calculation(o.json, o.error);
             break;
         }
         case 1: { // Implied volatility — solved from the IV card's OWN inputs.
@@ -1009,100 +1062,28 @@ void DerivativesScreen::on_calculate_secondary() {
                 display_error(tr("Enter the option's market price — implied volatility is solved from it."));
                 return;
             }
-            run_pricing("implied_vol", {
-                                           "--spot",
-                                           deriv_num(iv_spot_->value()),
-                                           "--strike",
-                                           deriv_num(iv_strike_->value()),
-                                           "--time",
-                                           deriv_num(iv_time_->value()),
-                                           "--rate",
-                                           deriv_num(iv_rate_->value()),
-                                           "--market-price",
-                                           deriv_num(opt_market_price_->value()),
-                                           "--div-yield",
-                                           deriv_num(iv_div_->value()),
-                                           "--type",
-                                           iv_type_->currentIndex() == 0 ? "call" : "put",
-                                       });
+            const DerivOutcome o = deriv_outcome(
+                deriv::equity_implied_vol(iv_spot_->value(), iv_strike_->value(), iv_time_->value(), iv_rate_->value(),
+                                          opt_market_price_->value(), iv_div_->value(), iv_type_->currentIndex() == 0),
+                [](double sigma) { return deriv_implied_vol_json(sigma); });
+            show_calculation(o.json, o.error);
             break;
         }
+        default: // only bonds (YTM) and equity options (IV) have a secondary calculator
+            break;
     }
 }
 
-// ── Python integration ──────────────────────────────────────────────────────
+// ── Calculation ─────────────────────────────────────────────────────────────
 
-void DerivativesScreen::run_pricing(const QString& command, const QStringList& args) {
-    QStringList full_args;
-    full_args << command << args;
-
-    // Pricing is deterministic — cache 10 min
-    const QString cache_key = "deriv:" + full_args.join(":");
-    const QVariant cached = fincept::CacheManager::instance().get(cache_key);
-    if (!cached.isNull()) {
-        auto doc = QJsonDocument::fromJson(cached.toString().toUtf8());
-        if (!doc.isNull() && doc.isObject()) {
-            display_results(doc.object());
-            return;
-        }
-    }
-
-    loading_ = true;
-    clear_results();
+void DerivativesScreen::show_calculation(const QJsonObject& result, const QString& error) {
     // Persist the inputs that produced this run (debounced by the manager).
     fincept::ScreenStateManager::instance().notify_changed(this);
-
-    // Loading state — the results panel was simply emptied, so a slow Python
-    // start looked identical to "the button did nothing".
-    if (status_engine_)
-        status_engine_->setText(tr("CALCULATING…"));
-    {
-        auto* busy = new QLabel(tr("Calculating %1 …").arg(command), this);
-        busy->setObjectName("derivResultLabel");
-        busy->setContentsMargins(12, 10, 12, 10);
-        results_container_->layout()->addWidget(busy);
-        results_container_->show();
+    if (!error.isEmpty()) {
+        display_error(error);
+        return;
     }
-
-    QPointer<DerivativesScreen> self = this;
-    const int requested_instrument = active_instrument_;
-
-    services::python_cli::PythonCliService::instance().run(
-        QStringLiteral("derivatives_pricing.py"), full_args,
-        [self, cache_key, requested_instrument](const services::python_cli::CliResult& r) {
-            if (!self)
-                return;
-
-            self->loading_ = false;
-            if (self->status_engine_)
-                self->status_engine_->setText(DerivativesScreen::tr("PYTHON ENGINE"));
-
-            // The user switched instrument while this ran: its cards no longer apply to
-            // the panel on screen (a bond result under the FX panel), so don't draw them.
-            // The (deterministic) result is still cached so switching back is instant.
-            if (self->active_instrument_ != requested_instrument) {
-                if (r.success)
-                    fincept::CacheManager::instance().put(
-                        cache_key, QVariant(QString::fromUtf8(QJsonDocument(r.data).toJson(QJsonDocument::Compact))),
-                        10 * 60, "derivatives");
-                return;
-            }
-
-            if (!r.success) {
-                self->display_error(r.error.isEmpty() ? DerivativesScreen::tr("Pricing failed") : r.error);
-                return;
-            }
-
-            const QJsonObject obj = r.data;
-
-            fincept::CacheManager::instance().put(
-                cache_key, QVariant(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact))), 10 * 60,
-                "derivatives");
-
-            self->display_results(obj);
-        });
-
-    LOG_INFO("Derivatives", "Running: " + command);
+    display_results(result);
 }
 
 // ── Results display ─────────────────────────────────────────────────────────
@@ -1148,19 +1129,6 @@ void DerivativesScreen::display_error(const QString& error) {
 }
 
 void DerivativesScreen::display_results(const QJsonObject& result) {
-    // The pricing script reports solver failures in-band, e.g. implied_vol
-    // returns {"error": "Could not converge on implied volatility"} with a zero
-    // exit code. Without this the message fell through to the generic key dump
-    // and rendered as a result card titled "ERROR" — indistinguishable from a
-    // successful calculation at a glance.
-    if (result.contains("error") && result.value("error").isString()) {
-        const QString msg = result.value("error").toString();
-        if (!msg.isEmpty()) {
-            display_error(msg);
-            return;
-        }
-    }
-
     clear_results();
 
     auto* body = new QWidget(this);

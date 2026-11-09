@@ -1994,14 +1994,6 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
         <translation>Penggunaan jaringan dihitung sebagai distribusi</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>LISENSI KOMERSIAL</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Diperlukan untuk penerapan komersial</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>Tidak perlu berbagi kode sumber</translation>
     </message>
@@ -2048,18 +2040,6 @@ Pasar, ekuitas, portofolio, wawasan makro.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Lisensi (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Lisensi Komersial</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Kebijakan Merek Dagang</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>CLA Kontributor</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32203,10 +32183,6 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Hak Cipta 2024-2026 Fincept Corporation. Hak cipta dilindungi undang-undang.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Perangkat lunak ini dilisensikan di bawah AGPL-3.0-or-later untuk penggunaan sumber terbuka, dengan lisensi komersial terpisah yang tersedia untuk penerapan perusahaan.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

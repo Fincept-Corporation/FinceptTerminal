@@ -3,8 +3,10 @@
 
 #include "core/events/EventBus.h"
 #include "core/logging/Logger.h"
+#include "screens/portfolio/PortfolioStress.h"
 #include "services/backtesting/BacktestingService.h"
 #include "services/portfolio/PortfolioAnalyticsService.h"
+#include "services/portfolio/PortfolioService.h"
 #include "storage/cache/CacheManager.h"
 #include "ui/theme/Theme.h"
 
@@ -31,6 +33,7 @@ using fincept::services::PortfolioAnalyticsService;
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace fincept::screens {
 
@@ -191,9 +194,12 @@ QWidget* PortfolioOptimizationView::build_optimize_tab() {
     layout->addWidget(status_label_);
 
     result_table_ = new QTableWidget;
-    result_table_->setColumnCount(5);
-    result_table_->setHorizontalHeaderLabels(
-        {tr("SYMBOL"), tr("CURRENT WT%"), tr("OPTIMAL WT%"), tr("CHANGE"), tr("ACTION")});
+    // Columns 0-2 are read back by "BACKTEST OPTIMAL WEIGHTS" — keep their order.
+    result_table_->setColumnCount(7);
+    result_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("CURRENT WT%"), tr("OPTIMAL WT%"), tr("CHANGE"),
+                                              tr("ACTION"), tr("TRADE QTY"), tr("TRADE VALUE")});
+    result_table_->setToolTip(tr("TRADE QTY / VALUE: what moves the book from current to optimal weights at today's "
+                                 "prices and NAV (before costs and taxes)."));
     style_table(result_table_);
     layout->addWidget(result_table_, 1);
 
@@ -501,10 +507,18 @@ QWidget* PortfolioOptimizationView::build_backtest_tab() {
             auto perf = data.value("performance").toObject();
             QStringList keys = {"totalReturn", "annualizedReturn", "sharpeRatio", "sortinoRatio", "maxDrawdown",
                                 "winRate",     "profitFactor",     "calmarRatio", "volatility",   "totalTrades"};
+            // Readable names instead of the raw camelCase keys ("TOTALRETURN").
+            const QHash<QString, QString> labels = {
+                {"totalReturn", tr("Total Return")},   {"annualizedReturn", tr("Annualized Return")},
+                {"sharpeRatio", tr("Sharpe Ratio")},   {"sortinoRatio", tr("Sortino Ratio")},
+                {"maxDrawdown", tr("Max Drawdown")},   {"winRate", tr("Win Rate")},
+                {"profitFactor", tr("Profit Factor")}, {"calmarRatio", tr("Calmar Ratio")},
+                {"volatility", tr("Volatility")},      {"totalTrades", tr("Total Trades")},
+            };
             backtest_metrics_table_->setRowCount(keys.size());
             for (int r = 0; r < keys.size(); ++r) {
                 auto key = keys[r];
-                auto* name_item = new QTableWidgetItem(key.toUpper());
+                auto* name_item = new QTableWidgetItem(labels.value(key, key));
                 backtest_metrics_table_->setItem(r, 0, name_item);
                 auto val = perf.value(key);
                 QString display;
@@ -601,8 +615,10 @@ QWidget* PortfolioOptimizationView::build_black_litterman_tab() {
         QString("color:%1; font-size:12px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     layout->addWidget(bl_title_);
 
-    bl_body_ = new QLabel(tr("Market-implied equilibrium returns (π = δ·Σ·w_market) shown below. "
-                             "Select 'B-L Model' as the METHOD on the OPTIMIZE tab to also compute B-L weights."));
+    bl_body_ =
+        new QLabel(tr("IMPLIED = equilibrium returns at which your current mix would be optimal "
+                      "(π = δ·Σ·w). POSTERIOR = π blended with the historical-return views "
+                      "(Ω = diag(τΣ), τ = 0.05). Select 'B-L Model' as the METHOD to optimise on the posterior."));
     bl_body_->setWordWrap(true);
     bl_body_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     layout->addWidget(bl_body_);
@@ -613,8 +629,9 @@ QWidget* PortfolioOptimizationView::build_black_litterman_tab() {
     bl_stack_->addWidget(bl_placeholder);
 
     bl_table_ = new QTableWidget;
-    bl_table_->setColumnCount(4);
-    bl_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
+    bl_table_->setColumnCount(5);
+    bl_table_->setHorizontalHeaderLabels(
+        {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("POSTERIOR RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
     style_table(bl_table_);
     bl_stack_->addWidget(bl_table_);
 
@@ -640,12 +657,20 @@ void PortfolioOptimizationView::set_data(const portfolio::PortfolioSummary& summ
 void PortfolioOptimizationView::reset_results() {
     result_table_->setRowCount(0);
     status_label_->clear();
+    frontier_current_ = {};
+    frontier_assets_ = {};
     for (QStackedWidget* st : {frontier_stack_, strategies_stack_, compare_stack_, risk_stack_, bl_stack_}) {
         if (st)
             st->setCurrentIndex(0);
     }
     if (backtest_optimal_btn_)
         backtest_optimal_btn_->setEnabled(false);
+}
+
+void PortfolioOptimizationView::set_analytics(const portfolio::MarketAnalytics& analytics) {
+    analytics_ = analytics;
+    if (has_data_)
+        update_stress();
 }
 
 void PortfolioOptimizationView::set_target_return(double annual_return) {
@@ -699,8 +724,8 @@ void PortfolioOptimizationView::retranslateUi() {
         run_btn_->setText(tr("▶ RUN OPTIMIZATION"));
 
     if (result_table_)
-        result_table_->setHorizontalHeaderLabels(
-            {tr("SYMBOL"), tr("CURRENT WT%"), tr("OPTIMAL WT%"), tr("CHANGE"), tr("ACTION")});
+        result_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("CURRENT WT%"), tr("OPTIMAL WT%"), tr("CHANGE"),
+                                                  tr("ACTION"), tr("TRADE QTY"), tr("TRADE VALUE")});
     if (alloc_table_)
         alloc_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("WEIGHT"), tr("VALUE"), tr("VS EQUAL WT")});
     if (strategies_table_)
@@ -745,11 +770,13 @@ void PortfolioOptimizationView::retranslateUi() {
     if (bl_title_)
         bl_title_->setText(tr("BLACK-LITTERMAN MODEL"));
     if (bl_body_)
-        bl_body_->setText(tr("Market-implied equilibrium returns (π = δ·Σ·w_market) shown below. "
-                             "Select 'B-L Model' as the METHOD on the OPTIMIZE tab to also compute B-L weights."));
+        bl_body_->setText(
+            tr("IMPLIED = equilibrium returns at which your current mix would be optimal "
+               "(π = δ·Σ·w). POSTERIOR = π blended with the historical-return views "
+               "(Ω = diag(τΣ), τ = 0.05). Select 'B-L Model' as the METHOD to optimise on the posterior."));
     if (bl_table_)
         bl_table_->setHorizontalHeaderLabels(
-            {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
+            {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("POSTERIOR RETURN"), tr("CURRENT WT"), tr("OPTIMIZED WT")});
 
     // Combo items are English keys sent to Python (Max Sharpe, Risk Parity, etc.)
     // and intentionally not translated — they double as cache keys + the analytics
@@ -788,6 +815,10 @@ void PortfolioOptimizationView::run_optimization() {
     args["risk_model"] = risk_model_cb_->currentText().toLower().replace(" ", "_");
     if (method_cb_->currentText() == QLatin1String("Target Return"))
         args["target_return"] = target_ret_spin_->value() / 100.0; // fraction, as the script expects
+    // The live T-bill rate the rest of the tab uses (Sharpe, Sortino, alpha). The script
+    // accepts it, but this view never sent it, so every max-Sharpe solve and every Sharpe
+    // shown here ran at a hard-coded 4%.
+    args["risk_free_rate"] = services::PortfolioService::instance().risk_free_rate();
 
     const QString args_str = QJsonDocument(args).toJson(QJsonDocument::Compact);
     // The result is only meaningful for the portfolio it was computed for; the
@@ -890,6 +921,8 @@ void PortfolioOptimizationView::show_result(const QJsonObject& root, bool from_c
             set(2, tr("n/a"), ui::colors::TEXT_TERTIARY);
             set(3, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
             set(4, tr("NO DATA"), ui::colors::TEXT_TERTIARY);
+            set(5, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
+            set(6, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
             continue;
         }
 
@@ -904,6 +937,24 @@ void PortfolioOptimizationView::show_result(const QJsonObject& root, bool from_c
                          : action == "INCREASE" ? ui::colors::POSITIVE
                                                 : ui::colors::NEGATIVE;
         set(4, action, ac);
+
+        // The trade that gets there: Δweight × NAV, in shares at the last price. Whole
+        // shares for whole-share positions; fractional (crypto, funds) otherwise.
+        const double trade_value = ch / 100.0 * summary_.total_market_value;
+        if (action != QLatin1String("HOLD") && h.current_price > 0.0) {
+            const bool whole = h.quantity == std::floor(h.quantity);
+            double qty = trade_value / h.current_price;
+            if (whole)
+                qty = std::round(qty);
+            set(5, QString("%1%2").arg(qty >= 0 ? "+" : "").arg(qty, 0, 'f', whole ? 0 : 4), ac);
+            set(6,
+                QString("%1%2 %3").arg(trade_value >= 0 ? "+" : "-", currency_,
+                                       QString::number(std::abs(trade_value), 'f', 0)),
+                ac);
+        } else {
+            set(5, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
+            set(6, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
+        }
     }
 
     // ── Status label ──────────────────────────────────────────────────────────
@@ -923,10 +974,25 @@ void PortfolioOptimizationView::show_result(const QJsonObject& root, bool from_c
     }
     if (!excluded.isEmpty())
         status += tr("  |  No price history, left out: %1").arg(excluded.join(", "));
+    // Where the book is today on the same model, so the improvement is visible.
+    const QJsonObject cur = root["current"].toObject();
+    if (!cur.isEmpty()) {
+        status += tr("  |  Current mix: %1% return, %2% vol, Sharpe %3")
+                      .arg(cur["return"].toDouble() * 100.0, 0, 'f', 1)
+                      .arg(cur["volatility"].toDouble() * 100.0, 0, 'f', 1)
+                      .arg(cur["sharpe"].toDouble(), 0, 'f', 2);
+    }
+    const QString models = root["returns_model"].toString();
+    if (!models.isEmpty())
+        status += tr("  |  %1 returns, %2 risk, rf %3%")
+                      .arg(models, root["risk_model"].toString())
+                      .arg(root["risk_free_rate"].toDouble() * 100.0, 0, 'f', 2);
     status_label_->setText(status);
     status_label_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::POSITIVE()));
 
     // ── Frontier, Strategies, Compare, Risk, B-L ──────────────────────────────
+    frontier_current_ = cur;
+    frontier_assets_ = root["assets"].toObject();
     update_frontier(root["frontier"].toArray());
     update_strategies(root["comparison"].toObject());
     update_compare(root["comparison"].toObject());
@@ -1049,6 +1115,50 @@ void PortfolioOptimizationView::update_frontier(const QJsonArray& pts) {
     chart->addSeries(frontier_series);
     chart->addSeries(opt_series);
 
+    // Today's mix and each holding on its own, on the same axes — the distance from the
+    // "Current" marker to the curve is what optimizing buys.
+    QScatterSeries* cur_series = nullptr;
+    if (!frontier_current_.isEmpty()) {
+        cur_series = new QScatterSeries;
+        cur_series->setName(tr("Current"));
+        cur_series->setColor(QColor(ui::colors::CYAN()));
+        cur_series->setMarkerShape(QScatterSeries::MarkerShapeRectangle);
+        cur_series->setMarkerSize(10);
+        const double cx = frontier_current_["volatility"].toDouble() * 100.0;
+        const double cy = frontier_current_["return"].toDouble() * 100.0;
+        cur_series->append(cx, cy);
+        min_x = std::min(min_x, cx);
+        max_x = std::max(max_x, cx);
+        min_y = std::min(min_y, cy);
+        max_y = std::max(max_y, cy);
+        chart->addSeries(cur_series);
+    }
+    QScatterSeries* asset_series = nullptr;
+    if (!frontier_assets_.isEmpty()) {
+        asset_series = new QScatterSeries;
+        asset_series->setName(tr("Holdings"));
+        asset_series->setColor(QColor(ui::colors::TEXT_TERTIARY()));
+        asset_series->setMarkerSize(6);
+        for (auto it = frontier_assets_.begin(); it != frontier_assets_.end(); ++it) {
+            const auto o = it.value().toObject();
+            const double ax = o["volatility"].toDouble() * 100.0;
+            const double ay = o["return"].toDouble() * 100.0;
+            if (!std::isfinite(ax) || !std::isfinite(ay) || ax <= 0.0)
+                continue;
+            asset_series->append(ax, ay);
+            min_x = std::min(min_x, ax);
+            max_x = std::max(max_x, ax);
+            min_y = std::min(min_y, ay);
+            max_y = std::max(max_y, ay);
+        }
+        if (asset_series->count() > 0) {
+            chart->addSeries(asset_series);
+        } else {
+            delete asset_series;
+            asset_series = nullptr;
+        }
+    }
+
     auto* x_axis = new QValueAxis;
     x_axis->setTitleText("Volatility (%)");
     x_axis->setTitleBrush(QColor(ui::colors::TEXT_TERTIARY()));
@@ -1061,6 +1171,10 @@ void PortfolioOptimizationView::update_frontier(const QJsonArray& pts) {
     chart->addAxis(x_axis, Qt::AlignBottom);
     frontier_series->attachAxis(x_axis);
     opt_series->attachAxis(x_axis);
+    if (cur_series)
+        cur_series->attachAxis(x_axis);
+    if (asset_series)
+        asset_series->attachAxis(x_axis);
 
     auto* y_axis = new QValueAxis;
     y_axis->setTitleText("Expected Return (%)");
@@ -1074,6 +1188,10 @@ void PortfolioOptimizationView::update_frontier(const QJsonArray& pts) {
     chart->addAxis(y_axis, Qt::AlignLeft);
     frontier_series->attachAxis(y_axis);
     opt_series->attachAxis(y_axis);
+    if (cur_series)
+        cur_series->attachAxis(y_axis);
+    if (asset_series)
+        asset_series->attachAxis(y_axis);
 
     frontier_stack_->setCurrentIndex(1);
 }
@@ -1092,7 +1210,7 @@ void PortfolioOptimizationView::update_strategies(const QJsonObject& comparison)
         {"max_sharpe", "Max Sharpe", "Maximise risk-adjusted return"},
         {"min_volatility", "Min Volatility", "Minimise portfolio standard deviation"},
         {"risk_parity", "Risk Parity", "Equal risk contribution per asset"},
-        {"hrp", "HRP", "Hierarchical risk parity (inv-var)"},
+        {"hrp", "HRP", "Hierarchical risk parity (correlation clusters, recursive bisection)"},
         {"equal_weight", "Equal Weight", "Uniform 1/N allocation"},
     };
 
@@ -1232,53 +1350,19 @@ void PortfolioOptimizationView::update_stress() {
         return;
     }
 
-    struct StressScenario {
-        const char* name;
-        const char* desc;
-        double equity_shock;    // %
-        double bond_shock;      // %
-        double commodity_shock; // %
-    };
-    static const StressScenario kScenarios[] = {
-        {"2008 Financial Crisis", "Lehman collapse, credit freeze", -38.5, 5.2, -33.0},
-        {"2020 COVID Crash", "Pandemic selloff (Feb–Mar 2020)", -33.9, 1.2, -20.0},
-        {"Dot-com Bust", "Tech bubble burst (2000–2002)", -49.1, 8.5, -10.0},
-        {"Interest Rate Shock +3%", "Aggressive Fed tightening", -15.0, -12.0, -5.0},
-        {"Black Monday 1987", "Single-day market crash", -22.6, 2.0, -8.0},
-        {"Inflation Surge", "1970s-style stagflation", -10.0, -15.0, 25.0},
-        {"Geopolitical Crisis", "Major conflict escalation", -12.0, 3.0, 15.0},
-        {"Currency Crisis", "Emerging-market contagion", -18.0, 1.0, 5.0},
-    };
-
-    // Classify current holdings into asset classes by symbol heuristics.
-    double equity_wt = 0, bond_wt = 0, commodity_wt = 0, crypto_wt = 0;
-    for (const auto& h : summary_.holdings) {
-        const QString s = h.symbol.toUpper();
-        const double wt = h.weight / 100.0;
-        const bool is_crypto = s.endsWith("-USD") || s.endsWith("-USDT") || s.endsWith("USDT");
-        const bool is_bond = s == "TLT" || s == "AGG" || s == "BND" || s == "IEF" || s == "SHY" || s == "LQD" ||
-                             s == "HYG" || s.contains("TREAS") || s.contains("BOND");
-        const bool is_comm = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" || s == "DBC" || s.contains("GOLD") ||
-                             s.contains("OIL");
-        if (is_crypto)
-            crypto_wt += wt;
-        else if (is_bond)
-            bond_wt += wt;
-        else if (is_comm)
-            commodity_wt += wt;
-        else
-            equity_wt += wt;
-    }
-
+    // Same model as the RISK view (screens/portfolio/PortfolioStress.h): equity lines
+    // move by their own beta when the analytics run has one.
+    namespace ps = portfolio_stress;
+    const bool have_betas = !analytics_.holdings.isEmpty() && analytics_.portfolio_id == summary_.portfolio.id;
+    const QHash<QString, portfolio::HoldingRisk>* risk = have_betas ? &analytics_.holdings : nullptr;
     const double total_mv = summary_.total_market_value;
-    const int n = static_cast<int>(sizeof(kScenarios) / sizeof(kScenarios[0]));
+    const int n = static_cast<int>(std::size(ps::kScenarios));
     stress_table_->setRowCount(n);
     for (int i = 0; i < n; ++i) {
-        const auto& sc = kScenarios[i];
-        // Crypto treated as 1.5× equity beta to the shock.
-        const double impact_pct = sc.equity_shock * equity_wt + sc.bond_shock * bond_wt +
-                                  sc.commodity_shock * commodity_wt + sc.equity_shock * 1.5 * crypto_wt;
-        const double loss = total_mv * impact_pct / 100.0;
+        const auto& sc = ps::kScenarios[i];
+        const ps::Result res = ps::apply(sc, summary_.holdings, risk, total_mv);
+        const double impact_pct = res.impact_pct;
+        const double loss = res.pnl;
 
         stress_table_->setRowHeight(i, 28);
         auto set = [&](int col, const QString& text, const char* color = nullptr) {
@@ -1288,8 +1372,8 @@ void PortfolioOptimizationView::update_stress() {
                 item->setForeground(QColor(color));
             stress_table_->setItem(i, col, item);
         };
-        set(0, tr(sc.name), ui::colors::TEXT_PRIMARY);
-        set(1, tr(sc.desc), ui::colors::TEXT_TERTIARY);
+        set(0, ps::scenario_name(sc), ui::colors::TEXT_PRIMARY);
+        set(1, ps::scenario_description(sc), ui::colors::TEXT_TERTIARY);
         const char* ic = impact_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
         set(2, QString("%1%2%").arg(impact_pct >= 0 ? "+" : "").arg(impact_pct, 0, 'f', 1), ic);
         set(3, QString("%1%2 %3").arg(loss >= 0 ? "+" : "-", currency_, QString::number(std::abs(loss), 'f', 0)), ic);
@@ -1307,8 +1391,9 @@ void PortfolioOptimizationView::update_black_litterman(const QJsonObject& root) 
         return;
 
     const bool is_bl = root["strategy"].toString() == "black_litterman";
-    bl_table_->setHorizontalHeaderLabels(
-        {tr("SYMBOL"), tr("IMPLIED RETURN"), tr("CURRENT WT"), is_bl ? tr("B-L WT") : tr("OPTIMIZED WT")});
+    const auto posterior = root["posterior_returns"].toObject();
+    bl_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("IMPLIED RETURN"), tr("POSTERIOR RETURN"), tr("CURRENT WT"),
+                                          is_bl ? tr("B-L WT") : tr("OPTIMIZED WT")});
 
     bl_table_->setRowCount(static_cast<int>(summary_.holdings.size()));
     for (int r = 0; r < static_cast<int>(summary_.holdings.size()); ++r) {
@@ -1326,8 +1411,15 @@ void PortfolioOptimizationView::update_black_litterman(const QJsonObject& root) 
         set(0, h.symbol, ui::colors::CYAN);
         set(1, QString("%1%2%").arg(imp >= 0 ? "+" : "").arg(imp, 0, 'f', 1),
             imp >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
-        set(2, QString("%1%").arg(h.weight, 0, 'f', 1));
-        set(3, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
+        if (posterior.contains(h.symbol)) {
+            const double post = posterior.value(h.symbol).toDouble() * 100.0;
+            set(2, QString("%1%2%").arg(post >= 0 ? "+" : "").arg(post, 0, 'f', 1),
+                post >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+        } else {
+            set(2, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
+        }
+        set(3, QString("%1%").arg(h.weight, 0, 'f', 1));
+        set(4, QString("%1%").arg(ow, 0, 'f', 1), ui::colors::AMBER);
     }
     bl_stack_->setCurrentIndex(1);
 }

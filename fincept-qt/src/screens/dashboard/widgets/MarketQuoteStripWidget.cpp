@@ -37,6 +37,7 @@ MarketQuoteStripWidget::MarketQuoteStripWidget(const QJsonObject& cfg, QWidget* 
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
+    enable_symbol_link(/*follows=*/false); // clicking a row feeds the link group
 
     set_configurable(true);
     apply_styles();

@@ -1,10 +1,9 @@
 #pragma once
-// OptionPricing — synchronous Black-Scholes / Black-Scholes-Merton pricers
-// in pure C++. Used by StrategyAnalytics for payoff curve evaluation at
-// hundreds of spot points per scrub frame, where the async py_vollib daemon
-// would be far too slow. Greeks for the analytics ribbon still come from
-// the chain producer's Greeks worker (live, populated on row.ce_greeks /
-// row.pe_greeks); these helpers exist purely for the curve.
+// OptionPricing — synchronous Black-Scholes / Black-Scholes-Merton maths in pure
+// C++: prices, analytical Greeks and implied volatility. Used by
+// StrategyAnalytics for payoff curves (hundreds of spot points per scrub frame),
+// by OptionChainService for the chain's per-leg IV + Greeks, and by the
+// Derivatives screen's calculators.
 //
 // Math reference (BSM with continuous dividend yield q):
 //
@@ -19,8 +18,11 @@
 
 namespace fincept::services::options::pricing {
 
-/// Standard normal CDF via std::erf — accurate to ~1e-9.
+/// Standard normal CDF, 0.5·erfc(−x/√2) — relative accuracy holds in the left tail too.
 double normal_cdf(double x);
+
+/// Standard normal density.
+double normal_pdf(double x);
 
 /// Black-Scholes (no dividends, q = 0).
 double bs_call(double S, double K, double t, double r, double sigma);
@@ -33,5 +35,40 @@ double bsm_put(double S, double K, double t, double r, double sigma, double q);
 /// Black model (futures / forwards — no spot, no dividend).
 double black_call(double F, double K, double t, double r, double sigma);
 double black_put(double F, double K, double t, double r, double sigma);
+
+/// Analytical BSM Greeks, per share, in the units OptionGreeks documents:
+///   theta — per CALENDAR day (annual theta / 365)
+///   vega  — per 1.00 of σ (divide by 100 for per vol point)
+///   rho   — per 1.00 of r (divide by 100 for per 1% rate)
+/// Requires S, K, t, sigma > 0.
+struct BsmGreeks {
+    double delta = 0;
+    double gamma = 0;
+    double theta = 0;
+    double vega = 0;
+    double rho = 0;
+};
+BsmGreeks bsm_greeks(bool is_call, double S, double K, double t, double r, double sigma, double q);
+
+/// Outcome of an implied-volatility solve.
+enum class IvStatus {
+    Ok,             ///< `sigma` holds the implied volatility (0 when the price carries no time value)
+    BelowIntrinsic, ///< price below the (forward) intrinsic value — no volatility reproduces it
+    AboveMaximum,   ///< price at or above the no-arbitrage maximum (S·e^(−qt) call, K·e^(−rt) put)
+    InvalidInput,   ///< S, K or t not positive, or a non-finite input
+};
+
+struct ImpliedVol {
+    double sigma = 0; ///< annualised, decimal (0.142 = 14.2%); meaningful only when status == Ok
+    IvStatus status = IvStatus::InvalidInput;
+};
+
+/// BSM implied volatility from a (discounted) option price. As in Jäckel's "Let's
+/// Be Rational": the price is undiscounted onto the forward F = S·e^((r−q)t),
+/// checked against the forward intrinsic value and maximum, an in-the-money option
+/// is mapped to its out-of-the-money counterpart (time value only), and the
+/// normalised Black equation is solved — here by a bracketed Newton iteration, to
+/// full double precision.
+ImpliedVol bsm_implied_vol(double price, double S, double K, double t, double r, double q, bool is_call);
 
 } // namespace fincept::services::options::pricing

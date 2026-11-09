@@ -296,8 +296,8 @@ QWidget* CreateAgentPanel::build_form_panel() {
     terminal_dry_run_check_->setStyleSheet(neutral_check_style);
     sub_vl->addWidget(terminal_dry_run_check_);
 
-    terminal_cat_lbl_ = new QLabel(tr("Category whitelist (none checked = essential research tools + tool search, "
-                                      "which reaches every non-UI tool)"));
+    terminal_cat_lbl_ = new QLabel(tr("Category whitelist (none checked = every tool an agent may use: reading the "
+                                      "terminal's screens and running the bundled Python analytics)"));
     terminal_cat_lbl_->setWordWrap(true);
     terminal_cat_lbl_->setStyleSheet(QString("color:%1;font-size:10px;").arg(ui::colors::TEXT_TERTIARY()));
     sub_vl->addWidget(terminal_cat_lbl_);
@@ -305,12 +305,10 @@ QWidget* CreateAgentPanel::build_form_panel() {
     terminal_categories_list_ = new QListWidget;
     terminal_categories_list_->setFixedHeight(110);
     terminal_categories_list_->setStyleSheet(list_style());
-    // Categories sourced from src/mcp/tools/*.cpp registrations. Excludes
-    // UI-only categories (navigation/system/settings) and recursive ones
-    // (ai-chat/meta) — agents shouldn't drive the UI or call the chat LLM.
-    for (const auto& cat : {"markets", "watchlist", "news", "portfolio", "notes", "crypto-trading", "paper-trading",
-                            "sec-edgar", "ma-analytics", "alt-investments", "data-sources", "profile",
-                            "file_manager", "report-builder", "python", "datahub", "analytics"}) {
+    // The core tool categories an agent may use (mcp/core/CoreTools.h). The
+    // UI-driving ones ("ui-control", "navigation") are never available to
+    // agents — they run in the background and must not move the user's screens.
+    for (const auto& cat : {"ui-read", "analytics"}) {
         auto* item = new QListWidgetItem(cat);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(Qt::Unchecked);

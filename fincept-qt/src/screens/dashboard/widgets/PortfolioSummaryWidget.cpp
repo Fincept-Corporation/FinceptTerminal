@@ -40,6 +40,7 @@ PortfolioSummaryWidget::PortfolioSummaryWidget(QWidget* parent)
     auto* vl = content_layout();
     vl->setContentsMargins(8, 8, 8, 8);
     vl->setSpacing(6);
+    enable_symbol_link(/*follows=*/false); // clicking a holding feeds the link group
 
     // ── Selected-portfolio label ────────────────────────────────────────────
     // Sits above the summary card so the user always knows which portfolio

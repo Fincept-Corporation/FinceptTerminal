@@ -492,33 +492,6 @@ void QuantModulePanel::display_fortitudo_result(const QString& command, const QJ
         header_text += tr("  |  %1 OBS").arg(d.value("n_observations").toInt());
     results_layout_->addWidget(gs_section_header(header_text, accent));
 
-    // ── 1. CHECK STATUS ──────────────────────────────────────────────────────
-    if (command == "check_status") {
-        auto bool_card = [this](const QString& label, bool ok) {
-            return gs_make_card(label, ok ? tr("AVAILABLE") : tr("MISSING"), this,
-                                ok ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
-        };
-        QList<QWidget*> deps = {
-            bool_card(tr("OPTIMIZATION"), d.value("wrappers_optimization").toBool()),
-            bool_card(tr("FUNCTIONS"), d.value("wrappers_functions").toBool()),
-            bool_card(tr("NATIVE FORTITUDO"), d.value("native_fortitudo_tech").toBool()),
-            gs_make_card(tr("MODE"), d.value("mode").toString().toUpper(), this, ui::colors::INFO()),
-        };
-        results_layout_->addWidget(gs_card_row(deps, this));
-        const auto ops = d.value("ops_available").toArray();
-        QStringList names;
-        for (const auto& v : ops)
-            names << v.toString();
-        auto* lbl = new QLabel(tr("Operations: %1").arg(names.join(", ")));
-        lbl->setWordWrap(true);
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
-                                   "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-        results_layout_->addWidget(lbl);
-        status_label_->setText(tr("Fortitudo backend ready"));
-        return;
-    }
-
     // ── 2. PORTFOLIO METRICS ─────────────────────────────────────────────────
     if (command == "portfolio_metrics") {
         const double exp_ret = d.value("expected_return").toDouble();

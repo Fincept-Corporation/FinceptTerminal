@@ -64,8 +64,9 @@ static QJsonValue clamp_value(const QJsonValue& v, int max_items, int max_chars,
             // A trailing marker keeps the omission visible in-place. Without it
             // the model reads a 5-item array as complete and reasons off a
             // truncated dataset — a silent-wrong-answer bug, not a cosmetic one.
-            out.append(QJsonValue(QStringLiteral("…[%1 more items omitted — use result_fetch for the full payload]")
-                                      .arg(in.size() - keep)));
+            out.append(
+                QJsonValue(QStringLiteral("…[%1 more items omitted — ui_read the result id for the full payload]")
+                               .arg(in.size() - keep)));
         }
         return out;
     }
@@ -117,7 +118,7 @@ ShrinkStats shrink_json(QJsonValue& value, int budget_bytes) {
     QJsonObject stub{
         {"__truncated", true},
         {"__original_bytes", st.original_bytes},
-        {"__note", QStringLiteral("Payload too large to preview — use result_fetch to page through it.")},
+        {"__note", QStringLiteral("Payload too large to preview — page through it with ui_read(ref=<result id>).")},
     };
     value = stub;
     st.truncated = true;
@@ -143,8 +144,16 @@ QString ResultStore::put(const QString& tool, const QJsonValue& payload) {
     e.tool = tool;
     e.text = to_compact(payload);
     e.stored_ms = QDateTime::currentMSecsSinceEpoch();
-    entries_.insert(id, std::move(e));
+    entries_.emplace(id, std::move(e)); // QHash::insert only copies
     return id;
+}
+
+std::optional<QByteArray> ResultStore::raw(const QString& id) const {
+    QMutexLocker lock(&mutex_);
+    auto it = entries_.constFind(id);
+    if (it == entries_.constEnd())
+        return std::nullopt;
+    return it->text;
 }
 
 ResultStore::Page ResultStore::page(const QString& id, int offset, int limit) const {
@@ -162,9 +171,24 @@ ResultStore::Page ResultStore::page(const QString& id, int offset, int limit) co
     // what a model sends next) used to call std::clamp(limit, 1, 0): lo > hi violates the
     // precondition (an assertion in MSVC debug builds, unspecified otherwise). An empty
     // final page is the correct answer there.
+    // Slice on UTF-8 character boundaries: compact JSON keeps non-ASCII text as
+    // raw UTF-8 (₹, —, CJK names), and a cut inside a multi-byte sequence turned
+    // into U+FFFD on BOTH adjacent pages. A continuation byte is 10xxxxxx.
+    const QByteArray& bytes = it->text;
+    auto is_continuation = [&bytes](int i) {
+        return i < bytes.size() && (static_cast<unsigned char>(bytes.at(i)) & 0xC0) == 0x80;
+    };
+    while (p.offset < p.total_bytes && is_continuation(p.offset))
+        ++p.offset; // a resume offset that lands mid-character starts at the next one
     const int remaining = p.total_bytes - p.offset;
-    const int take = remaining <= 0 ? 0 : std::clamp(limit, 1, remaining);
-    p.text = QString::fromUtf8(it->text.mid(p.offset, take));
+    int take = remaining <= 0 ? 0 : std::clamp(limit, 1, remaining);
+    if (take > 0 && take < remaining) {
+        int cut = p.offset + take;
+        while (cut > p.offset + 1 && is_continuation(cut))
+            --cut;
+        take = cut - p.offset;
+    }
+    p.text = QString::fromUtf8(bytes.mid(p.offset, take));
     p.returned = take;
     p.has_more = p.offset + take < p.total_bytes;
     return p;

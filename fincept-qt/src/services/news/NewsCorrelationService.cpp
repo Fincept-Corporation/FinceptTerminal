@@ -1,33 +1,82 @@
 #include "services/news/NewsCorrelationService.h"
 
 #include "core/logging/Logger.h"
-#include "python/PythonRunner.h"
+#include "network/http/HttpClient.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QPointer>
 
+#include <cmath>
 #include <utility>
 
 namespace fincept::services {
 
 namespace news_correlation_detail {
 
-/// polymarket.py reports numbers as strings ("0.33", "247802.0"); accept both forms.
-double json_number(const QJsonValue& v, bool* ok = nullptr) {
-    if (v.isDouble()) {
-        if (ok)
-            *ok = true;
-        return v.toDouble();
+/// Manifold Markets' public API: the markets with the most recent bets, newest first.
+constexpr int kManifoldMarketLimit = 20;
+
+QString manifold_markets_url() {
+    return QStringLiteral("https://api.manifold.markets/v0/markets?limit=%1&sort=last-bet-time&order=desc")
+        .arg(kManifoldMarketLimit);
+}
+
+/// Rounds like Python's round(x, ndigits) (0 <= ndigits <= 15): the exact binary value to
+/// `ndigits` decimals with exact ties to even, as the nearest double — the rounding these
+/// odds have always been shown with, so the panel's percentages do not shift.
+double round_half_even(double x, int ndigits) {
+    if (!std::isfinite(x))
+        return x;
+    double scale = 1.0;
+    for (int i = 0; i < ndigits; ++i)
+        scale *= 10.0;
+    // A tie (x * 10^n == k + 1/2) is exactly a binary fraction x == odd / 2^(n+1),
+    // and then x * scale is exact.
+    const double halves = std::ldexp(x, ndigits + 1);
+    if (halves == std::trunc(halves) && std::fmod(std::fabs(halves), 2.0) == 1.0) {
+        const double lower = std::floor(x * scale);
+        const double even = std::fmod(lower, 2.0) == 0.0 ? lower : lower + 1.0;
+        return std::copysign(even / scale, x);
     }
-    bool parsed = false;
-    const double d = v.toString().trimmed().toDouble(&parsed);
-    if (ok)
-        *ok = parsed;
-    return parsed ? d : 0.0;
+    // Not a tie: the correctly rounded fixed-point text is unambiguous.
+    return QString::number(x, 'f', ndigits).toDouble();
+}
+
+/// Manifold /v0/markets -> open binary markets, in API order. The first `limit` BINARY markets
+/// are taken (resolved ones count toward it), resolved ones are dropped, the YES probability is
+/// rounded to 4 decimals and the volume to a whole number. A market without a numeric
+/// probability is skipped: a price is never invented.
+QVector<PredictionMarket> parse_manifold_markets(const QJsonArray& raw, int limit) {
+    QVector<PredictionMarket> markets;
+    int binary_seen = 0;
+    for (const auto& v : raw) {
+        if (binary_seen >= limit)
+            break;
+        const QJsonObject m = v.toObject();
+        if (m.value(QLatin1String("outcomeType")).toString() != QLatin1String("BINARY"))
+            continue;
+        ++binary_seen;
+        if (m.value(QLatin1String("isResolved")).toBool(false))
+            continue;
+        const QJsonValue probability = m.value(QLatin1String("probability"));
+        if (!probability.isDouble())
+            continue;
+        const double yes = round_half_even(probability.toDouble(), 4);
+        if (yes < 0.0 || yes > 1.0)
+            continue;
+        PredictionMarket pm;
+        pm.id = m.value(QLatin1String("id")).toString();
+        pm.question = m.value(QLatin1String("question")).toString();
+        pm.url = m.value(QLatin1String("url")).toString();
+        pm.yes_price = yes;
+        pm.no_price = 1.0 - yes;
+        pm.volume = round_half_even(m.value(QLatin1String("volume")).toDouble(0.0), 0);
+        markets.append(pm);
+    }
+    return markets;
 }
 
 } // namespace news_correlation_detail
@@ -73,59 +122,33 @@ void NewsCorrelationService::fetch_predictions(PredictionCallback cb) {
         return; // the running fetch answers every waiter
     predictions_inflight_ = true;
 
-    QPointer<NewsCorrelationService> self = this;
-    python::PythonRunner::instance().run("polymarket.py", {"get_markets", "20"}, [self](python::PythonResult result) {
-        if (!self)
-            return;
-        self->predictions_inflight_ = false;
-        auto waiters = std::exchange(self->predictions_waiters_, {});
+    const HttpClient::Headers headers{{"Accept", "application/json"}, {"User-Agent", "FinceptTerminal/4.0.2"}};
+    // `this` as the context: the reply cannot outlive the service it answers.
+    HttpClient::instance().get(
+        news_correlation_detail::manifold_markets_url(),
+        [this](Result<QJsonDocument> result) {
+            predictions_inflight_ = false;
+            auto waiters = std::exchange(predictions_waiters_, {});
 
-        bool ok = result.success;
-        QVector<PredictionMarket> markets;
-        if (ok) {
-            const QJsonObject obj = QJsonDocument::fromJson(result.output.toUtf8()).object();
-            const QJsonArray arr = obj.contains("markets") ? obj["markets"].toArray() : obj["data"].toArray();
-            for (const auto& v : arr) {
-                const QJsonObject m = v.toObject();
-                if (m.value("closed").toBool(false))
-                    continue;
-                // The script emits outcomePrices ["yes","no"] as strings. This used to read
-                // "yes_price"/"probability" (absent) and default to 0.5, so EVERY market was
-                // shown at 50% — never fabricate a price: skip markets without one.
-                bool have_price = false;
-                double yes = 0.0;
-                const QJsonArray prices = m.value("outcomePrices").toArray();
-                if (!prices.isEmpty())
-                    yes = news_correlation_detail::json_number(prices.first(), &have_price);
-                if (!have_price && m.contains("yes_price"))
-                    yes = news_correlation_detail::json_number(m.value("yes_price"), &have_price);
-                if (!have_price && m.contains("probability"))
-                    yes = news_correlation_detail::json_number(m.value("probability"), &have_price);
-                if (!have_price || yes < 0.0 || yes > 1.0)
-                    continue;
-                PredictionMarket pm;
-                pm.id = m.value("id").toString();
-                pm.question = m.value("question").toString();
-                pm.url = m.value("url").toString();
-                pm.yes_price = yes;
-                pm.no_price = 1.0 - yes;
-                pm.volume = news_correlation_detail::json_number(m.value("volume"));
-                markets.append(pm);
+            // Anything but a JSON array (HTTP error, transport failure, bad body) is a failed fetch.
+            const bool ok = result.is_ok() && result.value().isArray();
+            QVector<PredictionMarket> markets;
+            if (ok) {
+                markets = news_correlation_detail::parse_manifold_markets(
+                    result.value().array(), news_correlation_detail::kManifoldMarketLimit);
+                predictions_cache_ = markets;
+                predictions_fetched_at_ = QDateTime::currentSecsSinceEpoch();
+                predictions_failed_at_ = 0;
+            } else {
+                const QString why = result.is_ok() ? QStringLiteral("response is not a JSON array")
+                                                   : QString::fromStdString(result.error());
+                LOG_WARN("NewsCorrelation", "Prediction fetch failed: " + why.left(200));
+                predictions_failed_at_ = QDateTime::currentSecsSinceEpoch();
             }
-        } else {
-            LOG_WARN("NewsCorrelation", "Prediction fetch failed: " + result.error.left(200));
-        }
-
-        if (ok) {
-            self->predictions_cache_ = markets;
-            self->predictions_fetched_at_ = QDateTime::currentSecsSinceEpoch();
-            self->predictions_failed_at_ = 0;
-        } else {
-            self->predictions_failed_at_ = QDateTime::currentSecsSinceEpoch();
-        }
-        for (auto& w : waiters)
-            w(ok, ok ? markets : self->predictions_cache_);
-    });
+            for (auto& w : waiters)
+                w(ok, ok ? markets : predictions_cache_);
+        },
+        this, headers);
 }
 
 } // namespace fincept::services

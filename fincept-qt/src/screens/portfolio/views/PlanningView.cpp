@@ -35,6 +35,22 @@ namespace {
 /// emptied for display, and the next add/remove would persist that truncation
 /// over the user's real goals. Cleared by the next successful load.
 constexpr const char* kGoalsReadFailedProp = "fincept_goals_read_failed";
+
+/// Monthly rate that compounds to `annual` over twelve months. The return inputs are
+/// effective annual rates (seeded from the realised CAGR); annual/12 compounded monthly
+/// overstated them (8% → 8.30% a year).
+double planning_monthly_rate(double annual) {
+    return std::pow(1.0 + std::max(annual, -0.99), 1.0 / 12.0) - 1.0;
+}
+
+/// Future value of 1 per period for `n` periods at rate `r` (end-of-period deposits).
+/// Valid for negative rates too — the old `r > 0 ? … : n` fallback treated any
+/// negative real return as zero.
+double planning_annuity_factor(double r, int n) {
+    if (n <= 0)
+        return 0.0;
+    return std::abs(r) > 1e-12 ? (std::pow(1.0 + r, n) - 1.0) / r : static_cast<double>(n);
+}
 } // namespace
 
 PlanningView::PlanningView(QWidget* parent) : QWidget(parent) {
@@ -653,11 +669,11 @@ void PlanningView::recalculate_goals() {
     // Starting capital = the slice of the current portfolio earmarked for this goal.
     const double start_capital = summary_.total_market_value * alloc_pct;
 
-    const double monthly_rate = ret / 12.0;
+    const double monthly_rate = planning_monthly_rate(ret);
     const int months = years * 12;
     const double growth = std::pow(1.0 + monthly_rate, months);
     const double fv_start = start_capital * growth;
-    const double annuity_factor = (monthly_rate > 1e-9) ? ((growth - 1.0) / monthly_rate) : months;
+    const double annuity_factor = planning_annuity_factor(monthly_rate, months);
     const double fv_contrib = monthly * annuity_factor;
     const double projected = fv_start + fv_contrib;
 
@@ -752,7 +768,7 @@ void PlanningView::recalculate_savings() {
         const double annual_saved = income * rate_pct / 100.0;
         const double growth = std::pow(1.0 + ret, years);
         const double fv_start = start_capital * growth;
-        const double fv_saved = (ret > 1e-9) ? annual_saved * ((growth - 1.0) / ret) : annual_saved * years;
+        const double fv_saved = annual_saved * planning_annuity_factor(ret, years);
         return std::make_pair(annual_saved, fv_start + fv_saved);
     };
 
@@ -898,15 +914,22 @@ PlanningView::McResult PlanningView::monte_carlo(double start, double monthly, i
         return r;
     constexpr int kSims = 2000;
     std::mt19937 gen(12345u); // fixed seed → stable, reproducible projections
-    std::normal_distribution<double> nd(mean_annual, std::max(vol_annual, 1e-6));
+    // Lognormal annual growth with MEDIAN 1+g, where g is the (compound) return the
+    // deterministic projection uses — so the MC median lands on that projection instead
+    // of ~σ²/2 a year below it. Normal returns fed the compound rate in as the
+    // arithmetic mean, and could draw losses beyond -100%.
+    const double g = std::max(mean_annual, -0.95);
+    const double s = std::max(vol_annual, 1e-6);
+    const double log_var = std::log(1.0 + (s * s) / ((1.0 + g) * (1.0 + g)));
+    std::normal_distribution<double> nd(std::log(1.0 + g), std::sqrt(log_var));
     const double annual_contrib = monthly * 12.0;
     QVector<double> ends;
     ends.reserve(kSims);
     int success = 0;
-    for (int s = 0; s < kSims; ++s) {
+    for (int sim = 0; sim < kSims; ++sim) {
         double bal = start;
         for (int y = 0; y < years; ++y) {
-            bal = bal * (1.0 + nd(gen)) + annual_contrib;
+            bal = bal * std::exp(nd(gen)) + annual_contrib;
             if (bal < 0.0)
                 bal = 0.0;
         }
@@ -998,8 +1021,9 @@ void PlanningView::refresh_goals_list() {
     for (int i = 0; i < goals_.size(); ++i) {
         const Goal& g = goals_[i];
         const double start = summary_.total_market_value * g.alloc_pct / 100.0;
-        const double growth = std::pow(1.0 + mean / 12.0, g.years * 12);
-        const double annuity = (mean > 1e-9) ? ((growth - 1.0) / (mean / 12.0)) : g.years * 12;
+        const double m_rate = planning_monthly_rate(mean);
+        const double growth = std::pow(1.0 + m_rate, g.years * 12);
+        const double annuity = planning_annuity_factor(m_rate, g.years * 12);
         const double projected = start * growth + g.monthly * annuity;
         const double funded_now = (g.target > 1e-6) ? (start / g.target * 100.0) : 0.0;
         const double proj_pct = (g.target > 1e-6) ? (projected / g.target * 100.0) : 0.0;
@@ -1178,20 +1202,20 @@ void PlanningView::recalculate() {
     double monthly = monthly_contrib_->value();
     double ret = expected_return_->value() / 100.0;
     double inf = inflation_->value() / 100.0;
-    double real_ret = ret - inf;
+    // Fisher: (1+r)/(1+i) − 1. The r − i shortcut overstates the real return, more so at
+    // high inflation (8% / 6% → 1.89%, not 2%), and that compounds over decades.
+    double real_ret = (1.0 + ret) / (1.0 + inf) - 1.0;
 
     // Withdrawal rule target: corpus = annual_expense / withdrawal_rate
     double wr = withdrawal_rate_->value() / 100.0;
     double target = (wr > 1e-6) ? (annual_exp / wr) : annual_exp * 25.0;
 
-    // Future value: current portfolio + monthly contributions
+    // Future value: current portfolio + monthly contributions, in today's money
     // FV = PV * (1+r)^n + PMT * [((1+r)^n - 1) / r]
-    double monthly_rate = real_ret / 12.0;
+    double monthly_rate = planning_monthly_rate(real_ret);
     int months = static_cast<int>(years * 12);
     double fv_portfolio = current_value * std::pow(1.0 + monthly_rate, months);
-    double fv_contrib = (monthly_rate > 0.0001)
-                            ? monthly * ((std::pow(1.0 + monthly_rate, months) - 1.0) / monthly_rate)
-                            : monthly * months;
+    double fv_contrib = monthly * planning_annuity_factor(monthly_rate, months);
     double projected = fv_portfolio + fv_contrib;
     double gap = projected - target;
 
@@ -1217,10 +1241,7 @@ void PlanningView::recalculate() {
         // (expected return == inflation, a perfectly plausible entry) made the
         // divisor 0/0 and printed "nan"; a zero horizon (retire age ==
         // current age) made it 0 as well.
-        const double annuity_factor = (months <= 0)                ? 0.0
-                                      : (std::abs(monthly_rate) > 1e-9)
-                                          ? ((std::pow(1.0 + monthly_rate, months) - 1.0) / monthly_rate)
-                                          : static_cast<double>(months);
+        const double annuity_factor = planning_annuity_factor(monthly_rate, months);
         const double needed_monthly = annuity_factor > 1e-9 ? (-gap) / annuity_factor : 0.0;
         status_label_->setText(tr("\u26A0 Shortfall of %1 %2. Consider increasing monthly savings "
                                   "by %1 %3 to close the gap.")

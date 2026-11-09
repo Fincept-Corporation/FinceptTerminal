@@ -1,11 +1,12 @@
 #pragma once
 // McpHttpServer.h — Fincept Terminal as an MCP server for EXTERNAL agents.
 //
-// Exposes the terminal's internal tool catalogue over the Model Context Protocol
-// (Streamable HTTP transport, JSON-RPC 2.0) so coding agents running on the same
-// machine — Claude Code, OpenAI Codex CLI, Cursor, Claude Desktop (through the
-// stdio bridge script) — can read live market data, research, portfolios and
-// run terminal workflows.
+// Exposes the terminal's ten core tools (src/mcp/core/CoreTools.h) over the
+// Model Context Protocol (Streamable HTTP transport, JSON-RPC 2.0) so agents on
+// the same machine — Claude Code, OpenAI Codex CLI, Gemini CLI, Cursor, VS Code,
+// Claude Desktop (through the stdio bridge script) — can operate the running
+// terminal the way a person does: see what is open, open screens, read tables,
+// charts and texts, work the controls, and run the bundled analytics scripts.
 //
 //   POST http://127.0.0.1:<port>/mcp   — JSON-RPC request / notification / batch
 //   GET  /mcp                          — 405 (no server-initiated stream)
@@ -18,20 +19,23 @@
 //   * `Authorization: Bearer <token>` is required on every /mcp request. The
 //     token is stable across restarts (SecureStorage key "mcp_server/token") so
 //     client configs keep working; regenerate_token() revokes every client.
-//   * Tools that change state (is_destructive) are refused unless the user has
-//     enabled allow_actions(). Live-trading tools and tools whose auth level is
-//     ExplicitConfirm (any level >= Verified) additionally require a per-call
-//     approval in the terminal UI (ToolApprovalDialog) regardless of
-//     allow_actions(); the approved call runs inside a ScopedApprovedCall.
-//   * tool_invoke is held to the policy of the tool it invokes, and may only
-//     reach built-in tools — the user's other MCP servers are never re-exported.
+//   * Two user permissions: allow_ui_control() — operate the UI (ui_act,
+//     ui_invoke, ui_open, ui_workspace); off = look-only — and allow_scripts()
+//     — run the bundled Python scripts. Both default ON: risk is judged per
+//     action, not per tool. ui_act / ui_invoke / python ask the user
+//     (ToolApprovalDialog) before orders, money moves, spends, deletes and
+//     sensitive scripts, whatever the permissions say; secret fields are never
+//     read or typed. Tools with auth level >= Verified also need a per-call
+//     approval (ScopedApprovedCall).
+//   * Only the terminal's own tools are served — the user's other MCP servers
+//     are never re-exported.
 //
 // Threading: the listener and all socket I/O live on the GUI thread. Tool calls
 // run on a dedicated QThreadPool (never QThreadPool::globalInstance(), which the
-// LLM fan-out and the agent bridge already block on), and replies are posted back
-// to the GUI thread. Long tools use the existing job protocol (allow_defer=true):
-// a call that overruns the grace window returns a {job_id,status:"running"}
-// receipt the client polls with job_status / job_result.
+// LLM fan-out and the agent bridge already block on); the UI tools hop to the
+// GUI thread themselves and never block it. Replies are posted back to the GUI
+// thread. Long Python scripts answer with a job id that `python(action=status)`
+// long-polls.
 
 #include <QDateTime>
 #include <QJsonObject>
@@ -55,18 +59,23 @@ struct ExternalCallRecord {
     QString summary;         // short status / error text, never secrets
 };
 
-/// Which tools `tools/list` advertises.
-///   Essentials — meta tools (tool_list, tool_describe, job_*, result_fetch),
-///                the generic `tool_invoke` dispatcher, and a curated set of
-///                high-value read tools (see EssentialTools.h). Small enough for
-///                any client's context; everything else stays reachable through
-///                tool_list + tool_invoke.
-///   Full       — every enabled internal tool (≈900). Only sensible for clients
-///                that defer/search large tool lists (e.g. Claude Code).
-/// The listing is a context-size choice, not a security boundary: tools/call
-/// accepts any enabled internal tool and applies the same policy either way.
-/// Clients pick up a toolset change when they reconnect (listChanged=false).
-enum class ExternalToolset { Essentials, Full };
+/// One client that said hello since start(), for the settings page.
+struct ExternalClientInfo {
+    QString name;       // clientInfo.name ("claude-code", "codex-mcp-client", …)
+    QString user_agent; // HTTP User-Agent, trimmed
+    QDateTime first_seen;
+    QDateTime last_seen;
+    int calls = 0;
+};
+
+/// Counters since start(), for the settings page.
+struct ExternalServerStats {
+    QDateTime started_at;
+    quint64 calls = 0;
+    quint64 ok = 0;
+    quint64 failed = 0;
+    quint64 denied = 0;
+};
 
 class McpHttpServer : public QObject {
     Q_OBJECT
@@ -97,17 +106,34 @@ class McpHttpServer : public QObject {
     // ── User settings (persisted) ───────────────────────────────────────────
     bool enabled_at_startup() const;
     void set_enabled_at_startup(bool on);
-    bool allow_actions() const;       // destructive tools permitted (approval rules still apply)
-    void set_allow_actions(bool on);
-    ExternalToolset toolset() const;
-    void set_toolset(ExternalToolset t);
+    /// Operate the UI (ui_act, ui_invoke, ui_open, ui_workspace). Off = look-only.
+    bool allow_ui_control() const;
+    void set_allow_ui_control(bool on);
+    /// Run the bundled Python scripts (python run / status / cancel).
+    bool allow_scripts() const;
+    void set_allow_scripts(bool on);
+    /// Auto mode — every approval prompt is skipped for every agent (external
+    /// clients, AI Chat, agent runs): orders, money moves, spends, deletes and
+    /// sensitive scripts run without asking. Off by default. See
+    /// ToolApprovalDialog::auto_approve(), which owns the setting.
+    bool auto_approve() const;
+    void set_auto_approve(bool on);
+    /// Largest tool result sent inline, in KB; the rest is parked for ui_read.
+    int result_budget_kb() const;
+    void set_result_budget_kb(int kb);
     quint16 configured_port() const;
     void set_configured_port(quint16 port); // takes effect on next start()
 
     /// Most recent external calls, newest first (bounded ring, max 200).
     QList<ExternalCallRecord> recent_activity() const;
+    /// Forget the activity log (the counters stay).
+    void clear_activity();
     /// Number of distinct clients that called `initialize` since start().
     int connected_client_count() const;
+    /// Those clients, most recently seen first.
+    QList<ExternalClientInfo> clients() const;
+    /// Counters since start().
+    ExternalServerStats stats() const;
 
     // ── Connection snippets for the Connect tab (token inlined unless noted) ──
     /// claude mcp add --transport http fincept <url> -H "Authorization: Bearer <token>" -s user
@@ -116,13 +142,19 @@ class McpHttpServer : public QObject {
     QString codex_add_command() const;
     /// [mcp_servers.fincept] url = "<url>"  bearer_token_env_var = "FINCEPT_MCP_TOKEN"
     QString codex_config_toml() const;
+    /// gemini mcp add --transport http fincept_terminal <url> -H "Authorization: Bearer <token>" -s user
+    QString gemini_add_command() const;
+    /// ~/.gemini/settings.json: {"mcpServers":{"fincept_terminal":{"httpUrl":…,"headers":{…},"timeout":…}}}
+    QString gemini_settings_json() const;
     /// {"mcpServers":{"fincept":{"type":"http","url":"<url>","headers":{"Authorization":"Bearer <token>"}}}}
     QString generic_http_json() const;
+    /// VS Code (Copilot) .vscode/mcp.json: {"servers":{"fincept_terminal":{"type":"http",…}}}
+    QString vscode_json() const;
     /// Claude Desktop style stdio entry: {"mcpServers":{"fincept":{"command":<python>,"args":[<bridge>,"--url",<url>],"env":{"FINCEPT_MCP_TOKEN":<token>}}}}
     QString stdio_bridge_json() const;
     /// Interpreter used for the stdio bridge (stdlib only; prefers the app's venv-numpy2 python).
     QString python_for_bridge() const;
-    /// Absolute path of scripts/mcp/fincept_mcp_stdio.py.
+    /// Absolute path of scripts/fincept_mcp/fincept_mcp_stdio.py.
     QString bridge_script_path() const;
 
     // ── For in-app agent runs (token passed via env FINCEPT_MCP_TOKEN) ────────
@@ -152,9 +184,9 @@ class McpHttpServer : public QObject {
     // ── Headless self-test hooks (McpServerSelfTest.cpp) ────────────────────
     friend int run_mcp_server_selftest();
     /// Make the next start() bind `port` (0 = OS-assigned, no fallback range)
-    /// and use `token` / `allow_actions` — all in memory, nothing is read from
-    /// or written to persisted settings or SecureStorage.
-    void set_selftest_overrides(quint16 port, const QString& token, bool allow_actions);
+    /// and use `token` / the two permissions — all in memory, nothing is read
+    /// from or written to persisted settings or SecureStorage.
+    void set_selftest_overrides(quint16 port, const QString& token, bool allow_ui_control, bool allow_scripts);
     void clear_selftest_overrides();
     /// The name tools/list advertises for an internal tool name
     /// (≤ 50 chars, ^[a-zA-Z0-9_-]+$; stable across restarts).
@@ -167,3 +199,4 @@ class McpHttpServer : public QObject {
 } // namespace fincept::mcp
 
 Q_DECLARE_METATYPE(fincept::mcp::ExternalCallRecord)
+Q_DECLARE_METATYPE(fincept::mcp::ExternalClientInfo)

@@ -42,9 +42,8 @@ class McpProvider {
     bool has_tool(const QString& name) const;
 
     /// O(1) lookup of a single tool's UnifiedTool snapshot by canonical name.
-    /// Returns `std::nullopt` if the name is unknown or disabled. Used by
-    /// tool_describe so the hot tool-pick path doesn't pay the O(N) cost of
-    /// list_tools()+linear-scan (was ~3 ms p95 across the 583-tool catalog).
+    /// Returns `std::nullopt` if the name is unknown or disabled. O(1), unlike
+    /// list_tools() + a linear scan.
     std::optional<UnifiedTool> find_tool(const QString& name) const;
 
     /// Audit-friendly snapshot of one tool. Carries the bits the self-test /
@@ -58,8 +57,6 @@ class McpProvider {
         bool has_handler = false; // sync OR async handler is set
         bool is_async = false;    // async_handler is set
         int default_timeout_ms = kMcpDefaultTimeoutMs;
-        bool supports_async = false; // the explicit override flag, not the derived verdict
-        bool job_eligible = false;   // what supports_async_jobs() would answer
         bool enabled = true;
         bool is_destructive = false;
         AuthLevel auth_required = AuthLevel::None;
@@ -91,39 +88,11 @@ class McpProvider {
     /// thread cancellation tokens through here).
     QFuture<ToolResult> call_tool_async(const QString& name, const QJsonObject& args, ToolContext ctx = {});
 
-    /// Long-running-task entry point, for LLM-originated calls only.
+    /// The tool's declared hard budget, or the 30 s default if unknown. The
+    /// agent bridge sizes its callers' HTTP timeouts from it.
     ///
-    /// Behaves exactly like `call_tool` for tools that haven't opted into the
-    /// job protocol (`ToolDef::supports_async`), so the ~580 existing tools and
-    /// every internal C++ / workflow / agent-bridge caller are unaffected.
-    ///
-    /// For a tool that HAS opted in: the call runs under a `JobRegistry` job. If
-    /// it completes within `grace_ms` the real result is returned inline and the
-    /// job is retired — the common "it was fast this time" case costs nothing.
-    /// Otherwise the work keeps running in the background and this returns a
-    /// receipt:
-    ///
-    ///     { job_id: "job_00001f", status: "running", tool: "run_agent" }
-    ///
-    /// The caller (the LLM) then polls `job_status(job_id, wait_ms)` and collects
-    /// with `job_result(job_id)`. That turns a five-minute blocking tool call
-    /// into a ~40-token receipt plus a long-poll, instead of holding the
-    /// provider HTTP turn open until it times out.
-    ///
-    /// Cancellation and progress are wired to the job automatically: handlers
-    /// see `ctx.is_cancelled()` flip when `job_cancel` is called, and whatever
-    /// they report through `ctx.on_progress` shows up in `job_status`.
-    ToolResult call_tool_or_defer(const QString& name, const QJsonObject& args, int grace_ms = kMcpJobGraceMs);
-
-    /// True if `name` is registered, enabled, and eligible for the job protocol.
-    ///
-    /// Requires an async handler (a sync one can't be backgrounded), plus
-    /// either an explicit `supports_async` or a `default_timeout_ms` above
-    /// `kMcpAsyncJobThresholdMs` — raising the budget IS the opt-in.
-    bool supports_async_jobs(const QString& name) const;
-
-    /// The tool's declared hard budget, or the 30 s default if unknown.
-    /// Recorded on the job so `job_status` can report elapsed against it.
+    /// (Long work is no longer backgrounded generically: the core tools answer
+    /// within their budget, and the `python` tool runs its own jobs.)
     int effective_timeout_ms(const QString& name) const;
 
     // ── Phase 6.3: Authorization hook ──────────────────────────────────────

@@ -6,7 +6,7 @@
 #     project(FinceptTerminal VERSION X.Y.Z ...)
 # The release workflows parse it correctly, but every file under
 # fincept-qt/packaging/ carries an independent hand-written copy (flatpak
-# manifest + metainfo, AppImageBuilder, appdata, installer licence). A stale
+# manifest + metainfo, AppImageBuilder, appdata). A stale
 # copy ships a bundle whose advertised version disagrees with the binary, which
 # breaks the auto-updater's version comparison.
 #

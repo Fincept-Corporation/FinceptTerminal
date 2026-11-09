@@ -626,7 +626,12 @@ jobs:
           # ----------------------------------------------------------------
           # Copy app resources and Python analytics scripts
           # ----------------------------------------------------------------
-          cp -r resources dist/resources 2>/dev/null || true
+          # MERGE into dist/resources/: windeployqt already created it for the
+          # WebEngine paks, so `cp -r resources dist/resources` nested the app
+          # assets at dist/resources/resources/ — no chart page, wallet pages or
+          # requirements-*.txt where the app looks for them.
+          mkdir -p dist/resources
+          cp -r resources/. dist/resources/
           bash .github/scripts/sync_scripts.sh scripts dist/scripts
 
           # ----------------------------------------------------------------

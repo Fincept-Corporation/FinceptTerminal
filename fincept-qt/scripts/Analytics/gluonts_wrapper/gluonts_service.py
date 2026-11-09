@@ -5,12 +5,13 @@ Self-contained probabilistic-forecasting + distributional-modeling service for
 the Fincept Terminal "GluonTS" sub-tab.
 
 Notes:
-- The legacy implementation (preserved as gluonts_service_legacy.py) imports
-  the heavy `gluonts` package, which depends on torch/mxnet and is not
-  installed in this venv. This rewrite uses scipy + sklearn + numpy only,
-  giving the same conceptual surface (probabilistic point + interval
-  forecasts, distribution fits, evaluation metrics, baseline predictors)
-  without the dependency.
+- Uses scipy + sklearn + numpy only; it does not import the heavy (torch-based)
+  `gluonts` package, yet covers the same conceptual surface (probabilistic point
+  + interval forecasts, distribution fits, evaluation metrics, baseline predictors).
+
+CLI: python gluonts_service.py <operation> '<json params>'   (prints one JSON object)
+Operations: check_status, probabilistic_forecast, quantile_forecast, distribution_fit,
+            evaluate_forecast, seasonal_naive
 
 Response contract (all ops):
     success: bool

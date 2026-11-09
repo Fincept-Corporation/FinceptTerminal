@@ -2,6 +2,7 @@
 #include "screens/portfolio/PortfolioSectorPanel.h"
 
 #include "screens/portfolio/PortfolioPanelHeader.h"
+#include "services/portfolio/PortfolioService.h"
 #include "ui/theme/Theme.h"
 
 #include <QChart>
@@ -111,7 +112,10 @@ void PortfolioSectorPanel::build_ui() {
         QString("color:%1; font-size:10px; font-weight:700; letter-spacing:1px;").arg(ui::colors::TEXT_TERTIARY()));
     corr_header->addWidget(corr_title_);
 
-    corr_note_ = new QLabel(tr("(P&L return proxy, top 6 by weight)"));
+    // Real Pearson correlation of daily returns (PortfolioService analytics) — the old
+    // "P&L return proxy" caption described a method that no longer exists.
+    corr_note_ = new QLabel(
+        tr("(%1-day daily returns, top 6 by weight)").arg(services::PortfolioService::kCorrelationWindowDays));
     corr_note_->setStyleSheet(QString("color:%1; font-size:10px;").arg(ui::colors::TEXT_DIM()));
     corr_header->addWidget(corr_note_);
     corr_header->addStretch();
@@ -426,7 +430,8 @@ void PortfolioSectorPanel::retranslateUi() {
     if (corr_title_)
         corr_title_->setText(tr("CORRELATION"));
     if (corr_note_)
-        corr_note_->setText(tr("(P&L return proxy, top 6 by weight)"));
+        corr_note_->setText(
+            tr("(%1-day daily returns, top 6 by weight)").arg(services::PortfolioService::kCorrelationWindowDays));
 
     // Donut legend uses translated "Unclassified" + sector data; matrix shows
     // "Need 2+ holdings for correlation" or a grid. Re-run both so the strings

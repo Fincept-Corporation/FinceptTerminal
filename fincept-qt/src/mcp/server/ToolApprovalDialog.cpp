@@ -2,6 +2,7 @@
 
 #include "mcp/server/ToolApprovalDialog.h"
 
+#include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
 #include "ui/notifications/DesktopNotifier.h"
 #include "ui/notifications/NotificationService.h"
@@ -31,6 +32,7 @@
 #include <QWaitCondition>
 
 #include <algorithm>
+#include <atomic>
 #include <memory>
 
 namespace fincept::mcp {
@@ -126,6 +128,15 @@ bool is_host_candidate(QWidget* w) {
 
 HostWindow find_host_window() {
     HostWindow out;
+    // An application-modal box (the app's own "Confirm live order") blocks input
+    // to every other window, our dialog included unless it is parented on that
+    // box — the user could then neither approve nor deny.
+    if (QWidget* modal = QApplication::activeModalWidget();
+        modal && modal->isVisible() && !modal->isMinimized() && is_host_candidate(modal)) {
+        out.any_visible = true;
+        out.parent = modal;
+        return out;
+    }
     QWidget* active = QApplication::activeWindow();
     if (is_host_candidate(active) && !active->isMinimized()) {
         out.any_visible = true;
@@ -174,7 +185,10 @@ void show_next() {
         PendingPtr p = st.queue.takeFirst();
         if (is_done(p))
             continue; // the worker already gave up on it
-        if (ToolApprovalDialog::has_active_grant(p->request.client, p->request.tool)) {
+        // A blanket grant never covers a live-money request (none is offered for one,
+        // but an earlier grant for the same words — "click Yes" — must not leak in).
+        if (!(p->request.live_trading && p->request.destructive) &&
+            ToolApprovalDialog::has_active_grant(p->request.client, p->request.tool)) {
             resolve(p, ToolApprovalVerdict::Approved);
             continue;
         }
@@ -244,12 +258,34 @@ ToolApprovalVerdict ToolApprovalDialog::request_approval(const ToolApprovalReque
     QCoreApplication* app = QCoreApplication::instance();
     if (!app)
         return ToolApprovalVerdict::Unavailable;
+    if (auto_approve()) {
+        // Auto mode: the user chose a fully agentic terminal. Nothing blocks, so
+        // this is safe on any thread (the GUI-thread refusal below exists only
+        // because a dialog wait would freeze the UI). Never log arguments.
+        LOG_WARN(kTag, QString("Auto mode: approved '%1' for '%2' without asking%3")
+                           .arg(request.tool, request.client,
+                                request.live_trading ? QStringLiteral(" (LIVE TRADING)") : QString()));
+        if (request.live_trading) {
+            const QString client = request.client;
+            const QString tool = request.tool;
+            QMetaObject::invokeMethod(
+                app,
+                [client, tool]() {
+                    ui::DesktopNotifier::instance().notify(
+                        ToolApprovalDialog::tr("Auto mode — Fincept Terminal"),
+                        ToolApprovalDialog::tr("%1 ran \"%2\" without asking (auto mode is on).").arg(client, tool),
+                        static_cast<int>(ui::ToastService::Severity::Warning));
+                },
+                Qt::QueuedConnection);
+        }
+        return ToolApprovalVerdict::Approved;
+    }
     if (QThread::currentThread() == app->thread()) {
         // Blocking here would freeze the UI that has to show the question.
         LOG_WARN(kTag, "request_approval() called on the GUI thread — refusing instead of blocking it");
         return ToolApprovalVerdict::Unavailable;
     }
-    if (has_active_grant(request.client, request.tool))
+    if (!(request.live_trading && request.destructive) && has_active_grant(request.client, request.tool))
         return ToolApprovalVerdict::Approved;
 
     auto p = std::make_shared<Pending>();
@@ -298,6 +334,40 @@ void ToolApprovalDialog::clear_grants() {
     using namespace tool_approval_detail;
     QMutexLocker lock(&grants_mutex());
     grants_locked().clear();
+}
+
+namespace tool_approval_detail {
+constexpr const char* kAutoApproveKey = "mcp/auto_approve";
+// -1 = not read from settings yet, 0 = off, 1 = on.
+std::atomic<int> g_auto_approve{-1};
+} // namespace tool_approval_detail
+
+bool ToolApprovalDialog::auto_approve() {
+    using namespace tool_approval_detail;
+    int v = g_auto_approve.load();
+    if (v < 0) {
+        // Normally seeded on the GUI thread at startup (load_auto_approve_setting);
+        // this fallback only runs if a call arrives before that.
+        v = AppConfig::instance().get(QString::fromLatin1(kAutoApproveKey), false).toBool() ? 1 : 0;
+        int expected = -1;
+        g_auto_approve.compare_exchange_strong(expected, v);
+        v = g_auto_approve.load();
+    }
+    return v == 1;
+}
+
+void ToolApprovalDialog::set_auto_approve(bool on) {
+    using namespace tool_approval_detail;
+    g_auto_approve.store(on ? 1 : 0);
+    AppConfig::instance().set(QString::fromLatin1(kAutoApproveKey), on);
+    LOG_WARN(kTag, on ? QStringLiteral("Auto mode ON — agents' risky actions (orders, money moves, deletes, sensitive "
+                                       "scripts) now run WITHOUT asking")
+                      : QStringLiteral("Auto mode off — risky agent actions ask the user again"));
+}
+
+void ToolApprovalDialog::load_auto_approve_setting() {
+    using namespace tool_approval_detail;
+    g_auto_approve.store(AppConfig::instance().get(QString::fromLatin1(kAutoApproveKey), false).toBool() ? 1 : 0);
 }
 
 void ToolApprovalDialog::deny_all_pending() {

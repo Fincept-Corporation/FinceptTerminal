@@ -9,6 +9,7 @@
 #include "ui/widgets/EnterprisePromo.h"
 #include "ui/widgets/LanguageSwitcher.h"
 #include "ui/widgets/SpeedSparkline.h"
+#include "ui/widgets/VersionLabel.h"
 
 #include <QCloseEvent>
 #include <QCoreApplication>
@@ -41,8 +42,10 @@ using python::SetupStage;
 using python::SetupStageState;
 
 constexpr int kSetupAutoLaunchDelayMs = 1200;
-/// Same weights the manager uses for its overall %, for the pre-run estimate.
-constexpr std::array<int, 4> kSetupPrefillWeights{10, 25, 15, 50};
+/// Display order of the stage rows: runtime, essentials, full set, trading.
+constexpr std::array<int, 4> kSetupRowOrder{
+    static_cast<int>(SetupStage::Runtime), static_cast<int>(SetupStage::AnalyticsCore),
+    static_cast<int>(SetupStage::AnalyticsFull), static_cast<int>(SetupStage::Trading)};
 
 QString setup_mmss(qint64 ms) {
     const qint64 secs = std::max<qint64>(0, ms / 1000);
@@ -61,6 +64,8 @@ const char* setup_state_name(SetupStageState s) {
             return "failed";
         case SetupStageState::Skipped:
             return "skipped";
+        case SetupStageState::Deferred:
+            return "deferred";
     }
     return "waiting";
 }
@@ -89,6 +94,11 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
     const python::SetupStatus st = psm.check_status();
     prefill_done_ = {st.uv_installed && st.python_installed, st.venv_numpy1_ready, st.core_ready,
                      st.venv_numpy2_ready};
+    // A first run installs the essentials only; the trading and full rows are
+    // optional unless the full set was already opted into on this machine.
+    full_requested_ = st.full_requested;
+    prefill_optional_ = {false, !full_requested_ && !st.venv_numpy1_ready, false,
+                         !full_requested_ && !st.venv_numpy2_ready};
     anything_installed_ = st.uv_installed || st.python_installed || st.venv_numpy1_created || st.venv_numpy2_created;
 
     tick_timer_ = new QTimer(this);
@@ -104,7 +114,13 @@ SetupScreen::SetupScreen(QWidget* parent) : QWidget(parent) {
 
     connect(&psm, &python::PythonSetupManager::progress_changed, this,
             [this](const python::SetupProgress&) { render(); });
-    connect(&psm, &python::PythonSetupManager::core_ready, this, &SetupScreen::render);
+    // The essentials are in: open the terminal right away — whatever is left
+    // (bytecode precompile, or the full set if it was requested) finishes in
+    // the background with the status-bar chip reporting it.
+    connect(&psm, &python::PythonSetupManager::core_ready, this, [this]() {
+        render();
+        schedule_auto_launch();
+    });
     connect(&psm, &python::PythonSetupManager::running_changed, this, [this](bool) {
         render();
         sync_activity();
@@ -122,6 +138,7 @@ void SetupScreen::build_ui() {
     // Language picker stays available before anything is installed.
     auto* top = new QHBoxLayout;
     top->setContentsMargins(0, 0, 0, 0);
+    top->addWidget(ui::make_version_label(this));
     top->addStretch();
     top->addWidget(new ui::LanguageSwitcher(this));
     root->addLayout(top);
@@ -176,9 +193,9 @@ void SetupScreen::build_ui() {
         line->setFixedHeight(1);
         ml->addWidget(line);
     };
-    for (int i = 0; i < 4; ++i) {
+    for (const int stage : kSetupRowOrder) {
         hairline();
-        ml->addWidget(build_stage_row(main_panel, i));
+        ml->addWidget(build_stage_row(main_panel, stage));
     }
     hairline();
     ml->addSpacing(10);
@@ -335,6 +352,7 @@ QLabel#setupStageStatus { color: @text_tertiary; font-family: @font; font-size: 
 QLabel#setupStageStatus[state="running"] { color: @amber_main; }
 QLabel#setupStageStatus[state="done"], QLabel#setupStageStatus[state="skipped"] { color: @positive; }
 QLabel#setupStageStatus[state="failed"] { color: @negative; }
+QLabel#setupStageStatus[state="deferred"] { color: @text_dim; }
 QProgressBar#setupStageBar { background: @bg_raised; border: none; }
 QProgressBar#setupStageBar::chunk { background: @amber_main; }
 QProgressBar#setupStageBar[state="done"]::chunk, QProgressBar#setupStageBar[state="skipped"]::chunk { background: @positive; }
@@ -390,12 +408,14 @@ void SetupScreen::retranslateUi() {
     install_dir_lbl_->setText(
         tr("Installing to: %1").arg(QDir::toNativeSeparators(python::PythonSetupManager::instance().install_dir())));
 
-    const QString names[] = {tr("RUNTIME"), tr("TRADING LIBRARIES"), tr("ANALYTICS CORE"), tr("ANALYTICS FULL")};
+    // Indexed by SetupStage (Runtime, Trading, AnalyticsCore, AnalyticsFull).
+    const QString names[] = {tr("PYTHON RUNTIME"), tr("TRADING LIBRARIES"), tr("ESSENTIAL LIBRARIES"),
+                             tr("FULL ANALYTICS LIBRARIES")};
     const QString descs[] = {
         tr("uv package manager + Python 3.11"),
-        tr("Backtesting and portfolio tools (NumPy 1.x environment)"),
-        tr("Market data, news and research essentials — unlocks LAUNCH"),
-        tr("Machine learning, AI agents and quant libraries — finishes in the background"),
+        tr("Backtesting and portfolio tools (NumPy 1.x) — optional"),
+        tr("yfinance market data with pandas and NumPy — opens the terminal"),
+        tr("AI agents, machine learning and quant libraries — optional"),
     };
     for (std::size_t i = 0; i < rows_.size(); ++i) {
         rows_[i].name->setText(names[i]);
@@ -421,6 +441,8 @@ void SetupScreen::render() {
     const bool has_run = snap.running || snap.finished;
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
 
+    // Pre-run estimate with the weights of the scope a run would install.
+    const auto& prefill_weights = full_requested_ ? python::kSetupWeightsFull : python::kSetupWeightsEssentials;
     int overall = 0;
     qint64 last_finish = snap.started_ms;
     for (std::size_t i = 0; i < rows_.size(); ++i) {
@@ -442,7 +464,12 @@ void SetupScreen::render() {
             state = SetupStageState::Skipped;
             percent = 100;
             detail = tr("Already installed");
-            overall += kSetupPrefillWeights[i];
+            overall += prefill_weights[i];
+        } else if (prefill_optional_[i]) {
+            state = SetupStageState::Deferred;
+            detail = i == static_cast<std::size_t>(SetupStage::Trading)
+                         ? tr("Installed together with the full libraries")
+                         : tr("Install any time from Settings → Python Env — it runs in the background");
         }
 
         QString status;
@@ -461,6 +488,9 @@ void SetupScreen::render() {
                 break;
             case SetupStageState::Skipped:
                 status = tr("INSTALLED");
+                break;
+            case SetupStageState::Deferred:
+                status = tr("OPTIONAL");
                 break;
         }
         row.status->setText(status);
@@ -498,10 +528,12 @@ void SetupScreen::render() {
         elapsed_lbl_->clear();
 
     live_row_->setVisible(snap.running);
-    render_buttons(has_run, snap.running, snap.succeeded, psm.is_core_ready(), snap.error);
+    render_buttons(has_run, snap.running, snap.succeeded, psm.is_core_ready(),
+                   has_run ? snap.scope == python::SetupScope::Full : full_requested_, snap.error);
 }
 
-void SetupScreen::render_buttons(bool has_run, bool running, bool succeeded, bool core_ready, const QString& error) {
+void SetupScreen::render_buttons(bool has_run, bool running, bool succeeded, bool core_ready, bool full_scope,
+                                 const QString& error) {
     QString primary;
     QString subtitle;
     QString note;
@@ -510,28 +542,36 @@ void SetupScreen::render_buttons(bool has_run, bool running, bool succeeded, boo
     if (!has_run) {
         primary_action_ = PrimaryAction::Begin;
         primary = anything_installed_ ? tr("CONTINUE SETUP") : tr("BEGIN SETUP");
-        subtitle = anything_installed_
-                       ? tr("Part of the Python environment is already in place — only the missing pieces are installed.")
-                       : tr("Fincept Terminal installs its own Python runtime and analytics libraries once. Later "
-                            "launches start instantly.");
-        note = tr("Needs an internet connection. The terminal opens as soon as the analytics core is installed; "
-                  "the remaining libraries finish in the background.");
+        link_action_ = LinkAction::SkipSetup;
+        subtitle =
+            anything_installed_
+                ? tr("Part of the Python environment is already in place — only the missing pieces are installed.")
+            : full_scope ? tr("Fincept Terminal installs its own Python runtime and all of its analytics libraries.")
+                         : tr("Fincept Terminal installs its own Python runtime and the essential market-data "
+                              "libraries — about a minute. AI, machine-learning and backtesting libraries are "
+                              "optional: install them later from Settings → Python Env while you keep working.");
+        note = full_scope ? tr("Needs an internet connection. The terminal opens as soon as the essentials are "
+                               "installed; the remaining libraries finish in the background.")
+                          : tr("Needs an internet connection (about 100 MB). The terminal opens automatically as "
+                               "soon as the essentials are installed.");
     } else if (running) {
         if (core_ready) {
             primary_action_ = PrimaryAction::Launch;
             primary = tr("LAUNCH TERMINAL");
-            subtitle = tr("The analytics core is ready — you can start using the terminal now.");
-            note = tr("Remaining analytics libraries keep installing in the background.");
+            subtitle = tr("The essentials are ready — opening the terminal…");
+            note = full_scope ? tr("Remaining analytics libraries keep installing in the background.")
+                              : tr("Final optimizations finish in the background.");
         } else {
             primary_action_ = PrimaryAction::Wait;
             primary = tr("INSTALLING…");
-            subtitle = tr("Installing the Python runtime and the analytics core…");
-            note = tr("LAUNCH TERMINAL unlocks as soon as the analytics core is installed.");
+            link_action_ = LinkAction::ContinueInBackground;
+            subtitle = tr("Installing the Python runtime and the essential libraries…");
+            note = tr("The terminal opens automatically as soon as the essentials are installed.");
         }
     } else if (succeeded) {
         primary_action_ = PrimaryAction::Launch;
         primary = tr("LAUNCH TERMINAL");
-        subtitle = tr("Everything is installed.");
+        subtitle = full_scope ? tr("Everything is installed.") : tr("The essential libraries are installed.");
         note = tr("Launching Fincept Terminal…");
     } else if (core_ready) {
         primary_action_ = PrimaryAction::Launch;
@@ -561,8 +601,14 @@ void SetupScreen::render_buttons(bool has_run, bool running, bool succeeded, boo
         case LinkAction::ContinueLimited:
             link_btn_->setText(tr("Continue without Python (limited)"));
             break;
+        case LinkAction::SkipSetup:
+            link_btn_->setText(tr("Skip for now"));
+            break;
+        case LinkAction::ContinueInBackground:
+            link_btn_->setText(tr("Open the terminal now — finish in the background"));
+            break;
     }
-    link_btn_->setVisible(link_action_ != LinkAction::None);
+    link_btn_->setVisible(link_action_ != LinkAction::None && !launched_);
 
     const bool show_error = has_run && !running && !succeeded && !error.isEmpty();
     if (show_error && error_box_->toPlainText() != error)
@@ -642,6 +688,23 @@ void SetupScreen::on_link_clicked() {
             LOG_WARN("SetupScreen", "User continued without a complete Python environment");
             launch();
             break;
+        case LinkAction::SkipSetup: {
+            const auto answer = QMessageBox::question(
+                this, tr("Skip Python setup"),
+                tr("Open the terminal without Python?\n\nMarket data, charts and analytics stay unavailable until "
+                   "Python is set up. Start it any time from PYTHON ENV in the status bar or Settings → Python Env; "
+                   "this screen also comes back at the next start."),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if (answer != QMessageBox::Yes)
+                break;
+            LOG_WARN("SetupScreen", "User skipped the Python setup");
+            launch();
+            break;
+        }
+        case LinkAction::ContinueInBackground:
+            LOG_INFO("SetupScreen", "User opened the terminal early — setup finishes in the background");
+            launch();
+            break;
         case LinkAction::None:
             break;
     }
@@ -670,20 +733,23 @@ void SetupScreen::launch() {
     emit launch_requested();
 }
 
+void SetupScreen::schedule_auto_launch() {
+    if (launched_ || auto_launch_scheduled_)
+        return;
+    auto_launch_scheduled_ = true;
+    QTimer::singleShot(kSetupAutoLaunchDelayMs, this, [this]() {
+        if (!launched_)
+            launch();
+    });
+}
+
 void SetupScreen::on_setup_done(bool success, const QString& error) {
     render();
     sync_activity();
-    if (success) {
-        if (!launched_ && !auto_launch_scheduled_) {
-            auto_launch_scheduled_ = true;
-            QTimer::singleShot(kSetupAutoLaunchDelayMs, this, [this]() {
-                if (!launched_)
-                    launch();
-            });
-        }
-    } else {
+    if (success)
+        schedule_auto_launch();
+    else
         LOG_WARN("SetupScreen", "Setup ended without success: " + error.left(500));
-    }
 }
 
 void SetupScreen::closeEvent(QCloseEvent* event) {

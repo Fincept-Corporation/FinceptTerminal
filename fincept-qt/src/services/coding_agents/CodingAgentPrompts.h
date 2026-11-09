@@ -21,9 +21,9 @@ struct SystemPromptContext {
     QDateTime now; // local time; invalid → current time
 };
 
-/// Who the user is, the clock, how to use the terminal's MCP tools (tool_list /
-/// tool_describe / tool_invoke, job_* for long tools, result_fetch for large
-/// results), where deliverables go and what never to do.
+/// Who the user is, the clock, how to use the terminal's MCP tools (the ui_*
+/// tools that operate the screen, python for the bundled scripts, ui_read for
+/// parked large results), where deliverables go and what never to do.
 ///
 /// Written with no % ^ & | < > ! or double-quote characters so that, after
 /// cmd_safe_text(), it survives a cmd.exe command line unchanged in meaning.

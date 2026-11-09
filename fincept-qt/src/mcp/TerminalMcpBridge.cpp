@@ -14,7 +14,7 @@
 #include "mcp/McpProvider.h"
 #include "mcp/McpService.h"
 #include "mcp/ResultStore.h"
-#include "mcp/server/EssentialTools.h"
+#include "mcp/server/CallApproval.h"
 
 #include <QDateTime>
 #include <QFutureWatcher>
@@ -63,7 +63,7 @@ static constexpr int kBridgeDispatchThreads = 4;
 // transcript, which re-sends them every round; a multi-MB filing or price
 // history drowns the context. Over the budget, the payload is shaped
 // structurally (valid JSON, marked in place) and the full copy parked in the
-// ResultStore for result_fetch.
+// ResultStore, readable with ui_read(ref=<result id>).
 static constexpr int kBridgeResultBudgetBytes = 24 * 1024;
 
 // HTTP timeout hint for external tools (the MCP wire carries no budget).
@@ -88,30 +88,13 @@ namespace {
 
 // Categories an agent may never dispatch, regardless of what its catalog says.
 // Mirrors the default `exclude_categories` AgentService applies to every agent
-// filter — UI-driving tools ("navigation"/"system"/"settings"), recursive chat
-// tools ("ai-chat"), and the meta tools. Excludes a specific agent adds on top
-// of these are enforced per run, via the run scope opened by begin_run().
+// filter. Agents run in the background (scheduled, autonomous), so they may
+// LOOK at the terminal (ui-read tools) and run analytics (python), but never
+// drive it: operating screens ("ui-control") or opening and rearranging them
+// ("navigation") would move the user's UI under their hands.
 const QStringList& never_dispatchable_categories() {
-    static const QStringList kCats = {QStringLiteral("navigation"), QStringLiteral("system"),
-                                      QStringLiteral("settings"), QStringLiteral("ai-chat"), QStringLiteral("meta")};
+    static const QStringList kCats = {QStringLiteral("navigation"), QStringLiteral("ui-control")};
     return kCats;
-}
-
-// The meta tools an Essentials run is built around: discovery plus the generic
-// dispatcher. Exempt from the "meta" category exclusion for those runs only —
-// without them an essentials agent could not reach anything outside its small
-// catalogue. job_* stay excluded: the bridge never defers (no job protocol on
-// the Python side), so there is never a job for an agent to poll.
-const QSet<QString>& essentials_meta_tools() {
-    static const QSet<QString> kTools = {QStringLiteral("tool_list"), QStringLiteral("tool_describe"),
-                                         QStringLiteral("tool_invoke")};
-    return kTools;
-}
-
-// result_fetch pages a payload this bridge parked when it shaped an oversized
-// response, so every run must be able to reach it, whatever its filter says.
-bool bridge_always_dispatchable(const QString& server_id, const QString& tool_name) {
-    return server_id == QLatin1String(INTERNAL_SERVER_ID) && tool_name == QLatin1String("result_fetch");
 }
 
 // True when `filter` would have kept this tool OUT of the catalog, in which
@@ -127,8 +110,8 @@ bool bridge_always_dispatchable(const QString& server_id, const QString& tool_na
 //
 // `category` is empty for tools on external MCP servers; that is the same value
 // apply_tool_filter sees for them, so a whitelist filter excludes them there and
-// here alike. `skip_category_excludes` lets the essentials meta tools through
-// the "meta" exclusion while still honouring the agent's name patterns.
+// here alike. `skip_category_excludes` bypasses the category rules (kept for
+// callers that vet a name-only rule).
 bool filter_excludes(const ToolFilter& filter, const QString& tool_name, const QString& category,
                      bool skip_category_excludes, QString* reason) {
     auto deny = [reason](const QString& why) {
@@ -165,30 +148,25 @@ bool filter_excludes(const ToolFilter& filter, const QString& tool_name, const Q
     return false;
 }
 
-// The single dispatch policy. Used for every POST /tool, for the tool a
-// tool_invoke call is about to reach, and to vet every catalog entry — so the
-// catalog, direct calls and indirect calls can never disagree.
+// The single dispatch policy. Used for every POST /tool and to vet every
+// catalog entry — so the catalog and the calls it honours can never disagree.
 // Returns the refusal reason, or nullopt when the call may proceed.
 std::optional<QString> bridge_dispatch_refusal(const ToolFilter& filter, bool include_external,
                                                AgentToolCatalog catalog, const QString& server_id,
                                                const QString& tool_name, const QString& category) {
-    if (bridge_always_dispatchable(server_id, tool_name))
-        return std::nullopt;
-
     const bool internal = server_id == QLatin1String(INTERNAL_SERVER_ID);
     if (!internal && !include_external)
         return QStringLiteral("external MCP tools are disabled for this agent");
 
-    const bool essentials_meta =
-        internal && catalog == AgentToolCatalog::Essentials && essentials_meta_tools().contains(tool_name);
+    Q_UNUSED(catalog); // both catalogues hold every tool the policy allows
 
     // 1. Process-wide, non-negotiable.
-    if (internal && !essentials_meta && never_dispatchable_categories().contains(category))
+    if (internal && never_dispatchable_categories().contains(category))
         return QStringLiteral("category '%1' is not dispatchable over the agent bridge").arg(category);
 
     // 2. The run's own filter (the agent author's includes/excludes).
     QString why;
-    if (filter_excludes(filter, tool_name, internal ? category : QString(), essentials_meta, &why))
+    if (filter_excludes(filter, tool_name, internal ? category : QString(), /*skip_category_excludes=*/false, &why))
         return why;
     return std::nullopt;
 }
@@ -226,7 +204,7 @@ void bridge_shape_payload(const QString& tool_name, QJsonObject& payload) {
     payload["full_bytes"] = st.original_bytes;
     payload["note"] = QStringLiteral("Result truncated to fit the agent context (%1 -> %2 bytes); arrays and long "
                                      "strings are marked where they were cut. Page the full payload with "
-                                     "result_fetch(result_id='%3', offset=0, limit=6000).")
+                                     "ui_read(ref='%3', offset=0).")
                           .arg(st.original_bytes)
                           .arg(st.final_bytes)
                           .arg(result_id);
@@ -413,21 +391,12 @@ QJsonArray TerminalMcpBridge::tool_definitions(const ToolFilter& filter, bool in
     auto& svc = McpService::instance();
     auto& provider = McpProvider::instance();
 
-    std::vector<UnifiedTool> tools;
-    if (catalog == AgentToolCatalog::Essentials) {
-        // Curated set (meta tools first, then research tools by priority).
-        // Names that are not registered in this build are skipped — the list
-        // is hand-maintained and a rename must never break an agent.
-        for (const QString& name : essential_tool_names()) {
-            if (auto t = provider.find_tool(name))
-                tools.push_back(*t);
-        }
-    } else {
-        // Goes through McpService so external MCP servers (configured via the
-        // MCP Servers tab) are visible to agents too. The user's max_tools is
-        // the only cap (0 = every matching tool), read-only tools first.
-        tools = svc.get_agent_tools(filter);
-    }
+    // Goes through McpService so external MCP servers (configured via the MCP
+    // Servers tab) are visible to agents too. The user's max_tools is the only
+    // cap (0 = every matching tool), read-only tools first. The internal
+    // catalogue is ten core tools, so Essentials and Filtered runs see the
+    // same set — whatever their policy allows.
+    std::vector<UnifiedTool> tools = svc.get_agent_tools(filter);
 
     QJsonArray out;
     for (const auto& t : tools) {
@@ -670,22 +639,6 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
         return;
     }
 
-    // tool_invoke reaches another tool. The INNER tool must satisfy the same
-    // policy as a direct call, or tool_invoke would be a way around the run's
-    // filter and the never-dispatchable categories. (Unresolvable targets are
-    // left to tool_invoke itself, which reports them to the agent.)
-    if (server_id == QLatin1String(INTERNAL_SERVER_ID) && tool_name == QLatin1String("tool_invoke")) {
-        const QString inner = args.value("tool").toString().trimmed();
-        const auto target = McpService::instance().resolve_tool_target(inner, args.value("server_id").toString());
-        if (target.error.isEmpty()) {
-            if (const auto why = bridge_dispatch_refusal(scope->filter, scope->include_external, scope->catalog,
-                                                         target.server_id, inner, target.category)) {
-                refuse(QStringLiteral("tool_invoke target '%1': %2").arg(inner, *why));
-                return;
-            }
-        }
-    }
-
     QPointer<TerminalMcpBridge> self = this;
     QPointer<QTcpSocket> sock_guard = sock;
 
@@ -738,6 +691,7 @@ void TerminalMcpBridge::handle_post_tool(QTcpSocket* sock, const QJsonObject& bo
         QFuture<ToolResult> f;
         {
             CallFlagGuard guard(destructive_ok);
+            ScopedCallOrigin origin(QStringLiteral("terminal agent")); // named in approval dialogs
             if (server_id == QLatin1String(INTERNAL_SERVER_ID)) {
                 f = McpProvider::instance().call_tool_async(tool_name, args);
             } else {

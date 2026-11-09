@@ -192,7 +192,7 @@ void BacktestingScreen::retranslateUi() {
     if (summary_hint_)
         summary_hint_->setText(
             tr("Select a provider, command, and strategy, then click RUN to execute.\n\n"
-               "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
+               "Supported providers: VectorBT, Backtesting.py, Zipline, BT, Fincept\n"
                "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns"));
     if (equity_hint_)
         equity_hint_->setText(tr("Run a backtest to see the equity curve."));
@@ -555,8 +555,12 @@ void BacktestingScreen::build_ui() {
 // ── IStatefulScreen ───────────────────────────────────────────────────────────
 
 QVariantMap BacktestingScreen::save_state() const {
+    // The provider is saved by slug: an index silently retargets saved states whenever the
+    // provider list changes (it did when the uninstallable FastTrade provider was removed).
     QVariantMap state{
-        {"provider", active_provider_},
+        {"provider_slug", (active_provider_ >= 0 && active_provider_ < providers_.size())
+                              ? providers_[active_provider_].slug
+                              : QString()},
         {"command", active_command_},
     };
     if (symbols_edit_)
@@ -572,7 +576,23 @@ QVariantMap BacktestingScreen::save_state() const {
 }
 
 void BacktestingScreen::restore_state(const QVariantMap& state) {
-    const int prov = state.value("provider", 0).toInt();
+    // States written before the slug key stored an index into the provider order of that time.
+    static const QStringList kLegacyProviderOrder = {QStringLiteral("vectorbt"),  QStringLiteral("backtestingpy"),
+                                                     QStringLiteral("fasttrade"), QStringLiteral("zipline"),
+                                                     QStringLiteral("bt"),        QStringLiteral("fincept")};
+    QString prov_slug = state.value("provider_slug").toString();
+    if (prov_slug.isEmpty()) {
+        const int legacy = state.value("provider", 0).toInt();
+        if (legacy >= 0 && legacy < kLegacyProviderOrder.size())
+            prov_slug = kLegacyProviderOrder.at(legacy);
+    }
+    int prov = 0; // unknown or removed provider → the default (first) one
+    for (int i = 0; i < providers_.size(); ++i) {
+        if (providers_[i].slug == prov_slug) {
+            prov = i;
+            break;
+        }
+    }
     const int cmd = state.value("command", 0).toInt();
     if (first_show_) {
         // Not shown yet: just record the selection — showEvent() applies it once, instead of

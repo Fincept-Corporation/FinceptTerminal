@@ -89,6 +89,20 @@ If you're contributing for the list and not for the product, this isn't the righ
 
 ---
 
+## Contributor terms
+
+Fincept Terminal is licensed under **AGPL-3.0-or-later** — the full text is in [`LICENSE`](../LICENSE), and it is the only licence that applies to this repository. The terms below apply only to people who contribute code or content to the repository; they do not apply to ordinary use of the software.
+
+By contributing to Fincept Terminal (via pull request, patch, comment, issue, or any other means), each contributor agrees to the following terms:
+
+1. **Assignment and licence-in.** To the maximum extent permitted by law, each contribution is a work made for hire owned by Fincept Corporation. To the extent any contribution is not a work made for hire, the contributor hereby presently and unconditionally assigns to Fincept Corporation all right, title, and interest in and to the contribution, including all copyright, moral rights (waived to the maximum extent permitted), and related rights. Without limiting the foregoing, the contributor grants Fincept Corporation a perpetual, worldwide, non-exclusive, royalty-free, irrevocable, sublicensable licence — with the right to sublicense through multiple tiers — to use, reproduce, modify, distribute, sublicense, and relicense the contribution under AGPL-3.0, under the proprietary licence of Fincept Terminal Enterprise, and under any future licence selected by Fincept Corporation.
+2. **No joint authorship.** Each contributor expressly disclaims any claim of joint authorship in the Software as a whole or in any other contributor's contributions. Contributing does not grant the contributor any licence to the Software as a whole or to any other contributor's contributions beyond the AGPL-3.0 licence under which the Software is published.
+3. **Warranty and indemnity.** Each contributor warrants that (a) the contribution is the contributor's original work or is properly attributed and licensed for the contribution; (b) the contributor has the legal right to make the contribution and grant the rights herein; (c) the contribution is free of any obligations to any current or former employer, client, university, or third party that would conflict with this assignment; and (d) the contribution does not infringe any third-party rights. The contributor shall indemnify, defend, and hold harmless Fincept Corporation from any breach of these warranties.
+4. **As-is.** Contributions are provided "as is" without warranties of any kind beyond the warranties in item 3 above.
+5. **No Enterprise rights back.** Contributing does not grant the contributor a seat in, or any licence to, Fincept Terminal Enterprise, nor access to Fincept's private datasets or paid API tiers.
+
+---
+
 ## Questions before you code?
 
 - Ask on the issue before writing code. Maintainers are happy to scope-approve early.

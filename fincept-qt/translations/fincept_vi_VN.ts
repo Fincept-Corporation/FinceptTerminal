@@ -1994,14 +1994,6 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
         <translation>Sử dụng qua mạng được tính là phân phối</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>GIẤY PHÉP THƯƠNG MẠI</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Bắt buộc cho triển khai thương mại</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>Không yêu cầu chia sẻ mã nguồn</translation>
     </message>
@@ -2048,18 +2040,6 @@ Thị trường, cổ phiếu, danh mục, phân tích vĩ mô.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Giấy phép (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Giấy phép thương mại</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Chính sách thương hiệu</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>CLA của người đóng góp</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32203,10 +32183,6 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Bản quyền 2024-2026 Fincept Corporation. Bảo lưu mọi quyền.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Phần mềm này được cấp phép theo AGPL-3.0-or-later cho mục đích sử dụng nguồn mở, kèm theo giấy phép thương mại riêng dành cho triển khai doanh nghiệp.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

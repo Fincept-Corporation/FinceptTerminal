@@ -32,17 +32,15 @@
 #include "mcp/McpInit.h"
 #include "mcp/ProviderToolFormatSelfTest.h"
 #include "mcp/ToolSelfTest.h"
+#include "mcp/core/CoreToolsSelfTest.h"
 #include "mcp/server/McpServerSelfTest.h"
 #include "network/http/HttpClient.h"
-#include "python/OptionGreeksWorker.h"
 #include "python/PythonSetupManager.h"
 #include "python/PythonWorker.h"
 #include "screens/launchpad/LaunchpadScreen.h"
 #include "screens/recovery/CrashRecoveryDialog.h"
 #include "screens/setup/SetupScreen.h"
 #include "services/agents/AgentService.h"
-#include "services/connectors/ConnectorService.h"
-#include "services/coding_agents/CodingAgentService.h"
 #include "services/alpha_arena/ArenaEngine.h"
 #include "services/alpha_arena/ArenaSelftest.h"
 #include "services/billing/FeeDiscountService.h"
@@ -59,6 +57,8 @@
 #include "services/cloud/SettingsCloudAdapter.h"
 #include "services/cloud/WatchlistCloudAdapter.h"
 #include "services/cloud/WorkflowCloudAdapter.h"
+#include "services/coding_agents/CodingAgentService.h"
+#include "services/connectors/ConnectorService.h"
 #include "services/dbnomics/DBnomicsService.h"
 #include "services/economics/EconomicsService.h"
 #include "services/economics/MacroCalendarService.h"
@@ -216,7 +216,36 @@ static void wire_app_lifecycle(QApplication& app, fincept::InstanceLock& lock) {
     });
 }
 
+#ifdef Q_OS_LINUX
+// Keep the app startable when the desktop session pins Qt to Wayland (#415).
+// Ubuntu Budgie 26.04 runs a Wayland-only labwc session that exports
+// QT_QPA_PLATFORM=wayland. Qt treats a single name as the ONLY candidate, and
+// the shipped bundle carries just the xcb platform plugin, so startup aborted:
+//   qt.qpa.plugin: Could not find the Qt platform plugin "wayland" in ""
+// even though XWayland was running and xcb would have worked. Appending xcb
+// keeps the session's choice first and only changes what happens when it
+// cannot load. Explicit fallback lists ("a;b"), every non-Wayland platform
+// (offscreen, xcb, eglfs, ...) and sessions without an X display are left
+// alone, and a -platform argument still overrides QT_QPA_PLATFORM entirely.
+static void add_xcb_fallback_to_forced_wayland() {
+    const QByteArray requested = qgetenv("QT_QPA_PLATFORM").trimmed();
+    if (!requested.startsWith("wayland") || requested.contains(';'))
+        return;
+    if (qEnvironmentVariableIsEmpty("DISPLAY"))
+        return; // no X server (no XWayland) for xcb to connect to
+    qputenv("QT_QPA_PLATFORM", requested + ";xcb");
+}
+#endif
+
+// Result<T>::value()/error() read a std::variant with std::get, which this check counts as a
+// possible throw. Every access below is guarded by is_ok()/is_err(), and an exception escaping
+// main() would end in std::terminate either way.
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[]) {
+#ifdef Q_OS_LINUX
+    add_xcb_fallback_to_forced_wayland();
+#endif
+
     // ── TLS backend selection (must happen before any Qt plugin loading) ────
     // Force QtNetwork to use the OpenSSL TLS backend across platforms.
     //   - macOS: Apple SecureTransport (qtls_st.cpp) double-frees inside
@@ -382,18 +411,16 @@ int main(int argc, char* argv[]) {
         for (fincept::WindowFrame* frame : fincept::WindowRegistry::instance().frames())
             delete frame;
 
-        // Stop the Python daemons before the shell tears anything down.
+        // Stop the yfinance daemon before the shell tears anything down.
         //
-        // Both own a QProcess plus repeating QTimers (PythonWorker gained a
-        // deadline-sweep timer that can call proc_->kill()). Neither had a
-        // shutdown call site: they are singletons, so their destructors run at
-        // STATIC destruction — after QApplication is gone and after the crash
-        // handler is unregistered. A timer or process callback firing in that
-        // window crashes with no minidump and no log line, which is exactly the
-        // kind of exit failure that is near-impossible to diagnose after the
-        // fact. stop() is idempotent on both.
+        // PythonWorker owns a QProcess plus repeating QTimers (a deadline-sweep
+        // timer can call proc_->kill()). It is a singleton, so without this call
+        // its destructor would run at STATIC destruction — after QApplication is
+        // gone and after the crash handler is unregistered. A timer or process
+        // callback firing in that window crashes with no minidump and no log
+        // line, which is exactly the kind of exit failure that is
+        // near-impossible to diagnose after the fact. stop() is idempotent.
         fincept::python::PythonWorker::instance().stop();
-        fincept::python::OptionGreeksWorker::instance().stop();
 
         // Kill any running uv / curl / tar child together with its own
         // children (Job Object / process group) so nothing keeps installing —
@@ -416,8 +443,10 @@ int main(int argc, char* argv[]) {
     // Phase 6: load the Component Browser catalogue. Try the build-side copy
     // first (present after cmake configure copies resources) and fall back to
     // the source-tree path for local dev runs without install step.
+    // bundled_resource() also covers the shipped macOS bundle (Contents/Resources/)
+    // and Linux .deb/.rpm (share/fincept-terminal/resources/) layouts.
     fincept::ComponentCatalog::instance().load_with_fallbacks({
-        QCoreApplication::applicationDirPath() + "/resources/component_catalog.json",
+        fincept::AppPaths::bundled_resource(QStringLiteral("component_catalog.json")),
         QCoreApplication::applicationDirPath() + "/component_catalog.json",
         "resources/component_catalog.json",
     });
@@ -867,7 +896,7 @@ int main(int argc, char* argv[]) {
     QString db_path = fincept::AppPaths::data() + "/fincept.db";
     auto db_result = fincept::Database::instance().open(db_path);
     if (db_result.is_err()) {
-        const std::string db_err = db_result.error();
+        const std::string& db_err = db_result.error(); // no copy: db_result outlives this block
         LOG_ERROR("App", "Failed to open database: " + QString::fromStdString(db_err));
 
         // A FAILED migration is fatal. Booting on regardless produced the worst
@@ -1056,9 +1085,8 @@ int main(int argc, char* argv[]) {
     // Initialize MCP tool system — registers all internal tools and starts
     // external MCP servers in the background (non-blocking).
     //
-    // ~925 tools across 38 modules, each building nested QJsonObject schemas.
-    // Nothing on the first frame consumes any of it, so it is deferred to the
-    // first event-loop turn — EXCEPT for --selftest-tools / --dump-tools, which
+    // The core tool catalogue (ten tools). Nothing on the first frame consumes
+    // it, so it is deferred to the first event-loop turn — EXCEPT for --selftest-tools / --dump-tools, which
     // read the registry synchronously and early-return below without ever
     // reaching QApplication::exec(). Those two must have it up front.
     {
@@ -1098,6 +1126,7 @@ int main(int argc, char* argv[]) {
         {"--selftest-tools", &fincept::mcp::run_tool_selftest},
         {"--selftest-llm-tools", &fincept::mcp::run_provider_tool_format_selftest},
         {"--selftest-mcp-server", &fincept::mcp::run_mcp_server_selftest},
+        {"--selftest-ui-tools", &fincept::mcp::core::run_core_tools_selftest},
         {"--selftest-feeds", &fincept::feeds::run_feed_selftest},
         {"--selftest-dock-layout", &fincept::layout::run_dock_layout_selftest},
         {"--selftest-live-table", &fincept::ui::run_live_table_selftest},
@@ -1156,6 +1185,17 @@ int main(int argc, char* argv[]) {
     // needs_package_sync and the async pipeline verifies it for real.
     auto setup_status = fincept::python::PythonSetupManager::instance().check_status();
 
+    // Agents (agno & co.) arrive with the optional full library set. Whenever a
+    // run leaves that set complete — the background sync below, an early launch
+    // from the setup screen, or an install started later from Settings → Python
+    // Env / the status-bar chip — re-warm agent discovery so agent lists fill
+    // without a restart. An essentials-only run has no agents to find.
+    QObject::connect(&fincept::python::PythonSetupManager::instance(),
+                     &fincept::python::PythonSetupManager::setup_complete, &app, [](bool success, const QString&) {
+                         if (success && fincept::python::PythonSetupManager::instance().is_full_installed())
+                             fincept::services::AgentService::instance().discover_agents();
+                     });
+
     // --smoke-test: CI/clean-machine screen-construction walk. Force the normal
     // boot path (we need a real WindowFrame + router to navigate every screen),
     // and skip the Python first-run SetupScreen — the smoke test only verifies
@@ -1182,10 +1222,11 @@ int main(int argc, char* argv[]) {
         setup_screen->resize(1040, 660);
         setup_screen->show();
 
-        // Hand off to the main window. launch_requested fires on LAUNCH TERMINAL
-        // (available as soon as the analytics core is installed — the remaining
-        // libraries keep installing, owned by PythonSetupManager), on "Continue
-        // without Python", or automatically after a complete success.
+        // Hand off to the main window. launch_requested fires automatically as
+        // soon as the essentials are installed (first run installs only those —
+        // whatever is left finishes in the background, owned by
+        // PythonSetupManager), on LAUNCH TERMINAL, on "Skip for now" /
+        // "Continue without Python", or on "finish in the background".
         // Qt::SingleShotConnection (Qt 6.0+) makes it fire exactly once.
         QObject::connect(
             setup_screen, &fincept::screens::SetupScreen::launch_requested, setup_screen,
@@ -1197,19 +1238,18 @@ int main(int argc, char* argv[]) {
 
                 auto& setup = fincept::python::PythonSetupManager::instance();
                 if (setup.is_running()) {
-                    // Early launch: the status-bar chip now reports progress, one
-                    // notification marks the end, and agent discovery is re-warmed
-                    // once agno & co. are actually installed.
+                    // Early launch: the status-bar chip now reports progress and
+                    // a failure surfaces as a notification. Agent discovery is
+                    // re-warmed by the setup_complete hook above once agno & co.
+                    // are actually installed.
                     setup.set_background_mode();
                     QObject::connect(
                         &setup, &fincept::python::PythonSetupManager::setup_complete, &app,
                         [](bool success, const QString& error) {
-                            if (success) {
+                            if (success)
                                 LOG_INFO("App", "Background Python install finished after early launch");
-                                fincept::services::AgentService::instance().discover_agents();
-                            } else {
+                            else
                                 LOG_WARN("App", "Background Python install failed (non-fatal): " + error);
-                            }
                         },
                         Qt::SingleShotConnection);
                 }
@@ -1317,23 +1357,25 @@ int main(int argc, char* argv[]) {
 
     // The terminal is usable but some Python libraries need installing or
     // verifying (app update changed a requirements file, an early launch last
-    // session, or a pre-4.5.1 install). Same pipeline as first run — resolve
-    // against the installed versions, install only what changed — in the
-    // background; the PYTHON ENV status chip shows progress and a single
-    // notification marks the end. Never during --smoke-test.
+    // session, or a pre-4.5.1 install). Only what the user has opted into is
+    // kept in sync: the essentials, or — once the full set was requested from
+    // Settings / on demand, or an older full install exists — everything.
+    // Same pipeline as first run, in the background; the PYTHON ENV status chip
+    // shows progress and a failure surfaces as a notification. Never during
+    // --smoke-test.
     if (setup_status.needs_package_sync && !smoke_mode) {
-        LOG_INFO("App", "Python libraries need a sync — running setup in the background");
+        LOG_INFO("App",
+                 QString("Python libraries need a sync (%1) — running setup in the background")
+                     .arg(setup_status.full_requested ? QStringLiteral("full set") : QStringLiteral("essentials")));
         auto& mgr = fincept::python::PythonSetupManager::instance();
         mgr.set_background_mode();
         QObject::connect(
             &mgr, &fincept::python::PythonSetupManager::setup_complete, &app,
             [](bool success, const QString& error) {
-                if (success) {
+                if (success)
                     LOG_INFO("App", "Background package sync completed successfully");
-                    fincept::services::AgentService::instance().discover_agents();
-                } else {
+                else
                     LOG_WARN("App", "Background package sync failed (non-fatal): " + error);
-                }
             },
             Qt::SingleShotConnection);
         mgr.run_setup();

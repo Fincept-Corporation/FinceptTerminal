@@ -5,14 +5,20 @@
 #include "services/workflow/NodeRegistry.h"
 #include "services/workflow/WorkflowExecutor.h"
 #include "storage/repositories/WorkflowRepository.h"
+#include "storage/sqlite/Database.h"
 #include "trading/AccountManager.h"
 
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPointer>
 #include <QSet>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QTimeZone>
 #include <QUuid>
+#include <QtConcurrent>
 
 #include <cmath>
 
@@ -516,6 +522,58 @@ void WorkflowService::stop_execution() {
 
 bool WorkflowService::is_executing() const {
     return executor_ && executor_->is_running();
+}
+
+// ── Run history ────────────────────────────────────────────────────────
+
+void WorkflowService::list_recent_runs(int limit) {
+    const int capped = qBound(1, limit, 200);
+    QPointer<WorkflowService> self = this;
+    (void)QtConcurrent::run([self, capped]() {
+        QVector<RunSummary> runs;
+        // Per-thread cloned connection (see Database::connection()).
+        auto db = fincept::Database::instance().connection();
+        QSqlQuery q(db);
+        // Newest run event per workflow; ids are AUTOINCREMENT, so MAX(id) is the
+        // latest even within one second (timestamp has second resolution).
+        q.prepare(
+            QStringLiteral("SELECT a.workflow_id, a.action, a.details, a.paper, a.timestamp, COALESCE(w.name, '') "
+                           "FROM workflow_audit_log a "
+                           "JOIN (SELECT MAX(id) AS max_id FROM workflow_audit_log "
+                           "      WHERE action IN ('workflow_started', 'workflow_completed', 'workflow_failed') "
+                           "      GROUP BY workflow_id) latest ON latest.max_id = a.id "
+                           "LEFT JOIN workflows w ON w.id = a.workflow_id "
+                           "ORDER BY a.id DESC LIMIT ?"));
+        q.addBindValue(capped);
+        if (q.exec()) {
+            while (q.next()) {
+                RunSummary r;
+                r.workflow_id = q.value(0).toString();
+                r.last_action = q.value(1).toString();
+                r.details = q.value(2).toString();
+                r.paper = q.value(3).toBool();
+                // Stored as UTC "yyyy-MM-dd HH:mm:ss" (SQLite datetime('now')).
+                r.timestamp = QDateTime::fromString(q.value(4).toString(), QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+                if (!r.timestamp.isValid())
+                    r.timestamp = QDateTime::fromString(q.value(4).toString(), Qt::ISODate);
+                r.timestamp.setTimeZone(QTimeZone::utc());
+                r.workflow_name = q.value(5).toString();
+                runs.append(r);
+            }
+        } else if (!q.lastError().text().contains(QLatin1String("no such table"), Qt::CaseInsensitive)) {
+            // A missing audit table just means no workflow has run in this profile yet.
+            LOG_WARN("WorkflowService", QString("Recent runs query failed: %1").arg(q.lastError().text()));
+        }
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, runs]() {
+                if (self)
+                    emit self->recent_runs_listed(runs);
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 } // namespace fincept::workflow

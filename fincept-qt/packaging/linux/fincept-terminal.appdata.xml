@@ -28,6 +28,11 @@
     <binary>FinceptTerminal</binary>
   </provides>
   <releases>
+    <release version="4.5.2" date="2026-11-09">
+      <description>
+        <p>Version 4.5.2 — Connect Claude Code, Codex, Gemini CLI, Cursor, VS Code or Claude Desktop to the terminal from Settings › AI Agents (MCP): a built-in MCP server with ten tools that work the terminal the way you do — open screens, read tables, charts and news, operate controls and run the bundled Python analytics — while orders, money moves, spends and deletions always ask you first. Several analytics that ran as Python scripts now run natively in C++. The version number is now shown on the sign-in and setup screens.</p>
+      </description>
+    </release>
     <release version="4.5.1" date="2026-10-31">
       <description>
         <p>Version 4.5.1 — Plans simplified to Free and Pro ($10/month). New Agent Workbench runs Claude Code and OpenAI Codex inside the terminal with live access to its data, and the terminal can now act as an MCP server for external agents. First-run setup installs in parallel and lets you start working once core libraries are in. A new connector catalog makes 240+ Python data sources browsable and runnable. Faster live tables, charts, logging and instrument search; safer trading with confirmations for live orders, pre-trade risk limits, a kill switch and pending-order expiry; many screen-level fixes across portfolio, news, dashboard and analytics.</p>

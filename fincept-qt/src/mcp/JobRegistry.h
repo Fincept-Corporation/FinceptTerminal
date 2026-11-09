@@ -1,35 +1,28 @@
 #pragma once
-// JobRegistry.h — Async job store for long-running MCP tool calls.
+// JobRegistry.h — Async job store for long-running work started by a tool call.
 //
 // Problem this solves
 // -------------------
-// Every MCP tool call was synchronous: `McpProvider::call_tool` dispatches the
-// handler and blocks on `QFuture::waitForFinished()`. For a tool with a
-// 300 s budget (`kDefaultAgentTimeoutMs`) that means the LLM's HTTP turn stays
-// open for five minutes, the chat UI shows nothing, and the whole tool-round
-// budget is spent on one call. There was no way to start work, hand the model a
-// receipt, and let it come back for the answer.
+// A tool call that blocks holds the model's HTTP turn open: a 5-minute script
+// run means five minutes of dead air and a whole tool round spent waiting, with
+// no way to report progress or give up. This registry is the receipt book that
+// lets a tool start work, answer with a job id, and be asked about it later.
 //
-// This registry is that receipt book. A tool that opts in
-// (`ToolDef::supports_async`) runs under a job: if it finishes inside the grace
-// window the caller gets the real result inline and the job is discarded, so
-// fast paths are unchanged. If it doesn't, the caller gets
-// `{job_id, status:"running"}` — a ~40-token receipt instead of a five-minute
-// stall — and the work continues in the background.
+// Its one client today is the `python` core tool (mcp/core/PythonScriptTool.cpp):
+//   python(action="run", …)        — waits up to wait_s (≤25 s) inline; a run
+//                                    still going after that answers with its
+//                                    job id and keeps running in the background
+//   python(action="status", job_id, wait_s) — long-polls; one call covers most
+//                                    of a run, and the result arrives with it
+//   python(action="cancel", job_id) — kills the script (PythonRunner cancel_token)
 //
-// The model then uses the `job_*` meta-tools (see tools/JobTools.cpp):
-//   job_status(id, wait_ms)  — long-polls; one call can cover the whole run
-//   job_result(id)           — the payload, once finished
-//   job_cancel(id)           — sets the cancellation flag the handler polls
-//   job_list()               — what's still in flight
+// Long-polling matters for token cost: without it the model burns one tool
+// round per poll. With it, a 90 s job costs ~4 rounds instead of ~30.
 //
-// `wait_ms` matters for token cost: without it the model burns one tool round
-// per poll. With it, a 90 s job costs ~2 rounds instead of ~30.
-//
-// Thread safety: every method is callable from any thread. Handlers resolve
-// their promise on service/worker threads; the meta-tools run on QtConcurrent
-// pool threads; the watchdog runs on the GUI thread. A single QMutex guards the
-// map and a QWaitCondition backs `wait_for` so long-polling costs no event loop.
+// Thread safety: every method is callable from any thread. Work resolves on
+// service/worker threads; tool calls arrive on pool threads; the watchdog runs on
+// the GUI thread. A single QMutex guards the map and a QWaitCondition backs
+// `wait_for` so long-polling costs no event loop.
 
 #include "mcp/McpTypes.h"
 
@@ -65,6 +58,10 @@ inline const char* job_state_str(JobState s) {
 struct JobSnapshot {
     QString id;
     QString tool;
+    /// Who started it (the caller label: "claude-code", "AI Chat", "agent: …").
+    /// Only that caller sees, waits on or cancels the job — one agent must not
+    /// read or stop another's work. Empty = no owner (visible to all).
+    QString owner;
     JobState state = JobState::Running;
     double progress = 0.0; // [0,1]; 0 when the handler reports no progress
     QString message;       // last status line from the handler
@@ -81,7 +78,7 @@ struct JobSnapshot {
     bool is_finished() const { return state != JobState::Running; }
     qint64 elapsed_ms() const;
 
-    /// Compact wire form for `job_status` / `job_list`. Deliberately small —
+    /// Compact wire form for a job's status answer. Deliberately small —
     /// this is polled repeatedly, so every field costs tokens on every poll.
     QJsonObject to_json() const;
 };
@@ -91,9 +88,9 @@ class JobRegistry {
     static JobRegistry& instance();
 
     /// Register a new running job. Returns its id (e.g. "job_4f21ab").
-    /// `timeout_ms` is the handler's hard budget, echoed back by `job_status`
+    /// `timeout_ms` is the handler's hard budget, echoed back in the status answer
     /// so a poller can tell a slow job from a stuck one.
-    QString create(const QString& tool, int timeout_ms = 0);
+    QString create(const QString& tool, int timeout_ms = 0, const QString& owner = {});
 
     /// Handler progress hook. `progress` is clamped to [0,1]; an empty
     /// `message` leaves the previous one in place.
@@ -106,7 +103,7 @@ class JobRegistry {
     /// Raise the cancellation flag the handler polls via `ToolContext::is_cancelled`.
     /// Returns false if the id is unknown or the job already finished. The job
     /// is NOT moved to Cancelled here — that happens when the handler actually
-    /// unwinds and calls complete(), so `job_status` keeps reporting "running"
+    /// unwinds and calls complete(), so status keeps reporting "running"
     /// until the work has genuinely stopped.
     bool request_cancel(const QString& id);
 
@@ -124,7 +121,7 @@ class JobRegistry {
     std::optional<ToolResult> take_result(const QString& id);
 
     /// Block up to `wait_ms` for the job to leave Running, then return its
-    /// snapshot. This is the long-poll that keeps `job_status` from costing one
+    /// snapshot. This is the long-poll that keeps a status check from costing one
     /// tool round per second. `wait_ms <= 0` returns immediately.
     std::optional<JobSnapshot> wait_for(const QString& id, int wait_ms);
 
@@ -162,7 +159,7 @@ class JobRegistry {
     // Hard cap so a runaway agent can't grow the map without bound. Oldest
     // finished jobs are evicted first; running jobs are never evicted.
     static constexpr int kMaxJobs = 128;
-    // Upper bound on a single `job_status` long-poll. Longer than this and the
+    // Upper bound on a single status long-poll. Longer than this and the
     // provider-side HTTP request risks timing out mid-wait.
     static constexpr int kMaxWaitMs = 30000;
 

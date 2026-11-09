@@ -6,10 +6,13 @@
 #include "services/portfolio/PortfolioService.h"
 #include "ui/theme/Theme.h"
 
+#include <QAreaSeries>
 #include <QBarSeries>
 #include <QBarSet>
 #include <QChart>
 #include <QChartView>
+#include <QDate>
+#include <QDateTimeAxis>
 #include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -18,6 +21,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLineSeries>
+#include <QLocale>
+#include <QMap>
 #include <QPointer>
 #include <QScrollArea>
 #include <QStackedWidget>
@@ -27,6 +32,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 using fincept::services::AnalyticsResult;
 using fincept::services::PortfolioAnalyticsService;
@@ -64,6 +70,99 @@ static void style_table(QTableWidget* t) {
                              "  font-weight:700; letter-spacing:0.5px; }")
                          .arg(ui::colors::BG_BASE(), ui::colors::TEXT_PRIMARY(), ui::colors::BORDER_DIM(),
                               ui::colors::BG_SURFACE(), ui::colors::TEXT_SECONDARY(), ui::colors::AMBER()));
+}
+
+// One line on a QuantStats time-series chart. Values are fractions (×100 for display).
+struct QsLine {
+    QsLine(QString n, QJsonArray v, QColor c, bool dash = false, bool fill = false, double s = 100.0)
+        : name(std::move(n)), values(std::move(v)), color(c), dashed(dash), fill_to_zero(fill), scale(s) {}
+    QString name;
+    QJsonArray values;
+    QColor color;
+    bool dashed = false;
+    bool fill_to_zero = false; // shade between the line and 0 (drawdown)
+    double scale = 100.0;
+};
+
+static qint64 qs_date_ms(const QJsonValue& v) {
+    const QDate d = QDate::fromString(v.toString(), Qt::ISODate);
+    return d.isValid() ? d.startOfDay().toMSecsSinceEpoch() : 0;
+}
+
+// Date-axis line chart for the series the script returns (cumulative, drawdown,
+// rolling). Null points (warm-up of a rolling window) are skipped.
+static QChartView* qs_line_chart(const QJsonArray& dates, const QVector<QsLine>& lines, const char* y_fmt,
+                                 QWidget* parent) {
+    auto* chart = new QChart;
+    chart->setBackgroundBrush(QBrush(QColor(ui::colors::BG_BASE())));
+    chart->setBackgroundRoundness(0);
+    chart->setMargins(QMargins(4, 4, 4, 4));
+    chart->setAnimationOptions(QChart::NoAnimation);
+    chart->legend()->setVisible(lines.size() > 1);
+    chart->legend()->setLabelColor(QColor(ui::colors::TEXT_SECONDARY()));
+    chart->legend()->setAlignment(Qt::AlignTop);
+
+    auto* x_axis = new QDateTimeAxis;
+    x_axis->setFormat("MMM yy");
+    x_axis->setTickCount(6);
+    x_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    x_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    x_axis->setLabelsFont(QFont("Consolas", 8));
+    auto* y_axis = new QValueAxis;
+    y_axis->setLabelFormat(y_fmt);
+    y_axis->setTickCount(5);
+    y_axis->setLabelsColor(QColor(ui::colors::TEXT_TERTIARY()));
+    y_axis->setGridLineColor(QColor(ui::colors::BORDER_DIM()));
+    y_axis->setLabelsFont(QFont("Consolas", 8));
+    chart->addAxis(x_axis, Qt::AlignBottom);
+    chart->addAxis(y_axis, Qt::AlignLeft);
+
+    double lo = 0.0, hi = 0.0;
+    for (const auto& ln : lines) {
+        auto* s = new QLineSeries;
+        s->setName(ln.name);
+        QLineSeries* zero = ln.fill_to_zero ? new QLineSeries : nullptr;
+        const int n = static_cast<int>(std::min(dates.size(), ln.values.size()));
+        for (int i = 0; i < n; ++i) {
+            if (!ln.values[i].isDouble())
+                continue;
+            const qint64 x = qs_date_ms(dates[i]);
+            if (x == 0)
+                continue;
+            const double y = ln.values[i].toDouble() * ln.scale;
+            s->append(static_cast<double>(x), y);
+            if (zero)
+                zero->append(static_cast<double>(x), 0.0);
+            lo = std::min(lo, y);
+            hi = std::max(hi, y);
+        }
+        QPen pen(ln.color, ln.dashed ? 1.2 : 1.8);
+        if (ln.dashed)
+            pen.setStyle(Qt::DashLine);
+        if (zero) {
+            auto* area = new QAreaSeries(s, zero);
+            area->setName(ln.name);
+            QColor fill = ln.color;
+            fill.setAlpha(60);
+            area->setBrush(fill);
+            area->setPen(pen);
+            chart->addSeries(area);
+            area->attachAxis(x_axis);
+            area->attachAxis(y_axis);
+        } else {
+            s->setPen(pen);
+            chart->addSeries(s);
+            s->attachAxis(x_axis);
+            s->attachAxis(y_axis);
+        }
+    }
+    const double pad = std::max((hi - lo) * 0.08, 0.5);
+    y_axis->setRange(lo - pad, hi + pad);
+
+    auto* view = new QChartView(chart, parent);
+    view->setRenderHint(QPainter::Antialiasing, true);
+    view->setStyleSheet(QString("background:%1; border:none;").arg(ui::colors::BG_BASE()));
+    return view;
 }
 
 // Build a centred placeholder label inside a parent widget. Returns the wrapper
@@ -465,6 +564,42 @@ void QuantStatsView::update_metrics() {
     }
 
     // ── Populate table ────────────────────────────────────────────────────────
+    // RELATIVE TO BENCHMARK: how the back-tested mix behaves against the index — did it
+    // earn its risk? (Appended last so the existing section order stays put.)
+    const QJsonObject rel = qs_data_.value("relative").toObject();
+    if (have_qs && !rel.isEmpty()) {
+        const QString bsym = bench_obj.value("symbol").toString();
+        add_section(bsym.isEmpty() ? tr("RELATIVE TO BENCHMARK") : tr("RELATIVE TO %1").arg(bsym));
+        auto num = [&rel](const char* key) { return rel.value(QLatin1String(key)); };
+        auto add_ratio = [&](const QString& name, const char* key, int dp) {
+            const QJsonValue v = num(key);
+            if (v.isDouble())
+                rows.push_back({"", name, ratio_str(v.toDouble(), dp), "--", true});
+        };
+        auto add_pct = [&](const QString& name, const char* key, bool good_if_positive) {
+            const QJsonValue v = num(key);
+            if (v.isDouble())
+                rows.push_back(
+                    {"", name, pct_str(v.toDouble() * 100.0), "--", good_if_positive ? v.toDouble() >= 0 : true});
+        };
+        add_ratio(tr("Beta"), "beta", 2);
+        add_pct(tr("Alpha (annualized)"), "alpha", true);
+        add_ratio(tr("Correlation"), "correlation", 2);
+        add_ratio(tr("R-Squared"), "r_squared", 2);
+        add_pct(tr("Tracking Error"), "tracking_error", false);
+        if (num("information_ratio").isDouble())
+            rows.push_back({"", tr("Information Ratio"), ratio_str(num("information_ratio").toDouble(), 2), "--",
+                            num("information_ratio").toDouble() >= 0});
+        // Capture ratios: above 1 on the way up and below 1 on the way down is the
+        // asymmetry an active book wants.
+        if (num("up_capture").isDouble())
+            rows.push_back({"", tr("Up Capture"), ratio_str(num("up_capture").toDouble(), 2), "--",
+                            num("up_capture").toDouble() >= 1.0});
+        if (num("down_capture").isDouble())
+            rows.push_back({"", tr("Down Capture"), ratio_str(num("down_capture").toDouble(), 2), "--",
+                            num("down_capture").toDouble() <= 1.0});
+    }
+
     metrics_table_->setRowCount(rows.size());
 
     for (int r = 0; r < rows.size(); ++r) {
@@ -525,6 +660,25 @@ void QuantStatsView::update_returns() {
     auto* cl = new QVBoxLayout(content);
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
+
+    // Cumulative return of today's mix against the benchmark, same dates.
+    const QJsonObject series = qs_data_["series"].toObject();
+    if (!series.isEmpty()) {
+        auto* cum_title = new QLabel(tr("CUMULATIVE RETURN — CURRENT WEIGHTS, BACK-TESTED"));
+        cum_title->setStyleSheet(
+            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        cl->addWidget(cum_title);
+        QVector<QsLine> lines;
+        lines.append({tr("Portfolio"), series["cumulative"].toArray(), QColor(ui::colors::POSITIVE())});
+        if (series.contains("benchmark_cumulative")) {
+            const QString bsym = qs_data_["benchmark"].toObject()["symbol"].toString();
+            lines.append({bsym.isEmpty() ? tr("Benchmark") : bsym, series["benchmark_cumulative"].toArray(),
+                          QColor(ui::colors::CYAN()), true});
+        }
+        auto* cum_chart = qs_line_chart(series["dates"].toArray(), lines, "%.0f%%", content);
+        cum_chart->setMinimumHeight(240);
+        cl->addWidget(cum_chart);
+    }
 
     auto* title = new QLabel(tr("RETURN DISTRIBUTION"));
     title->setStyleSheet(
@@ -621,10 +775,74 @@ void QuantStatsView::update_returns() {
                             make_item(trows[i].val, Qt::AlignRight | Qt::AlignVCenter,
                                       QColor(trows[i].positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
     }
+    dist_table->setMinimumHeight(26 * (static_cast<int>(trows.size()) + 1) + 4);
     cl->addWidget(dist_table);
+
+    // Monthly returns grid (years × months + the year compounded) — the classic
+    // QuantStats heatmap: seasonality and the bad months at a glance.
+    const QJsonObject monthly = qs_data_["monthly"].toObject();
+    if (!monthly.isEmpty()) {
+        auto* m_title = new QLabel(tr("MONTHLY RETURNS"));
+        m_title->setStyleSheet(
+            QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
+        cl->addWidget(m_title);
+
+        QMap<int, QMap<int, double>> by_year; // year -> month -> return
+        for (auto it = monthly.begin(); it != monthly.end(); ++it) {
+            if (!it.value().isDouble())
+                continue;
+            const QStringList ym = it.key().split(QLatin1Char('-'));
+            if (ym.size() != 2)
+                continue;
+            by_year[ym[0].toInt()][ym[1].toInt()] = it.value().toDouble();
+        }
+        auto* mt = new QTableWidget(static_cast<int>(by_year.size()), 14, content);
+        QStringList hdr{tr("YEAR")};
+        for (int m = 1; m <= 12; ++m)
+            hdr << QLocale().monthName(m, QLocale::ShortFormat).toUpper();
+        hdr << tr("YEAR %");
+        mt->setHorizontalHeaderLabels(hdr);
+        style_table(mt);
+        mt->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        int r = 0;
+        for (auto yit = by_year.constEnd(); yit != by_year.constBegin();) { // newest year first
+            --yit;
+            mt->setRowHeight(r, 24);
+            mt->setItem(r, 0,
+                        make_item(QString::number(yit.key()), Qt::AlignLeft | Qt::AlignVCenter,
+                                  QColor(ui::colors::TEXT_SECONDARY())));
+            double year_growth = 1.0;
+            for (int m = 1; m <= 12; ++m) {
+                if (!yit.value().contains(m)) {
+                    mt->setItem(r, m, make_item(QString(), Qt::AlignCenter, QColor(ui::colors::TEXT_TERTIARY())));
+                    continue;
+                }
+                const double v = yit.value().value(m);
+                year_growth *= 1.0 + v;
+                auto* item =
+                    make_item(QString::number(v * 100.0, 'f', 1), Qt::AlignCenter, QColor(ui::colors::TEXT_PRIMARY()));
+                QColor bg = v >= 0 ? QColor(ui::colors::POSITIVE()) : QColor(ui::colors::NEGATIVE());
+                bg.setAlpha(static_cast<int>(std::min(1.0, std::abs(v) / 0.10) * 150) + 20);
+                item->setBackground(bg);
+                mt->setItem(r, m, item);
+            }
+            const double yr = year_growth - 1.0;
+            mt->setItem(r, 13,
+                        make_item(pct_str(yr * 100.0, 1), Qt::AlignCenter,
+                                  QColor(yr >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE())));
+            ++r;
+        }
+        mt->setMinimumHeight(24 * (r + 1) + 6);
+        cl->addWidget(mt);
+    }
     cl->addStretch();
 
-    returns_stack_->addWidget(content);
+    // The tab now holds charts + tables: scroll rather than squeeze.
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(content);
+    returns_stack_->addWidget(scroll);
     returns_stack_->setCurrentIndex(1);
 }
 
@@ -673,6 +891,47 @@ void QuantStatsView::update_drawdown() {
     hero_l->addWidget(hero_value);
     cl->addWidget(hero_w);
 
+    // Underwater curve: how far below its running peak the mix was, every day.
+    const QJsonObject series = qs_data_["series"].toObject();
+    if (!series.isEmpty()) {
+        auto* uw = qs_line_chart(
+            series["dates"].toArray(),
+            {QsLine(tr("Drawdown"), series["drawdown"].toArray(), QColor(ui::colors::NEGATIVE()), false, true)},
+            "%.0f%%", content);
+        uw->setMinimumHeight(200);
+        cl->addWidget(uw);
+    }
+
+    // The worst episodes: when they started, bottomed and recovered — depth alone says
+    // nothing about how long the money was under water.
+    const QJsonArray episodes = qs_data_["drawdowns"].toArray();
+    if (!episodes.isEmpty()) {
+        auto* ep_title = new QLabel(tr("WORST DRAWDOWN PERIODS"));
+        ep_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;")
+                                    .arg(ui::colors::TEXT_SECONDARY()));
+        cl->addWidget(ep_title);
+        auto* ep = new QTableWidget(static_cast<int>(episodes.size()), 5, content);
+        ep->setHorizontalHeaderLabels({tr("PEAK"), tr("TROUGH"), tr("RECOVERED"), tr("DEPTH"), tr("DAYS")});
+        style_table(ep);
+        ep->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        for (int i = 0; i < episodes.size(); ++i) {
+            const QJsonObject e = episodes[i].toObject();
+            ep->setRowHeight(i, 24);
+            const auto left = Qt::AlignLeft | Qt::AlignVCenter;
+            const auto right = Qt::AlignRight | Qt::AlignVCenter;
+            ep->setItem(i, 0, make_item(e["start"].toString(), left, QColor(ui::colors::TEXT_SECONDARY())));
+            ep->setItem(i, 1, make_item(e["trough"].toString(), left, QColor(ui::colors::TEXT_SECONDARY())));
+            const bool open = e["end"].isNull();
+            ep->setItem(i, 2,
+                        make_item(open ? tr("not yet") : e["end"].toString(), left,
+                                  QColor(open ? ui::colors::WARNING() : ui::colors::TEXT_SECONDARY())));
+            ep->setItem(i, 3, make_item(pct_str(e["depth"].toDouble() * 100.0), right, QColor(ui::colors::NEGATIVE())));
+            ep->setItem(i, 4, make_item(QString::number(e["days"].toInt()), right, QColor(ui::colors::TEXT_PRIMARY())));
+        }
+        ep->setMinimumHeight(24 * (static_cast<int>(episodes.size()) + 1) + 6);
+        cl->addWidget(ep);
+    }
+
     // Drawdown metrics table
     auto* dd_table = new QTableWidget;
     dd_table->setColumnCount(2);
@@ -706,10 +965,15 @@ void QuantStatsView::update_drawdown() {
                           make_item(drows[i].val, Qt::AlignRight | Qt::AlignVCenter,
                                     QColor(drows[i].positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE())));
     }
+    dd_table->setMinimumHeight(26 * (static_cast<int>(drows.size()) + 1) + 4);
     cl->addWidget(dd_table);
     cl->addStretch();
 
-    drawdown_stack_->addWidget(content);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(content);
+    drawdown_stack_->addWidget(scroll);
     drawdown_stack_->setCurrentIndex(1);
 }
 
@@ -731,87 +995,50 @@ void QuantStatsView::update_rolling() {
     cl->setContentsMargins(16, 12, 16, 12);
     cl->setSpacing(12);
 
-    auto* title = new QLabel(tr("RISK-ADJUSTED RATIOS & WIN/LOSS BREAKDOWN"));
+    // Rolling statistics over a 63-day window: whether the risk-adjusted return and
+    // the volatility are stable, or the full-period figure hides a regime change.
+    // (This tab used to repeat the RATIOS rows of the METRICS tab under a ROLLING title.)
+    const QJsonObject rolling = qs_data_["rolling"].toObject();
+    const int window = rolling["window"].toInt(63);
+    auto* title = new QLabel(tr("ROLLING %1-DAY METRICS — CURRENT WEIGHTS, BACK-TESTED").arg(window));
     title->setStyleSheet(
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     cl->addWidget(title);
 
-    // Ratios table
-    auto* ratios_table = new QTableWidget;
-    ratios_table->setColumnCount(2);
-    ratios_table->setHorizontalHeaderLabels({tr("RATIO"), tr("VALUE")});
-    ratios_table->setColumnWidth(0, 220);
-    style_table(ratios_table);
-
-    const QJsonObject ratios = qs_data_["ratios"].toObject();
-    double sharpe = ratios["sharpe_ratio"].toDouble();
-    double sortino = ratios["sortino_ratio"].toDouble();
-    double calmar = ratios["calmar_ratio"].toDouble();
-    double pf = ratios["profit_factor"].toDouble();
-
-    struct RatioRow {
-        QString name;
-        QString val;
-        bool positive;
-    };
-    QVector<RatioRow> rrows = {
-        {tr("Sharpe Ratio"), ratio_str(sharpe), sharpe >= 0},
-        {tr("Sortino Ratio"), ratio_str(sortino), sortino >= 0},
-        {tr("Calmar Ratio"), ratio_str(calmar), calmar >= 0},
-        {tr("Profit Factor"), ratio_str(pf), pf >= 1.0},
-    };
-    ratios_table->setRowCount(rrows.size());
-    for (int i = 0; i < rrows.size(); ++i) {
-        ratios_table->setRowHeight(i, 26);
-        ratios_table->setItem(
-            i, 0, make_item(rrows[i].name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::TEXT_SECONDARY())));
-        ratios_table->setItem(i, 1,
-                              make_item(rrows[i].val, Qt::AlignRight | Qt::AlignVCenter,
-                                        QColor(rrows[i].positive ? ui::colors::POSITIVE : ui::colors::NEGATIVE())));
+    if (rolling.isEmpty()) {
+        auto* msg = new QLabel(tr("Not enough daily history for a %1-day rolling window yet.").arg(window));
+        msg->setStyleSheet(QString("color:%1; font-size:11px;").arg(ui::colors::TEXT_TERTIARY()));
+        cl->addWidget(msg);
+    } else {
+        const QJsonArray dates = rolling["dates"].toArray();
+        auto add_chart = [&](const QString& caption, const QVector<QsLine>& lines, const char* fmt) {
+            auto* cap = new QLabel(caption);
+            cap->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;")
+                                   .arg(ui::colors::TEXT_SECONDARY()));
+            cl->addWidget(cap);
+            auto* view = qs_line_chart(dates, lines, fmt, content);
+            view->setMinimumHeight(190);
+            cl->addWidget(view);
+        };
+        add_chart(tr("ROLLING SHARPE RATIO (annualised)"),
+                  {QsLine(tr("Sharpe"), rolling["sharpe"].toArray(), QColor(ui::colors::CYAN()), false, false, 1.0)},
+                  "%.1f");
+        add_chart(tr("ROLLING VOLATILITY (annualised)"),
+                  {QsLine(tr("Volatility"), rolling["volatility"].toArray(), QColor(ui::colors::AMBER()))}, "%.0f%%");
+        if (rolling.contains("beta")) {
+            const QString bsym = qs_data_["benchmark"].toObject()["symbol"].toString();
+            add_chart(tr("ROLLING BETA vs %1").arg(bsym.isEmpty() ? tr("benchmark") : bsym),
+                      {QsLine(tr("Beta"), rolling["beta"].toArray(), QColor(ui::colors::WARNING()), false, false, 1.0)},
+                      "%.2f");
+        }
     }
-    cl->addWidget(ratios_table);
-
-    // Win/Loss breakdown
-    auto* wl_title = new QLabel(tr("WIN / LOSS BREAKDOWN"));
-    wl_title->setStyleSheet(QString("color:%1; font-size:10px; font-weight:700; letter-spacing:0.5px;"
-                                    " margin-top:8px;")
-                                .arg(ui::colors::TEXT_SECONDARY()));
-    cl->addWidget(wl_title);
-
-    const QJsonObject dist = qs_data_["distribution"].toObject();
-    int win_days = dist["win_days"].toInt();
-    int loss_days = dist["loss_days"].toInt();
-    double win_rate = dist["win_rate"].toDouble() * 100.0;
-    double avg_win = dist["avg_win"].toDouble() * 100.0;
-    double avg_loss = dist["avg_loss"].toDouble() * 100.0;
-
-    auto* wl_table = new QTableWidget;
-    wl_table->setColumnCount(2);
-    wl_table->setHorizontalHeaderLabels({tr("METRIC"), tr("VALUE")});
-    wl_table->setColumnWidth(0, 220);
-    style_table(wl_table);
-
-    QVector<RatioRow> wrows = {
-        {tr("Win Rate"), pct_str(win_rate), win_rate >= 50.0},
-        {tr("Win Days"), QString::number(win_days), true},
-        {tr("Loss Days"), QString::number(loss_days), loss_days == 0},
-        {tr("Avg Win/Day"), pct_str(avg_win), true},
-        {tr("Avg Loss/Day"), pct_str(avg_loss), avg_loss >= 0},
-    };
-    wl_table->setRowCount(wrows.size());
-    for (int i = 0; i < wrows.size(); ++i) {
-        wl_table->setRowHeight(i, 26);
-        wl_table->setItem(
-            i, 0, make_item(wrows[i].name, Qt::AlignLeft | Qt::AlignVCenter, QColor(ui::colors::TEXT_SECONDARY())));
-        const char* vc = (wrows[i].name.contains("Days") || wrows[i].name == "Win Days")
-                             ? ui::colors::TEXT_PRIMARY
-                             : (wrows[i].positive ? ui::colors::POSITIVE() : ui::colors::NEGATIVE);
-        wl_table->setItem(i, 1, make_item(wrows[i].val, Qt::AlignRight | Qt::AlignVCenter, QColor(vc)));
-    }
-    cl->addWidget(wl_table);
     cl->addStretch();
 
-    rolling_stack_->addWidget(content);
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(content);
+    rolling_stack_->addWidget(scroll);
     rolling_stack_->setCurrentIndex(1);
 }
 
@@ -862,6 +1089,16 @@ void QuantStatsView::update_monte_carlo_chart() {
         {tr("PROB OF LOSS"), pct_str(prob_loss), ui::colors::WARNING()},
         {tr("EXP MAX DRAWDOWN"), pct_str(exp_max_dd), ui::colors::NEGATIVE()},
     };
+    // Tail in money: the average of the worst 5% of outcomes, on today's NAV.
+    if (mc_data_.contains("cvar_5")) {
+        const double cvar5 = mc_data_["cvar_5"].toDouble();
+        stats.append({tr("WORST 5% AVG"), pct_str(cvar5), ui::colors::NEGATIVE()});
+        if (summary_.total_market_value > 0)
+            stats.append({tr("≈ LOSS AT RISK"),
+                          QString("%1 %2").arg(currency_,
+                                               QLocale().toString(summary_.total_market_value * cvar5 / 100.0, 'f', 0)),
+                          ui::colors::NEGATIVE()});
+    }
 
     for (const auto& s : stats) {
         auto* col = new QWidget(this);
@@ -924,6 +1161,41 @@ void QuantStatsView::update_monte_carlo_chart() {
         chart->addSeries(series);
     }
 
+    // Percentile fan over ALL simulations (the script computes it per step); the median
+    // used to come from the 50 paths drawn, which wobbles from run to run.
+    const QJsonObject bands = mc_data_["percentile_paths"].toObject();
+    if (!bands.isEmpty()) {
+        const QJsonArray p50 = bands["p50"].toArray();
+        if (p50.size() == n_steps) {
+            for (int t = 0; t < n_steps; ++t)
+                median_path[t] = p50[t].toDouble();
+        }
+        struct Band {
+            const char* key;
+            Qt::PenStyle style;
+            QColor color;
+        };
+        const Band kBands[] = {
+            {"p5", Qt::DashLine, QColor(ui::colors::NEGATIVE())},
+            {"p25", Qt::DotLine, QColor(ui::colors::AMBER())},
+            {"p75", Qt::DotLine, QColor(ui::colors::AMBER())},
+            {"p95", Qt::DashLine, QColor(ui::colors::POSITIVE())},
+        };
+        for (const auto& b : kBands) {
+            const QJsonArray vals = bands[QLatin1String(b.key)].toArray();
+            if (vals.isEmpty())
+                continue;
+            auto* s = new QLineSeries;
+            QPen pen(b.color);
+            pen.setWidthF(1.5);
+            pen.setStyle(b.style);
+            s->setPen(pen);
+            for (int t = 0; t < vals.size(); ++t)
+                s->append(static_cast<qreal>(t + 1), vals[t].toDouble());
+            chart->addSeries(s);
+        }
+    }
+
     // Median path — bright cyan
     if (n_steps > 0) {
         auto* median_series = new QLineSeries;
@@ -982,9 +1254,18 @@ void QuantStatsView::update_monte_carlo_chart() {
 
     // Caption
     int n_shown = mc_data_["num_paths_shown"].toInt();
-    auto* caption = new QLabel(tr("Showing %1 of 1000 simulated paths over 252 trading days (GBM)."
-                                  " Bright line = median path.")
-                                   .arg(n_shown));
+    QString caption_text = tr("Showing %1 of %2 simulated paths over %3 trading days (GBM). Bright line = median; "
+                              "dashed = 5th / 95th percentile, dotted = 25th / 75th, over all paths.")
+                               .arg(n_shown)
+                               .arg(mc_data_["num_simulations"].toInt(1000))
+                               .arg(mc_data_["horizon_days"].toInt(252));
+    if (mc_data_.contains("annual_drift"))
+        caption_text += tr(" Calibrated to the mix's last 2 years: drift %1%/yr, volatility %2%/yr — a "
+                           "projection of the past, not a forecast.")
+                            .arg(QString::number(mc_data_["annual_drift"].toDouble(), 'f', 1),
+                                 QString::number(mc_data_["annual_volatility"].toDouble(), 'f', 1));
+    auto* caption = new QLabel(caption_text);
+    caption->setWordWrap(true);
     caption->setStyleSheet(QString("color:%1; font-size:9px; padding:4px 16px;").arg(ui::colors::TEXT_TERTIARY()));
     cl->addWidget(caption);
 

@@ -257,6 +257,24 @@ bool PortfolioService::sell_asset(const QString& portfolio_id, const QString& sy
     return true;
 }
 
+QStringList PortfolioService::held_symbols() {
+    QStringList out;
+    auto& repo = PortfolioRepository::instance();
+    auto ports = repo.list_portfolios();
+    if (ports.is_err())
+        return out;
+    for (const auto& p : ports.value()) {
+        auto assets = repo.get_assets(p.id);
+        if (assets.is_err())
+            continue;
+        for (const auto& a : assets.value()) {
+            if (!a.symbol.isEmpty() && a.quantity > 0 && !out.contains(a.symbol))
+                out.append(a.symbol);
+        }
+    }
+    return out;
+}
+
 // ── Transactions ─────────────────────────────────────────────────────────────
 
 void PortfolioService::load_transactions(const QString& portfolio_id, int limit) {

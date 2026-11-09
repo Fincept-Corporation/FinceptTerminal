@@ -3,6 +3,9 @@ spreadsheet.py — unified local + Google Sheets I/O for the Fincept workflow no
 
 Usage:
     python spreadsheet.py --args '<json>'
+    python spreadsheet.py --args -          (the JSON object on stdin — how the workflow node
+                                             sends it, since rows to write can exceed the
+                                             ~32 KB Windows command-line limit)
 
 The JSON args object supports:
   source           : "local" | "google"
@@ -264,13 +267,17 @@ def google_clear(spreadsheet_id, sheet_name, range_str, credentials_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--args", required=True)
+    parser.add_argument("--args", required=True, help="JSON object, or '-' to read it from stdin")
     parsed = parser.parse_args()
 
     try:
-        args = json.loads(parsed.args)
-    except json.JSONDecodeError as e:
+        raw = sys.stdin.buffer.read().decode("utf-8-sig") if parsed.args == "-" else parsed.args
+        args = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         print(json.dumps({"error": f"Invalid --args JSON: {e}"}))
+        sys.exit(1)
+    if not isinstance(args, dict):
+        print(json.dumps({"error": "--args must be a JSON object"}))
         sys.exit(1)
 
     source           = args.get("source", "local")

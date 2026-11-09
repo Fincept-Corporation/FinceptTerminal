@@ -71,21 +71,45 @@ inline void emit_progress(const QString& text) {
 
 /// Human-readable one-line label for a tool call.
 ///
-/// The discovery meta-tools are the ones a user sees most and understands least,
-/// so they get plain-English wording plus the argument that distinguishes one
-/// call from the next — without it, six `tool_describe` calls for six different
-/// tools all render as the identical string "tool_describe".
+/// The core tools get plain-English wording plus the argument that tells one
+/// call from the next — without it, six ui_act calls all render as "ui_act".
 inline QString tool_progress_label(const QString& display_name, const QJsonObject& args) {
-    if (display_name == QLatin1String("tool_list")) {
-        const QString q = args.value(QStringLiteral("query")).toString().trimmed();
-        return q.isEmpty() ? QStringLiteral("Finding tools") : QStringLiteral("Finding tools · ") + q;
+    auto arg = [&args](const char* key) { return args.value(QLatin1String(key)).toString().trimmed().left(40); };
+    auto with = [](const QString& label, const QString& detail) {
+        return detail.isEmpty() ? label : label + QStringLiteral(" · ") + detail;
+    };
+    if (display_name == QLatin1String("ui_overview"))
+        return QStringLiteral("Looking at the terminal");
+    if (display_name == QLatin1String("ui_open"))
+        return with(QStringLiteral("Opening"),
+                    arg("screen") + (arg("symbol").isEmpty() ? QString() : QLatin1Char(' ') + arg("symbol")));
+    if (display_name == QLatin1String("ui_snapshot"))
+        return with(QStringLiteral("Reading the screen"), arg("query").isEmpty() ? arg("target") : arg("query"));
+    if (display_name == QLatin1String("ui_act")) {
+        if (args.value(QStringLiteral("steps")).isArray())
+            return QStringLiteral("Working the screen · %1 steps")
+                .arg(args.value(QStringLiteral("steps")).toArray().size());
+        return with(arg("action").isEmpty() ? QStringLiteral("Acting") : arg("action"),
+                    arg("name").isEmpty() ? arg("ref") : arg("name"));
     }
-    if (display_name == QLatin1String("tool_describe")) {
-        const QString n = args.value(QStringLiteral("name")).toString().trimmed();
-        return n.isEmpty() ? QStringLiteral("Reading schema") : QStringLiteral("Reading schema · ") + n;
+    if (display_name == QLatin1String("ui_read"))
+        return with(QStringLiteral("Reading"), arg("ref"));
+    if (display_name == QLatin1String("ui_wait"))
+        return with(QStringLiteral("Waiting"),
+                    arg("until") + (arg("text").isEmpty() ? QString() : QLatin1Char(' ') + arg("text")));
+    if (display_name == QLatin1String("ui_screenshot"))
+        return with(QStringLiteral("Screenshot"), arg("target"));
+    if (display_name == QLatin1String("ui_workspace"))
+        return with(QStringLiteral("Arranging"), arg("action"));
+    if (display_name == QLatin1String("ui_invoke"))
+        return with(QStringLiteral("Running command"), arg("action"));
+    if (display_name == QLatin1String("python")) {
+        // A job id leads for status / cancel: the chat's Tools card tracks the job live from it.
+        const QString detail = !arg("job_id").isEmpty()   ? arg("job_id")
+                               : !arg("script").isEmpty() ? arg("script")
+                                                          : arg("query");
+        return with(QStringLiteral("Python ") + arg("action"), detail);
     }
-    if (display_name == QLatin1String("result_fetch"))
-        return QStringLiteral("Fetching full result");
 
     // Real tools: name plus the first short STRING argument as context
     // ("get_news · MARKETS"). Positional indices are deliberately excluded — a
@@ -215,22 +239,6 @@ inline bool is_openai_family_model(const QString& model_lower) {
            model_lower.startsWith(QLatin1String("o4"));
 }
 
-// ── Tool RAG activation ──────────────────────────────────────────────────
-//
-// When Tool RAG is on, the model is only sent the ~7 Tier-0 tools each turn and
-// discovers the rest via tool_list / tool_describe. Those meta-tools hand back
-// the discovered tool as *text* — but a structured function-calling model
-// (Kimi, OpenAI, Groq, …) can only emit a tool_call for a function actually
-// DECLARED in the request's `tools` array. Without re-declaring what it found,
-// the model stalls right after tool_describe ("I don't have that tool loaded"),
-// which is exactly the failure mode that breaks agentic actions like
-// create_portfolio.
-//
-// This mirrors Anthropic's Tool Search Tool: the discovered tool definition
-// must be injected into the active tool set. We accumulate the bare names the
-// model surfaces (via tool_list) or commits to (via tool_describe) across the
-// turn, and feed them back into format_tools_for_openai so they become real,
-// callable functions on the next round.
 // ── Tool-result size discipline ───────────────────────────────────────────
 //
 // Tool results used to be spliced into the transcript verbatim, with no cap on
@@ -242,7 +250,7 @@ inline bool is_openai_family_model(const QString& model_lower) {
 //
 // The cap is a budget, not a guillotine: whatever doesn't fit is parked in the
 // ResultStore and the envelope tells the model how to page it back with
-// `result_fetch`. Detail is available on demand instead of by default.
+// `ui_read(ref=<result id>)`. Detail is available on demand instead of by default.
 
 /// Byte ceiling for a single tool result in the transcript. 8 KB carries a
 /// realistic table or article list intact; beyond that the overflow store
@@ -272,8 +280,8 @@ inline void fit_llm_payload(const QString& tool_name, QJsonObject& payload) {
     payload["truncated"] = true;
     payload["result_id"] = result_id;
     payload["full_bytes"] = st.original_bytes;
-    payload["note"] = QStringLiteral("Result truncated to fit context (%1 → %2 bytes). Call "
-                                     "result_fetch(result_id='%3', offset=0, limit=6000) to page the full payload.")
+    payload["note"] = QStringLiteral("Result truncated to fit context (%1 → %2 bytes). Page the full payload "
+                                     "with ui_read(ref='%3', offset=0).")
                           .arg(st.original_bytes)
                           .arg(st.final_bytes)
                           .arg(result_id);
@@ -296,18 +304,6 @@ inline QJsonObject shape_tool_result_for_llm(const QString& tool_name, const mcp
 inline QString encode_tool_result_for_llm(const QString& tool_name, const mcp::ToolResult& tr) {
     return QString::fromUtf8(QJsonDocument(shape_tool_result_for_llm(tool_name, tr)).toJson(QJsonDocument::Compact));
 }
-
-// Ceiling on how many discovered tools stay declared at once.
-//
-// Every activated tool re-enters the `tools` array on every subsequent round,
-// at full schema size. Left unbounded (the previous behaviour), a turn that
-// makes eight tool_list calls has ~40 extra schemas riding along by mid-turn —
-// which is roughly the whole catalogue Tier-0 exists to avoid sending, so the
-// ~85% saving quietly evaporates exactly when the turn is longest.
-//
-// 24 is comfortably above what any single turn genuinely juggles (top_k is
-// capped at 20 and defaults to 5) while keeping the tail bounded.
-inline constexpr int kMaxActivatedTools = 24;
 
 // —— Tool-loop budget ———
 //
@@ -380,61 +376,6 @@ class ToolLoopBudget {
     int rounds_ = 0;
 };
 
-/// Insertion-ordered, capped set of tools the model has discovered this turn.
-/// Evicts least-recently-activated first, so a tool the model keeps coming back
-/// to survives while stale candidates from an early search age out.
-class ActivationTracker {
-  public:
-    ActivationTracker() = default;
-    explicit ActivationTracker(const QSet<QString>& seed) {
-        for (const auto& n : seed)
-            add(n);
-    }
-
-    void add(const QString& name) {
-        if (name.isEmpty())
-            return;
-        if (set_.contains(name)) {
-            order_.removeOne(name); // re-activation refreshes recency
-            order_.append(name);
-            return;
-        }
-        set_.insert(name);
-        order_.append(name);
-        while (order_.size() > kMaxActivatedTools)
-            set_.remove(order_.takeFirst());
-    }
-
-    const QSet<QString>& names() const { return set_; }
-    int size() const { return set_.size(); }
-
-  private:
-    QStringList order_; // least-recently-activated at the front
-    QSet<QString> set_;
-};
-
-inline void note_tool_activations(const QString& bare_tool_name, const QJsonObject& args, const mcp::ToolResult& result,
-                                  ActivationTracker& activated) {
-    if (!result.success)
-        return;
-    if (bare_tool_name == QLatin1String("tool_list")) {
-        // Activate every candidate the search surfaced — the model may pick any.
-        const QJsonArray rows = result.data.toObject().value("tools").toArray();
-        for (const auto& row : rows)
-            activated.add(row.toObject().value("name").toString());
-    } else if (bare_tool_name == QLatin1String("tool_describe")) {
-        // The model committed to one tool — prefer the canonical name echoed in
-        // the result, fall back to the name it asked about. Adding it last also
-        // makes it the most-recently-used entry, so it outlives the rest of the
-        // search batch it came from.
-        QString name = result.data.toObject().value("name").toString();
-        if (name.isEmpty())
-            name = args.value("name").toString();
-        activated.add(name);
-    }
-}
-
-
 // —— Parallel tool execution ———
 //
 // A model that asks for six quotes emits six tool_calls in ONE assistant turn,
@@ -500,13 +441,14 @@ inline bool tool_is_destructive(const QString& wire_name) {
     const QString bare = mcp::McpProvider::parse_openai_function_name(wire_name).second;
     if (bare.isEmpty())
         return true;
-    // tool_invoke is a generic dispatcher: it is not destructive itself, but the
-    // tool it wraps may be. Treat it as a barrier so a wrapped write can never
-    // run concurrently with — or overtake — other calls in the same round.
-    if (bare == QLatin1String("tool_invoke"))
-        return true;
     const auto t = mcp::McpProvider::instance().find_tool(bare);
-    return t ? t->is_destructive : true;
+    if (!t)
+        return true;
+    // Tools that change what the screen shows (ui_act, ui_invoke, ui_open,
+    // ui_workspace) are barriers too: two of them racing would interleave
+    // their steps on the GUI thread in an order the model never asked for.
+    return t->is_destructive || t->category == QLatin1String("ui-control") ||
+           t->category == QLatin1String("navigation");
 }
 
 /// Split a round into execution batches, preserving the model's ordering.
@@ -564,9 +506,7 @@ inline std::vector<mcp::ToolResult> execute_tool_calls(const std::vector<Pending
         if (end - begin == 1) {
             // In-thread: a single call gains nothing from a pool hop, and this
             // keeps the common one-call round byte-for-byte what it was.
-            out[begin] = mcp::McpService::instance().execute_openai_function(calls[begin].wire_name,
-                                                                            calls[begin].args,
-                                                                            /*allow_defer=*/true);
+            out[begin] = mcp::McpService::instance().execute_openai_function(calls[begin].wire_name, calls[begin].args);
             continue;
         }
         std::vector<QFuture<mcp::ToolResult>> futures;
@@ -576,8 +516,7 @@ inline std::vector<mcp::ToolResult> execute_tool_calls(const std::vector<Pending
                 [call = calls[k], call_in_progress, destructive_allowed, session_id]() -> mcp::ToolResult {
                     mcp::TerminalMcpBridge::ScopedCallFlags flags(call_in_progress, destructive_allowed);
                     ChatSessionGuard session(session_id);
-                    return mcp::McpService::instance().execute_openai_function(call.wire_name, call.args,
-                                                                              /*allow_defer=*/true);
+                    return mcp::McpService::instance().execute_openai_function(call.wire_name, call.args);
                 }));
         }
         for (std::size_t k = begin; k < end; ++k) {

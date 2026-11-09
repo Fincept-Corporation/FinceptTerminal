@@ -49,7 +49,7 @@ struct ArenaKillWait {
     QEventLoop loop;
 };
 
-Result<void> arena_wait_kill(const std::shared_ptr<ArenaKillWait>& st, Result<void> started) {
+Result<void> arena_wait_kill(const std::shared_ptr<ArenaKillWait>& st, const Result<void>& started) {
     if (started.is_err())
         return started;
     if (!st->finished) {
@@ -61,7 +61,7 @@ Result<void> arena_wait_kill(const std::shared_ptr<ArenaKillWait>& st, Result<vo
 
 Result<void> arena_kill_all_sync(ArenaEngine& eng) {
     auto st = std::make_shared<ArenaKillWait>();
-    auto started = eng.kill_all([st](Result<void> r) {
+    auto started = eng.kill_all([st](const Result<void>& r) {
         st->out = r;
         st->finished = true;
         st->loop.quit();
@@ -71,7 +71,7 @@ Result<void> arena_kill_all_sync(ArenaEngine& eng) {
 
 Result<void> arena_kill_agent_sync(ArenaEngine& eng, const QString& agent_id) {
     auto st = std::make_shared<ArenaKillWait>();
-    auto started = eng.kill_agent(agent_id, [st](Result<void> r) {
+    auto started = eng.kill_agent(agent_id, [st](const Result<void>& r) {
         st->out = r;
         st->finished = true;
         st->loop.quit();
@@ -352,7 +352,7 @@ int run_arena_selftest() {
         // (mark_all needs funding rates: set via set_marks + funding map — see impl: funding
         //  rates ride in set_funding())
         px.set_funding({{"BTC", 0.0001}});
-        px.mark_all(3600 * 1000, 5); // one full 1h funding window (HL rates are hourly)
+        px.mark_all(qint64{3600} * 1000, 5); // one full 1h funding window (HL rates are hourly)
         check("px: positive funding costs longs", px.account(paid).equity < eq_before);
 
         // Liquidation: crash the mark far below entry.
@@ -692,7 +692,7 @@ int run_arena_selftest() {
             // Asynchronous contract: kill_all returns before closing anything,
             // refuses lifecycle calls meanwhile, then flattens + ends.
             auto st = std::make_shared<ArenaKillWait>();
-            auto started = eng.kill_all([st](Result<void> r) {
+            auto started = eng.kill_all([st](const Result<void>& r) {
                 st->out = r;
                 st->finished = true;
                 st->loop.quit();

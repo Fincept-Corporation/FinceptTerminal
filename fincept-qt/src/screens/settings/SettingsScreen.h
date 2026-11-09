@@ -51,7 +51,7 @@ class SettingsScreen : public QWidget, public IStatefulScreen {
     /// old section widget.
     void wire_section_signals(int idx);
 
-    /// Sections are built on first visit, not up front: constructing all 16 at
+    /// Sections are built on first visit, not up front: constructing all 17 at
     /// once cost every Settings open (130 credential cards, a storage scan, DB
     /// reads for providers / profiles / servers) for sections the user never
     /// looked at. Until then each stack slot holds an empty placeholder.

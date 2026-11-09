@@ -17,6 +17,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 namespace fincept::screens {
@@ -70,6 +71,10 @@ void EquityPeersTab::set_symbol(const QString& symbol) {
     peer_table_->setRowCount(0);
     peers_loaded_ = false;
     cached_peers_.clear();
+    if (relative_lbl_) {
+        relative_lbl_->clear();
+        relative_lbl_->hide();
+    }
     // A peer list restored from the saved session wins once over the curated defaults.
     const QStringList curated = default_peers(symbol);
     if (pending_peers_.isEmpty() && curated.isEmpty()) {
@@ -169,6 +174,15 @@ void EquityPeersTab::build_ui() {
     });
     vl->addWidget(peer_table_, 1);
 
+    // ── Relative valuation vs the peer median ────────────────────────────────
+    relative_lbl_ = new QLabel(this);
+    relative_lbl_->setObjectName(QStringLiteral("peersStatus"));
+    relative_lbl_->setWordWrap(true);
+    relative_lbl_->setTextFormat(Qt::RichText);
+    relative_lbl_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    relative_lbl_->hide();
+    vl->addWidget(relative_lbl_);
+
     // ── Legend + units ────────────────────────────────────────────────────────
     auto* legend = new QWidget(this);
     auto* leg_hl = new QHBoxLayout(legend);
@@ -229,6 +243,7 @@ void EquityPeersTab::on_peers_loaded(QVector<services::equity::PeerData> peers) 
     cached_peers_ = peers;
     peers_loaded_ = true;
     populate_table(peers);
+    update_relative_summary(peers);
     if (peers.isEmpty()) {
         status_label_->setText(tr("No data came back for %1 — check the tickers (yfinance form, e.g. TCS.NS).")
                                    .arg(requested_symbols_.join(QStringLiteral(", "))));
@@ -248,10 +263,12 @@ void EquityPeersTab::on_peers_loaded(QVector<services::equity::PeerData> peers) 
 }
 
 void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& peers) {
-    const QStringList headers = {tr("SYMBOL"),    tr("MKT CAP"), tr("PRICE"),   tr("P/E"),     tr("FWD P/E"),
-                                 tr("P/B"),       tr("P/S"),     tr("PEG"),     tr("ROE"),     tr("ROA"),
-                                 tr("GROSS MGN"), tr("NET MGN"), tr("OP MGN"),  tr("D/E"),     tr("DIV YIELD"),
-                                 tr("BETA")};
+    // CHG% / REV GR / EPS GR were fetched for every peer but never shown — growth is what
+    // justifies a premium multiple, so it belongs next to them.
+    const QStringList headers = {tr("SYMBOL"),  tr("MKT CAP"),   tr("PRICE"),     tr("CHG%"),   tr("P/E"),
+                                 tr("FWD P/E"), tr("P/B"),       tr("P/S"),       tr("PEG"),    tr("ROE"),
+                                 tr("ROA"),     tr("GROSS MGN"), tr("NET MGN"),   tr("OP MGN"), tr("REV GR"),
+                                 tr("EPS GR"),  tr("D/E"),       tr("DIV YIELD"), tr("BETA")};
 
     peer_table_->setSortingEnabled(false);
     peer_table_->setColumnCount(static_cast<int>(headers.size()));
@@ -302,25 +319,31 @@ void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& p
         set_cell(r, 1, p.market_cap > 0.0 ? equity_fmt::large(p.market_cap) : equity_fmt::dash(), p.market_cap,
                  QColor(ui::colors::CYAN()));
         set_cell(r, 2, peers_fmt(p.price, 2), p.price, QColor(ui::colors::CYAN()));
-        set_cell(r, 3, peers_fmt(p.pe_ratio, 1, QStringLiteral("x")), p.pe_ratio, color_ratio(p.pe_ratio, 15, 30));
-        set_cell(r, 4, peers_fmt(p.forward_pe, 1, QStringLiteral("x")), p.forward_pe, color_ratio(p.forward_pe, 15, 30));
-        set_cell(r, 5, peers_fmt(p.price_to_book, 2, QStringLiteral("x")), p.price_to_book,
+        // change_pct arrives in percent (yfinance regularMarketChangePercent).
+        set_cell(r, 3, p.change_pct != 0.0 ? equity_fmt::pct(p.change_pct / 100.0, 2, true) : equity_fmt::dash(),
+                 p.change_pct, color_sign(p.change_pct));
+        set_cell(r, 4, peers_fmt(p.pe_ratio, 1, QStringLiteral("x")), p.pe_ratio, color_ratio(p.pe_ratio, 15, 30));
+        set_cell(r, 5, peers_fmt(p.forward_pe, 1, QStringLiteral("x")), p.forward_pe,
+                 color_ratio(p.forward_pe, 15, 30));
+        set_cell(r, 6, peers_fmt(p.price_to_book, 2, QStringLiteral("x")), p.price_to_book,
                  color_ratio(p.price_to_book, 2, 5));
-        set_cell(r, 6, peers_fmt(p.price_to_sales, 2, QStringLiteral("x")), p.price_to_sales,
+        set_cell(r, 7, peers_fmt(p.price_to_sales, 2, QStringLiteral("x")), p.price_to_sales,
                  color_ratio(p.price_to_sales, 3, 8));
-        set_cell(r, 7, peers_fmt(p.peg_ratio, 2), p.peg_ratio, color_ratio(p.peg_ratio, 1, 2));
-        set_cell(r, 8, pct(p.roe), p.roe, color_sign(p.roe));
-        set_cell(r, 9, pct(p.roa), p.roa, color_sign(p.roa));
-        set_cell(r, 10, pct(p.gross_margin), p.gross_margin, color_sign(p.gross_margin));
-        set_cell(r, 11, pct(p.profit_margin), p.profit_margin, color_sign(p.profit_margin));
-        set_cell(r, 12, pct(p.operating_margin), p.operating_margin, color_sign(p.operating_margin));
+        set_cell(r, 8, peers_fmt(p.peg_ratio, 2), p.peg_ratio, color_ratio(p.peg_ratio, 1, 2));
+        set_cell(r, 9, pct(p.roe), p.roe, color_sign(p.roe));
+        set_cell(r, 10, pct(p.roa), p.roa, color_sign(p.roa));
+        set_cell(r, 11, pct(p.gross_margin), p.gross_margin, color_sign(p.gross_margin));
+        set_cell(r, 12, pct(p.profit_margin), p.profit_margin, color_sign(p.profit_margin));
+        set_cell(r, 13, pct(p.operating_margin), p.operating_margin, color_sign(p.operating_margin));
+        set_cell(r, 14, pct(p.revenue_growth), p.revenue_growth, color_sign(p.revenue_growth));
+        set_cell(r, 15, pct(p.earnings_growth), p.earnings_growth, color_sign(p.earnings_growth));
         // yfinance reports debtToEquity and dividendYield in PERCENT (D/E 152 = 1.52x, yield
         // 0.33 = 0.33%) — normalise to the ratio / fraction the thresholds and pct() expect.
         const double de = p.debt_to_equity / 100.0;
-        set_cell(r, 13, peers_fmt(de, 2, QStringLiteral("x")), de, color_ratio(de, 0.5, 2.0));
+        set_cell(r, 16, peers_fmt(de, 2, QStringLiteral("x")), de, color_ratio(de, 0.5, 2.0));
         const double dy = p.dividend_yield / 100.0;
-        set_cell(r, 14, pct(dy), dy, dy > 0.0 ? QColor(ui::colors::POSITIVE()) : kGray);
-        set_cell(r, 15, peers_fmt(p.beta, 2), p.beta,
+        set_cell(r, 17, pct(dy), dy, dy > 0.0 ? QColor(ui::colors::POSITIVE()) : kGray);
+        set_cell(r, 18, peers_fmt(p.beta, 2), p.beta,
                  p.beta == 0.0 ? kGray
                                : (p.beta > 0.0 && p.beta <= 1.5 ? QColor(ui::colors::POSITIVE())
                                                                 : QColor(ui::colors::NEGATIVE())));
@@ -328,6 +351,106 @@ void EquityPeersTab::populate_table(const QVector<services::equity::PeerData>& p
 
     peer_table_->resizeColumnsToContents();
     peer_table_->setSortingEnabled(true);
+}
+
+void EquityPeersTab::update_relative_summary(const QVector<services::equity::PeerData>& peers) {
+    if (!relative_lbl_)
+        return;
+    const services::equity::PeerData* subj = nullptr;
+    QVector<const services::equity::PeerData*> others;
+    for (const auto& p : peers) {
+        if (p.symbol.compare(current_symbol_, Qt::CaseInsensitive) == 0)
+            subj = &p;
+        else
+            others.append(&p);
+    }
+    if (!subj || others.size() < 2) {
+        relative_lbl_->clear();
+        relative_lbl_->hide();
+        return;
+    }
+
+    // Median over the peers that report the figure (yfinance sends a missing ratio as 0;
+    // multiples must also be positive — a negative P/E is "no earnings", not "cheap").
+    auto median_of = [&others](double services::equity::PeerData::*field, bool positive_only, double scale) {
+        QVector<double> v;
+        for (const auto* p : others) {
+            const double x = p->*field * scale;
+            if (std::isfinite(x) && x != 0.0 && (!positive_only || x > 0.0))
+                v.append(x);
+        }
+        if (v.size() < 2)
+            return std::nan("");
+        std::sort(v.begin(), v.end());
+        const qsizetype n = v.size();
+        return n % 2 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
+    };
+    const QString pos = ui::colors::POSITIVE();
+    const QString neg = ui::colors::NEGATIVE();
+    QStringList parts;
+    // Multiple: premium (above median) reads as expensive.
+    auto multiple = [&](const QString& label, double services::equity::PeerData::*field) {
+        const double med = median_of(field, true, 1.0);
+        const double own = subj->*field;
+        if (!std::isfinite(med) || own <= 0.0)
+            return;
+        const double prem = own / med - 1.0;
+        parts << QStringLiteral("<b>%1</b> %2x vs %3x <span style='color:%4'>(%5)</span>")
+                     .arg(label, QString::number(own, 'f', 1), QString::number(med, 'f', 1), prem > 0 ? neg : pos,
+                          equity_fmt::pct(prem, 0, true));
+    };
+    // Rate: above median reads as better.
+    auto rate = [&](const QString& label, double services::equity::PeerData::*field) {
+        const double med = median_of(field, false, 1.0);
+        const double own = subj->*field;
+        if (!std::isfinite(med) || own == 0.0)
+            return;
+        const double diff_pp = (own - med) * 100.0;
+        parts << QStringLiteral("<b>%1</b> %2 vs %3 <span style='color:%4'>(%5%6 pp)</span>")
+                     .arg(label, equity_fmt::pct(own, 1), equity_fmt::pct(med, 1), diff_pp >= 0 ? pos : neg,
+                          diff_pp >= 0 ? QStringLiteral("+") : QString(), QString::number(diff_pp, 'f', 1));
+    };
+    using PD = services::equity::PeerData;
+    multiple(tr("P/E"), &PD::pe_ratio);
+    multiple(tr("Fwd P/E"), &PD::forward_pe);
+    multiple(tr("P/S"), &PD::price_to_sales);
+    multiple(tr("P/B"), &PD::price_to_book);
+    rate(tr("ROE"), &PD::roe);
+    rate(tr("Net margin"), &PD::profit_margin);
+    rate(tr("Rev growth"), &PD::revenue_growth);
+
+    // Price the subject would trade at on the peers' median multiples (each multiple
+    // scales the price linearly), and their average as a relative-value anchor.
+    QStringList implied;
+    double implied_sum = 0.0;
+    int implied_n = 0;
+    auto implied_at = [&](const QString& label, double PD::*field) {
+        const double med = median_of(field, true, 1.0);
+        const double own = subj->*field;
+        if (!std::isfinite(med) || own <= 0.0 || subj->price <= 0.0)
+            return;
+        const double px = subj->price * med / own;
+        implied << QStringLiteral("%1 %2").arg(label, QString::number(px, 'f', 2));
+        implied_sum += px;
+        ++implied_n;
+    };
+    implied_at(tr("P/E"), &PD::pe_ratio);
+    implied_at(tr("Fwd P/E"), &PD::forward_pe);
+    implied_at(tr("P/S"), &PD::price_to_sales);
+
+    QString text = tr("<b>%1 vs peer median</b> (%n peer(s)): ", "", static_cast<int>(others.size()))
+                       .arg(subj->symbol.toHtmlEscaped()) +
+                   parts.join(QStringLiteral(" · "));
+    if (implied_n > 0) {
+        const double avg = implied_sum / implied_n;
+        const double gap = avg / subj->price - 1.0;
+        text += tr("<br><b>Implied price at peer-median multiples:</b> %1 — average <b>%2</b> "
+                   "<span style='color:%3'>(%4 vs %5)</span>")
+                    .arg(implied.join(QStringLiteral(" · ")), QString::number(avg, 'f', 2), gap >= 0 ? pos : neg,
+                         equity_fmt::pct(gap, 1, true), QString::number(subj->price, 'f', 2));
+    }
+    relative_lbl_->setText(text);
+    relative_lbl_->setVisible(!parts.isEmpty() || implied_n > 0);
 }
 
 QString EquityPeersTab::symbol_at_row(int row) const {
@@ -410,8 +533,10 @@ void EquityPeersTab::retranslateUi() {
                                "yield in %; D/E = total debt ÷ equity (x). Market cap and price are in each "
                                "listing's own currency."));
     // Re-render from cached data so headers and dashes pick up the new locale.
-    if (peers_loaded_)
+    if (peers_loaded_) {
         populate_table(cached_peers_);
+        update_relative_summary(cached_peers_);
+    }
 }
 
 QString EquityPeersTab::peers_text() const {

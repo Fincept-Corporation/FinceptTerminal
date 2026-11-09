@@ -189,15 +189,20 @@ ads::CDockWidget* DockScreenRouter::create_dock_widget(const QString& id) {
 
 void DockScreenRouter::prepare_dock_widget(const QString& id) {
     // Phase 8: pre-create the dock widget shell for restoreState matching.
-    // Idempotent — a no-op if the widget already exists (likely registered
-    // earlier by ensure_all_registered() at WindowFrame construction).
-    if (dock_widgets_.contains(id))
+    // Idempotent — a no-op if the manager already knows the widget (likely
+    // registered earlier by ensure_all_registered()). A widget we own but that
+    // prune_hidden_panels() detached from the manager is re-attached instead:
+    // restoreState() matches through the manager's map only (#412).
+    ads::CDockWidget* dw = dock_widgets_.value(id, nullptr);
+    if (dw && manager_ && manager_->findDockWidget(id))
         return;
-    if (!factories_.contains(id) && !screens_.contains(id)) {
-        LOG_WARN("DockRouter", QString("prepare_dock_widget: unknown id '%1'").arg(id));
-        return;
+    if (!dw) {
+        if (!factories_.contains(id) && !screens_.contains(id)) {
+            LOG_WARN("DockRouter", QString("prepare_dock_widget: unknown id '%1'").arg(id));
+            return;
+        }
+        dw = create_dock_widget(id);
     }
-    auto* dw = create_dock_widget(id);
     if (!dw)
         return;
 

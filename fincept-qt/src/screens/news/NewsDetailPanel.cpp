@@ -592,7 +592,12 @@ void NewsDetailPanel::show_article(const services::NewsArticle& article) {
     // Sentiment badge
     QString sstr = services::sentiment_string(article.sentiment);
     QString scolor = services::sentiment_color(article.sentiment);
+    // The label alone hid how strong the tone is (+0.16 and +0.93 both read BULLISH).
+    if (article.sentiment_score != 0.0)
+        sstr +=
+            QStringLiteral(" %1%2").arg(article.sentiment_score > 0 ? "+" : "").arg(article.sentiment_score, 0, 'f', 2);
     sentiment_badge_->setText(sstr);
+    sentiment_badge_->setToolTip(tr("Headline tone, finance-tuned VADER: -1 bearish … +1 bullish (±0.15 = neutral)"));
     sentiment_badge_->setStyleSheet(QString("color: %1; padding: 1px 4px;").arg(scolor));
 
     // Tier badge

@@ -88,6 +88,13 @@ BrokerHoldingsWidget::BrokerHoldingsWidget(const QJsonObject& cfg, QWidget* pare
             open_symbol(it->text(), QStringLiteral("equity_trading"), QStringLiteral("equity"),
                         it->data(Qt::UserRole).toString());
     });
+    // Single click → linked panels (same placeholder-row guard).
+    enable_symbol_link(/*follows=*/false);
+    connect(table_, &QTableWidget::cellClicked, this, [this](int row, int /*col*/) {
+        auto* it = table_->item(row, 0);
+        if (it && it->data(Qt::UserRole).isValid())
+            publish_symbol(it->text(), it->data(Qt::UserRole).toString());
+    });
 
     // Title-bar refresh = "retry". It used to be wired to nothing, so the 20 s
     // "No data yet - click refresh to retry" prompt pointed at a dead button.

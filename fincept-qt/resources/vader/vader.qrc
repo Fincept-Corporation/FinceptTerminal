@@ -1,0 +1,10 @@
+<!-- VADER sentiment lexicons, unmodified from vaderSentiment 3.3.2
+     (https://github.com/cjhutto/vaderSentiment), MIT licence in LICENSE.txt.
+     Read by src/services/news/VaderSentiment.cpp. -->
+<RCC>
+    <qresource prefix="/vader">
+        <file>vader_lexicon.txt</file>
+        <file>emoji_utf8_lexicon.txt</file>
+        <file>LICENSE.txt</file>
+    </qresource>
+</RCC>

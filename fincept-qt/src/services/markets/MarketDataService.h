@@ -99,25 +99,9 @@ class MarketDataService : public QObject, public fincept::datahub::Producer {
     /// This callback API remains for one-shot reads (e.g. report builder snapshots).
     void fetch_quotes(const QStringList& symbols, QuoteCallback cb);
 
-    using NewsCallback = std::function<void(bool, QJsonArray)>;
-    void fetch_news(const QString& symbol, int count, NewsCallback cb);
-
     /// Fetch full company info (P/E, 52W range, market cap, ratios, etc.)
     using InfoCallback = std::function<void(bool, InfoData)>;
     void fetch_info(const QString& symbol, InfoCallback cb);
-
-    /// Fetch historical OHLCV data. period: "1mo","3mo","6mo","1y","2y","5y"
-    /// interval: "1d","1wk","1mo"
-    /// Phase 3+: prefer `DataHub::subscribe(this, "market:history:<sym>:<period>:<interval>", ...)`
-    /// for streaming chart widgets. Callback API remains for one-shot reads.
-    using HistoryCallback = std::function<void(bool, QVector<HistoryPoint>)>;
-    void fetch_history(const QString& symbol, const QString& period, const QString& interval, HistoryCallback cb);
-
-    /// Fetch 5-day hourly sparkline data for multiple symbols in one Python call.
-    /// Callback: map of symbol -> list of close prices (chronological).
-    /// Phase 3+: prefer `DataHub::subscribe(this, "market:sparkline:<sym>", ...)` for live tables.
-    using SparklineCallback = std::function<void(bool, QHash<QString, QVector<double>>)>;
-    void fetch_sparklines(const QStringList& symbols, SparklineCallback cb);
 
     /// Resolve human-readable display names (e.g. "^GSPC" → "S&P 500",
     /// "GC=F" → "Gold") for cryptic tickers so market tables can show names

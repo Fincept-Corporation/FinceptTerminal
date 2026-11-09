@@ -47,7 +47,9 @@ class WorkflowExecutor : public QObject {
     /// The MCP tool an mcp.tool_call node will call: its `tool` parameter, else the
     /// `tool` field of a Tool Picker payload on its first input.
     static QString effective_mcp_tool(const QJsonObject& params, const QVector<QJsonValue>& inputs);
-    /// True for an internal, destructive tool of the "live-trading" category (orders at a broker).
+    /// True for an internal tool that can reach a real order (ui_act, python). In a
+    /// PAPER run such tools refuse orders themselves; in LIVE they are listed in the
+    /// confirmation and must be named on the node.
     static bool mcp_tool_moves_money(const QString& tool);
     /// Node ids forming one cycle of `adjacency` (first id repeated at the end is omitted);
     /// empty when the graph is acyclic.

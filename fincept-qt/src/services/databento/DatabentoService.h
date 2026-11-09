@@ -20,13 +20,6 @@
 namespace fincept {
 
 // Metadata types for the Surface Analytics control panel
-struct DbPublisher {
-    int publisher_id = 0;
-    QString dataset;
-    QString venue;
-    QString description;
-};
-
 struct DbDatasetRange {
     QString dataset;
     QDate start;
@@ -114,15 +107,10 @@ class DatabentoService : public QObject {
     QString api_key() const;
     void clear_api_key();
 
-    // Test connection
-    void test_connection(); // emits connection_tested(bool ok, QString msg)
-
     // ── Metadata (callback-based; results cached in-memory) ─────────────────
-    // The control panel uses these to populate dataset/schema/publisher pickers
-    // and to suggest sane default date ranges before a fetch is dispatched.
+    // Surface Analytics uses these to fill its dataset picker and symbol completer,
+    // suggest sane default date ranges and estimate a request's cost before a fetch.
     void list_datasets(std::function<void(QStringList)> cb);
-    void list_schemas(const QString& dataset, std::function<void(QStringList)> cb);
-    void list_publishers(const QString& dataset, std::function<void(QList<DbPublisher>)> cb);
     void get_dataset_range(const QString& dataset, std::function<void(DbDatasetRange)> cb);
     void get_cost(const DbCostQuery& q, std::function<void(DbCostResult)> cb);
     void search_symbols(const QString& query, const QString& dataset, std::function<void(QStringList)> cb);
@@ -171,7 +159,6 @@ class DatabentoService : public QObject {
     QDateTime last_fetch_time() const { return last_fetch_time_; }
 
   signals:
-    void connection_tested(bool ok, const QString& message);
     void ohlcv_ready(const DatabentoOhlcvResult& result);
     void vol_surface_ready(const DatabentoVolSurfaceResult& result);
     void futures_ready(const DatabentoFuturesResult& result);
@@ -206,8 +193,6 @@ class DatabentoService : public QObject {
 
     // Metadata caches — populated lazily on first request, valid for app session
     QStringList cached_datasets_;
-    QHash<QString, QStringList> cached_schemas_; // dataset → schemas
-    QHash<QString, QList<DbPublisher>> cached_publishers_;
     QHash<QString, DbDatasetRange> cached_ranges_;
 
     static constexpr const char* SECURE_KEY = "databento.api_key";

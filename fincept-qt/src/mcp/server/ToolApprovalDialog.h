@@ -47,7 +47,7 @@ namespace fincept::mcp {
 /// What the user is asked to approve. Built by McpHttpServer on the worker thread.
 struct ToolApprovalRequest {
     QString client;       ///< clientInfo.name of the caller ("claude-code", "codex-mcp-client", "unknown")
-    QString tool;         ///< internal tool name (the INNER tool for tool_invoke)
+    QString tool;         ///< what is being approved ("ui_act: click Place order", "python: exchange/place_order")
     QString description;  ///< the tool's own description
     QJsonObject args;     ///< arguments — shown as a bounded preview, never logged
     bool destructive = false;
@@ -88,6 +88,24 @@ class ToolApprovalDialog : public QDialog {
     /// GUI THREAD. Deny every queued request and the one on screen (used when the
     /// MCP server stops, so no worker keeps waiting on a dialog nobody needs).
     static void deny_all_pending();
+
+    // ── Auto mode (Settings › AI Agents (MCP)) ──────────────────────────────
+    // When on, request_approval() answers Approved at once for EVERY caller —
+    // external MCP clients, AI Chat and the agent bridge — without showing a
+    // dialog: orders, money moves, spends, deletes, sign-out and sensitive
+    // scripts all run on the agent's say-so. Each auto-approval is logged (WARN)
+    // and live-trading ones raise a desktop notification. Hard rules are NOT
+    // approvals and still hold: a PAPER workflow run stays paper, Blocked
+    // scripts stay refused, secret fields are never read or typed.
+    // Off by default; persisted as `mcp/auto_approve`.
+
+    /// True when auto mode is on. Thread-safe (atomic, seeded from settings once).
+    static bool auto_approve();
+    /// Turn auto mode on/off and persist it. Call from the GUI thread.
+    static void set_auto_approve(bool on);
+    /// Read the persisted value into the cache. GUI thread; called at startup so
+    /// worker threads never touch QSettings.
+    static void load_auto_approve_setting();
 
     ToolApprovalDialog(const ToolApprovalRequest& request, qint64 deadline_ms, QWidget* parent = nullptr);
     ~ToolApprovalDialog() override;

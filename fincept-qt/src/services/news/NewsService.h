@@ -51,6 +51,9 @@ struct NewsArticle {
     QString source;
     QString region;
     Sentiment sentiment = Sentiment::NEUTRAL;
+    /// Finance-tuned VADER compound score of headline + summary, -1..1 (0 = neutral or
+    /// unknown — rows restored from the database carry only the label).
+    double sentiment_score = 0.0;
     Impact impact = Impact::LOW;
     QStringList tickers;
     QString link;

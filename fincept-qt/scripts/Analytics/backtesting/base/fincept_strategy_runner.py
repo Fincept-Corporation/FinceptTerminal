@@ -46,8 +46,8 @@ class FinceptStrategyRunner:
             raise ValueError(f"Strategy {strategy_id} not found in registry")
 
         # Containment check - the code below exec()s whatever it reads, so the
-        # resolved path must stay under strategies_dir. Shared with live_runner.py
-        # via _loader; raises StrategyPathError (a ValueError) if it escapes.
+        # resolved path must stay under strategies_dir. The check lives in
+        # strategies/_loader; raises StrategyPathError (a ValueError) if it escapes.
         strategy_path = resolve_strategy_path(self.strategies_dir, info['path'])
         if not strategy_path.exists():
             raise FileNotFoundError(f"Strategy file not found: {strategy_path}")

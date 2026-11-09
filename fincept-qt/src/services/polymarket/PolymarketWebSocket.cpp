@@ -14,7 +14,7 @@
 
 namespace fincept::services::polymarket {
 
-static constexpr int kPingIntervalMs = 50000;
+static constexpr int kPingIntervalMs = 10000;   // docs: send "PING" every 10 s (application-level heartbeat)
 static constexpr int kPolyWsIdleCloseMs = 5000; // socket stays up this long after the last unsubscribe
 // Hub fan-out cap for the push topics. Both payloads are latest-state (a price
 // scalar / a full book snapshot), so latest-wins coalescing drops nothing.

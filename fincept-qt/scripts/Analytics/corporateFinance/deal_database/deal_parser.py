@@ -1,4 +1,9 @@
-"""M&A Deal Parser - Extract structured data from SEC filings"""
+"""M&A Deal Parser - Extract structured data from SEC filings
+
+CLI: python deal_parser.py parse <accession_number|EDGAR URL> <form_type>   parse one filing the scan stored
+     (deal_tracker.py scan) from that filing's own primary document on EDGAR; form_type fills a stored row
+     that has none.  parse_batch <accession_numbers_json> [max_workers].
+"""
 import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
@@ -16,21 +21,54 @@ sys.path.insert(0, str(analytics_path))
 # Use absolute imports instead of relative imports
 from corporateFinance.config import DEAL_TYPES, PAYMENT_METHODS, INDUSTRIES
 from corporateFinance.deal_database.database_schema import MADatabase
-from mcp.edgar import base as edgar_base, financials as edgar_financials
+from fincept_mcp.edgar import base as edgar_base, financials as edgar_financials
+
+
+def _http_get_text(url: str, max_bytes: int = 3_000_000) -> str:
+    """GET `url` with the SEC-required User-Agent; at most `max_bytes` are read. '' on any error."""
+    from urllib.request import Request, urlopen
+    from corporateFinance.deal_database.deal_scanner import _EDGAR_HEADERS
+    try:
+        req = Request(url, headers={**_EDGAR_HEADERS, "Accept": "text/plain,text/html"})
+        with urlopen(req, timeout=30) as resp:
+            raw = resp.read(max_bytes)
+    except Exception as exc:
+        print(f"[Parser] EDGAR fetch failed {url}: {exc}", file=sys.stderr)
+        return ""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
+
+
+def _primary_document_text(submission: str) -> str:
+    """Plain text of the first <DOCUMENT> (the form itself) of an EDGAR complete-submission file."""
+    import html
+    doc = re.search(r"<DOCUMENT>(.*?)(?:</DOCUMENT>|$)", submission, re.S | re.I)
+    body = doc.group(1) if doc else submission
+    text = re.search(r"<TEXT>(.*?)(?:</TEXT>|$)", body, re.S | re.I)
+    body = text.group(1) if text else body
+    body = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", body)
+    body = html.unescape(re.sub(r"<[^>]+>", " ", body))
+    return re.sub(r"\s+", " ", body).strip()
 
 
 class _EdgarAdapter:
     """Thin adapter so deal_parser can call the same methods as before,
-    now backed by mcp.edgar (System 1 / edgartools)."""
+    now backed by fincept_mcp.edgar (System 1 / edgartools)."""
 
     def resolve_cik(self, name: str):
         result = edgar_base.resolve_cik(name)
         return result.get("cik") if result.get("success") else None
 
     def get_filing_text(self, accession_number: str, cik: str) -> str:
-        # System 1 fetches by ticker/CIK + form; use CIK with default 10-K
-        result = edgar_base.get_filing_text(cik, "10-K")
-        return result.get("text", "") if result.get("success") else ""
+        """Text of THIS filing (not the company's latest 10-K): the primary document of the accession's
+        complete-submission file on EDGAR."""
+        acc = accession_number.strip()
+        cik_path = str(cik).strip().lstrip("0") or "0"
+        url = f"https://www.sec.gov/Archives/edgar/data/{cik_path}/{acc.replace('-', '')}/{acc}.txt"
+        submission = _http_get_text(url)
+        return _primary_document_text(submission)[:100_000] if submission else ""
 
     def get_company_financials(self, cik: str) -> dict:
         result = edgar_financials.get_financials(cik)
@@ -45,6 +83,7 @@ class MADealParser:
     def __init__(self, db: Optional[MADatabase] = None, fetcher=None):
         self.db = db or MADatabase()
         self.fetcher = fetcher or _EdgarAdapter()
+        self.last_error: Optional[str] = None  # why the last parse_filing() returned None
 
         self.value_patterns = [
             r'\$\s*(\d+(?:\.\d+)?)\s*(?:billion|bn)',
@@ -66,28 +105,36 @@ class MADealParser:
             'mixed': ['cash and stock', 'combination of cash and', 'mixed consideration']
         }
 
-    def parse_filing(self, accession_number: str) -> Optional[Dict[str, Any]]:
-        """Parse complete M&A deal from SEC filing"""
+    def filing_record(self, accession_number: str) -> Optional[Dict[str, Any]]:
+        """The stored sec_filings row for `accession_number` (written by the scan), or None."""
+        cursor = self.db._get_connection().cursor()
+        cursor.execute("SELECT * FROM sec_filings WHERE accession_number = ?", (accession_number,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def parse_filing(self, accession_number: str, filing_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Parse complete M&A deal from SEC filing. `filing_type` is used when the stored row has none.
+        On None, `self.last_error` says why."""
+        self.last_error = None
         try:
             conn = self.db._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute("""
-                SELECT * FROM sec_filings
-                WHERE accession_number = ?
-            """, (accession_number,))
-
-            filing_record = cursor.fetchone()
+            filing_record = self.filing_record(accession_number)
             if not filing_record:
+                self.last_error = "not in the local filing index"
                 return None
-
-            filing_record = dict(filing_record)
+            if filing_type and not filing_record.get('filing_type'):
+                filing_record['filing_type'] = filing_type
 
             text = self._get_filing_text(filing_record)
             if not text:
+                self.last_error = "could not fetch the filing text from SEC EDGAR"
                 return None
 
             deal_data = self._extract_deal_structure(text, filing_record)
+            if not deal_data:
+                self.last_error = "no M&A deal terms (named parties) found in the filing"
 
             if deal_data:
                 deal_id = self._generate_deal_id(deal_data)
@@ -113,6 +160,7 @@ class MADealParser:
                 return deal_data
 
         except Exception as e:
+            self.last_error = str(e)
             print(f"Error parsing {accession_number}: {e}", file=sys.stderr)
 
         return None
@@ -556,8 +604,10 @@ class MADealParser:
             r'per\s+share\s+(?:merger\s+)?consideration\s+of\s+\$\s*(\d+\.\d{2})',
         ]
         for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                # "common stock, par value $0.01 per share" is the par value, not the offer price
+                if re.search(r'par\s+value', text[max(0, match.start() - 40):match.start()], re.IGNORECASE):
+                    continue
                 try:
                     return float(match.group(1))
                 except ValueError:
@@ -767,17 +817,23 @@ def main():
                 # Try to use the URL as an accession number directly
                 accession_number = filing_url
 
-            deal_data = parser.parse_filing(accession_number)
+            deal_data = parser.parse_filing(accession_number, filing_type)
 
             if deal_data:
                 result = {
                     "success": True,
                     "data": deal_data
                 }
+            elif parser.last_error == "not in the local filing index":
+                result = {
+                    "success": False,
+                    "error": f"Filing {accession_number} is not in the local filing index - run SCAN SEC FILINGS "
+                             "first, then pick it from the list."
+                }
             else:
                 result = {
                     "success": False,
-                    "error": "Failed to parse filing - no M&A deal data found"
+                    "error": f"Failed to parse filing {accession_number}: {parser.last_error or 'no M&A deal data found'}"
                 }
 
             print(json.dumps(result))

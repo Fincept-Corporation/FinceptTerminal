@@ -267,10 +267,16 @@ QString VideoPlayerWidget::resolve_ytdlp_program() const {
         QDir(exe_dir).filePath("tools/" + exe_name),
         QDir(exe_dir).filePath("bin/" + exe_name),
         QDir(exe_dir).filePath("../tools/" + exe_name),
+        // Linux FHS install (<prefix>/bin/FinceptTerminal): kept out of
+        // <prefix>/bin so it never replaces the distro's yt-dlp (#415).
+        QDir(exe_dir).filePath("../libexec/fincept-terminal/" + exe_name),
     };
 
     for (const auto& candidate : local_candidates) {
-        if (QFileInfo::exists(candidate)) {
+        // A directory of the same name used to sit at <exe_dir>/yt-dlp in Linux
+        // build trees; exists() accepted it and QProcess then failed to start.
+        const QFileInfo info(candidate);
+        if (info.isFile() && info.isExecutable()) {
             return QDir::cleanPath(candidate);
         }
     }

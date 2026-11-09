@@ -14,8 +14,8 @@
 //
 // The service is a singleton so it can be registered from main.cpp and
 // looked up from any consumer screen. It DOES NOT spawn Python directly
-// (D1) — Greeks routing goes through PythonWorker. It is the sole hub
-// producer for the option:* topic family (D2).
+// (D1) — IV and Greeks are computed in-process (services/options/OptionPricing).
+// It is the sole hub producer for the option:* topic family (D2).
 //
 // Not thread-safe in the API surface; all entry points must be called
 // from the UI thread. Internal QtConcurrent work is marshalled back via
@@ -124,18 +124,12 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// broker's get_quotes for the underlying on first call per session.
     double resolve_spot(const QString& broker_id, const QString& underlying);
 
-    /// Phase 3 — Greeks/IV via py_vollib daemon. Builds the contract list
-    /// from `chain` (skipping per-token throttled strikes which use cached
-    /// values), submits to OptionGreeksWorker, and on success patches the
-    /// chain rows in place + republishes on `topic`. Also publishes
-    /// `option:atm_iv:<broker>:<underlying>` and per-leg `option:tick:*`.
+    /// Phase 3 — IV + Greeks per leg, solved in-process from each leg's mid (else
+    /// LTP) with BSM (pricing::bsm_implied_vol / bsm_greeks): synchronous, ~0.4 ms
+    /// for a 600-contract chain. Legs inside the per-token throttle reuse their cached
+    /// values. Republishes `topic` with the enriched rows and publishes
+    /// `option:atm_iv:<broker>:<underlying>`.
     void enrich_with_greeks(const fincept::services::options::OptionChain& chain, const QString& topic);
-
-    /// True when `chain` belongs to the same (broker, underlying, expiry) series as
-    /// `last_chain_` but is OLDER than it — i.e. a newer snapshot was assembled while
-    /// an async Greeks job for `chain` was in flight, so republishing it would roll
-    /// the topic back to stale quotes.
-    bool is_superseded(const fincept::services::options::OptionChain& chain) const;
 
     /// Adopt a Greeks-enriched snapshot as `last_chain_` (when it is the same
     /// snapshot `last_chain_` holds) and tell signal consumers. `last_chain_` was
@@ -193,7 +187,7 @@ class OptionChainService : public QObject, public fincept::datahub::Producer {
     /// Last spot snapshot per (broker, underlying) — refreshed each tick.
     QHash<QString, double> spot_cache_;
     /// Per-token last Greeks compute timestamp (ms since epoch) — used to
-    /// throttle py_vollib invocations to ≤1/500ms per strike per side.
+    /// throttle IV solves to ≤1/500ms per strike per side.
     QHash<qint64, qint64> last_greeks_compute_ms_;
     /// Last time (epoch ms) the day's ATM IV was written to `iv_history_daily`, per
     /// underlying — the write is a synchronous SQLite upsert on the UI thread and the

@@ -1,7 +1,21 @@
-"""Regression Analysis for M&A Valuation"""
+"""Regression Analysis for M&A Valuation - OLS of comparable-company EV on its drivers.
+
+CLI: python regression_analysis.py run <json>  keys type (ols|multiple), subject {revenue, ebitda, growth},
+     comp_data [{name, ev, revenue, ebitda, growth}, ...] (default: complete deals in the local deal database).
+     OLS needs at least k + 2 comparables for k drivers (5 for revenue/EBITDA/growth); statistics that do not
+     exist are reported as null. Native form: regression <comp_data> <subject_metrics> <type>.
+"""
+import os
+import sys
 from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
 from dataclasses import dataclass
+
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+    import fincept_json
 
 @dataclass
 class RegressionResult:
@@ -21,6 +35,11 @@ class MARegression:
 
         n = len(y)
         k = X.shape[1]
+        if n < k + 2:
+            # n <= k + 1 leaves no residual degrees of freedom: the fit is exact (or underdetermined) and every
+            # standard error / t-statistic / p-value is undefined.
+            raise ValueError("Regression on %d driver(s) needs at least %d observations (drivers + intercept + 1 "
+                             "degree of freedom); got %d." % (k, k + 2, n))
 
         X_with_intercept = np.column_stack([np.ones(n), X])
 
@@ -64,9 +83,6 @@ class MARegression:
         comp_data: [{'ev': X, 'revenue': Y, 'ebitda_margin': Z, 'growth': W}, ...]
         subject_metrics: {'revenue': A, 'ebitda_margin': B, 'growth': C}
         """
-
-        if len(comp_data) < 3:
-            raise ValueError("Need at least 3 comparable companies")
 
         y = np.array([comp['ev'] for comp in comp_data])
 
@@ -296,11 +312,14 @@ def _service_argv(argv):
     comps = p.get("comp_data")
     if not isinstance(comps, list) or not comps:
         comps = _svc_db_comps()
-    if len(comps) < 3:
+    drivers = [k for k in comps[0] if k not in ("name", "ev")] if comps and isinstance(comps[0], dict) else []
+    needed = max(len(drivers), 3) + 2
+    if len(comps) < needed:
         # Printed as the script-level error envelope; PythonRunner surfaces `error` to the screen.
-        print(json.dumps({"success": False, "error": "Regression needs at least 3 comparable deals with EV, revenue, "
-                          "EBITDA and growth. Paste them as `comp_data` (list of {name, ev, revenue, ebitda, growth}) "
-                          "or load deals into the Deal Database first.", "command": argv[1]}))
+        print(json.dumps({"success": False, "error": "Regression needs at least %d comparable companies with EV, "
+                          "revenue, EBITDA and growth (got %d): fewer leave no degrees of freedom for the "
+                          "statistics. Paste them as `comp_data` (list of {name, ev, revenue, ebitda, growth}) or "
+                          "load deals into the Deal Database first." % (needed, len(comps)), "command": argv[1]}))
         sys.exit(1)
     subject = p.get("subject") if isinstance(p.get("subject"), dict) else {}
     regression_type = str(p.get("type", p.get("regression_type", "multiple"))).lower()
@@ -310,7 +329,6 @@ def _service_argv(argv):
 
 def main():
     """CLI entry point - outputs JSON for C++ integration"""
-    import sys
     import json
 
     sys.argv = _service_argv(sys.argv)
@@ -421,18 +439,8 @@ def main():
                     }
 
             result = {"success": True, "data": analysis}
-
-            def safe_json(o):
-                if isinstance(o, np.bool_):
-                    return bool(o)
-                if isinstance(o, (np.floating, np.integer)):
-                    v = float(o)
-                    if v != v or v == float('inf') or v == float('-inf'):  # nan or inf
-                        return None
-                    return v
-                return str(o)
-
-            print(json.dumps(result, default=safe_json))
+            # np.float64 subclasses float, so a json.dumps `default=` hook never sees it: sanitize instead.
+            print(fincept_json.dumps(result))
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}

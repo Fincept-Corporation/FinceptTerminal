@@ -11,7 +11,7 @@ new_financial_credit, bank_financing, central_bank_balance, fdi, fx_reserves_yea
 construction_index, enterprise_boom_index, cx_pmi_yearly, cx_services_pmi_yearly, real_estate, new_house_price,
 consumer_goods_retail, daily_energy, commodity_price_index, au_report, urban_unemployment, national_tax_receipts,
 czsr, gdzctz, hgjck, gyzjz, qyspjg, wbck, whxd, xfzxx, stock_market_cap, market_margin_sh, market_margin_sz,
-insurance_income, freight_index, lpi_index, mobile_number, hk_cpi, hk_cpi_ratio, hk_ppi, hk_gbp, hk_gbp_ratio,
+insurance_income, freight_index, lpi_index, mobile_number, hk_cpi, hk_cpi_ratio, hk_ppi, hk_gdp, hk_gdp_ratio,
 hk_rate_of_unemployment, hk_trade_diff_ratio, hk_building_amount, hk_building_volume, hk_market_info
 
 SLOW endpoints (25): Response time 60-120 seconds - These work but take 1-2 minutes
@@ -405,10 +405,11 @@ class ChinaEconomicsWrapper:
     def get_hk_ppi(self) -> Dict[str, Any]:
         return self._safe_call_with_retry(ak.macro_china_hk_ppi)
 
-    def get_hk_gbp(self) -> Dict[str, Any]:
+    def get_hk_gdp(self) -> Dict[str, Any]:
+        # akshare spells its Hong Kong GDP functions macro_china_hk_gbp*
         return self._safe_call_with_retry(ak.macro_china_hk_gbp)
 
-    def get_hk_gbp_ratio(self) -> Dict[str, Any]:
+    def get_hk_gdp_ratio(self) -> Dict[str, Any]:
         return self._safe_call_with_retry(ak.macro_china_hk_gbp_ratio)
 
     def get_hk_rate_of_unemployment(self) -> Dict[str, Any]:
@@ -448,7 +449,7 @@ class ChinaEconomicsWrapper:
             "lpi_index", "society_traffic_volume", "passenger_load_factor",
             "postal_telecommunicational", "mobile_number", "international_tourism_fx", "yw_electronic_index",
             "nbs_nation", "nbs_region",
-            "hk_cpi", "hk_cpi_ratio", "hk_ppi", "hk_gbp", "hk_gbp_ratio",
+            "hk_cpi", "hk_cpi_ratio", "hk_ppi", "hk_gdp", "hk_gdp_ratio",
             "hk_rate_of_unemployment", "hk_trade_diff_ratio", "hk_building_amount",
             "hk_building_volume", "hk_market_info"
         ]

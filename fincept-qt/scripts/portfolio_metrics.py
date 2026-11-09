@@ -26,8 +26,8 @@ Output (stdout, one JSON object; all returns/ratios are FRACTIONS, not percent)
       "as_of": "YYYY-MM-DD",                  # last date in the downloaded data
       "period": "1y",
       "benchmark": {"symbol": "SPY", "dates": [...], "closes": [...]},
-      "risk_free": {"rate": 0.0423, "symbol": "^IRX", "as_of": "YYYY-MM-DD",
-                    "description": "US 13-week T-bill discount yield"},          # omitted if unavailable
+      "risk_free": {"rate": 0.0431, "discount_rate": 0.0420, "symbol": "^IRX", "as_of": "YYYY-MM-DD",
+                    "description": "US 13-week T-bill, bond-equivalent yield"},  # omitted if unavailable
       "correlation": {"window": 63, "start": "...", "end": "...",
                       "matrix": {"AAPL|MSFT": 0.61, ...}},                     # Pearson, daily returns
       "portfolio": {                                                             # ex-ante: CURRENT weights
@@ -36,7 +36,11 @@ Output (stdout, one JSON object; all returns/ratios are FRACTIONS, not percent)
           "ann_vol": 0.183,                   # annualised stdev of daily returns
           "var_95_1d": 0.0182,                # 1-day historical VaR, 95%, as a positive loss fraction
           "cvar_95_1d": 0.0261,               # 1-day expected shortfall beyond the VaR
-          "beta": 1.07                        # OLS vs benchmark daily returns (null if not estimable)
+          "param_var_95_1d": 0.0175,          # 1-day parametric (normal) VaR, 95%
+          "beta": 1.07,                       # OLS vs benchmark daily returns (null if not estimable)
+          "benchmark_corr": 0.93,             # correlation with the benchmark's daily returns
+          "tracking_error": 0.061,            # annualised stdev of (portfolio − benchmark)
+          "diversification_ratio": 1.32       # Σ wᵢσᵢ / σₚ
       },
       "holdings": {"AAPL": {"ann_vol": 0.27, "beta": 1.2, "risk_contribution": 0.31,
                             "observations": 250}, ...},     # risk_contribution = share of portfolio variance
@@ -230,15 +234,23 @@ def analytics(payload):
         warnings.append(f"no history for benchmark {benchmark}")
 
     # ── Risk-free rate: last 13-week T-bill yield ─────────────────────────────
+    # ^IRX is quoted on a DISCOUNT basis (actual/360, return on face value). Sharpe /
+    # Sortino / alpha compound returns on the invested amount, so convert to the
+    # bond-equivalent (investment) yield of a 91-day bill: 365·d / (360 − 91·d).
+    # At a 4.2% discount rate that is ~4.30% — about 10 bp the raw quote understated.
     irx = closes.get(RISK_FREE_SYMBOL)
     if irx is not None and not irx.empty:
         rate = _finite(irx.iloc[-1])
         if rate is not None and -1.0 < rate < 30.0:
+            d = rate / 100.0
+            denom = 360.0 - 91.0 * d
+            bey = 365.0 * d / denom if denom > 0 else d
             result["risk_free"] = {
-                "rate": rate / 100.0,
+                "rate": bey,
+                "discount_rate": d,
                 "symbol": RISK_FREE_SYMBOL,
                 "as_of": irx.index[-1].strftime("%Y-%m-%d"),
-                "description": "US 13-week T-bill discount yield",
+                "description": "US 13-week T-bill, bond-equivalent yield",
             }
     if "risk_free" not in result:
         warnings.append("risk-free rate unavailable (^IRX not returned)")
@@ -315,7 +327,11 @@ def analytics(payload):
         "ann_vol": None,
         "var_95_1d": None,
         "cvar_95_1d": None,
+        "param_var_95_1d": None,
         "beta": None,
+        "diversification_ratio": None,
+        "tracking_error": None,
+        "benchmark_corr": None,
     }
     holdings_out = {}
     if len(port) >= MIN_RISK_OBS:
@@ -325,6 +341,9 @@ def analytics(payload):
         tail_losses = vals[vals <= q05]
         portfolio["var_95_1d"] = _finite(max(0.0, -q05))
         portfolio["cvar_95_1d"] = _finite(max(0.0, -float(tail_losses.mean()))) if len(tail_losses) else None
+        # Parametric (normal) VaR alongside the historical one: a historical figure far
+        # above it flags fat tails the normal model misses.
+        portfolio["param_var_95_1d"] = _finite(max(0.0, 1.6448536 * float(np.std(vals, ddof=1)) - float(np.mean(vals))))
 
         bench_r = None
         if bench is not None:
@@ -332,12 +351,21 @@ def analytics(payload):
             joined = pd.concat([port.rename("p"), bench_r.rename("b")], axis=1, join="inner").dropna()
             if len(joined) >= MIN_RISK_OBS and joined["b"].var(ddof=1) > 0:
                 portfolio["beta"] = _finite(joined["p"].cov(joined["b"]) / joined["b"].var(ddof=1))
+                portfolio["benchmark_corr"] = _finite(joined["p"].corr(joined["b"]))
+                active = joined["p"] - joined["b"]
+                portfolio["tracking_error"] = _finite(float(active.std(ddof=1)) * math.sqrt(ppy))
 
         # Euler decomposition: share of portfolio variance carried by each line.
         cov = filled[priced].cov().values * ppy
         wv = w[priced].values
         port_var = float(wv @ cov @ wv)
         marginal = cov @ wv
+        # Diversification ratio (Choueifaty): weighted average stand-alone vol over the
+        # portfolio's vol. 1.0 = no diversification benefit; higher = correlations are
+        # cancelling risk.
+        if port_var > 0:
+            stand_alone = np.sqrt(np.clip(np.diag(cov), 0.0, None))
+            portfolio["diversification_ratio"] = _finite(float(wv @ stand_alone) / math.sqrt(port_var))
         for i, s in enumerate(priced):
             own = rets[s]
             own_win = own[own.index >= window_df.index[0]]

@@ -864,12 +864,12 @@ void PolymarketScreen::select_market(const pred::PredictionMarket& market) {
             svc.fetch_top_holders(condition_id, 20);
             svc.fetch_open_interest({condition_id});
         }
-        if (!condition_id.isEmpty())
-            svc.fetch_comments(condition_id, 50);
         bool ok = false;
         const int event_id = market.key.event_id.toInt(&ok);
-        if (ok && event_id > 0)
+        if (ok && event_id > 0) {
+            svc.fetch_comments(event_id, 50);
             svc.fetch_related_markets(event_id);
+        }
     }
 
     subscribe_to_market(market);
@@ -922,8 +922,8 @@ void PolymarketScreen::on_markets_ready(const QVector<pred::PredictionMarket>& m
         }
         if (!tickers.isEmpty()) {
             const qint64 end = QDateTime::currentSecsSinceEpoch();
-            const qint64 start = end - (7 * 24 * 3600);
-            ks->fetch_batch_candles(tickers, /*period=*/1440, start, end);
+            const qint64 start = end - (qint64{7} * 24 * 3600);
+            ks->fetch_batch_candles(tickers, /*period_interval_min=*/1440, start, end);
         }
     }
 }

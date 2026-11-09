@@ -92,6 +92,10 @@ class ExchangeSession : public QObject {
     /// handshake still pending. Used by the session manager to avoid
     /// re-spawning when switching back to a session that's already live.
     bool is_ws_active() const;
+    /// True between a successful start_ws() and stop_ws(): the stream is meant
+    /// to be up, so `!is_ws_active()` while this holds is a dropped stream (a
+    /// respawn may be pending). Main thread only.
+    bool is_ws_wanted() const { return ws_should_run_; }
     void set_ws_primary_symbol(const QString& symbol);
     /// Re-point only the OHLC stream to a new chart timeframe (no restart).
     void set_ws_timeframe(const QString& timeframe);
@@ -133,6 +137,13 @@ class ExchangeSession : public QObject {
 
     ExchangeSession(const ExchangeSession&) = delete;
     ExchangeSession& operator=(const ExchangeSession&) = delete;
+
+  signals:
+    /// The WS stream changed state: subprocess spawned, remote handshake
+    /// connected / dropped, process exited, or stopped. No payload — re-read
+    /// is_ws_active() / is_ws_connected(). Main thread. Not emitted from the
+    /// destructor.
+    void ws_state_changed(const QString& exchange_id);
 
   private:
     void handle_ws_line(const QString& line);

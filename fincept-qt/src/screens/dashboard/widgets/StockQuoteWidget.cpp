@@ -51,6 +51,7 @@ StockQuoteWidget::StockQuoteWidget(const QString& symbol, QWidget* parent)
 
     ticker_label_ = new QLabel(symbol_);
     prl->addWidget(ticker_label_);
+    enable_symbol_link(/*follows=*/true);
     link_symbol(ticker_label_, symbol_); // double-click the ticker → Equity Research
     link_symbol(price_label_, symbol_);
 
@@ -113,6 +114,17 @@ void StockQuoteWidget::apply_config(const QJsonObject& cfg) {
     if (next == symbol_)
         return;
     set_symbol(next);
+}
+
+void StockQuoteWidget::on_linked_symbol(const SymbolRef& ref) {
+    if (normalize_symbol(ref.symbol) == symbol_)
+        return;
+    set_symbol(ref.symbol);
+    emit config_changed(config()); // the tile comes back on the linked symbol
+}
+
+SymbolRef StockQuoteWidget::linked_symbol() const {
+    return SymbolRef::equity(symbol_);
 }
 
 QDialog* StockQuoteWidget::make_config_dialog(QWidget* parent) {

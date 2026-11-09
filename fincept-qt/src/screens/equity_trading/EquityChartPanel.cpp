@@ -44,24 +44,61 @@ EquityChartPanel::EquityChartPanel(QWidget* parent) : QWidget(parent) {
         connect(kline_, &fincept::ui::KLineChartWidget::sell_requested, this, &EquityChartPanel::sell_requested);
         connect(kline_, &fincept::ui::KLineChartWidget::add_to_watchlist_requested, this,
                 &EquityChartPanel::add_to_watchlist_requested);
+        // The runtime can be deployed yet unable to render (#411) — degrade to
+        // the Qt-Charts chart instead of leaving a permanently blank chart.
+        connect(kline_, &fincept::ui::KLineChartWidget::runtime_failed, this,
+                &EquityChartPanel::swap_kline_for_fallback);
     } else {
-        // No WebEngine — drop KLineChart, use the Qt-Charts chart (which carries
-        // its own timeframe buttons + overlays). Forward its timeframe signal.
+        // No WebEngine — drop KLineChart, use the Qt-Charts chart.
         delete kline_;
         kline_ = nullptr;
-        fallback_ = new EquityChart(this);
-        connect(fallback_, &EquityChart::timeframe_changed, this, [this](const QString& tf) {
-            have_bar_ = false; // fresh history will arrive for the new timeframe
-            emit timeframe_changed(tf);
-        });
-        connect(fallback_, &EquityChart::buy_requested, this, &EquityChartPanel::buy_requested);
-        connect(fallback_, &EquityChart::sell_requested, this, &EquityChartPanel::sell_requested);
-        connect(fallback_, &EquityChart::add_to_watchlist_requested, this,
-                &EquityChartPanel::add_to_watchlist_requested);
-        root->addWidget(fallback_);
+        build_fallback_ui();
     }
 
     build_position_card();
+}
+
+void EquityChartPanel::build_fallback_ui() {
+    // The Qt-Charts chart carries its own timeframe buttons + overlays. Forward
+    // its timeframe signal.
+    fallback_ = new EquityChart(this);
+    connect(fallback_, &EquityChart::timeframe_changed, this, [this](const QString& tf) {
+        have_bar_ = false; // fresh history will arrive for the new timeframe
+        emit timeframe_changed(tf);
+    });
+    connect(fallback_, &EquityChart::buy_requested, this, &EquityChartPanel::buy_requested);
+    connect(fallback_, &EquityChart::sell_requested, this, &EquityChartPanel::sell_requested);
+    connect(fallback_, &EquityChart::add_to_watchlist_requested, this, &EquityChartPanel::add_to_watchlist_requested);
+    layout()->addWidget(fallback_);
+}
+
+void EquityChartPanel::swap_kline_for_fallback() {
+    if (!kline_)
+        return;
+    // We're inside the dying chart's own signal — deleteLater, never delete.
+    auto* dead = kline_;
+    kline_ = nullptr;
+    layout()->removeWidget(dead);
+    dead->hide();
+    dead->deleteLater();
+    if (tf_bar_) {
+        layout()->removeWidget(tf_bar_);
+        tf_bar_->hide();
+        tf_bar_->deleteLater();
+        tf_bar_ = nullptr;
+    }
+    for (auto*& b : tf_buttons_)
+        b = nullptr;
+    have_bar_ = false;
+
+    build_fallback_ui();
+    draw_position_line();
+    if (pos_card_ && has_position_)
+        pos_card_->raise(); // keep the floating card above the new chart
+
+    // The panel keeps no candles and the fallback has its own timeframe state,
+    // so ask the screen to load history for the timeframe the fallback shows.
+    emit timeframe_changed(fallback_->current_timeframe());
 }
 
 void EquityChartPanel::build_kline_ui() {
@@ -95,6 +132,7 @@ void EquityChartPanel::build_kline_ui() {
     }
     h->addStretch(1);
 
+    tf_bar_ = bar;
     root->addWidget(bar);
     root->addWidget(kline_, 1);
 }
@@ -132,7 +170,8 @@ void EquityChartPanel::set_candles(const QVector<trading::BrokerCandle>& candles
             QJsonObject o;
             // BrokerCandle.timestamp is milliseconds; KLineChartWidget expects
             // seconds (it multiplies by 1000 internally).
-            o[QStringLiteral("timestamp")] = static_cast<double>(c.timestamp / 1000);
+            const qint64 ts_secs = c.timestamp / 1000; // whole seconds, truncated on purpose
+            o[QStringLiteral("timestamp")] = static_cast<double>(ts_secs);
             o[QStringLiteral("open")] = c.open;
             o[QStringLiteral("high")] = c.high;
             o[QStringLiteral("low")] = c.low;
@@ -212,7 +251,8 @@ void EquityChartPanel::on_quote(const trading::BrokerQuote& quote) {
     }
 
     QJsonObject o;
-    o[QStringLiteral("timestamp")] = static_cast<double>(bar_ts_ms_ / 1000);
+    const qint64 bar_ts_secs = bar_ts_ms_ / 1000; // whole seconds, truncated on purpose
+    o[QStringLiteral("timestamp")] = static_cast<double>(bar_ts_secs);
     o[QStringLiteral("open")] = bar_open_;
     o[QStringLiteral("high")] = bar_high_;
     o[QStringLiteral("low")] = bar_low_;

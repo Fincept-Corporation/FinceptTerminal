@@ -13,6 +13,14 @@ from config import (
 )
 from base_analytics import AlternativeInvestmentBase, FinancialMath
 
+try:
+    from fincept_irr import irr as _irr
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    import os
+    import sys
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+    from fincept_irr import irr as _irr
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +45,8 @@ class FixedAnnuityAnalyzer(AlternativeInvestmentBase):
         super().__init__(parameters)
         self.premium = parameters.acquisition_price if hasattr(parameters, 'acquisition_price') else Decimal('100000')
         self.annuity_rate = parameters.annuity_rate if hasattr(parameters, 'annuity_rate') else Decimal('0.05')
-        self.payout_years = parameters.payout_years if hasattr(parameters, 'payout_years') else 20
+        # int: the CLI hands every number over as Decimal, and range(Decimal) raises
+        self.payout_years = int(parameters.payout_years) if hasattr(parameters, 'payout_years') else 20
         self.surrender_charge_years = parameters.surrender_charge_years if hasattr(parameters, 'surrender_charge_years') else 7
         self.surrender_charge_rate = parameters.surrender_charge_rate if hasattr(parameters, 'surrender_charge_rate') else Decimal('0.07')
 
@@ -98,13 +107,9 @@ class FixedAnnuityAnalyzer(AlternativeInvestmentBase):
         for _ in range(self.payout_years):
             cash_flows.append(annual_payout)  # Annual payouts (inflows)
 
-        # Calculate IRR using numpy
-        try:
-            irr = Decimal(str(np.irr(cash_flows)))
-            return irr
-        except:
-            # Fallback: approximate IRR
-            return self.annuity_rate
+        # Bracketed root find (np.irr no longer exists); None when the flows have no IRR.
+        irr = _irr([float(cf) for cf in cash_flows])
+        return Decimal(str(irr)) if irr is not None else None
 
     def inflation_erosion_analysis(self, inflation_rate: Decimal = Decimal('0.03')) -> Dict[str, Any]:
         """
@@ -308,7 +313,7 @@ class FixedAnnuityAnalyzer(AlternativeInvestmentBase):
             'annuity_option': {
                 'annual_income': float(annuity_payout),
                 'total_income': float(annuity_payout * Decimal(str(self.payout_years))),
-                'irr': float(annuity_irr),
+                'irr': float(annuity_irr) if annuity_irr is not None else None,
                 'bequest_value': 0.0,
                 'inflation_protection': 'None',
                 'liquidity': 'Very Low (surrender charges)'
@@ -486,7 +491,7 @@ class FixedAnnuityAnalyzer(AlternativeInvestmentBase):
             'annual_payout': float(annual_payout),
             'payout_years': self.payout_years,
             'total_payouts_summary': total_payouts,
-            'internal_rate_return': float(irr),
+            'internal_rate_return': float(irr) if irr is not None else None,
             'inflation_impact': inflation_impact,
             'insurer_rating': self.insurer_rating,
             'analysis_category': 'THE FLAWED',
@@ -508,7 +513,7 @@ class FixedAnnuityAnalyzer(AlternativeInvestmentBase):
         annual_payout = self.calculate_annual_payout()
 
         return {
-            'internal_rate_return': float(irr),
+            'internal_rate_return': float(irr) if irr is not None else None,
             'annual_payout': float(annual_payout),
             'payout_rate': float(self.annuity_rate),
             'note': 'Actual performance depends on longevity and inflation'
@@ -556,7 +561,7 @@ class InflationIndexedAnnuityAnalyzer(AlternativeInvestmentBase):
         self.premium = parameters.acquisition_price if hasattr(parameters, 'acquisition_price') else Decimal('100000')
         self.real_payout_rate = parameters.real_payout_rate if hasattr(parameters, 'real_payout_rate') else Decimal('0.04')  # Real rate
         self.inflation_rate = parameters.inflation_rate if hasattr(parameters, 'inflation_rate') else Decimal('0.025')  # 2.5% expected
-        self.payout_years = parameters.payout_years if hasattr(parameters, 'payout_years') else 25
+        self.payout_years = int(parameters.payout_years) if hasattr(parameters, 'payout_years') else 25
         self.surrender_charge_years = parameters.surrender_charge_years if hasattr(parameters, 'surrender_charge_years') else 0  # Immediate annuity
         self.insurer_rating = parameters.insurer_rating if hasattr(parameters, 'insurer_rating') else 'A'
         self.age = parameters.age if hasattr(parameters, 'age') else 65

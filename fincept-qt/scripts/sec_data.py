@@ -338,24 +338,49 @@ class SECDataWrapper:
     # FILING CONTENT ENDPOINTS
 
     def get_filing_content(self, filing_url: str) -> Dict[str, Any]:
-        """Get content of a specific SEC filing"""
+        """Download one SEC filing document and return its text (HTML / XML markup stripped).
+
+        Only EDGAR archive documents on sec.gov are fetched. Text past MAX_CHARS is cut and the
+        result says so. (This used to download nothing and answer success with a placeholder note.)
+        """
+        max_chars = 2_000_000
         try:
             if not filing_url:
                 return {"error": SECError("filing_content", "Filing URL is required").to_dict()}
 
-            # Validate URL format
-            if "/data/" not in filing_url:
-                return {"error": SECError("filing_content", "Invalid SEC filing URL format").to_dict()}
+            # Validate URL format: an EDGAR archive document on sec.gov
+            from urllib.parse import urlparse
+            parsed = urlparse(filing_url)
+            host = (parsed.hostname or "").lower()
+            if (parsed.scheme not in ("http", "https") or not (host == "sec.gov" or host.endswith(".sec.gov"))
+                    or "/data/" not in parsed.path):
+                return {"error": SECError("filing_content", "Invalid SEC filing URL format: expected an "
+                                          "https://www.sec.gov/Archives/edgar/data/... document").to_dict()}
 
-            # This would download and parse the filing content
-            # For now, return basic filing info
+            time.sleep(0.1)  # SEC rate limit, as in _make_request
+            response = self.session.get(filing_url, timeout=60, headers={
+                "Accept": "text/html,application/xhtml+xml,application/xml,text/plain,*/*"})
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+            raw = response.text
+            if "html" in content_type or "xml" in content_type or raw.lstrip().startswith("<"):
+                try:
+                    from bs4 import BeautifulSoup
+                    text = BeautifulSoup(raw, "html.parser").get_text(separator=" ", strip=True)
+                except ImportError:
+                    text = re.sub(r"<[^>]+>", " ", raw)
+            else:
+                text = raw
+            text = re.sub(r"\s+", " ", text).strip()
 
             return {
                 "success": True,
                 "data": {
                     "url": filing_url,
-                    "content_type": "text/html",
-                    "note": "Filing content download would be implemented here"
+                    "content_type": content_type or "unknown",
+                    "length": len(text),
+                    "truncated": len(text) > max_chars,
+                    "text": text[:max_chars]
                 },
                 "parameters": {"filing_url": filing_url}
             }
@@ -554,30 +579,27 @@ class SECDataWrapper:
             if not filings_result.get("success"):
                 return filings_result
 
-            # Process Form 4 filings to extract insider trading data
+            # Form 4 filing index. The transaction details (insider, code, shares, price) live in
+            # each filing's XML and are not parsed here; these rows used to carry invented values
+            # instead ("Extracted from filing", transaction type "P" = purchase, 0 shares at 0).
             filings_data = filings_result["data"]
-            insider_trades = []
+            insider_filings = []
 
             for filing in filings_data:
-                # This would parse Form 4 content to extract insider trading details
-                # For now, return basic filing info
-                insider_trade = {
+                insider_filings.append({
                     "filing_date": filing.get("filingDate"),
+                    "report_date": filing.get("reportDate"),
                     "accession_number": filing.get("accessionNumber"),
-                    "company_name": "Extracted from filing",
-                    "insider_name": "Extracted from filing",
-                    "transaction_type": "P",
-                    "securities_transacted": 0,
-                    "price": 0,
-                    "amount": 0,
-                    "ownership_type": "Direct",
-                    "note": "Form 4 parsing would be implemented here"
-                }
-                insider_trades.append(insider_trade)
+                    "form": filing.get("form"),
+                    "document_url": filing.get("filing_url"),
+                    "filing_detail_url": filing.get("filing_detail_url")
+                })
 
             return {
                 "success": True,
-                "data": insider_trades,
+                "data": insider_filings,
+                "note": "Form 4 filing index only: transaction details (insider, code, shares, price) "
+                        "are not parsed - open document_url for them.",
                 "parameters": {
                     "symbol": symbol,
                     "cik": str(cik) if cik else None,
@@ -595,57 +617,17 @@ class SECDataWrapper:
     def get_institutional_ownership(self, symbol: Optional[str] = None, cik: Optional[Union[str, int]] = None,
                                   start_date: Optional[str] = None, end_date: Optional[str] = None,
                                   limit: Optional[int] = 50) -> Dict[str, Any]:
-        """Get institutional ownership data (Form 13F filings)"""
-        try:
-            if not symbol and not cik:
-                return {"error": SECError("institutional_ownership", "Either symbol or CIK must be provided").to_dict()}
+        """Institutional ownership — not implemented.
 
-            # Use Form 13F-HR filings for institutional ownership
-            filings_result = self.get_company_filings(
-                symbol=symbol,
-                cik=cik,
-                form_type="13F-HR",
-                start_date=start_date,
-                end_date=end_date,
-                limit=limit
-            )
-
-            if not filings_result.get("success"):
-                return filings_result
-
-            # Process Form 13F filings to extract institutional ownership data
-            filings_data = filings_result["data"]
-            institutional_holdings = []
-
-            for filing in filings_data:
-                # This would parse Form 13F content to extract institutional holdings
-                # For now, return basic filing info
-                holding = {
-                    "filing_date": filing.get("filingDate", ""),
-                    "accession_number": filing.get("accessionNumber", ""),
-                    "institution_name": "Extracted from filing",
-                    "cusip": "Extracted from filing",
-                    "security_name": "Extracted from filing",
-                    "shares": 0,
-                    "market_value": 0,
-                    "note": "Form 13F parsing would be implemented here"
-                }
-                institutional_holdings.append(holding)
-
-            return {
-                "success": True,
-                "data": institutional_holdings,
-                "parameters": {
-                    "symbol": symbol,
-                    "cik": str(cik) if cik else None,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "limit": limit
-                }
-            }
-
-        except Exception as e:
-            return {"error": SECError("institutional_ownership", str(e)).to_dict()}
+        A company's institutional ownership is the sum of every institution's 13F-HR holdings
+        of it; 13F-HR filings are filed by the institutions, not by the company. This used to
+        list the company's own 13F-HR filings (normally none) as holdings with invented values
+        ("Extracted from filing", 0 shares, market value 0).
+        """
+        return {"error": SECError(
+            "institutional_ownership",
+            "Not implemented: institutional ownership needs every institution's 13F-HR holdings "
+            "aggregated, which this connector does not do").to_dict()}
 
     # COMPANY SEARCH ENDPOINTS
 

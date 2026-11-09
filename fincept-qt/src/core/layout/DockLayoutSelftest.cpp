@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QMap>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
@@ -239,6 +240,107 @@ int run_dock_layout_selftest() {
         check(containers >= 2, "floating panel restores as its own (2nd) container");
         check(s.single_names.contains("fno") && s.single_names.contains("equity_trading"),
               "both docked and floating panels survive");
+    }
+
+    // ── Case 6 (#412): open a saved layout after its panels were closed+pruned ─
+    // File → Open Layout restored an EMPTY frame once the user had navigated
+    // away from the layout's panels. DockScreenRouter keeps every dock widget
+    // alive in its own map (dock_widgets_), but prune_hidden_panels()
+    // removeDockWidget()s closed ones out of the manager — and restoreState()
+    // matches widgets only through the manager's map, silently skipping names
+    // it can't find. ensure_all_registered() skipped anything already in
+    // dock_widgets_, so the pruned panels were never re-attached. Mirrors the
+    // router step by step; `reattach` toggles the fix (re-add owned widgets the
+    // manager can't find).
+    struct ApplyOutcome {
+        bool detached_before_apply = false;
+        bool restored = false;
+        bool fno_open = false;
+        bool equity_open = false;
+    };
+    auto open_saved_layout_after_prune = [](bool reattach) -> ApplyOutcome {
+        ApplyOutcome r;
+        QWidget host;
+        auto* mgr = new ads::CDockManager(&host);
+        QMap<QString, ads::CDockWidget*> owned; // DockScreenRouter::dock_widgets_
+
+        auto ensure_all_registered = [&]() {
+            ads::CDockAreaWidget* park = nullptr;
+            for (const QString& id : all_ids()) {
+                ads::CDockWidget* dw = owned.value(id, nullptr);
+                if (dw && (!reattach || mgr->findDockWidget(id)))
+                    continue;
+                if (!dw) {
+                    dw = make_widget(mgr, id);
+                    owned.insert(id, dw);
+                }
+                if (park)
+                    mgr->addDockWidget(ads::CenterDockWidgetArea, dw, park);
+                else
+                    park = mgr->addDockWidget(ads::CenterDockWidgetArea, dw);
+                dw->toggleView(false);
+            }
+        };
+        auto navigate_exclusive = [&](const QString& id) -> ads::CDockAreaWidget* {
+            for (auto* other : mgr->dockWidgetsMap())
+                if (other->objectName() != id && !other->isClosed())
+                    other->toggleView(false);
+            ads::CDockWidget* dw = owned.value(id);
+            ads::CDockAreaWidget* area = mgr->addDockWidget(ads::CenterDockWidgetArea, dw);
+            dw->toggleView(true);
+            return area;
+        };
+        auto prune_hidden_panels = [&]() {
+            QList<ads::CDockWidget*> closed;
+            for (auto* dw : mgr->dockWidgetsMap())
+                if (dw && dw->isClosed())
+                    closed.append(dw);
+            for (auto* dw : closed)
+                mgr->removeDockWidget(dw);
+        };
+        auto is_open = [&](const QString& id) {
+            ads::CDockWidget* dw = mgr->findDockWidget(id);
+            return dw && !dw->isClosed() && dw->dockAreaWidget();
+        };
+
+        ensure_all_registered(); // WindowFrame construction
+        // Build "fno | equity_trading" side by side.
+        ads::CDockAreaWidget* left = navigate_exclusive("fno");
+        ads::CDockWidget* eq = owned.value("equity_trading");
+        mgr->addDockWidget(ads::RightDockWidgetArea, eq, left);
+        eq->toggleView(true);
+        prune_hidden_panels();                     // capture_layout() prunes before saveState()
+        const QByteArray saved = mgr->saveState(); // File → Save Layout As…
+
+        navigate_exclusive("dashboard"); // user navigates away
+        prune_hidden_panels();           // 500 ms session-layout save timer
+        r.detached_before_apply = !mgr->findDockWidget("fno") && !mgr->findDockWidget("equity_trading");
+
+        ensure_all_registered();               // apply_layout() phase 0
+        r.restored = mgr->restoreState(saved); // apply_layout() phase 2
+        r.fno_open = is_open("fno");
+        r.equity_open = is_open("equity_trading");
+
+        // Widgets still detached are parentless (ADS reparents them to nullptr
+        // on removal) and would outlive `host`; free them here.
+        for (auto* dw : owned)
+            if (!mgr->findDockWidget(dw->objectName()))
+                delete dw;
+        return r;
+    };
+    {
+        const ApplyOutcome old_path = open_saved_layout_after_prune(/*reattach=*/false);
+        const ApplyOutcome fixed = open_saved_layout_after_prune(/*reattach=*/true);
+        out() << "\n[6] open saved layout after navigate-away + prune (#412):\n"
+              << "    without re-attach: restored=" << old_path.restored << " fno_open=" << old_path.fno_open
+              << " equity_open=" << old_path.equity_open << "\n"
+              << "    with re-attach:    restored=" << fixed.restored << " fno_open=" << fixed.fno_open
+              << " equity_open=" << fixed.equity_open << "\n";
+        check(old_path.detached_before_apply, "navigating away + prune detaches the layout's panels from the manager");
+        check(old_path.restored && !old_path.fno_open && !old_path.equity_open,
+              "BUG reproduced: restoreState() 'succeeds' but neither panel comes back");
+        check(fixed.restored && fixed.fno_open && fixed.equity_open,
+              "re-attaching detached widgets before restoreState() brings both panels back");
     }
 
     out() << "\n=== " << (failures == 0 ? "ALL PASS" : QString("%1 FAILURE(S)").arg(failures)) << " ===\n";

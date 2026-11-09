@@ -153,9 +153,6 @@ def get_stock_comment_detail_scrd_desire_em(symbol="000001"):
     """Get stock comment desire detail (EastMoney)"""
     return safe_call(ak.stock_comment_detail_scrd_desire_em, symbol=symbol)
 
-def get_stock_comment_detail_scrd_desire_daily_em(symbol="000001"):
-    """Get stock comment desire daily (EastMoney)"""
-    return safe_call(ak.stock_comment_detail_scrd_desire_daily_em, symbol=symbol)
 
 def get_stock_comment_detail_scrd_focus_em(symbol="000001"):
     """Get stock comment focus detail (EastMoney)"""
@@ -346,7 +343,6 @@ ENDPOINTS = {
     # Comments & Sentiment
     "stock_comment_em": {"func": get_stock_comment_em, "desc": "Stock comment", "category": "Comments"},
     "stock_comment_detail_scrd_desire_em": {"func": get_stock_comment_detail_scrd_desire_em, "desc": "Comment desire detail", "category": "Comments"},
-    "stock_comment_detail_scrd_desire_daily_em": {"func": get_stock_comment_detail_scrd_desire_daily_em, "desc": "Comment desire daily", "category": "Comments"},
     "stock_comment_detail_scrd_focus_em": {"func": get_stock_comment_detail_scrd_focus_em, "desc": "Comment focus detail", "category": "Comments"},
     "stock_comment_detail_zhpj_lspf_em": {"func": get_stock_comment_detail_zhpj_lspf_em, "desc": "Comment history rating", "category": "Comments"},
     "stock_comment_detail_zlkp_jgcyd_em": {"func": get_stock_comment_detail_zlkp_jgcyd_em, "desc": "Institutional participation", "category": "Comments"},

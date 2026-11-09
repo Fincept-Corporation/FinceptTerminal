@@ -239,14 +239,14 @@ jobs:
         working-directory: fincept-qt
         run: |
           # D4 exempts one-shot catalog/info APIs that have no hub topic:
-          #   MarketDataService::fetch_info, MarketDataService::fetch_news,
+          #   MarketDataService::fetch_info,
           #   DBnomicsService::fetch_providers / fetch_datasets / fetch_series /
           #   fetch_observations. See fincept-qt/CLAUDE.md §D4 for the rule.
           # Match any streaming fetch_* call, then grep -v the allowed ones.
           violations=$(grep -rnE --include='*.cpp' --include='*.h' \
               '(MarketDataService|NewsService|EconomicsService|DBnomicsService|GovDataService)::instance\(\)\.fetch_' \
               src/screens/ \
-            | grep -vE 'MarketDataService::instance\(\)\.fetch_(info|news)\b' \
+            | grep -vE 'MarketDataService::instance\(\)\.fetch_info\b' \
             | grep -vE 'DBnomicsService::instance\(\)\.fetch_(providers|datasets|series|observations)\b' \
             || true)
           if [ -n "$violations" ]; then

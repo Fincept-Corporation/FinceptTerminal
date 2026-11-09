@@ -3,6 +3,7 @@
 #include "core/logging/Logger.h"
 #include "storage/cache/CacheManager.h"
 
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QNetworkReply>
@@ -19,7 +20,10 @@ namespace fincept::services::polymarket {
 
 static const QString GAMMA_BASE = QStringLiteral("https://gamma-api.polymarket.com");
 static const QString CLOB_BASE = QStringLiteral("https://clob.polymarket.com");
-static const QString DATA_BASE = QStringLiteral("https://data-api.polymarket.com");
+// Data API v1 was retired on 2026-11-02 (every v1 route answers 410 Gone). v2
+// responses are snake_case, wrapped in {"data": ..., "pagination": {...}}, and
+// reject the v1 `market` / `offset` params with HTTP 400 (use `condition`).
+static const QString DATA_BASE = QStringLiteral("https://data-api.polymarket.com/v2");
 
 // ── JSON helpers ─────────────────────────────────────────────────────────────
 
@@ -40,6 +44,12 @@ static double num_or_str(const QJsonValue& v) {
     if (v.isString())
         return v.toString().toDouble();
     return v.toDouble();
+}
+
+// The payload of a Data API v2 response. A documented miss is `data: null` or
+// `[]`, never an error — both come back as an empty value here.
+static QJsonValue data_payload(const QJsonDocument& doc) {
+    return doc.isObject() ? doc.object().value(QStringLiteral("data")) : QJsonValue();
 }
 
 // ── Existing type parsing ───────────────────────────────────────────────────
@@ -84,7 +94,13 @@ Market Market::from_json(const QJsonObject& obj) {
         m.outcomes.append(o);
     }
 
-    auto tokens_arr = parse_json_arr(obj["clobTokenIds"]);
+    // Polymarket Protocol V2 markets (`version: "v2"`) trade by `positionIds` (a plain
+    // array); V1/CTF markets by `clobTokenIds` (JSON text). The docs require choosing by
+    // version even while Gamma also mirrors the ids into clobTokenIds for V2 rows.
+    const bool protocol_v2 = obj["version"].toString() == QLatin1String("v2");
+    auto tokens_arr = parse_json_arr(protocol_v2 ? obj["positionIds"] : obj["clobTokenIds"]);
+    if (tokens_arr.isEmpty() && protocol_v2)
+        tokens_arr = parse_json_arr(obj["clobTokenIds"]);
     for (const auto& t : tokens_arr) {
         m.clob_token_ids.append(t.toString());
     }
@@ -188,7 +204,7 @@ Trade Trade::from_json(const QJsonObject& obj) {
     t.price = num_or_str(obj["price"]);
     t.size = num_or_str(obj["size"]);
     t.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
-    t.condition_id = obj["conditionId"].toString();
+    t.condition_id = obj["condition_id"].toString();
     return t;
 }
 
@@ -196,20 +212,16 @@ Trade Trade::from_json(const QJsonObject& obj) {
 
 TopHolder TopHolder::from_json(const QJsonObject& obj) {
     TopHolder h;
-    h.address = obj["proxyWallet"].toString();
-    if (h.address.isEmpty())
-        h.address = obj["address"].toString();
+    h.address = obj["proxy_wallet"].toString();
     // Data API returns `pseudonym`/`name`; prefer the displayable one.
     h.display_name = obj["name"].toString();
     if (h.display_name.isEmpty())
         h.display_name = obj["pseudonym"].toString();
     if (h.display_name.isEmpty() && !h.address.isEmpty())
         h.display_name = h.address.left(6) + "..." + h.address.right(4);
-    // /holders returns `amount` (token balance). `size` is a legacy fallback.
+    // /v2/holders returns `amount` (token balance); `avg_price` only with include_pnl=true.
     h.position_size = num_or_str(obj["amount"]);
-    if (h.position_size == 0.0)
-        h.position_size = num_or_str(obj["size"]);
-    h.entry_price = num_or_str(obj["avgPrice"]);
+    h.entry_price = num_or_str(obj["avg_price"]);
     const QJsonValue rv = obj["rank"];
     h.rank = rv.isString() ? rv.toString().toInt() : rv.toInt();
     return h;
@@ -217,27 +229,16 @@ TopHolder TopHolder::from_json(const QJsonObject& obj) {
 
 LeaderboardEntry LeaderboardEntry::from_json(const QJsonObject& obj) {
     LeaderboardEntry e;
-    // /v1/leaderboard returns proxyWallet + userName; fall back to legacy keys.
-    e.address = obj["proxyWallet"].toString();
-    if (e.address.isEmpty())
-        e.address = obj["address"].toString();
-    e.display_name = obj["userName"].toString();
-    if (e.display_name.isEmpty())
-        e.display_name = obj["name"].toString();
-    if (e.display_name.isEmpty())
-        e.display_name = obj["pseudonym"].toString();
+    // /v2/leaderboard rows: rank, user_id (wallet), user_name, pnl, volume,
+    // profile_image. No trade count — num_trades stays 0 and renders as "—".
+    e.address = obj["user_id"].toString();
+    e.display_name = obj["user_name"].toString();
     if (e.display_name.isEmpty() && !e.address.isEmpty())
         e.display_name = e.address.left(6) + "..." + e.address.right(4);
-    e.profile_image = obj["profileImage"].toString();
+    e.profile_image = obj["profile_image"].toString();
     e.pnl = num_or_str(obj["pnl"]);
-    if (e.pnl == 0)
-        e.pnl = num_or_str(obj["cashPnl"]);
-    // /v1/leaderboard uses `vol`; legacy `volume` retained for safety.
-    e.volume = num_or_str(obj["vol"]);
-    if (e.volume == 0)
-        e.volume = num_or_str(obj["volume"]);
-    e.num_trades = obj["numTrades"].toInt();
-    // API returns rank as string ("1", "2") — accept both.
+    e.volume = num_or_str(obj["volume"]);
+    // v2 sends rank as a number; v1 sent a string ("1", "2") — accept both.
     const QJsonValue rv = obj["rank"];
     e.rank = rv.isString() ? rv.toString().toInt() : rv.toInt();
     return e;
@@ -246,32 +247,33 @@ LeaderboardEntry LeaderboardEntry::from_json(const QJsonObject& obj) {
 Activity Activity::from_json(const QJsonObject& obj) {
     Activity a;
     a.type = obj["type"].toString();
-    a.address = obj["proxyWallet"].toString();
-    if (a.address.isEmpty())
-        a.address = obj["address"].toString();
+    a.address = obj["proxy_wallet"].toString();
     a.amount = num_or_str(obj["size"]);
-    a.usdc_size = num_or_str(obj["usdcSize"]);
+    a.usdc_size = num_or_str(obj["usdc_size"]);
     a.price = num_or_str(obj["price"]);
     a.timestamp = static_cast<int64_t>(obj["timestamp"].toVariant().toLongLong());
-    a.condition_id = obj["conditionId"].toString();
+    a.condition_id = obj["condition_id"].toString();
     a.title = obj["title"].toString();
     a.outcome = obj["outcome"].toString();
     return a;
 }
 
 Comment Comment::from_json(const QJsonObject& obj) {
+    // Gamma /comments row: ids are decimal strings, createdAt is ISO-8601, the author
+    // lives under `profile`, and likes are `reactionCount`.
     Comment c;
-    c.id = obj["id"].toInt();
+    c.id = obj["id"].toString().toInt();
     c.body = obj["body"].toString();
-    if (c.body.isEmpty())
-        c.body = obj["content"].toString();
-    c.author = obj["name"].toString();
+    const QJsonObject profile = obj["profile"].toObject();
+    // Respect the user's choice: Polymarket shows the pseudonym when the name is private.
+    if (profile["displayUsernamePublic"].toBool(true))
+        c.author = profile["name"].toString();
     if (c.author.isEmpty())
-        c.author = obj["author"].toString();
-    c.author_address = obj["address"].toString();
-    c.created_at = static_cast<int64_t>(obj["createdAt"].toVariant().toLongLong());
-    c.parent_id = obj["parentId"].toInt();
-    c.likes = obj["likes"].toInt();
+        c.author = profile["pseudonym"].toString();
+    c.author_address = obj["userAddress"].toString();
+    c.created_at = QDateTime::fromString(obj["createdAt"].toString(), Qt::ISODateWithMs).toSecsSinceEpoch();
+    c.parent_id = obj["parentCommentID"].toString().toInt();
+    c.likes = obj["reactionCount"].toInt();
     return c;
 }
 
@@ -297,21 +299,17 @@ Team Team::from_json(const QJsonObject& obj) {
 
 OpenInterest OpenInterest::from_json(const QJsonObject& obj) {
     OpenInterest oi;
-    oi.condition_id = obj["conditionId"].toString();
-    if (oi.condition_id.isEmpty())
-        oi.condition_id = obj["market"].toString();
-    oi.open_interest = obj["openInterest"].toDouble();
-    if (oi.open_interest == 0)
-        oi.open_interest = obj["value"].toDouble();
+    // /v2/oi rows: { condition_id, value }.
+    oi.condition_id = obj["condition_id"].toString();
+    oi.open_interest = num_or_str(obj["value"]);
     return oi;
 }
 
 LiveVolume LiveVolume::from_json(const QJsonObject& obj) {
+    // /v2/live-volume `data`: { taker_volume_total, conditions: [...] }. The
+    // response carries no event id; fetch_live_volume() fills it in.
     LiveVolume lv;
-    lv.event_id = obj["eventId"].toString();
-    if (lv.event_id.isEmpty())
-        lv.event_id = obj["event_id"].toString();
-    lv.volume_24h = obj["volume"].toDouble();
+    lv.volume_24h = num_or_str(obj["taker_volume_total"]);
     return lv;
 }
 
@@ -697,10 +695,11 @@ void PolymarketService::fetch_tags() {
         "FetchTags");
 }
 
-void PolymarketService::fetch_comments(const QString& condition_id, int limit) {
-    // Gamma /comments requires conditionId (0x hex), not the slug.
-    QString path =
-        "/comments?conditionId=" + QUrl::toPercentEncoding(condition_id) + "&limit=" + QString::number(limit);
+void PolymarketService::fetch_comments(int event_id, int limit) {
+    // Gamma /comments hangs off an Event (or Series): parent_entity_type accepts only
+    // Event / Series / PerpsAsset, and the old `conditionId` form answers 422. Newest first.
+    QString path = "/comments?parent_entity_type=Event&parent_entity_id=" + QString::number(event_id) +
+                   "&limit=" + QString::number(limit) + "&order=createdAt&ascending=false";
 
     get_gamma(
         path,
@@ -780,8 +779,11 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
     get_clob(
         "/midpoint?token_id=" + token_id,
         [acc, maybe_emit](const QJsonDocument& doc) {
-            // CLOB returns { "mid_price": "0.52" } as a string.
-            acc->summary.midpoint = num_or_str(doc.object()["mid_price"]);
+            // The live CLOB answers { "mid": "0.52" } (a string). Its OpenAPI spec says
+            // `mid_price`, which the server does not send — reading only that key left the
+            // midpoint at 0 for every market. Accept both.
+            const QJsonObject o = doc.object();
+            acc->summary.midpoint = num_or_str(o.contains("mid") ? o["mid"] : o["mid_price"]);
             maybe_emit();
         },
         "Midpoint");
@@ -806,13 +808,14 @@ void PolymarketService::fetch_price_summary(const QString& token_id) {
 // ── Data API ─────────────────────────────────────────────────────────────────
 
 void PolymarketService::fetch_trades(const QString& condition_id, int limit) {
-    QString path = "/trades?market=" + condition_id + "&limit=" + QString::number(limit);
+    // v2 caps a page at 1000 and rejects anything larger.
+    QString path = "/trades?condition=" + condition_id + "&limit=" + QString::number(qBound(1, limit, 1000));
 
     get_data(
         path,
         [this](const QJsonDocument& doc) {
             QVector<Trade> result;
-            QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
+            const QJsonArray arr = data_payload(doc).toArray();
             result.reserve(arr.size());
             for (const auto& v : arr)
                 result.append(Trade::from_json(v.toObject()));
@@ -823,17 +826,18 @@ void PolymarketService::fetch_trades(const QString& condition_id, int limit) {
 }
 
 void PolymarketService::fetch_top_holders(const QString& condition_id, int limit) {
-    // Data API caps `limit` at 20 for /holders.
+    // `limit` is rows per outcome token. The panel shows 20; include_pnl=true
+    // (max 100 rows, exactly one condition) adds the holder's `avg_price`.
     const int capped = qBound(1, limit, 20);
-    QString path = "/holders?market=" + condition_id + "&limit=" + QString::number(capped);
+    QString path = "/holders?condition=" + condition_id + "&limit=" + QString::number(capped) + "&include_pnl=true";
 
     get_data(
         path,
         [this](const QJsonDocument& doc) {
             QVector<TopHolder> result;
-            // Response shape: [{ token, holders:[ { proxyWallet, amount, ... } ] }, ...]
+            // `data` shape: [{ token_id, holders:[ { proxy_wallet, amount, avg_price, ... } ] }, ...]
             // One entry per asset/outcome (YES/NO). Flatten and rank by amount.
-            QJsonArray top = doc.isArray() ? doc.array() : QJsonArray();
+            const QJsonArray top = data_payload(doc).toArray();
             for (const auto& bucket : top) {
                 auto holders_arr = bucket.toObject().value("holders").toArray();
                 int rank = 1;
@@ -867,17 +871,14 @@ void PolymarketService::fetch_leaderboard(int limit) {
         return;
     }
 
-    // Data API: /v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=N
-    // Fields on each entry: rank, proxyWallet, userName, vol, pnl, profileImage.
+    // All-time PnL board. time_period must be explicit: v2 defaults to `day`.
     const int capped = qBound(1, limit, 50);
-    QString path = "/v1/leaderboard?category=OVERALL&timePeriod=ALL&orderBy=PNL&limit=" + QString::number(capped);
+    QString path = "/leaderboard?category=overall&time_period=all&sort_by=PNL&limit=" + QString::number(capped);
 
     get_data(
         path,
         [this, cache_key](const QJsonDocument& doc) {
-            QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
-            if (arr.isEmpty() && doc.isObject() && doc.object().contains("data"))
-                arr = doc.object()["data"].toArray();
+            const QJsonArray arr = data_payload(doc).toArray();
             fincept::CacheManager::instance().put(
                 cache_key, QVariant(QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact))),
                 kLeaderboardTtlSec, "polymarket");
@@ -895,16 +896,15 @@ void PolymarketService::fetch_leaderboard(int limit) {
         "FetchLeaderboard");
 }
 
-void PolymarketService::fetch_activity(const QString& condition_id, int limit) {
-    QString path = "/activity?market=" + condition_id + "&limit=" + QString::number(limit);
+void PolymarketService::fetch_activity(const QString& user, int limit) {
+    // The v2 activity feed is wallet-anchored: `user` is required (400 without it).
+    QString path = "/activity?user=" + user + "&limit=" + QString::number(qBound(1, limit, 1000));
 
     get_data(
         path,
         [this](const QJsonDocument& doc) {
             QVector<Activity> result;
-            QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
-            if (arr.isEmpty() && doc.isObject() && doc.object().contains("data"))
-                arr = doc.object()["data"].toArray();
+            const QJsonArray arr = data_payload(doc).toArray();
             for (const auto& v : arr)
                 result.append(Activity::from_json(v.toObject()));
             LOG_INFO("Polymarket", "Fetched " + QString::number(result.size()) + " activities");
@@ -918,25 +918,26 @@ void PolymarketService::fetch_live_volume(const QString& event_id) {
 
     get_data(
         path,
-        [this](const QJsonDocument& doc) {
-            if (doc.isObject()) {
-                emit live_volume_ready(LiveVolume::from_json(doc.object()));
+        [this, event_id](const QJsonDocument& doc) {
+            const QJsonValue data = data_payload(doc);
+            if (data.isObject()) {
+                LiveVolume lv = LiveVolume::from_json(data.toObject());
+                lv.event_id = event_id;
+                emit live_volume_ready(lv);
             }
         },
         "FetchLiveVolume");
 }
 
 void PolymarketService::fetch_open_interest(const QStringList& condition_ids) {
-    QString ids = condition_ids.join(",");
-    QString path = "/open-interest?condition_ids=" + ids;
+    // At most 20 distinct ids per request (v2 limit).
+    QString path = "/oi?condition=" + condition_ids.join(",");
 
     get_data(
         path,
         [this](const QJsonDocument& doc) {
             QVector<OpenInterest> result;
-            QJsonArray arr = doc.isArray() ? doc.array() : QJsonArray();
-            if (arr.isEmpty() && doc.isObject() && doc.object().contains("data"))
-                arr = doc.object()["data"].toArray();
+            const QJsonArray arr = data_payload(doc).toArray();
             for (const auto& v : arr)
                 result.append(OpenInterest::from_json(v.toObject()));
             emit open_interest_ready(result);

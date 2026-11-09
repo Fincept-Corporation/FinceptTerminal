@@ -7,7 +7,10 @@
 #include <QString>
 #include <QStringList>
 
+#include <atomic>
 #include <functional>
+#include <memory>
+#include <optional>
 
 namespace fincept::python {
 
@@ -60,6 +63,24 @@ class PythonRunner : public QObject {
         /// Written to the child's stdin after spawn; the write channel is then
         /// closed so the script sees EOF. See the note on run() below.
         QByteArray stdin_data;
+
+        /// Optional cancellation token. Raising it (from any thread) fails a
+        /// request that is still queued without spawning it, and kills a running
+        /// process within ~250 ms; the callback then receives
+        /// `success=false, error="Cancelled"`. Null = not cancellable (default).
+        std::shared_ptr<std::atomic<bool>> cancel_token;
+
+        /// When set, ONLY these stored credentials are injected into the child's
+        /// environment (the env vars the script itself reads); every other key
+        /// in SecureStorage stays out. Unset = every managed credential, as the
+        /// terminal's own screens expect. Agent-started runs (the MCP `python`
+        /// tool) always set it, so a script an agent runs cannot read keys it has
+        /// no business with (exchange secrets in a data connector's environment).
+        std::optional<QStringList> credential_allowlist;
+
+        /// Stop a run whose stdout grows past this many bytes: the process is
+        /// killed and the result fails with "output too large". 0 = no cap.
+        qint64 max_output_bytes = 0;
     };
 
     /// Sentinel for RunOptions::timeout_ms — resolve the budget from the script
@@ -115,6 +136,10 @@ class PythonRunner : public QObject {
     /// Set max concurrent Python processes (default: 3)
     void set_max_concurrent(int n) { max_concurrent_ = n; }
 
+    /// Running + queued script requests. Owner thread (the GUI thread) only —
+    /// used by the UI automation layer to tell "still loading" from "idle".
+    int pending_count() const { return active_count_ + static_cast<int>(queue_.size()); }
+
   signals:
     void python_ready();
 
@@ -156,6 +181,12 @@ class PythonRunner : public QObject {
         bool expect_json = true;
         /// Resolved watchdog budget in ms; 0 = no watchdog.
         int timeout_ms = 0;
+        /// See RunOptions::cancel_token. Null = not cancellable.
+        std::shared_ptr<std::atomic<bool>> cancel_token;
+        /// See RunOptions::credential_allowlist.
+        std::optional<QStringList> credential_allowlist;
+        /// See RunOptions::max_output_bytes.
+        qint64 max_output_bytes = 0;
     };
     QQueue<QueuedRequest> queue_;
 

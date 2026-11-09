@@ -18,7 +18,7 @@ Usage:
     python wto_data.py available_apis
     python wto_data.py qr_members
     python wto_data.py eping_search --language 1 --domainIds 1
-    python wto_data.py timeseries_data --i TP_A_0010 --r US
+    python wto_data.py timeseries_data --i ITS_MTV_AX --r US --ps 2015-2023 --pc TO --p 000 --head M
     python wto_data.py tfad_data --countries 840,124
 """
 
@@ -28,6 +28,7 @@ import asyncio
 import aiohttp
 from datetime import datetime
 from typing import Dict, List, Optional, Union, Literal
+import re
 import urllib.parse
 
 # Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
@@ -38,6 +39,75 @@ import urllib.parse
 if sys.platform == "win32":
     import aiohttp.connector as _aiohttp_connector
     _aiohttp_connector.DefaultResolver = aiohttp.ThreadedResolver
+
+# The Timeseries API identifies economies by WTO reporter/partner codes: ISO 3166-1 numeric for
+# countries (840 = United States, 156 = China), except Serbia (892), Montenegro (893) and Sudan
+# (736), plus WTO aggregates such as 000 (World) and 918 (European Union). Users type ISO codes,
+# so translate alpha-2 / alpha-3 here. Packed as <alpha2><alpha3><WTO code>.
+_ISO_TO_WTO_PACKED = (
+    "ADAND020 AEARE784 AFAFG004 AGATG028 AIAIA660 ALALB008 AMARM051 AOAGO024 AQATA010 ARARG032 "
+    "ASASM016 ATAUT040 AUAUS036 AWABW533 AXALA248 AZAZE031 BABIH070 BBBRB052 BDBGD050 BEBEL056 "
+    "BFBFA854 BGBGR100 BHBHR048 BIBDI108 BJBEN204 BLBLM652 BMBMU060 BNBRN096 BOBOL068 BQBES535 "
+    "BRBRA076 BSBHS044 BTBTN064 BVBVT074 BWBWA072 BYBLR112 BZBLZ084 CACAN124 CCCCK166 CDCOD180 "
+    "CFCAF140 CGCOG178 CHCHE756 CICIV384 CKCOK184 CLCHL152 CMCMR120 CNCHN156 COCOL170 CRCRI188 "
+    "CUCUB192 CVCPV132 CWCUW531 CXCXR162 CYCYP196 CZCZE203 DEDEU276 DJDJI262 DKDNK208 DMDMA212 "
+    "DODOM214 DZDZA012 ECECU218 EEEST233 EGEGY818 EHESH732 ERERI232 ESESP724 ETETH231 FIFIN246 "
+    "FJFJI242 FKFLK238 FMFSM583 FOFRO234 FRFRA250 GAGAB266 GBGBR826 GDGRD308 GEGEO268 GFGUF254 "
+    "GGGGY831 GHGHA288 GIGIB292 GLGRL304 GMGMB270 GNGIN324 GPGLP312 GQGNQ226 GRGRC300 GSSGS239 "
+    "GTGTM320 GUGUM316 GWGNB624 GYGUY328 HKHKG344 HMHMD334 HNHND340 HRHRV191 HTHTI332 HUHUN348 "
+    "IDIDN360 IEIRL372 ILISR376 IMIMN833 ININD356 IOIOT086 IQIRQ368 IRIRN364 ISISL352 ITITA380 "
+    "JEJEY832 JMJAM388 JOJOR400 JPJPN392 KEKEN404 KGKGZ417 KHKHM116 KIKIR296 KMCOM174 KNKNA659 "
+    "KPPRK408 KRKOR410 KWKWT414 KYCYM136 KZKAZ398 LALAO418 LBLBN422 LCLCA662 LILIE438 LKLKA144 "
+    "LRLBR430 LSLSO426 LTLTU440 LULUX442 LVLVA428 LYLBY434 MAMAR504 MCMCO492 MDMDA498 MEMNE893 "
+    "MFMAF663 MGMDG450 MHMHL584 MKMKD807 MLMLI466 MMMMR104 MNMNG496 MOMAC446 MPMNP580 MQMTQ474 "
+    "MRMRT478 MSMSR500 MTMLT470 MUMUS480 MVMDV462 MWMWI454 MXMEX484 MYMYS458 MZMOZ508 NANAM516 "
+    "NCNCL540 NENER562 NFNFK574 NGNGA566 NINIC558 NLNLD528 NONOR578 NPNPL524 NRNRU520 NUNIU570 "
+    "NZNZL554 OMOMN512 PAPAN591 PEPER604 PFPYF258 PGPNG598 PHPHL608 PKPAK586 PLPOL616 PMSPM666 "
+    "PNPCN612 PRPRI630 PSPSE275 PTPRT620 PWPLW585 PYPRY600 QAQAT634 REREU638 ROROU642 RSSRB892 "
+    "RURUS643 RWRWA646 SASAU682 SBSLB090 SCSYC690 SDSDN736 SESWE752 SGSGP702 SHSHN654 SISVN705 "
+    "SJSJM744 SKSVK703 SLSLE694 SMSMR674 SNSEN686 SOSOM706 SRSUR740 SSSSD728 STSTP678 SVSLV222 "
+    "SXSXM534 SYSYR760 SZSWZ748 TCTCA796 TDTCD148 TFATF260 TGTGO768 THTHA764 TJTJK762 TKTKL772 "
+    "TLTLS626 TMTKM795 TNTUN788 TOTON776 TRTUR792 TTTTO780 TVTUV798 TWTWN158 TZTZA834 UAUKR804 "
+    "UGUGA800 UMUMI581 USUSA840 UYURY858 UZUZB860 VAVAT336 VCVCT670 VEVEN862 VGVGB092 VIVIR850 "
+    "VNVNM704 VUVUT548 WFWLF876 WSWSM882 YEYEM887 YTMYT175 ZAZAF710 ZMZMB894 ZWZWE716 "
+)
+_WTO_ECONOMY_CODES: Dict[str, str] = {"EU": "918", "EUN": "918", "WLD": "000", "WORLD": "000"}
+for _tok in _ISO_TO_WTO_PACKED.split():
+    _WTO_ECONOMY_CODES[_tok[:2]] = _tok[5:]
+    _WTO_ECONOMY_CODES[_tok[2:5]] = _tok[5:]
+
+
+def wto_economy_codes(value: str) -> str:
+    """Comma-separated economies (ISO alpha-2/alpha-3, WTO numeric codes, 'all', 'default') ->
+    WTO codes. Raises WTOError for an entry that is none of those."""
+    out = []
+    for part in str(value).split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if token.lower() in ("all", "default") or token.isdigit():
+            out.append(token.lower() if not token.isdigit() else token)
+            continue
+        code = _WTO_ECONOMY_CODES.get(token.upper())
+        if code is None:
+            raise WTOError(f"Unknown economy '{token}': use an ISO code (US, USA) or a WTO code (840)")
+        out.append(code)
+    return ",".join(out) if out else "all"
+
+
+def wto_periods(value: str) -> str:
+    """The API takes 'default', 'all' or a comma-separated list of years; expand YYYY-YYYY ranges."""
+    out = []
+    for part in str(value).split(","):
+        token = part.strip()
+        m = re.fullmatch(r"(\d{4})\s*-\s*(\d{4})", token)
+        if m:
+            lo, hi = sorted((int(m.group(1)), int(m.group(2))))
+            out.extend(str(y) for y in range(lo, hi + 1))
+        elif token:
+            out.append(token)
+    return ",".join(out) if out else "default"
+
 
 class WTOError(Exception):
     """Custom exception for WTO data errors"""
@@ -331,24 +401,23 @@ class WTODataWrapper:
                                  max_records: int = 500, heading_style: str = "H",
                                  language: int = 1, include_metadata: bool = False) -> Dict:
         """Get timeseries data points"""
-        params = {
-            'i': indicator,
-            'r': reporters,
-            'p': partners,
-            'ps': periods,
-            'pc': products,
-            'spc': str(include_sub_products).lower(),
-            'fmt': format_type,
-            'mode': mode,
-            'dec': decimals,
-            'off': str(offset),
-            'max': str(max_records),
-            'head': heading_style,
-            'lang': str(language),
-            'meta': str(include_metadata).lower()
-        }
-
         try:
+            params = {
+                'i': indicator,
+                'r': wto_economy_codes(reporters),
+                'p': wto_economy_codes(partners),
+                'ps': wto_periods(periods),
+                'pc': products,
+                'spc': str(include_sub_products).lower(),
+                'fmt': format_type,
+                'mode': mode,
+                'dec': decimals,
+                'off': str(offset),
+                'max': str(max_records),
+                'head': heading_style,
+                'lang': str(language),
+                'meta': str(include_metadata).lower()
+            }
             async with aiohttp.ClientSession() as session:
                 result = await self.fetch_data(session, f"{self.timeseries_url}/data", params)
                 return {
@@ -364,16 +433,15 @@ class WTODataWrapper:
                                        periods: str = "default", products: str = "default",
                                        include_sub_products: bool = False) -> Dict:
         """Get timeseries data count"""
-        params = {
-            'i': indicator,
-            'r': reporters,
-            'p': partners,
-            'ps': periods,
-            'pc': products,
-            'spc': str(include_sub_products).lower()
-        }
-
         try:
+            params = {
+                'i': indicator,
+                'r': wto_economy_codes(reporters),
+                'p': wto_economy_codes(partners),
+                'ps': wto_periods(periods),
+                'pc': products,
+                'spc': str(include_sub_products).lower()
+            }
             async with aiohttp.ClientSession() as session:
                 result = await self.fetch_data(session, f"{self.timeseries_url}/data_count", params)
                 return {
@@ -823,23 +891,28 @@ def main():
             ))
 
         elif command == "timeseries_data":
-            if "i" not in args:
+            # Long names, or the API's own parameter names (--i --r --p --ps --pc --head ...),
+            # which is what the usage line above and the desktop panel use.
+            def ts_arg(long_name, api_name, default):
+                return args.get(long_name, args.get(api_name, default))
+            indicator = ts_arg("indicator", "i", None)
+            if not indicator:
                 raise ValueError("i (indicator) parameter is required")
             result = asyncio.run(wrapper.get_timeseries_data(
-                args["i"],
-                args.get("reporters", "all"),
-                args.get("partners", "default"),
-                args.get("periods", "default"),
-                args.get("products", "default"),
-                args.get("include_sub_products") == "true",
-                args.get("format_type", "json"),
-                args.get("mode", "full"),
-                args.get("decimals", "default"),
-                int(args.get("offset", 0)),
-                int(args.get("max_records", 500)),
-                args.get("heading_style", "H"),
-                int(args.get("language", 1)),
-                args.get("include_metadata") == "true"
+                indicator,
+                ts_arg("reporters", "r", "all"),
+                ts_arg("partners", "p", "default"),
+                ts_arg("periods", "ps", "default"),
+                ts_arg("products", "pc", "default"),
+                ts_arg("include_sub_products", "spc", "false") == "true",
+                ts_arg("format_type", "fmt", "json"),
+                ts_arg("mode", "mode", "full"),
+                ts_arg("decimals", "dec", "default"),
+                int(ts_arg("offset", "off", 0)),
+                int(ts_arg("max_records", "max", 500)),
+                ts_arg("heading_style", "head", "H"),
+                int(ts_arg("language", "lang", 1)),
+                ts_arg("include_metadata", "meta", "false") == "true"
             ))
 
         elif command == "timeseries_reporters":

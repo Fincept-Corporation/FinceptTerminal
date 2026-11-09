@@ -17,9 +17,10 @@ The terminal injects everything this toolkit needs into the agent config:
   terminal_tools                 the catalogue: [{name, description, inputSchema,
                                  serverId, timeoutMs}]
 
-When an agent config names no tool categories, the catalogue is the curated
-"essentials" set plus tool_list / tool_describe / tool_invoke; call_terminal_tool
-(always registered) reaches any other tool the agent's policy allows.
+The catalogue is the terminal's core tools this agent's policy allows (agents
+get the screen-reading ui_* tools and `python` for the bundled scripts) plus any
+tools from the user's external MCP servers. call_terminal_tool (always
+registered) reaches a tool by name, e.g. an external server's tool.
 
 Usage:
     toolkit = TerminalToolkit(endpoint=..., tool_definitions=[...], token=...)
@@ -42,9 +43,6 @@ INTERNAL_SERVER_ID = "fincept-terminal"
 # too long, and the agent receives the terminal's real error.
 _TIMEOUT_SLACK_SECONDS = 15.0
 _DEFAULT_TOOL_TIMEOUT_SECONDS = 120.0
-# Budget of the terminal's tool_invoke dispatcher (MetaTools.cpp).
-_TOOL_INVOKE_TIMEOUT_SECONDS = 900.0
-
 GENERIC_TOOL_NAME = "call_terminal_tool"
 
 
@@ -132,8 +130,8 @@ class TerminalToolkit:
             schema: Dict[str, Any] = tool_def.get("inputSchema") or {"type": "object", "properties": {}}
             add(name, description, schema, self._make_tool_fn(name, description, schema))
 
-        # Generic entry point: reaches tools that are not in the catalogue above
-        # (found with tool_list), and pages truncated results via result_fetch.
+        # Generic entry point: reaches a tool by name — mostly tools on the user's
+        # external MCP servers that are not in the catalogue above.
         if GENERIC_TOOL_NAME not in self._catalog:
             add(GENERIC_TOOL_NAME, _GENERIC_DESCRIPTION, _GENERIC_SCHEMA, self._make_generic_fn())
 
@@ -172,13 +170,12 @@ class TerminalToolkit:
         - A tool in this agent's catalogue is posted directly (its own serverId
           and timeout apply).
         - An explicit external `server_id` is posted directly to that server.
-        - Otherwise the terminal's tool_invoke dispatcher is used when the
-          catalogue has it (Essentials agents), else the tool is posted as an
-          internal tool. The terminal enforces the agent's tool policy either way.
+        - Otherwise the tool is posted as an internal tool. The terminal enforces
+          the agent's tool policy either way.
         """
         name = (tool or "").strip()
         if not name:
-            return json.dumps({"error": "call_terminal_tool needs 'tool' (a name from tool_list)."})
+            return json.dumps({"error": "call_terminal_tool needs 'tool' (an exact tool name)."})
         if name == GENERIC_TOOL_NAME:
             return json.dumps({"error": "call_terminal_tool cannot call itself."})
         if arguments is None:
@@ -197,9 +194,6 @@ class TerminalToolkit:
             return self._call_tool(name, arguments)
         if server_id and server_id != INTERNAL_SERVER_ID:
             return self._post(name, arguments, server_id, self.default_timeout_seconds + _TIMEOUT_SLACK_SECONDS)
-        if "tool_invoke" in self._catalog:
-            return self._post("tool_invoke", {"tool": name, "arguments": arguments}, None,
-                              _TOOL_INVOKE_TIMEOUT_SECONDS + _TIMEOUT_SLACK_SECONDS)
         return self._post(name, arguments, None, self.default_timeout_seconds + _TIMEOUT_SLACK_SECONDS)
 
     # ------------------------------------------------------------------
@@ -283,32 +277,31 @@ class TerminalToolkit:
 
         # The bridge shapes oversized results and says so in place; keep those
         # markers — an agent that read a trimmed array as complete would reason
-        # off a truncated dataset.
+        # off a truncated dataset. The bridge's note says how to read the rest
+        # (ui_read with the result id).
         if result.get("truncated"):
             return json.dumps({
                 "data": data_val,
                 "truncated": True,
                 "result_id": result.get("result_id"),
                 "full_bytes": result.get("full_bytes"),
-                "note": (result.get("note") or "")
-                + " Use " + GENERIC_TOOL_NAME + "(tool='result_fetch', arguments={'result_id': ..., "
-                  "'offset': ..., 'limit': ...}) to page it.",
+                "note": result.get("note") or ("Truncated. Read the rest with ui_read(ref='"
+                                               + str(result.get("result_id")) + "', offset=0)."),
             })
 
         return json.dumps(data_val) if not isinstance(data_val, str) else data_val
 
 
 _GENERIC_DESCRIPTION = (
-    "Call any Fincept Terminal tool by its exact name, including tools that are not listed "
-    "among your functions. Find tools with tool_list and read their parameters with "
-    "tool_describe first. Pass server_id only for a tool on an external MCP server (as "
-    "tool_describe reports it). Also pages a truncated result: tool='result_fetch'."
+    "Call a Fincept Terminal tool by its exact name — mainly a tool on one of the user's "
+    "external MCP servers (pass its server_id). The terminal's own tools are already among "
+    "your functions; call those directly."
 )
 
 _GENERIC_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
-        "tool": {"type": "string", "description": "Exact tool name (from tool_list / tool_describe)"},
+        "tool": {"type": "string", "description": "Exact tool name"},
         "arguments": {"type": "object", "description": "Arguments object matching the tool's input schema"},
         "server_id": {"type": "string", "description": "External MCP server id; omit for terminal tools"},
     },

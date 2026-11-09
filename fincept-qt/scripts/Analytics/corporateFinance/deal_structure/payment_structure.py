@@ -1,4 +1,10 @@
-"""Payment Structure Analysis - Cash vs Stock"""
+"""Payment Structure Analysis - Cash vs Stock
+
+CLI: python payment_structure.py analyze <json>  keys purchase_price, cash_pct (0.6 or 60 = 60 % cash),
+     cash_on_hand, new_debt; optional acquirer_shares_outstanding, acquirer_share_price,
+     target_shares_outstanding, target_share_price (defaults 100M @ $50 / 20M @ $30).
+     Native form: payment <json> | payment <price> <cash_pct> <acquirer_cash> <debt_capacity>.
+"""
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from enum import Enum
@@ -314,11 +320,16 @@ def main():
             if len(sys.argv) < 3:
                 raise ValueError("Payment parameters required")
 
+            def cash_fraction(value) -> float:
+                """Cash share as a fraction: 60 and 0.6 both mean 60 % (values above 1 are percents)."""
+                value = float(value)
+                return value / 100.0 if value > 1 else value
+
             # Accept either JSON dict or positional args
             try:
                 params = json.loads(sys.argv[2])
                 total = float(params.get('total_consideration', params.get('purchase_price', 0)))
-                cash_pct = float(params.get('cash_pct', params.get('cash_percentage', 50))) / 100.0 if params.get('cash_pct', params.get('cash_percentage', 50)) > 1 else float(params.get('cash_pct', params.get('cash_percentage', 0.5)))
+                cash_pct = cash_fraction(params.get('cash_pct', params.get('cash_percentage', 0.5)))
                 acquirer_cash = float(params.get('acquirer_cash', total * cash_pct))
                 debt_capacity = float(params.get('debt_capacity', total * 0.5))
                 acq_shares = float(params.get('acquirer_shares_outstanding', 100_000_000))
@@ -329,7 +340,7 @@ def main():
                 if len(sys.argv) < 6:
                     raise ValueError("Purchase price, cash percentage, acquirer cash, and debt capacity required")
                 total = float(sys.argv[2])
-                cash_pct = float(sys.argv[3])
+                cash_pct = cash_fraction(sys.argv[3])
                 acquirer_cash = float(sys.argv[4])
                 debt_capacity = float(sys.argv[5])
                 acq_shares = 100_000_000
@@ -346,7 +357,7 @@ def main():
 
             analysis = analyzer.analyze_mixed_payment(
                 purchase_price=total,
-                cash_percentage=cash_pct,
+                cash_percentage=cash_pct * 100.0,  # analyze_mixed_payment takes a percent (0-100)
                 acquirer_cash=acquirer_cash,
                 debt_capacity=debt_capacity
             )

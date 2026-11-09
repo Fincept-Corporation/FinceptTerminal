@@ -6,8 +6,9 @@ Input (stdin JSON):
     "symbols":        ["AAPL", "MSFT", "GOOGL"],
     "weights":        [0.4, 0.35, 0.25],       # current weights (fractions)
     "method":         "max_sharpe",             # see STRATEGIES below
-    "returns_method": "mean_historical",        # ignored (scipy only for now)
-    "risk_model":     "sample_covariance"       # ignored (scipy only for now)
+    "returns_method": "mean_historical",        # mean_historical | ema | capm | james_stein
+    "risk_model":     "sample_covariance",      # sample_covariance | ledoit_wolf | semicovariance | exponential
+    "risk_free_rate": 0.04                      # annual, fraction; optional, default 0.04
   }
 
 Output (stdout JSON):
@@ -27,7 +28,12 @@ Output (stdout JSON):
       "risk_parity":     {...},
       "hrp":             {...},
       "equal_weight":    {...}
-    }
+    },
+    "current":   {"return": ..., "volatility": ..., "sharpe": ...},   # today's weights, same model
+    "assets":    {"AAPL": {"return": ..., "volatility": ...}, ...},  # each holding on its own
+    "implied_returns":   {...},   # Black-Litterman equilibrium prior (current weights)
+    "posterior_returns": {...},   # prior blended with the historical-return views
+    "returns_model": "...", "risk_model": "...", "periods_per_year": 252.0
   }
 
 STRATEGIES (method field):
@@ -36,10 +42,14 @@ STRATEGIES (method field):
   risk_parity       — Equal risk contribution per asset
   max_return        — Maximise expected return (fully invests in best asset)
   equal_weight      — 1/N allocation (no optimisation)
-  hrp               — Hierarchical Risk Parity (inverse-variance proxy)
-  target_return     — Efficient portfolio at 10% target return
-  black_litterman   — BL with equal-weight market prior
+  hrp               — Hierarchical Risk Parity (correlation clustering + recursive bisection)
+  target_return     — Efficient portfolio at the requested target return (default 10%)
+  black_litterman   — Max Sharpe on BL posterior returns (current-weights prior + historical views)
+
+Annualisation uses the observations per year implied by the data (~252 for one
+equity market, ~365 for crypto) instead of a fixed 252.
 """
+import math
 import sys
 import json
 import numpy as np
@@ -108,21 +118,173 @@ def fetch_price_data(symbols, period="1y"):
 
 # ── Core optimiser ────────────────────────────────────────────────────────────
 
-def build_params(returns_df):
-    """Return (mean_returns_annual, cov_annual, n) from a returns DataFrame."""
-    mean_ret = returns_df.mean().values * 252
-    cov      = returns_df.cov().values * 252
-    return mean_ret, cov, len(mean_ret)
+EWM_SPAN = 180          # observations — recent-weighted mean / covariance
+BL_TAU = 0.05           # Black-Litterman prior uncertainty scale
+
+RETURNS_LABELS = {
+    "mean_historical": "Mean historical",
+    "ema": "Exponentially weighted (span %d)" % EWM_SPAN,
+    "capm": "CAPM (equal-weight market proxy)",
+    "james_stein": "James-Stein shrinkage",
+}
+RISK_LABELS = {
+    "sample_covariance": "Sample covariance",
+    "ledoit_wolf": "Ledoit-Wolf shrinkage",
+    "semicovariance": "Downside semicovariance",
+    "exponential": "Exponentially weighted covariance (span %d)" % EWM_SPAN,
+}
 
 
-def run_strategy(strategy, mean_ret, cov, n, extra=None):
+def periods_per_year(index):
+    """Observations per year implied by the data (~252 for one equity market, ~365 crypto)."""
+    if len(index) < 2:
+        return 252.0
+    days = (index[-1] - index[0]).days
+    if days <= 0:
+        return 252.0
+    return float(min(366.0, max(50.0, (len(index) - 1) / (days / 365.25))))
+
+
+def expected_returns(returns_df, method, ppy, rf):
+    """Annualised expected returns by the chosen model (arithmetic, fractions)."""
+    if method == "ema":
+        return returns_df.ewm(span=EWM_SPAN).mean().iloc[-1].values * ppy
+    if method == "capm":
+        market = returns_df.mean(axis=1)
+        var_m = float(market.var(ddof=1))
+        mkt_ret = float(market.mean()) * ppy
+        if var_m <= 0:
+            return returns_df.mean().values * ppy
+        betas = np.array([float(returns_df[c].cov(market)) / var_m for c in returns_df.columns])
+        return rf + betas * (mkt_ret - rf)
+    if method == "james_stein":
+        mu = returns_df.mean().values
+        n, t = len(mu), len(returns_df)
+        grand = float(mu.mean())
+        spread = float(np.sum((mu - grand) ** 2))
+        if n > 3 and spread > 0 and t > 0:
+            s2 = float(returns_df.var(ddof=1).mean())   # average per-asset daily variance
+            shrink = min(1.0, max(0.0, (n - 3) * s2 / (t * spread)))
+        else:
+            shrink = 0.0
+        return (grand + (1.0 - shrink) * (mu - grand)) * ppy
+    return returns_df.mean().values * ppy           # mean_historical
+
+
+def ledoit_wolf_cov(returns_df):
+    """Ledoit-Wolf (2004) shrinkage of the sample covariance toward a scaled identity."""
+    x = returns_df.values - returns_df.values.mean(axis=0)
+    t, n = x.shape
+    s = x.T @ x / t
+    mu = float(np.trace(s)) / n
+    f = mu * np.eye(n)
+    d2 = float(np.sum((s - f) ** 2)) / n
+    row_sq = np.sum(x ** 2, axis=1)                 # |x_t|^2
+    b2_bar = (float(np.sum(row_sq ** 2)) - t * float(np.sum(s ** 2))) / (n * t * t)
+    b2 = min(max(b2_bar, 0.0), d2)
+    shrink = b2 / d2 if d2 > 0 else 0.0
+    return shrink * f + (1.0 - shrink) * s
+
+
+def risk_model_cov(returns_df, method, rf_daily):
+    """Daily covariance by the chosen model (annualised by the caller)."""
+    if method == "ledoit_wolf":
+        return ledoit_wolf_cov(returns_df)
+    if method == "semicovariance":
+        downside = np.minimum(returns_df.values - rf_daily, 0.0)
+        return downside.T @ downside / len(returns_df)
+    if method == "exponential":
+        n = returns_df.shape[1]
+        ew = returns_df.ewm(span=EWM_SPAN).cov()
+        return ew.iloc[-n:].values
+    return returns_df.cov().values                  # sample_covariance
+
+
+def build_params(returns_df, returns_method="mean_historical", risk_model="sample_covariance", rf=0.04):
+    """Return (mean_returns_annual, cov_annual, n, periods_per_year) from a returns DataFrame."""
+    ppy = periods_per_year(returns_df.index)
+    rf_daily = (1.0 + rf) ** (1.0 / ppy) - 1.0
+    mean_ret = expected_returns(returns_df, returns_method, ppy, rf)
+    cov = risk_model_cov(returns_df, risk_model, rf_daily) * ppy
+    cov = (cov + cov.T) / 2.0                       # symmetric for the solver
+    return mean_ret, cov, len(mean_ret), ppy
+
+
+def hrp_weights(cov):
+    """Hierarchical Risk Parity (Lopez de Prado): single-linkage clustering on the
+    correlation distance, quasi-diagonal ordering, recursive bisection with
+    inverse-variance cluster weights."""
+    n = cov.shape[0]
+    if n == 1:
+        return np.ones(1)
+    from scipy.cluster.hierarchy import leaves_list, linkage
+    from scipy.spatial.distance import squareform
+
+    sd = np.sqrt(np.clip(np.diag(cov), 1e-18, None))
+    corr = np.clip(cov / np.outer(sd, sd), -1.0, 1.0)
+    dist = np.sqrt(np.clip((1.0 - corr) / 2.0, 0.0, 1.0))
+    np.fill_diagonal(dist, 0.0)
+    order = list(leaves_list(linkage(squareform(dist, checks=False), method="single")))
+
+    def cluster_var(idx):
+        sub = cov[np.ix_(idx, idx)]
+        ivp = 1.0 / np.clip(np.diag(sub), 1e-18, None)
+        ivp /= ivp.sum()
+        return float(ivp @ sub @ ivp)
+
+    w = np.ones(n)
+    clusters = [order]
+    while clusters:
+        nxt = []
+        for c in clusters:
+            if len(c) <= 1:
+                continue
+            half = len(c) // 2
+            left, right = c[:half], c[half:]
+            v_l, v_r = cluster_var(left), cluster_var(right)
+            alpha = 1.0 - v_l / (v_l + v_r) if (v_l + v_r) > 0 else 0.5
+            w[left] *= alpha
+            w[right] *= 1.0 - alpha
+            nxt += [left, right]
+        clusters = nxt
+    return w / w.sum()
+
+
+def black_litterman_returns(mean_ret, cov, w_mkt, rf, delta=None):
+    """Posterior expected returns. Prior: market-implied equilibrium pi = delta*Sigma*w_mkt
+    (w_mkt = the caller's current weights). Views: the chosen historical-return estimate,
+    one absolute view per asset with He-Litterman confidence Omega = diag(tau*Sigma).
+    Returns (pi, posterior, delta)."""
+    n = len(mean_ret)
+    if delta is None:
+        # Market-implied risk aversion of the prior portfolio, kept in a sane band.
+        port_ret = float(w_mkt @ mean_ret)
+        port_var = float(w_mkt @ cov @ w_mkt)
+        delta = (port_ret - rf) / port_var if port_var > 0 else 2.5
+        delta = float(min(5.0, max(1.0, delta)))
+    pi = delta * cov @ w_mkt
+    tau_sigma = BL_TAU * cov
+    omega = np.diag(np.clip(np.diag(tau_sigma), 1e-12, None))
+    p = np.eye(n)
+    try:
+        inv_ts = np.linalg.inv(tau_sigma)
+        inv_om = np.linalg.inv(omega)
+        a = inv_ts + p.T @ inv_om @ p
+        b = inv_ts @ pi + p.T @ inv_om @ mean_ret
+        posterior = np.linalg.solve(a, b)
+    except np.linalg.LinAlgError:
+        posterior = (pi + mean_ret) / 2.0
+    return pi, posterior, delta
+
+
+def run_strategy(strategy, mean_ret, cov, n, extra=None, rf=0.04):
     """
     Returns dict: {weights, return, volatility, sharpe} or {error}.
     weights is a numpy array of length n.
     """
     if extra is None:
         extra = {}
-    RF = 0.04
+    RF = rf
 
     from scipy.optimize import minimize
 
@@ -167,14 +329,19 @@ def run_strategy(strategy, mean_ret, cov, n, extra=None):
 
         elif strategy in ("equal_weight", "equal"):
             w = np.ones(n) / n
-            return _build_result(w, mean_ret, cov, strategy)
+            return _build_result(w, mean_ret, cov, strategy, RF)
 
-        elif strategy in ("hrp", "inv_var"):
+        elif strategy == "hrp":
+            # Real HRP (clusters by correlation, then allocates by recursive bisection).
+            # It used to be plain inverse-variance weighting under the HRP label.
+            return _build_result(hrp_weights(cov), mean_ret, cov, strategy, RF)
+
+        elif strategy == "inv_var":
             diag = np.diag(cov)
             diag = np.where(diag > 1e-12, diag, 1e-12)
             inv_var = 1.0 / diag
             w = inv_var / inv_var.sum()
-            return _build_result(w, mean_ret, cov, strategy)
+            return _build_result(w, mean_ret, cov, strategy, RF)
 
         elif strategy in ("target_return",):
             tgt = extra.get("target_return", 0.10)
@@ -184,32 +351,39 @@ def run_strategy(strategy, mean_ret, cov, n, extra=None):
                            options={"ftol": 1e-9, "maxiter": 1000})
 
         elif strategy == "black_litterman":
-            delta = 2.5
-            pi    = delta * np.dot(cov, w0)
+            # Posterior returns from main() (equilibrium prior at the CURRENT weights,
+            # blended with the historical-return views). Without them fall back to the
+            # equal-weight equilibrium, which alone just reproduces the prior.
+            mu_bl = extra.get("bl_returns")
+            if mu_bl is None:
+                mu_bl = 2.5 * np.dot(cov, w0)
+            mu_bl = np.asarray(mu_bl, dtype=float)
+
             def neg_bl_sharpe(w):
-                r = float(np.dot(w, pi))
+                r = float(np.dot(w, mu_bl))
                 v = port_vol(w)
                 return -(r - RF) / v if v > 1e-10 else 0.0
             res = minimize(neg_bl_sharpe, w0, method="SLSQP",
                            bounds=bounds, constraints=constraints,
                            options={"ftol": 1e-9, "maxiter": 1000})
+            return _build_result(res.x, mu_bl, cov, strategy, RF)
 
         else:
             # Fallback: equal weight
             w = np.ones(n) / n
-            return _build_result(w, mean_ret, cov, strategy)
+            return _build_result(w, mean_ret, cov, strategy, RF)
 
         if not getattr(res, "success", False):
             # Still use best-found weights
             pass
-        return _build_result(res.x, mean_ret, cov, strategy)
+        return _build_result(res.x, mean_ret, cov, strategy, RF)
 
     except Exception as exc:
         return {"error": str(exc)}
 
 
-def _build_result(weights, mean_ret, cov, strategy):
-    RF   = 0.04
+def _build_result(weights, mean_ret, cov, strategy, rf=0.04):
+    RF   = rf
     w    = np.clip(weights, 0.0, 1.0)
     s    = w.sum()
     if s > 1e-10:
@@ -222,10 +396,10 @@ def _build_result(weights, mean_ret, cov, strategy):
 
 # ── Efficient frontier ────────────────────────────────────────────────────────
 
-def build_frontier(mean_ret, cov, n, num_points=40):
+def build_frontier(mean_ret, cov, n, num_points=40, rf=0.04):
     """Return list of {volatility, return, sharpe} frontier points."""
     from scipy.optimize import minimize
-    RF = 0.04
+    RF = rf
 
     bounds      = tuple((0.0, 1.0) for _ in range(n))
     w0          = np.ones(n) / n
@@ -326,6 +500,17 @@ def main():
     raw_method = params.get("method", "max_sharpe").lower().replace("-", "_")
     strategy   = method_map.get(raw_method, raw_method)
 
+    # Annual risk-free rate (fraction) for every Sharpe ratio and the max-Sharpe
+    # objective. It was hard-coded to 0.04, so a caller's rate (the workflow
+    # optimisation node sends one) was silently ignored.
+    try:
+        rf = float(params.get("risk_free_rate", 0.04))
+    except (TypeError, ValueError):
+        rf = float("nan")
+    if not math.isfinite(rf) or not -0.5 < rf < 1.0:
+        print(json.dumps({"error": "risk_free_rate must be an annual fraction between -0.5 and 1 (e.g. 0.04)"}))
+        return
+
     close = fetch_price_data(symbols)
     if close is None:
         print(json.dumps({"error": "Could not fetch price data"}))
@@ -341,10 +526,37 @@ def main():
         print(json.dumps({"error": "Insufficient price history (need ≥ 20 trading days)"}))
         return
 
-    mean_ret, cov, n = build_params(returns_df)
+    # The UI offers these choices; they used to be accepted and ignored.
+    def _key(v, default):
+        return str(v or default).strip().lower().replace("-", "_").replace(" ", "_")
+    returns_method = _key(params.get("returns_method"), "mean_historical")
+    if returns_method not in RETURNS_LABELS:
+        returns_method = "mean_historical"
+    risk_model = _key(params.get("risk_model"), "sample_covariance")
+    if risk_model not in RISK_LABELS:
+        risk_model = "sample_covariance"
+
+    mean_ret, cov, n, ppy = build_params(returns_df, returns_method, risk_model, rf)
+
+    # Current weights over the assets that have data (the BL prior and the "current"
+    # point on the frontier).
+    in_weights = params.get("weights", [])
+    w_cur = np.zeros(n)
+    have_cur = isinstance(in_weights, list) and len(in_weights) == len(symbols)
+    if have_cur:
+        wmap = {symbols[i]: float(in_weights[i]) for i in range(len(symbols))}
+        for i in range(n):
+            w_cur[i] = max(0.0, wmap.get(available[i], 0.0))
+    if w_cur.sum() <= 1e-9:
+        have_cur = False
+        w_cur = np.ones(n) / n
+    else:
+        w_cur = w_cur / w_cur.sum()
+
+    bl_pi, bl_posterior, bl_delta = black_litterman_returns(mean_ret, cov, w_cur, rf)
 
     # ── Primary optimisation ──────────────────────────────────────────────────
-    primary = run_strategy(strategy, mean_ret, cov, n, extra=params)
+    primary = run_strategy(strategy, mean_ret, cov, n, extra=dict(params, bl_returns=bl_posterior), rf=rf)
     if "error" in primary:
         print(json.dumps({"error": primary["error"]}))
         return
@@ -355,7 +567,7 @@ def main():
     # ── Efficient frontier ────────────────────────────────────────────────────
     frontier = []
     try:
-        frontier = build_frontier(mean_ret, cov, n)
+        frontier = build_frontier(mean_ret, cov, n, rf=rf)
     except Exception:
         pass
 
@@ -366,7 +578,7 @@ def main():
     comparison = {}
     for cs in comparison_strategies:
         try:
-            r = run_strategy(cs, mean_ret, cov, n)
+            r = run_strategy(cs, mean_ret, cov, n, rf=rf)
             if "error" not in r:
                 w_arr = r["weights"]
                 comparison[cs] = {
@@ -399,34 +611,27 @@ def main():
     except Exception:
         pass
 
-    # ── Black-Litterman market-implied equilibrium returns ────────────────────
-    # π = δ · Σ · w_market, using the caller's current weights as the market
-    # proxy (falls back to equal weight). Lets the B-L tab show what returns the
-    # market is implicitly pricing in before any investor views are applied.
-    implied_returns = {}
-    try:
-        in_weights = params.get("weights", [])
-        w_mkt = np.zeros(n)
-        if isinstance(in_weights, list) and len(in_weights) == len(symbols):
-            wmap = {symbols[i]: float(in_weights[i]) for i in range(len(symbols))}
-            for i in range(n):
-                w_mkt[i] = wmap.get(available[i], 0.0)
-        if w_mkt.sum() <= 1e-9:
-            w_mkt = np.ones(n) / n
-        else:
-            w_mkt = w_mkt / w_mkt.sum()
-        delta = 2.5  # risk-aversion coefficient
-        pi = delta * np.dot(cov, w_mkt)
-        for i in range(n):
-            implied_returns[available[i]] = float(pi[i])
-    except Exception:
-        pass
+    # ── Black-Litterman: equilibrium prior and posterior ──────────────────────
+    # pi = delta·Sigma·w_current — the returns at which today's mix would be optimal;
+    # the posterior blends it with the historical-return views (see
+    # black_litterman_returns). The B-L method optimises on the posterior.
+    implied_returns = {available[i]: float(bl_pi[i]) for i in range(n)}
+    posterior_returns = {available[i]: float(bl_posterior[i]) for i in range(n)}
+
+    # Each holding on its own, and today's mix, on the same model — for the frontier chart.
+    assets = {available[i]: {"return": float(mean_ret[i]), "volatility": float(np.sqrt(max(cov[i, i], 0.0)))}
+              for i in range(n)}
+    current = None
+    if have_cur:
+        cur = _build_result(w_cur, mean_ret, cov, "current", rf)
+        current = {"return": cur["return"], "volatility": cur["volatility"], "sharpe": cur["sharpe"]}
 
     output = {
         "weights":                weights_dict,
         "expected_annual_return": primary["return"],
         "annual_volatility":      primary["volatility"],
         "sharpe_ratio":           primary["sharpe"],
+        "risk_free_rate":         rf,
         "strategy":               strategy,
         "symbols":                available,
         "frontier":               frontier,
@@ -435,7 +640,15 @@ def main():
         "marginal_risk":          marginal_risk,
         "asset_volatility":       asset_volatility,
         "implied_returns":        implied_returns,
+        "posterior_returns":      posterior_returns,
+        "bl_delta":               bl_delta,
+        "assets":                 assets,
+        "returns_model":          RETURNS_LABELS[returns_method],
+        "risk_model":             RISK_LABELS[risk_model],
+        "periods_per_year":       ppy,
     }
+    if current is not None:
+        output["current"] = current
 
     print(json.dumps(convert_numpy(output)))
 

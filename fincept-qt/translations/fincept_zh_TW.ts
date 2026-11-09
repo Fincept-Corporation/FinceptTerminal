@@ -1994,14 +1994,6 @@ Markets, equities, portfolio, macro insights.</source>
         <translation>網路使用視為散布</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>商業授權</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>商業部署所必需</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>無需分享原始碼</translation>
     </message>
@@ -2048,18 +2040,6 @@ Markets, equities, portfolio, macro insights.</source>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>授權 (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>商業授權</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>商標政策</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>貢獻者 CLA</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32202,10 +32182,6 @@ Create a real ticket and our team will respond within 24 hours.</source>
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>版權所有 2024-2026 Fincept Corporation。保留一切權利。</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>本軟體依據 AGPL-3.0-or-later 授權供開源使用，企業部署另有獨立的商業授權可供選擇。</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

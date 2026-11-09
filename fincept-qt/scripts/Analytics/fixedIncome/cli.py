@@ -9,18 +9,24 @@ credit analysis, structured products, and portfolio analytics.
 Usage:
     python cli.py <command> [params_json]
 
-Commands:
-    bond_pricing    - Bond valuation and yield calculations
-    duration        - Duration and convexity analysis
-    yield_curve     - Term structure and spread analysis
-    credit          - Credit risk analysis
-    structured      - MBS/ABS analysis
-    portfolio       - Portfolio analytics and immunization
-    bond_features   - Bond types, covenants, contingencies
-    market_structure - Market segments, repos, indexes
-    floating_rate   - FRN pricing, money market instruments
-    sovereign       - Sovereign and municipal credit analysis
-    list            - List all available commands
+Commands (an unknown command answers with the full list):
+    pricing / yields  - price, ytm, ytc, ytw, clean_dirty, spot_rate, forward_rate
+    duration          - macaulay_duration, modified_duration, effective_duration, convexity, price_change
+    yield curve       - bootstrap, forward_curve, nelson_siegel, curve_shape, g_spread, z_spread, oas
+    credit            - expected_loss, unexpected_loss, credit_var, pd_from_spread, merton_pd, historical_pd,
+                        rating_transition
+    structured        - mbs_cash_flows, wal, wal_sensitivity, prepayment_schedule, abs_cash_flows,
+                        credit_enhancement, sequential_cmo
+    portfolio         - portfolio_metrics, duration_contribution, key_rate_exposure, immunization_requirements,
+                        immunize_two_bonds, rebalancing_check, contingent_immunization, tracking_error
+    bond features     - describe_bond_type, analyze_covenants, analyze_contingencies, cash_flow_structure
+    market structure  - market_segments, fixed_income_indexes, primary_vs_secondary, repo_mechanics,
+                        short_term_funding, ig_vs_hy_funding
+    floating rate     - frn_price, discount_margin, zero_discount_margin, frn_with_caps_floors,
+                        reference_rate_info, money_market_yield, compare_mm_yields
+    sovereign / muni  - sovereign_rating, sovereign_ability_to_pay, sovereign_willingness, local_vs_foreign_debt,
+                        default_restructuring, municipal_go, municipal_revenue, go_vs_revenue,
+                        govt_vs_corporate, relative_value
 """
 
 import sys

@@ -27,7 +27,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Ensure the scripts root is on sys.path so mcp.edgar is importable
+# Ensure the scripts root is on sys.path so fincept_mcp.edgar is importable
 _SCRIPTS_ROOT = str(Path(__file__).parent.parent.parent.parent)
 if _SCRIPTS_ROOT not in sys.path:
     sys.path.insert(0, _SCRIPTS_ROOT)
@@ -39,8 +39,8 @@ def _call(command: str, *args) -> str:
     JSON string suitable for passing back to the LLM.
     """
     try:
-        from mcp.edgar import main as edgar_main
-        from mcp.edgar import base as edgar_base
+        from fincept_mcp.edgar import main as edgar_main
+        from fincept_mcp.edgar import base as edgar_base
         # Auto-initialize identity on first call
         edgar_base.initialize_edgar()
         result = edgar_main.execute_command(command, list(str(a) for a in args))

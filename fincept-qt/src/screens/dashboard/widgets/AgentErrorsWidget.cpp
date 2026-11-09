@@ -31,7 +31,7 @@ AgentErrorsWidget::AgentErrorsWidget(const QJsonObject& cfg, QWidget* parent) : 
 
     set_configurable(true);
     apply_styles();
-    apply_config(cfg);
+    AgentErrorsWidget::apply_config(cfg); // qualified: no dynamic dispatch inside a constructor
 }
 
 QJsonObject AgentErrorsWidget::config() const {

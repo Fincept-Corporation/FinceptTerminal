@@ -1,10 +1,10 @@
 #pragma once
-// TotpService — thin wrapper around the exchange/totp_gen.py helper so that
-// the CryptoCredentials dialog does not spawn Python directly (D1 / P6).
+// TotpService — current TOTP code for a base32 seed, for the CryptoCredentials
+// dialog (so the screen holds no TOTP logic itself, P6). Computed in-process by
+// core/crypto/Totp: the permanent seed never leaves this process.
 //
 // This is a non-Producer service: TOTP codes are a per-dialog authentication
 // helper with no cross-screen streaming use case, so there is no hub topic.
-// Consumers call generate() with their own QPointer-guarded callback.
 
 #include <QObject>
 #include <QString>
@@ -22,17 +22,16 @@ struct TotpResult {
 
 using TotpCallback = std::function<void(const TotpResult&)>;
 
-/// Generates 6-digit TOTP codes from a base32 secret via the bundled
-/// `exchange/totp_gen.py` Python helper. Singleton to reuse PythonRunner's
-/// concurrency slot accounting.
+/// Generates 6-digit RFC 6238 codes (30 s step) from a base32 secret.
+/// Lower case, spaces and missing '=' padding are accepted; any other
+/// non-Base32 character is reported as an error.
 class TotpService : public QObject {
     Q_OBJECT
   public:
     static TotpService& instance();
 
-    /// Async: runs totp_gen.py with the given secret. Callback fires on the
-    /// main thread with the decoded result. Callers should guard with
-    /// QPointer per P8 — the service does not know the caller's lifetime.
+    /// Completes synchronously: `cb` runs on the caller's thread before
+    /// generate() returns.
     void generate(const QString& secret, TotpCallback cb);
 
   private:

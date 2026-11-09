@@ -95,19 +95,22 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
                                  const QMap<QString, int>& category_counts, int bullish, int bearish, int neutral);
     void update_monitors();
     void compute_deviations();
-    void sort_articles(QVector<services::NewsArticle>& articles) const;
+    /// Apply a search: typed text (substring match) or a symbol handed over by a
+    /// linked panel / drag-drop / "Filter by $TICKER" (ticker-aware whole-word match).
+    void apply_search(const QString& query, bool is_symbol);
+    /// Re-read the symbols held across all portfolios (worker thread) so the intel
+    /// drawer can flag holdings that are in the news.
+    void refresh_holdings();
 
     /// Enrich the visible articles (NER + places, correlation signals) and route the
     /// results into the intel drawer + feed model. Debounced via `enrichment_timer_`.
-    /// NER/places are cached per article in NewsNlpService (only NEW articles reach
-    /// Python, in one process); signals are computed in-process.
+    /// NER/places are cached per article in NewsNlpService (only NEW articles are
+    /// processed, in one worker-thread batch); signals are computed in-process.
     void request_enrichment();
     void run_enrichment_now();
     /// Prediction-market odds feed only the intel drawer: fetched (from a 10-min
     /// cache) only while the drawer is open.
     void maybe_fetch_predictions();
-
-    int64_t time_window_seconds() const;
 
     // Panels
     NewsCommandBar* command_bar_ = nullptr;
@@ -128,6 +131,13 @@ class NewsScreen : public QWidget, public IStatefulScreen, public IGroupLinked {
     QString sort_mode_ = "RELEVANCE";
     QString view_mode_ = "WIRE";
     QString search_query_;
+    /// True while search_query_ is a symbol from a linked panel rather than typed text:
+    /// it is then matched as a ticker (exchange suffix stripped, whole word) — a plain
+    /// substring test found no "RELIANCE.NS" headline and matched "V" in nearly all.
+    bool symbol_filter_ = false;
+    /// Symbols held in any portfolio (sorted) — matched against the feed for the
+    /// "holdings in the news" list.
+    QStringList holding_symbols_;
     bool loading_ = false;
     bool visible_ = false;
     bool first_show_ = true;

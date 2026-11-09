@@ -27,6 +27,9 @@ class KLineChartWidget : public QWidget {
     void clear_position_line();
     void clear();
 
+    // True when the WebEngine runtime is deployed AND no chart in this process
+    // has seen it fail to start (see runtime_failed()). Hosts check this once at
+    // construction to pick KLineChart vs. their native fallback chart.
     bool is_available() const;
 
     // Enable the right-click trading menu (Buy/Sell @ cursor price + watchlist).
@@ -39,6 +42,13 @@ class KLineChartWidget : public QWidget {
 
   signals:
     void chart_ready();
+    // The embedded Chromium renderer died, or the chart page failed to load
+    // (#411: a deployment missing resources/v8_context_snapshot.bin aborts every
+    // renderer at startup, leaving a permanently blank view). The widget is inert
+    // afterwards — calls become no-ops. Hosts should swap in their native chart
+    // and replay their cached candles. Emitted queued and at most once, so a
+    // handler may deleteLater() this widget.
+    void runtime_failed();
     void buy_requested(double price);
     void sell_requested(double price);
     void add_to_watchlist_requested();
@@ -58,14 +68,16 @@ class KLineChartWidget : public QWidget {
     void run_js(const QString& js);
     void flush_pending();
     void on_load_finished(bool ok);
+    void fail_runtime(const QString& reason);
 
 #ifdef HAS_QT_WEBENGINE
     QWebEngineView* web_view_ = nullptr;
 #endif
     bool page_ready_ = false;
     bool initialized_ = false;
+    bool failed_ = false; // renderer died / page failed to load — see runtime_failed()
     bool trading_menu_ = false;
-    bool menu_open_ = false;           // re-entrancy guard (avoid double menus)
+    bool menu_open_ = false; // re-entrancy guard (avoid double menus)
     // One install_chart_event_filter() retry chain at a time (only read in the
     // HAS_QT_WEBENGINE build — [[maybe_unused]] keeps -Wunused-private-field quiet).
     [[maybe_unused]] bool proxy_retry_pending_ = false;

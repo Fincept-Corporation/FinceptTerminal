@@ -245,6 +245,72 @@ void KalshiRestClient::fetch_market(const QString& ticker) {
         QStringLiteral("Kalshi.fetch_market"));
 }
 
+// ── fetch_markets_by_tickers (callback-style, hub producer) ────────────────
+
+void KalshiRestClient::fetch_markets_by_tickers(const QStringList& tickers, MarketsCallback on_ok,
+                                                ErrorCallback on_error) {
+    if (tickers.isEmpty()) {
+        if (on_ok)
+            on_ok({});
+        return;
+    }
+    QUrlQuery q;
+    q.addQueryItem("tickers", tickers.join(QLatin1Char(',')));
+    q.addQueryItem("limit", QString::number(qBound(1, static_cast<int>(tickers.size()), 1000)));
+    QUrl u(base_url() + QStringLiteral("/markets"));
+    u.setQuery(q);
+
+    QNetworkRequest req{u};
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("FinceptTerminal/4.0"));
+    // get_json() sets no timeout; a stalled socket would pin the hub topic until its refresh_timeout.
+    req.setTransferTimeout(15000);
+    auto* reply = nam_->get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, on_ok = std::move(on_ok), on_error = std::move(on_error)]() {
+        reply->deleteLater();
+        const QByteArray data = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            QString msg;
+            if (status > 0) {
+                // Kalshi error bodies: {"error":{"code":"…","message":"…"}}.
+                const QJsonObject err = QJsonDocument::fromJson(data).object().value("error").toObject();
+                const QString server = err.value("message").toString();
+                msg = server.isEmpty() ? QStringLiteral("HTTP %1").arg(status)
+                                       : QStringLiteral("HTTP %1: %2").arg(status).arg(server);
+            } else {
+                // Transport failure (DNS, refused, TLS, timeout): Qt's reason, without the URL noise.
+                msg = reply->errorString();
+            }
+            if (on_error)
+                on_error(msg);
+            return;
+        }
+        QJsonParseError perr;
+        const QJsonDocument doc = QJsonDocument::fromJson(data, &perr);
+        if (doc.isNull()) {
+            if (on_error)
+                on_error(QStringLiteral("JSON parse: ") + perr.errorString());
+            return;
+        }
+        const QJsonArray arr = doc.object().value("markets").toArray();
+        QVector<pr::PredictionMarket> markets;
+        markets.reserve(arr.size());
+        for (const auto& v : arr) {
+            const QJsonObject obj = v.toObject();
+            auto m = parse_market(obj);
+            m.extras.insert(QStringLiteral("previous_price_dollars"), str_or_num(obj.value("previous_price_dollars")));
+            m.extras.insert(QStringLiteral("previous_yes_bid_dollars"),
+                            str_or_num(obj.value("previous_yes_bid_dollars")));
+            m.extras.insert(QStringLiteral("previous_yes_ask_dollars"),
+                            str_or_num(obj.value("previous_yes_ask_dollars")));
+            m.extras.insert(QStringLiteral("result"), obj.value("result").toString());
+            markets.push_back(std::move(m));
+        }
+        if (on_ok)
+            on_ok(markets);
+    });
+}
+
 // ── fetch_events ────────────────────────────────────────────────────────────
 
 void KalshiRestClient::fetch_events(const QString& status, const QString& series_ticker, bool with_nested_markets,

@@ -119,10 +119,11 @@ QWidget* MAModulePanel::build_advanced_panel() {
     reg_vl->addWidget(build_input_row(tr("Subject Growth"), subj_growth, reg));
 
     // The regression needs a comparable set. It used to be fed nothing (the script then had no data at all);
-    // paste one here, or leave this empty to use the deals already in the local deal database.
+    // paste one here, or leave this empty to use the deals already in the local deal database. Three drivers
+    // plus the intercept need at least five comparables to leave a degree of freedom for the statistics.
     auto* reg_comps = new QTextEdit(reg);
     reg_comps->setPlaceholderText(tr("Comparable companies (optional) - JSON array: [{\"name\":\"A\",\"ev\":5e9,"
-                                     "\"revenue\":1e9,\"ebitda\":2e8,\"growth\":0.1}, ...] (at least 3). "
+                                     "\"revenue\":1e9,\"ebitda\":2e8,\"growth\":0.1}, ...] (at least 5). "
                                      "Leave empty to use the local deal database."));
     reg_comps->setMaximumHeight(110);
     reg_vl->addWidget(reg_comps);

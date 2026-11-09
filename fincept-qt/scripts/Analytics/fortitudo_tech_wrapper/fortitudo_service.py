@@ -7,8 +7,11 @@ functime_service / statsmodels_service.
 
 Backed by the in-tree fortitudo_tech_wrapper modules (functions.py,
 optimization.py) — those wrap the fortitudo.tech library when present and
-fall back to numpy implementations otherwise. The legacy entry point is
-preserved as fortitudo_service_legacy.py.
+fall back to numpy implementations otherwise.
+
+CLI: python fortitudo_service.py <operation> '<json params>'   (prints one JSON object)
+Operations: check_status, portfolio_metrics, covariance_matrix, mean_variance_optimize,
+            mean_cvar_optimize, efficient_frontier, exp_decay_probabilities
 
 Response contract (all ops):
     success: bool
@@ -34,7 +37,7 @@ _script_dir = os.path.dirname(os.path.abspath(__file__))
 if _script_dir not in sys.path:
     sys.path.insert(0, _script_dir)
 
-# Wrapper modules (optimization.py + functions.py + option_pricing.py).
+# Wrapper modules (optimization.py + functions.py).
 # These exist in this directory; they shadow / wrap fortitudo.tech.
 try:
     from optimization import MeanVarianceOptimizer, MeanCVaROptimizer

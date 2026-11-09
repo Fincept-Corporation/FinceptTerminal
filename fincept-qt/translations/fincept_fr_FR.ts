@@ -1996,14 +1996,6 @@ Marchés, actions, portefeuille, analyses macro.</translation>
         <translation>L'utilisation en réseau compte comme distribution</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>LICENCE COMMERCIALE</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Requise pour un déploiement commercial</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>Aucun partage du code source requis</translation>
     </message>
@@ -2050,18 +2042,6 @@ Marchés, actions, portefeuille, analyses macro.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Licence (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Licence commerciale</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Politique de marques</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>CLA du contributeur</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32211,10 +32191,6 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Copyright 2024-2026 Fincept Corporation. Tous droits réservés.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Ce logiciel est sous licence AGPL-3.0-or-later pour un usage open source, avec une licence commerciale distincte disponible pour le déploiement en entreprise.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

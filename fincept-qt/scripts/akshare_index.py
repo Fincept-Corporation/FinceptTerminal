@@ -344,17 +344,8 @@ def get_index_li_cx():
     """Get Labor Index (Caixin)"""
     return safe_call(ak.index_li_cx)
 
-def get_index_si_cx():
-    """Get Sentiment Index (Caixin)"""
-    return safe_call(ak.index_si_cx)
 
-def get_index_fi_cx():
-    """Get Finance Index (Caixin)"""
-    return safe_call(ak.index_fi_cx)
 
-def get_index_bi_cx():
-    """Get Business Index (Caixin)"""
-    return safe_call(ak.index_bi_cx)
 
 def get_index_ci_cx():
     """Get Consumption Index (Caixin)"""
@@ -364,13 +355,7 @@ def get_index_ti_cx():
     """Get Technology Index (Caixin)"""
     return safe_call(ak.index_ti_cx)
 
-def get_index_dei_cx():
-    """Get Digital Economy Index (Caixin)"""
-    return safe_call(ak.index_dei_cx)
 
-def get_index_ii_cx():
-    """Get Investment Index (Caixin)"""
-    return safe_call(ak.index_ii_cx)
 
 def get_index_neei_cx():
     """Get New Energy Economy Index (Caixin)"""
@@ -518,13 +503,8 @@ ENDPOINTS = {
     "index_business_environment": {"func": get_index_bei_cx, "desc": "Business Environment Index", "category": "Economic Index"},
     "index_new_economy": {"func": get_index_nei_cx, "desc": "New Economy Index", "category": "Economic Index"},
     "index_labor": {"func": get_index_li_cx, "desc": "Labor Index", "category": "Economic Index"},
-    "index_sentiment": {"func": get_index_si_cx, "desc": "Sentiment Index", "category": "Economic Index"},
-    "index_finance": {"func": get_index_fi_cx, "desc": "Finance Index", "category": "Economic Index"},
-    "index_business": {"func": get_index_bi_cx, "desc": "Business Index", "category": "Economic Index"},
     "index_consumption": {"func": get_index_ci_cx, "desc": "Consumption Index", "category": "Economic Index"},
     "index_technology": {"func": get_index_ti_cx, "desc": "Technology Index", "category": "Economic Index"},
-    "index_digital_economy": {"func": get_index_dei_cx, "desc": "Digital Economy Index", "category": "Economic Index"},
-    "index_investment": {"func": get_index_ii_cx, "desc": "Investment Index", "category": "Economic Index"},
     "index_new_energy": {"func": get_index_neei_cx, "desc": "New Energy Economy Index", "category": "Economic Index"},
     "index_quality_life": {"func": get_index_qli_cx, "desc": "Quality of Life Index", "category": "Economic Index"},
     "index_ai": {"func": get_index_ai_cx, "desc": "AI Index", "category": "Economic Index"},

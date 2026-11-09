@@ -6,10 +6,10 @@
 //
 //   - hft (3 commands: fetch_orderbook, market_making, toxic_flow, slippage, analyze)
 //   - rolling_retraining (list, create, preview, retrain events, delete)
-//   - advanced_models (list_models, list_available, create, train, predict, info)
+//   - advanced_models (train_model)
 //   - feature_engineering (per-indicator, select_features_by_ic, evaluate_expression)
 //   - portfolio_opt (BL, HRP, MinVar, MaxSharpe, EF)
-//   - factor_evaluation (calculate_ic, generate_evaluation_report, calculate_risk_metrics, analyze_factor_returns)
+//   - factor_evaluation (calculate_ic, generate_evaluation_report, calculate_risk_metrics)
 //   - strategy_builder (create_*, portfolio_metrics)
 //   - data_processors (list_processors, create_pipeline, process_data)
 #include "screens/ai_quant_lab/QuantModulePanel.h"
@@ -481,19 +481,6 @@ void QuantModulePanel::display_data_processors_result(const QString& command, co
     QString header_text = command.toUpper();
     header_text.replace('_', ' ');
     results_layout_->addWidget(gs_section_header(header_text, accent));
-
-    if (command == "check_status") {
-        QList<QWidget*> top = {
-            gs_make_card(tr("PANDAS"), payload.value("pandas_available").toBool() ? tr("AVAILABLE") : tr("MISSING"),
-                         this,
-                         payload.value("pandas_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("PROCESSORS"), QString::number(payload.value("processors_available").toInt()), this,
-                         ui::colors::POSITIVE()),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-        status_label_->setText(tr("Data processors ready"));
-        return;
-    }
 
     if (command == "list_processors") {
         const auto procs = payload.value("processors").toArray();

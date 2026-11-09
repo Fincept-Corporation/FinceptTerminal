@@ -5,11 +5,11 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/server/McpHttpServer.h"
-#include "screens/agent_workbench/AgentConnectPanel.h"
 #include "screens/agent_workbench/AgentRunPanel.h"
 #include "screens/agent_workbench/AgentRunsPanel.h"
 #include "screens/agent_workbench/AgentSchedulesPanel.h"
 #include "screens/agent_workbench/AgentWorkbenchCommon.h"
+#include "screens/settings/AgentConnectSection.h"
 #include "services/coding_agents/CodingAgentService.h"
 #include "ui/theme/Theme.h"
 #include "ui/theme/ThemeManager.h"
@@ -185,7 +185,7 @@ AgentWorkbenchScreen::AgentWorkbenchScreen(QWidget* parent) : QWidget(parent) {
     run_panel_ = new AgentRunPanel(stack_);
     runs_panel_ = new AgentRunsPanel(stack_);
     schedules_panel_ = new AgentSchedulesPanel(stack_);
-    connect_panel_ = new AgentConnectPanel(stack_);
+    connect_panel_ = new AgentConnectSection(stack_); // the same page as Settings › AI Agents (MCP)
     stack_->addWidget(run_panel_);
     stack_->addWidget(runs_panel_);
     stack_->addWidget(schedules_panel_);

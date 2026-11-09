@@ -2,16 +2,17 @@
 
 #include "python/PythonRunner.h"
 #include "services/backtesting/BacktestingService.h"
+#include "services/equity/TechnicalIndicators.h"
 #include "services/workflow/NodeRegistry.h"
 
 #include <QDate>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QRandomGenerator>
-#include <QTimer>
-
 #include <QJsonObject>
+#include <QRandomGenerator>
 #include <QSet>
+#include <QTimer>
+#include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
 #include <cmath>
@@ -542,32 +543,34 @@ void register_analytics_nodes(NodeRegistry& registry) {
                  {"SMA", "EMA", "RSI", "MACD", "BBANDS", "ATR", "STOCH", "ADX", "CCI", "WILLR", "OBV", "VWAP"},
                  "",
                  true},
-                {"period", "Period", "number", 14, {}, "Lookback period"},
-                {"symbol", "Symbol", "string", "", {}, "Ticker symbol"},
+                {"period", "Period", "number", 14, {}, "Lookback bars (MACD is fixed at 12/26/9; OBV has none)"},
+                {"symbol", "Symbol", "string", "", {}, "Ticker symbol (copied to the output)"},
             },
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                // Serialise input price data to pass as a JSON string arg.
-                QJsonValue input_val = inputs.isEmpty() ? QJsonValue{} : inputs[0];
-                QJsonDocument input_doc;
-                if (input_val.isArray())
-                    input_doc = QJsonDocument(input_val.toArray());
-                else if (input_val.isObject())
-                    input_doc = QJsonDocument(input_val.toObject());
-
-                QString json_data =
-                    input_doc.isNull() ? "{}" : QString::fromUtf8(input_doc.toJson(QJsonDocument::Compact));
-
-                QString indicator = params.value("indicator").toString("SMA");
-                QString period = QString::number(static_cast<int>(params.value("period").toDouble(14)));
-                QString symbol = params.value("symbol").toString();
-
-                QStringList args = {"--data", json_data, "--indicator", indicator, "--period", period};
-                if (!symbol.isEmpty())
-                    args << "--symbol" << symbol;
-
-                analytics_run_python_json("compute_technicals.py", args, cb);
+                // The selected indicator at the selected period, computed natively with the same
+                // formulas as the Equity Research Technicals tab. Output: {success, indicator,
+                // period, params, columns, value, latest, data} — see technicals::compute_single.
+                const QString indicator = params.value("indicator").toString("SMA");
+                const double period_param = params.value("period").toDouble(14);
+                const int period = std::isfinite(period_param) && period_param >= 1 &&
+                                           period_param <= fincept::services::equity::technicals::kMaxIndicatorPeriod
+                                       ? static_cast<int>(period_param)
+                                       : 0; // rejected by compute_single with a clear message
+                const QString symbol = params.value("symbol").toString().trimmed();
+                const QJsonValue input = inputs.isEmpty() ? QJsonValue{} : inputs[0];
+                (void)QtConcurrent::run([indicator, period, symbol, input, cb]() {
+                    fincept::services::equity::technicals::SingleIndicatorResult r =
+                        fincept::services::equity::technicals::compute_single(input, indicator, period);
+                    if (!r.ok) {
+                        cb(false, {}, r.error);
+                        return;
+                    }
+                    if (!symbol.isEmpty())
+                        r.output["symbol"] = symbol;
+                    cb(true, r.output, {});
+                });
             },
     });
 
@@ -803,9 +806,7 @@ void register_analytics_nodes(NodeRegistry& registry) {
         .execute =
             [](const QJsonObject& params, const QVector<QJsonValue>& inputs,
                std::function<void(bool, QJsonValue, QString)> cb) {
-                // compute_technicals.py has no CORRELATION mode (it ignored --indicator and failed
-                // on any input that is not an OHLCV history), so this node always errored. The
-                // matrix is computed here from the series the upstream nodes delivered.
+                // The matrix is computed here from the series the upstream nodes delivered.
                 QString method = params.value("method").toString("pearson");
                 if (method != "pearson" && method != "spearman" && method != "kendall")
                     method = "pearson";
@@ -1454,10 +1455,9 @@ void register_analytics_nodes(NodeRegistry& registry) {
                     return;
                 }
 
-                // compute_technicals.py never had a PAIRS mode (every run failed), so the spread is
-                // computed here: OLS hedge ratio of A on B over the lookback window and the z-score of
-                // the latest residual. Both histories come from the same yfinance command the
-                // market-data nodes use.
+                // The spread is computed here: OLS hedge ratio of A on B over the lookback window and
+                // the z-score of the latest residual. Both histories come from the same yfinance
+                // command the market-data nodes use.
                 an_fetch_closes(symbol_a, "2y", [=](bool ok_a, QVector<double> closes_a, QString err_a) {
                     if (!ok_a) {
                         cb(false, {}, err_a);

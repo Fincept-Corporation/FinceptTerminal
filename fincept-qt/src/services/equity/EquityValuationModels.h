@@ -53,6 +53,10 @@ struct DcfInputs {
     double discount = 0.0;        ///< discount rate (cost of equity for levered FCF), fraction
     int years = 10;
     double shares = 0.0; ///< shares outstanding, absolute
+    /// Fade growth linearly from `growth` (year 1) to `terminal_growth` (year n) instead of
+    /// holding it flat then dropping to the terminal rate — the standard two-stage
+    /// convergence; flat high growth for a decade overstates value.
+    bool fade = false;
 };
 
 struct DcfResult {
@@ -65,10 +69,15 @@ struct DcfResult {
     double terminal_fraction = 0.0; ///< pv_terminal / equity_value
 };
 
-/// Levered-FCF DCF: FCF_t = FCF_0·(1+g)^t for t = 1..n, terminal value
-/// FCF_n·(1+g_T)/(r − g_T), all discounted at r. Equity value directly (levered FCF is
-/// already after interest), so no net-debt bridge.
+/// Levered-FCF DCF: FCF_t = FCF_{t-1}·(1+g_t) for t = 1..n (g_t = g, or faded towards g_T
+/// when `fade`), terminal value FCF_n·(1+g_T)/(r − g_T), all discounted at r. Equity value
+/// directly (levered FCF is already after interest), so no net-debt bridge.
 DcfResult dcf(const DcfInputs& in);
+
+/// Reverse DCF: the projection growth rate (fraction) at which the DCF's per-share value
+/// equals `price` with every other input unchanged — what the market price assumes.
+/// NaN when no growth in [-50%, +100%] reaches the price (or the inputs are invalid).
+double implied_growth(const DcfInputs& in, double price);
 
 // ── Altman Z (1968, public manufacturers) ────────────────────────────────────────
 struct AltmanResult {
@@ -76,10 +85,19 @@ struct AltmanResult {
     QString missing; ///< which input was absent when !ok
     double z = 0.0;
     double x1 = 0.0, x2 = 0.0, x3 = 0.0, x4 = 0.0, x5 = 0.0;
+    /// Z'' (Altman 1995, non-manufacturers / emerging markets): drops the sales-turnover
+    /// term that penalises asset-light firms and uses BOOK equity, so it needs no price.
+    bool z2_ok = false;
+    double z2 = 0.0;
+    double x4_book = 0.0; ///< book equity / total liabilities
 };
 /// Z = 1.2·WC/TA + 1.4·RE/TA + 3.3·EBIT/TA + 0.6·MVE/TL + 1.0·Sales/TA.
-/// `market_cap` must be in the statements' currency.
+/// Z'' = 6.56·WC/TA + 3.26·RE/TA + 6.72·EBIT/TA + 1.05·BookEquity/TL.
+/// `market_cap` must be in the statements' currency (Z only; Z'' is computed without it).
 AltmanResult altman_z(const FiscalYear& fy, double market_cap);
+/// Z'' zones: safe above 2.60, distress below 1.10.
+constexpr double kAltmanZ2Safe = 2.60;
+constexpr double kAltmanZ2Distress = 1.10;
 
 // ── Piotroski F (2000) ──────────────────────────────────────────────────────────
 struct PiotroskiResult {

@@ -5,9 +5,9 @@
 #include "datahub/DataHub.h"
 #include "datahub/DataHubMetaTypes.h"
 #include "datahub/TopicPolicy.h"
-#include "python/OptionGreeksWorker.h"
 #include "python/PythonRunner.h"
 #include "services/databento/DatabentoService.h"
+#include "services/options/OptionPricing.h"
 #include "storage/repositories/IvHistoryRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "trading/AccountDataStream.h"
@@ -122,6 +122,33 @@ bool parse_fyers_opt_symbol(const QString& sym, double& strike, bool& is_call) {
     return ok;
 }
 
+constexpr double kChainLegMinT = 1.0 / 365.0; // one calendar day — expiry-day legs
+constexpr double kChainLegMaxIv = 5.0;        // 500%: past this a solve is noise, not a vol
+
+struct ChainLegGreeks {
+    double iv = 0;       // decimal
+    OptionGreeks greeks; // greeks.valid == false → no usable IV for this leg
+};
+
+/// IV from the leg's market price, then BSM Greeks at that IV (OptionGreeks units:
+/// theta per calendar day, vega per 1.00 σ, rho per 1.00 r). A leg is invalid when
+/// its price, spot or strike is not positive, the price is outside the no-arbitrage
+/// bounds, or the IV is not in (0, 500%] — an IV of exactly 0 (a price with no time
+/// value left) has degenerate Greeks (gamma = 0/0).
+ChainLegGreeks chain_leg_greeks(double S, double K, double t, double r, double q, bool is_call, double price) {
+    ChainLegGreeks out;
+    t = std::max(t, kChainLegMinT);
+    if (!(price > 0) || !(S > 0) || !(K > 0))
+        return out;
+    const pricing::ImpliedVol iv = pricing::bsm_implied_vol(price, S, K, t, r, q, is_call);
+    if (iv.status != pricing::IvStatus::Ok || !(iv.sigma > 0) || iv.sigma > kChainLegMaxIv)
+        return out;
+    const pricing::BsmGreeks g = pricing::bsm_greeks(is_call, S, K, t, r, iv.sigma, q);
+    out.iv = iv.sigma;
+    out.greeks = {g.delta, g.gamma, g.theta, g.vega, g.rho, true};
+    return out;
+}
+
 } // namespace
 
 OptionChainService& OptionChainService::instance() {
@@ -227,7 +254,7 @@ void OptionChainService::refresh(const QStringList& topics) {
             refresh_chain(broker, underlying, expiry);
         } else if (topic.startsWith(kAtmIvPrefix)) {
             // ATM IV is push-only — derived from the chain's ATM CE/PE IV when
-            // the Greeks worker enriches a refresh. The hub policy marks it
+            // Greeks enrichment runs on a refresh. The hub policy marks it
             // push_only so refresh() shouldn't normally be called for it; this
             // branch exists only to log if a consumer requests force=true.
             LOG_DEBUG("OptionChain", QString("ATM IV refresh requested (push-only — drive via chain): %1").arg(topic));
@@ -275,13 +302,14 @@ void OptionChainService::list_databento_expiries(const QString& underlying, std:
     QJsonObject json_args;
     json_args[QStringLiteral("api_key")] = db_svc.api_key();
     json_args[QStringLiteral("symbol")] = underlying;
-    QStringList script_args = {
-        QStringLiteral("list_expiries"),
-        QString::fromUtf8(QJsonDocument(json_args).toJson(QJsonDocument::Compact)),
-    };
+    // The args (with the API key) travel on stdin, never argv: any same-user process can
+    // read a command line (Win32_Process.CommandLine, /proc/<pid>/cmdline).
+    fincept::python::PythonRunner::RunOptions opts;
+    opts.stdin_data = QJsonDocument(json_args).toJson(QJsonDocument::Compact);
     QPointer<OptionChainService> self = this;
-    fincept::python::PythonRunner::instance().run(
-        kDatabentoScript, script_args, [self, underlying, callback](fincept::python::PythonResult result) {
+    fincept::python::PythonRunner::instance().run_with_options(
+        kDatabentoScript, {QStringLiteral("list_expiries"), QStringLiteral("--stdin")}, opts,
+        [self, underlying, callback](fincept::python::PythonResult result) {
             if (!self)
                 return;
             QStringList expiries;
@@ -514,10 +542,9 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                 for (auto& row : chain.rows)
                     row.is_atm = (std::abs(row.strike - chain.atm_strike) < 1e-6);
 
-                // First publish — Greeks/IV are zero. The Greeks worker fills
-                // them in asynchronously and republishes the same topic with
-                // populated rows; the hub coalesce window collapses the two
-                // publishes when the worker is fast.
+                // First publish — Greeks/IV are zero. enrich_with_greeks() below
+                // fills them in and republishes the same topic with populated
+                // rows; the hub coalesce window collapses the two publishes.
 
                 // Publish chain + derived stats. Hub fans out to subscribers.
                 auto& hub = fincept::datahub::DataHub::instance();
@@ -535,7 +562,7 @@ void OptionChainService::refresh_chain(const QString& broker_id, const QString& 
                                             .arg(chain.atm_strike, 0, 'f', 2)
                                             .arg(chain.pcr, 0, 'f', 3));
 
-                // Kick off Greeks/IV enrichment — async; republishes when ready.
+                // Greeks/IV enrichment — republishes the enriched chain.
                 self->enrich_with_greeks(chain, topic);
             },
             Qt::QueuedConnection);
@@ -561,14 +588,14 @@ void OptionChainService::refresh_chain_databento(const QString& underlying, cons
     json_args[QStringLiteral("api_key")] = db_svc.api_key();
     json_args[QStringLiteral("symbol")] = underlying;
     json_args[QStringLiteral("expiry")] = expiry;
-    QStringList script_args = {
-        QStringLiteral("get_chain"),
-        QString::fromUtf8(QJsonDocument(json_args).toJson(QJsonDocument::Compact)),
-    };
+    // API key on stdin, never argv — see list_databento_expiries().
+    fincept::python::PythonRunner::RunOptions opts;
+    opts.stdin_data = QJsonDocument(json_args).toJson(QJsonDocument::Compact);
 
     QPointer<OptionChainService> self = this;
-    fincept::python::PythonRunner::instance().run(
-        kDatabentoScript, script_args, [self, topic, underlying, expiry](fincept::python::PythonResult result) {
+    fincept::python::PythonRunner::instance().run_with_options(
+        kDatabentoScript, {QStringLiteral("get_chain"), QStringLiteral("--stdin")}, opts,
+        [self, topic, underlying, expiry](fincept::python::PythonResult result) {
             if (!self)
                 return;
             self->in_flight_.remove(topic);
@@ -820,7 +847,7 @@ void OptionChainService::refresh_chain_fyers(const QString& broker_id, const QSt
                 for (auto it = by_strike.constBegin(); it != by_strike.constEnd(); ++it)
                     chain.rows.append(it->row);
 
-                // OptionGreeks::vega is "per 1.00 σ" (the py_vollib worker's convention,
+                // OptionGreeks::vega is "per 1.00 σ" (enrich_with_greeks' convention,
                 // which the Builder ribbon divides by 100 for display). Vendors normally
                 // quote vega per 1% vol, so decide the unit from magnitude instead of
                 // assuming: BSM vega per 1.00 σ is S·φ(d1)·√t, and a quoted value far
@@ -955,11 +982,6 @@ double OptionChainService::compute_t_years(const QString& expiry) {
     if (days <= 0)
         return 1.0 / 365.0; // expiry day or past — clamp to one day
     return double(days) / 365.0;
-}
-
-bool OptionChainService::is_superseded(const OptionChain& chain) const {
-    return last_chain_.broker_id == chain.broker_id && last_chain_.underlying == chain.underlying &&
-           last_chain_.expiry == chain.expiry && last_chain_.timestamp_ms > chain.timestamp_ms;
 }
 
 void OptionChainService::commit_enriched_chain(const OptionChain& enriched) {
@@ -1267,16 +1289,18 @@ void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QStr
     const double q = 0.0;
     const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
 
-    QJsonArray contracts;
-
-    auto add_leg = [&](qint64 token, double strike, const fincept::trading::BrokerQuote& quote, bool is_call) {
+    // Solve each leg that is due (outside the per-token throttle and priced), caching
+    // the valid results; an invalid solve leaves the leg's earlier cached value alone.
+    int recomputed = 0;
+    int solved = 0;
+    auto solve_leg = [&](qint64 token, double strike, const fincept::trading::BrokerQuote& quote, bool is_call) {
         if (token == 0)
             return;
         const qint64 last = last_greeks_compute_ms_.value(token, 0);
         if (now_ms - last < kGreeksThrottleMs && (greeks_cache_.contains(token) || iv_cache_.contains(token)))
-            return; // throttled — cached values will be applied below
+            return; // throttled — cached values are applied below
         // Pick mid price when both bid/ask are present, else LTP. Skip when
-        // we have no usable price — IV solver would just fail.
+        // we have no usable price — the IV solve would just fail.
         double price = 0;
         if (quote.bid > 0 && quote.ask > 0)
             price = 0.5 * (quote.bid + quote.ask);
@@ -1284,131 +1308,48 @@ void OptionChainService::enrich_with_greeks(const OptionChain& chain, const QStr
             price = quote.ltp;
         if (price <= 0)
             return;
-
-        QJsonObject c;
-        c["token"] = QJsonValue(qint64(token));
-        c["S"] = chain.spot;
-        c["K"] = strike;
-        c["t"] = t;
-        c["r"] = r;
-        c["q"] = q;
-        c["flag"] = is_call ? "c" : "p";
-        c["market_price"] = price;
-        contracts.append(c);
         last_greeks_compute_ms_[token] = now_ms;
+        ++recomputed;
+        const ChainLegGreeks leg = chain_leg_greeks(chain.spot, strike, t, r, q, is_call, price);
+        if (!leg.greeks.valid)
+            return;
+        greeks_cache_.insert(token, leg.greeks);
+        iv_cache_.insert(token, leg.iv);
+        ++solved;
     };
 
     for (const auto& row : chain.rows) {
-        add_leg(row.ce_token, row.strike, row.ce_quote, /*is_call*/ true);
-        add_leg(row.pe_token, row.strike, row.pe_quote, /*is_call*/ false);
+        solve_leg(row.ce_token, row.strike, row.ce_quote, /*is_call*/ true);
+        solve_leg(row.pe_token, row.strike, row.pe_quote, /*is_call*/ false);
     }
 
-    // Apply cached values to a working copy so we can republish even when
-    // every leg was throttled (no contracts to compute).
-    OptionChain enriched = chain;
-    auto apply_cached = [this](OptionChain& ch) {
-        for (auto& row : ch.rows) {
-            if (row.ce_token != 0) {
-                if (auto it = iv_cache_.constFind(row.ce_token); it != iv_cache_.constEnd())
-                    row.ce_iv = it.value();
-                if (auto it = greeks_cache_.constFind(row.ce_token); it != greeks_cache_.constEnd())
-                    row.ce_greeks = it.value();
-            }
-            if (row.pe_token != 0) {
-                if (auto it = iv_cache_.constFind(row.pe_token); it != iv_cache_.constEnd())
-                    row.pe_iv = it.value();
-                if (auto it = greeks_cache_.constFind(row.pe_token); it != greeks_cache_.constEnd())
-                    row.pe_greeks = it.value();
-            }
-        }
-    };
-    apply_cached(enriched);
-
-    if (contracts.isEmpty()) {
-        // Fully throttled — republish with cached Greeks + ATM IV side-effect
-        // and exit. Only worth doing when at least one cache entry exists.
-        if (!iv_cache_.isEmpty() || !greeks_cache_.isEmpty()) {
-            fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(enriched));
-            publish_atm_iv(enriched);
-            commit_enriched_chain(enriched);
-        }
+    // Fully throttled with nothing cached yet: nothing to add to what is published.
+    if (recomputed == 0 && iv_cache_.isEmpty() && greeks_cache_.isEmpty())
         return;
+
+    // Apply the caches to a working copy and republish (also when every leg was
+    // throttled, so the cached Greeks + ATM IV side effect still go out).
+    OptionChain enriched = chain;
+    for (auto& row : enriched.rows) {
+        if (row.ce_token != 0) {
+            if (auto it = iv_cache_.constFind(row.ce_token); it != iv_cache_.constEnd())
+                row.ce_iv = it.value();
+            if (auto it = greeks_cache_.constFind(row.ce_token); it != greeks_cache_.constEnd())
+                row.ce_greeks = it.value();
+        }
+        if (row.pe_token != 0) {
+            if (auto it = iv_cache_.constFind(row.pe_token); it != iv_cache_.constEnd())
+                row.pe_iv = it.value();
+            if (auto it = greeks_cache_.constFind(row.pe_token); it != greeks_cache_.constEnd())
+                row.pe_greeks = it.value();
+        }
     }
-
-    QJsonObject payload;
-    payload["contracts"] = contracts;
-
-    QPointer<OptionChainService> self = this;
-    fincept::python::OptionGreeksWorker::instance().submit(
-        QStringLiteral("option_greeks_batch"), payload,
-        [self, enriched, topic](bool ok, QJsonObject result, QString error) mutable {
-            if (!self)
-                return;
-            if (!ok) {
-                LOG_WARN("OptionChain", QString("Greeks batch failed: %1").arg(error));
-                return;
-            }
-            const QJsonArray results = result.value(QStringLiteral("results")).toArray();
-
-            // Index cached results by token for O(N) row patching.
-            QHash<qint64, OptionGreeks> new_greeks;
-            QHash<qint64, double> new_iv;
-            new_greeks.reserve(results.size());
-            new_iv.reserve(results.size());
-            for (const auto& v : results) {
-                const QJsonObject row = v.toObject();
-                if (!row.value(QStringLiteral("valid")).toBool())
-                    continue;
-                const qint64 token = qint64(row.value(QStringLiteral("token")).toDouble());
-                if (token == 0)
-                    continue;
-                OptionGreeks g;
-                g.delta = row.value(QStringLiteral("delta")).toDouble();
-                g.gamma = row.value(QStringLiteral("gamma")).toDouble();
-                g.theta = row.value(QStringLiteral("theta")).toDouble();
-                g.vega = row.value(QStringLiteral("vega")).toDouble();
-                g.rho = row.value(QStringLiteral("rho")).toDouble();
-                g.valid = true;
-                new_greeks.insert(token, g);
-                new_iv.insert(token, row.value(QStringLiteral("iv")).toDouble());
-            }
-
-            // Merge into per-token caches so future throttled refreshes can
-            // reuse them.
-            for (auto it = new_greeks.constBegin(); it != new_greeks.constEnd(); ++it)
-                self->greeks_cache_.insert(it.key(), it.value());
-            for (auto it = new_iv.constBegin(); it != new_iv.constEnd(); ++it)
-                self->iv_cache_.insert(it.key(), it.value());
-
-            // Apply caches into the working chain copy and republish.
-            for (auto& row : enriched.rows) {
-                if (row.ce_token != 0) {
-                    if (auto it = self->iv_cache_.constFind(row.ce_token); it != self->iv_cache_.constEnd())
-                        row.ce_iv = it.value();
-                    if (auto it = self->greeks_cache_.constFind(row.ce_token); it != self->greeks_cache_.constEnd())
-                        row.ce_greeks = it.value();
-                }
-                if (row.pe_token != 0) {
-                    if (auto it = self->iv_cache_.constFind(row.pe_token); it != self->iv_cache_.constEnd())
-                        row.pe_iv = it.value();
-                    if (auto it = self->greeks_cache_.constFind(row.pe_token); it != self->greeks_cache_.constEnd())
-                        row.pe_greeks = it.value();
-                }
-            }
-
-            // A newer REST snapshot may have been published while the worker ran;
-            // the Greeks above are already cached for it, so don't roll the topic back.
-            if (self->is_superseded(enriched)) {
-                LOG_DEBUG("OptionChain", QString("Greeks for %1 arrived after a newer snapshot — not republished")
-                                             .arg(topic));
-                return;
-            }
-            fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(enriched));
-            self->publish_atm_iv(enriched);
-            self->commit_enriched_chain(enriched);
-            LOG_DEBUG("OptionChain",
-                      QString("Greeks enriched %1 contracts; republished %2").arg(new_iv.size()).arg(topic));
-        });
+    fincept::datahub::DataHub::instance().publish(topic, QVariant::fromValue(enriched));
+    publish_atm_iv(enriched);
+    commit_enriched_chain(enriched);
+    LOG_DEBUG(
+        "OptionChain",
+        QString("Greeks: %1 of %2 recomputed legs solved; republished %3").arg(solved).arg(recomputed).arg(topic));
 }
 
 double OptionChainService::compute_max_pain(const QVector<OptionChainRow>& rows) {

@@ -133,6 +133,10 @@ struct MarketAnalytics {
     std::optional<double> var_95_1d;      // 1-day historical VaR (95%), fraction of NAV
     std::optional<double> cvar_95_1d;     // 1-day expected shortfall (95%), fraction of NAV
     std::optional<double> beta;           // ex-ante beta vs benchmark
+    std::optional<double> param_var_95_1d;       // parametric (normal) 1-day VaR (95%), fraction of NAV
+    std::optional<double> diversification_ratio; // Σ wᵢσᵢ / σₚ — >1 = risk cancelled by low correlation
+    std::optional<double> tracking_error;        // ex-ante annualised stdev of (portfolio − benchmark), fraction
+    std::optional<double> benchmark_corr;        // correlation of daily returns with the benchmark
     int observations = 0;                 // daily observations behind the ex-ante figures
     double coverage = 0;                  // share of portfolio weight that had price history
     QHash<QString, HoldingRisk> holdings;
@@ -169,6 +173,27 @@ struct ComputedMetrics {
     std::optional<double> concentration_top3; // sum of top 3 weights %
     std::optional<double> annualized_return;  // realised TWR, annualised, %
     std::optional<double> total_return;       // realised TWR over the window, %
+
+    // Return quality (realised TWR series)
+    std::optional<double> calmar;           // annualised return / |max drawdown|
+    std::optional<double> current_drawdown; // %, latest TWR index vs its running peak (≤ 0)
+    std::optional<double> win_rate;         // % of TWR periods with a positive return
+    std::optional<double> best_period;      // %, best single TWR period
+    std::optional<double> worst_period;     // %, worst single TWR period
+
+    // Benchmark-relative (TWR periods matched to benchmark closes on the same dates)
+    std::optional<double> benchmark_return;  // %, benchmark total return over the matched periods
+    std::optional<double> excess_return;     // %, portfolio − benchmark total return, same periods
+    std::optional<double> tracking_error;    // annualised %, stdev of active returns
+    bool tracking_error_ex_ante = false;     // true = from current weights (no realised history)
+    std::optional<double> information_ratio; // annualised active return / tracking error
+    std::optional<double> treynor;           // annualised excess return over rf per unit beta, %
+    std::optional<double> r_squared;         // share of variance explained by the benchmark (0..1)
+
+    // Diversification / tail
+    std::optional<double> effective_n;           // 1 / Σw² — "how many equal positions" the book behaves like
+    std::optional<double> diversification_ratio; // Σ wᵢσᵢ / σₚ (ex-ante)
+    std::optional<double> var_95_10d;            // 10-day VaR (95%) in currency, √10 × 1-day
 
     // Context, so every surface can say exactly what the numbers are.
     QString benchmark_symbol;   // index beta/alpha are measured against

@@ -8,6 +8,7 @@
 
 #include "trading/brokers/angelone/AngelOneBroker.h"
 
+#include "core/crypto/Totp.h"
 #include "core/logging/Logger.h"
 #include "trading/adapter/BrokerEnumMap.h"
 #include "trading/brokers/BrokerHttp.h"
@@ -15,7 +16,6 @@
 #include "trading/brokers/BrokerTokenUtil.h"
 #include "trading/instruments/InstrumentService.h"
 
-#include <QCryptographicHash>
 #include <QDate>
 #include <QDateTime>
 #include <QJsonArray>
@@ -91,71 +91,21 @@ static double ao_json_num(const QJsonValue& v) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TOTP Generation (RFC 6238, SHA-1, 30-second window, 6 digits)
-// Base32 decode → HMAC-SHA1 with Unix epoch / 30 as 8-byte big-endian counter
+// TOTP Generation (RFC 6238, SHA-1, 30-second window, 6 digits) — core/crypto/Totp
 // ─────────────────────────────────────────────────────────────────────────────
-
-static QByteArray base32_decode(const QString& input) {
-    const QString alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    QString clean = input.toUpper().remove('=').remove(' ');
-    QByteArray out;
-    int buffer = 0, bits = 0;
-    for (QChar c : clean) {
-        int val = alphabet.indexOf(c);
-        if (val < 0)
-            continue;
-        buffer = (buffer << 5) | val;
-        bits += 5;
-        if (bits >= 8) {
-            bits -= 8;
-            out.append(static_cast<char>((buffer >> bits) & 0xFF));
-        }
-    }
-    return out;
-}
-
-static QByteArray hmac_sha1(const QByteArray& key, const QByteArray& msg) {
-    // HMAC-SHA1: ipad/opad per RFC 2104
-    const int block = 64;
-    QByteArray k = key;
-    if (k.size() > block)
-        k = QCryptographicHash::hash(k, QCryptographicHash::Sha1);
-    k = k.leftJustified(block, '\0');
-
-    QByteArray ipad(block, '\x36'), opad(block, '\x5c');
-    for (int i = 0; i < block; ++i) {
-        ipad[i] ^= k[i];
-        opad[i] ^= k[i];
-    }
-    QByteArray inner = QCryptographicHash::hash(ipad + msg, QCryptographicHash::Sha1);
-    return QCryptographicHash::hash(opad + inner, QCryptographicHash::Sha1);
-}
 
 QString AngelOneBroker::generate_totp(const QString& base32_secret) {
     // If already a 6-digit numeric code, pass through (manual entry fallback)
     if (base32_secret.length() == 6 && base32_secret.toUInt() > 0)
         return base32_secret;
 
-    QByteArray key = base32_decode(base32_secret);
-    if (key.isEmpty()) {
+    // SkipInvalid: decode the secret exactly as this login always has (non-Base32 characters dropped).
+    const QString code = fincept::crypto::generate_totp(base32_secret, QDateTime::currentSecsSinceEpoch(),
+                                                        fincept::crypto::Base32Mode::SkipInvalid)
+                             .code;
+    if (code.isEmpty())
         LOG_WARN(TAG_AO, "TOTP: invalid base32 secret");
-        return {};
-    }
-
-    quint64 counter = static_cast<quint64>(QDateTime::currentSecsSinceEpoch()) / 30;
-    QByteArray msg(8, '\0');
-    for (int i = 7; i >= 0; --i) {
-        msg[i] = static_cast<char>(counter & 0xFF);
-        counter >>= 8;
-    }
-
-    QByteArray hash = hmac_sha1(key, msg);
-    int offset = hash[hash.size() - 1] & 0x0F;
-    quint32 code =
-        ((static_cast<quint8>(hash[offset]) & 0x7F) << 24) | ((static_cast<quint8>(hash[offset + 1]) & 0xFF) << 16) |
-        ((static_cast<quint8>(hash[offset + 2]) & 0xFF) << 8) | (static_cast<quint8>(hash[offset + 3]) & 0xFF);
-    code %= 1000000;
-    return QString("%1").arg(code, 6, 10, QChar('0'));
+    return code;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

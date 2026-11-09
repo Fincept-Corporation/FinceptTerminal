@@ -344,6 +344,10 @@ void McpHttpServer::Impl::on_disconnected(QTcpSocket* sock, quint64 conn_id) {
     auto it = conns.find(sock);
     if (it != conns.end() && it->id == conn_id)
         it->closing = true;
+    // The client hung up while a tool was still working for it (a client-side
+    // timeout, Esc in the agent): nobody will read the answer, so stop the tool —
+    // an approval prompt or a ui_wait otherwise holds a pool thread until it ends.
+    cancel_calls_on(sock);
     QPointer<QTcpSocket> guard(sock);
     QMetaObject::invokeMethod(
         q,
@@ -457,7 +461,7 @@ bool McpHttpServer::Impl::reject_early(QTcpSocket* sock) {
                      QJsonObject{{QStringLiteral("error"), QStringLiteral("unauthorized")},
                                  {QStringLiteral("message"),
                                   QStringLiteral("A valid 'Authorization: Bearer <token>' header is required. Copy the "
-                                                 "current token from Fincept Terminal → Agent Workbench → Connect.")}},
+                                                 "current token from Fincept Terminal → Settings → AI Agents (MCP).")}},
                      {{QByteArrayLiteral("WWW-Authenticate"), challenge}}, /*force_close=*/true);
         return true;
     }

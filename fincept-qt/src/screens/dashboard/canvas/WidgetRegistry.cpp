@@ -1,15 +1,21 @@
 ﻿#include "screens/dashboard/canvas/WidgetRegistry.h"
 
 #include "screens/dashboard/widgets/AgentErrorsWidget.h"
+#include "screens/dashboard/widgets/AiQuickAskWidget.h"
+#include "screens/dashboard/widgets/AutomationRunsWidget.h"
 #include "screens/dashboard/widgets/BrokerHoldingsWidget.h"
 #include "screens/dashboard/widgets/CommoditiesWidget.h"
+#include "screens/dashboard/widgets/ConnectionHealthWidget.h"
 #include "screens/dashboard/widgets/CryptoTickerWidget.h"
 #include "screens/dashboard/widgets/CryptoWidget.h"
 #include "screens/dashboard/widgets/DashboardCandleWidget.h"
 #include "screens/dashboard/widgets/EconomicCalendarWidget.h"
+#include "screens/dashboard/widgets/FiiDiiFlowsWidget.h"
 #include "screens/dashboard/widgets/ForexWidget.h"
 #include "screens/dashboard/widgets/GeopoliticsEventsWidget.h"
 #include "screens/dashboard/widgets/IndicesWidget.h"
+#include "screens/dashboard/widgets/KalshiPricesWidget.h"
+#include "screens/dashboard/widgets/MacroSeriesWidget.h"
 #include "screens/dashboard/widgets/MarginUsageWidget.h"
 #include "screens/dashboard/widgets/MaritimeVesselsWidget.h"
 #include "screens/dashboard/widgets/MarketQuoteStripWidget.h"
@@ -18,6 +24,7 @@
 #include "screens/dashboard/widgets/NewsWidget.h"
 #include "screens/dashboard/widgets/NotesWidget.h"
 #include "screens/dashboard/widgets/OpenPositionsWidget.h"
+#include "screens/dashboard/widgets/OptionsSnapshotWidget.h"
 #include "screens/dashboard/widgets/OrderBookMiniWidget.h"
 #include "screens/dashboard/widgets/PerformanceWidget.h"
 #include "screens/dashboard/widgets/PolymarketPriceWidget.h"
@@ -25,6 +32,7 @@
 #include "screens/dashboard/widgets/QuickTradeWidget.h"
 #include "screens/dashboard/widgets/RecentFilesWidget.h"
 #include "screens/dashboard/widgets/RiskMetricsWidget.h"
+#include "screens/dashboard/widgets/ScanAlertsWidget.h"
 #include "screens/dashboard/widgets/ScreenerWidget.h"
 #include "screens/dashboard/widgets/SectorHeatmapWidget.h"
 #include "screens/dashboard/widgets/SparklineStripWidget.h"
@@ -279,6 +287,61 @@ WidgetRegistry::WidgetRegistry() {
                      QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
                                        "Recent / favorite financial notes — click to open Notes screen"),
                      4, 5, 2, 3, [](const QJsonObject& cfg) { return new widgets::NotesWidget(cfg); }});
+
+    // ── Connectivity: health, alerts, automations, macro, AI ─────────────────
+    register_widget(
+        {"connection_health", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Connection Health"),
+         QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Tools"),
+         QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                           "Fincept API, Python env, broker accounts and exchange WebSockets — live status"),
+         4, 4, 3, 3, [](const QJsonObject& cfg) { return new widgets::ConnectionHealthWidget(cfg); }});
+
+    register_widget({"scan_alerts", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Scan Alerts"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Trading"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Recent Algo Trading scan/alert triggers — symbol, condition, time"),
+                     4, 5, 3, 3, [](const QJsonObject& cfg) { return new widgets::ScanAlertsWidget(cfg); }});
+
+    register_widget({"automation_runs", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Automation Runs"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Trading"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Status of algo deployments and workflow runs — double-click to open"),
+                     6, 5, 4, 3, [](const QJsonObject& cfg) { return new widgets::AutomationRunsWidget(cfg); }});
+
+    register_widget({"macro_series", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Macro Series"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Research"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Economic time series (FRED or DBnomics) — line chart, latest value and "
+                                       "change; set series via gear icon"),
+                     4, 4, 3, 3, [](const QJsonObject& cfg) { return new widgets::MacroSeriesWidget(cfg); }});
+
+    register_widget(
+        {"ai_quick_ask", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "AI Quick Ask"),
+         QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Tools"),
+         QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Ask the configured AI model a quick question"), 4, 6, 3,
+         4, [](const QJsonObject& cfg) { return new widgets::AiQuickAskWidget(cfg); }});
+
+    register_widget(
+        {"options_snapshot", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Options Snapshot"),
+         QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Trading"),
+         QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                           "PCR, max pain and ATM IV for one underlying (nearest expiry) — needs a connected F&O "
+                           "broker; set underlying via gear icon"),
+         4, 3, 3, 3, [](const QJsonObject& cfg) { return new widgets::OptionsSnapshotWidget(cfg); }});
+
+    register_widget({"fii_dii_flows", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "FII / DII Flows"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Markets"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Daily FII / DII net buy-sell in ₹ Cr (NSE cash) — chart + table, "
+                                       "configurable session count"),
+                     4, 5, 3, 4, [](const QJsonObject& cfg) { return new widgets::FiiDiiFlowsWidget(cfg); }});
+
+    register_widget({"kalshi_prices", QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Kalshi"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry", "Markets"),
+                     QT_TRANSLATE_NOOP("fincept::screens::WidgetRegistry",
+                                       "Kalshi prediction-market prices (YES, 24 h change) — no account needed; "
+                                       "configurable ticker list"),
+                     3, 5, 2, 3, [](const QJsonObject& cfg) { return new widgets::KalshiPricesWidget(cfg); }});
 }
 
 QString WidgetRegistry::display_name_tr(const WidgetMeta& m) {
@@ -294,7 +357,7 @@ QString WidgetRegistry::category_tr(const QString& category) {
 }
 
 void WidgetRegistry::register_widget(WidgetMeta meta) {
-    registry_.insert(meta.type_id, std::move(meta));
+    registry_.insert(meta.type_id, meta); // QMap::insert copies; std::move would be a no-op
 }
 
 const WidgetMeta* WidgetRegistry::find(const QString& type_id) const {

@@ -291,10 +291,6 @@ def get_futures_contract_detail_em(symbol="A0"):
     """Get futures contract detail (EastMoney)"""
     return safe_call(ak.futures_contract_detail_em, symbol=symbol)
 
-def get_futures_derivative(symbol="豆一"):
-    """Get futures derivative data"""
-    return safe_call(ak.futures_derivative, symbol=symbol)
-
 
 # ==================== HOG FUTURES ====================
 
@@ -399,7 +395,6 @@ ENDPOINTS = {
 
     # Additional
     "futures_contract_detail_em": {"func": get_futures_contract_detail_em, "desc": "Contract detail (EM)", "category": "Contract Info"},
-    "futures_derivative": {"func": get_futures_derivative, "desc": "Futures derivative", "category": "Other"},
 
     # Hog Futures
     "futures_hog_core": {"func": get_futures_hog_core, "desc": "Hog core data", "category": "Hog"},

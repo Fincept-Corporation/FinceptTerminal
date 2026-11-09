@@ -101,13 +101,13 @@ def get_series(series_id: str, start_date: Optional[str] = None, end_date: Optio
         if 'error' in obs_data:
             return obs_data
 
-        # Get series metadata
+        # Get series metadata. It is optional: without it the answer keeps the normalised shape
+        # (series_id, numeric values) - returning FRED's raw observations body instead left callers
+        # without a series_id and with string values ("3.9", ".").
         metadata = make_fred_request('series', {'series_id': series_id})
-
-        if 'error' in metadata:
-            return obs_data  # Return observations even if metadata fails
-
-        series_info = metadata.get('seriess', [{}])[0] if 'seriess' in metadata else {}
+        series_info = {}
+        if 'error' not in metadata and metadata.get('seriess'):
+            series_info = metadata['seriess'][0]
 
         # Format observations
         observations = []

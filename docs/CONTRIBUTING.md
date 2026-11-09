@@ -164,13 +164,15 @@ src/
 scripts/
 ├── Analytics/        # Analytics modules — equity, portfolio, derivatives,
 │                     #   fixed income, economics, corporate finance
-├── agents/           # AI agent frameworks (finagent_core, Geopolitics, HedgeFund, …)
-├── ai_quant_lab/     # ML, factor discovery, HFT, RL trading, vision quant
-├── agno_trading/     # Agno-based trading agents
-└── *.py              # 100+ top-level data fetchers (market, gov, economic, alt)
+├── agents/           # AI agent frameworks (finagent_core, deepagents, rdagents) + persona configs
+├── ai_quant_lab/     # Qlib / RD-Agent research tools
+├── strategies/       # Strategy library for the Fincept backtesting provider
+├── exchange/         # Crypto exchange daemon (ccxt)
+├── fincept_mcp/      # SEC EDGAR research + MCP stdio bridge
+└── *.py              # ~200 data connectors (*_data.py) and yfinance_data.py
 ```
 
-See `fincept-qt/CLAUDE.md` for the detailed service catalog and architecture rules.
+See `fincept-qt/scripts/README.md` and [PYTHON_CONTRIBUTOR_GUIDE.md](./PYTHON_CONTRIBUTOR_GUIDE.md) for how scripts are run and written, and `fincept-qt/CLAUDE.md` for the service catalog and architecture rules.
 
 ---
 
@@ -268,4 +270,4 @@ Good first issues carry the `good-first-issue` label — those are the right sta
 ---
 
 **Repository:** https://github.com/Fincept-Corporation/FinceptTerminal
-**License:** AGPL-3.0-or-later
+**License:** AGPL-3.0-or-later — full text in [LICENSE](../LICENSE). By contributing you agree to the [contributor terms](../.github/CONTRIBUTING.md#contributor-terms).

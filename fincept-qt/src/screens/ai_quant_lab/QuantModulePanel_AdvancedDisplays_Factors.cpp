@@ -1,7 +1,7 @@
 // src/screens/ai_quant_lab/QuantModulePanel_AdvancedDisplays_Factors.cpp
 //
 // ADVANCED-category renderers for factor + strategy analytics:
-// factor_evaluation (IC / evaluation report / risk metrics / factor returns)
+// factor_evaluation (IC / evaluation report / risk metrics)
 // and strategy_builder (create_*, portfolio_metrics).
 //
 // Part of the partial-class split of QuantModulePanel_AdvancedDisplays.cpp.
@@ -55,20 +55,6 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
     QString header_text = command.toUpper();
     header_text.replace('_', ' ');
     results_layout_->addWidget(gs_section_header(header_text, accent));
-
-    if (command == "check_status") {
-        const bool pd = payload.value("pandas_available").toBool();
-        const bool ql = payload.value("qlib_available").toBool();
-        QList<QWidget*> top = {
-            gs_make_card(tr("PANDAS"), pd ? tr("AVAILABLE") : tr("MISSING"), this,
-                         pd ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("QLIB"), ql ? tr("AVAILABLE") : tr("MISSING"), this,
-                         ql ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-        status_label_->setText(tr("Factor evaluation ready"));
-        return;
-    }
 
     // ── calculate_ic ─────────────────────────────────────────────────────────
     if (command == "calculate_ic") {
@@ -153,67 +139,6 @@ void QuantModulePanel::display_factor_evaluation_result(const QString& command, 
         }
         status_label_->setText(
             tr("IC=%1 ICIR=%2 p=%3").arg(ic_mean, 0, 'f', 4).arg(icir, 0, 'f', 3).arg(pval, 0, 'f', 4));
-        return;
-    }
-
-    // ── analyze_factor_returns ───────────────────────────────────────────────
-    if (command == "analyze_factor_returns") {
-        const double ls_sharpe = payload.value("long_short_sharpe").toDouble();
-        const double ls_ret = payload.value("long_short_mean_return").toDouble();
-        const double mono = payload.value("monotonicity").toDouble();
-        const double spread = payload.value("spread").toDouble();
-
-        QList<QWidget*> top = {
-            gs_make_card(tr("L/S SHARPE"), QString::number(ls_sharpe, 'f', 3), this,
-                         ls_sharpe >= 1.0 ? ui::colors::POSITIVE()
-                         : ls_sharpe > 0  ? ui::colors::WARNING()
-                                          : ui::colors::NEGATIVE()),
-            gs_make_card(tr("L/S MEAN RET"), fmt_pct_safe(QJsonValue(ls_ret), 4), this, gs_pos_neg_color(ls_ret)),
-            gs_make_card(tr("SPREAD"), fmt_pct_safe(QJsonValue(spread), 4), this, gs_pos_neg_color(spread)),
-            gs_make_card(tr("MONOTONICITY"), QString::number(mono * 100, 'f', 1) + "%", this,
-                         mono >= 0.7 ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-
-        const auto qs = payload.value("quantile_stats").toObject();
-        if (!qs.isEmpty()) {
-            QList<QPair<QString, QJsonObject>> rows;
-            for (auto it = qs.begin(); it != qs.end(); ++it)
-                rows.append({it.key(), it.value().toObject()});
-            std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-
-            auto* table = new QTableWidget(rows.size(), 5, this);
-            table->setHorizontalHeaderLabels(
-                {tr("Quantile"), tr("Mean Return"), tr("Std"), tr("Sharpe"), tr("Win Rate")});
-            table->verticalHeader()->setVisible(false);
-            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-            table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(rows.size() * 26 + 32, 280));
-            for (int r = 0; r < rows.size(); ++r) {
-                const auto& q = rows[r].second;
-                table->setItem(r, 0, new QTableWidgetItem(rows[r].first));
-                const double mr = q.value("mean_return").toDouble();
-                auto* mri = new QTableWidgetItem(QString::number(mr * 100, 'f', 4) + "%");
-                mri->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                mri->setForeground(QColor(gs_pos_neg_color(mr)));
-                table->setItem(r, 1, mri);
-                auto* sd = new QTableWidgetItem(QString::number(q.value("std_return").toDouble() * 100, 'f', 4) + "%");
-                sd->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                table->setItem(r, 2, sd);
-                const double sh = q.value("sharpe").toDouble();
-                auto* shi = new QTableWidgetItem(QString::number(sh, 'f', 3));
-                shi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                shi->setForeground(QColor(gs_pos_neg_color(sh)));
-                table->setItem(r, 3, shi);
-                auto* wi = new QTableWidgetItem(QString::number(q.value("win_rate").toDouble() * 100, 'f', 1) + "%");
-                wi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                table->setItem(r, 4, wi);
-                table->setRowHeight(r, 26);
-            }
-            results_layout_->addWidget(table);
-        }
-        status_label_->setText(tr("L/S Sharpe=%1  spread=%2%").arg(ls_sharpe, 0, 'f', 3).arg(spread * 100, 0, 'f', 4));
         return;
     }
 
@@ -348,23 +273,6 @@ void QuantModulePanel::display_strategy_builder_result(const QString& command, c
     QString header_text = (stype.isEmpty() ? command : stype).toUpper();
     header_text.replace('_', ' ');
     results_layout_->addWidget(gs_section_header(header_text, accent));
-
-    if (command == "check_status") {
-        QList<QWidget*> top = {
-            gs_make_card(tr("QLIB"), payload.value("qlib_available").toBool() ? tr("AVAILABLE") : tr("MISSING"), this,
-                         payload.value("qlib_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("PANDAS"), payload.value("pandas_available").toBool() ? tr("AVAILABLE") : tr("MISSING"),
-                         this,
-                         payload.value("pandas_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("NUMPY"), payload.value("numpy_available").toBool() ? tr("AVAILABLE") : tr("MISSING"), this,
-                         payload.value("numpy_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("SCIPY"), payload.value("scipy_available").toBool() ? tr("AVAILABLE") : tr("MISSING"), this,
-                         payload.value("scipy_available").toBool() ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-        status_label_->setText(tr("Strategy builder ready"));
-        return;
-    }
 
     // portfolio_metrics — a flat dict of stats
     if (command == "portfolio_metrics") {

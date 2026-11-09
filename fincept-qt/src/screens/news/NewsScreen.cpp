@@ -15,6 +15,7 @@
 #include "services/news/NewsCorrelationService.h"
 #include "services/news/NewsNlpService.h"
 #include "services/notifications/NotificationService.h"
+#include "services/portfolio/PortfolioService.h"
 #include "storage/repositories/NewsArticleRepository.h"
 #include "storage/repositories/SettingsRepository.h"
 #include "ui/theme/StyleSheets.h"
@@ -24,6 +25,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QSettings>
 #include <QShortcut>
@@ -39,6 +41,82 @@ namespace fincept::screens {
 // Desktop notifications are only raised for articles this fresh — otherwise every
 // FLASH / BREAKING / monitor hit already sitting in the feed fires at launch.
 static constexpr int64_t kNewsNotifyMaxAgeSec = 1800;
+
+// Tickers shown in the intel drawer's mention lists.
+static constexpr int kNewsTrendingMax = 10;
+static constexpr int kNewsTrendingMinMentions = 2; // a single mention is noise, not a trend
+
+/// Ticker as headlines name it: data-vendor suffixes stripped ("RELIANCE.NS" ->
+/// RELIANCE, "BTC-USD" -> BTC, "^NSEI" -> NSEI).
+static QString news_symbol_base(const QString& symbol) {
+    QString up = symbol.trimmed().toUpper();
+    static const QRegularExpression suffix_re(
+        QStringLiteral("^([A-Z0-9&^-]+?)(?:\\.[A-Z]{1,3}|-(?:USD|USDT|USDC|EUR|GBP))$"));
+    const auto m = suffix_re.match(up);
+    if (m.hasMatch())
+        up = m.captured(1);
+    up.remove(QLatin1Char('^'));
+    return up;
+}
+
+/// Whole-word ticker matcher (an optional leading "$" allowed). Tickers of three
+/// letters or fewer match case-sensitively, or "V" / "ON" / "IT" would hit almost
+/// every article.
+static QRegularExpression news_symbol_regex(const QString& base) {
+    const QString pattern = QStringLiteral("(?<![\\w$.-])\\$?%1(?![\\w-])").arg(QRegularExpression::escape(base));
+    return QRegularExpression(pattern, base.size() <= 3 ? QRegularExpression::NoPatternOption
+                                                        : QRegularExpression::CaseInsensitiveOption);
+}
+
+/// Signed tone of an article: the finance-VADER score when known, else the label.
+static double news_signed_sentiment(const services::NewsArticle& a) {
+    if (a.sentiment_score != 0.0)
+        return a.sentiment_score;
+    return a.sentiment == services::Sentiment::BULLISH ? 0.5 : a.sentiment == services::Sentiment::BEARISH ? -0.5 : 0.0;
+}
+
+/// RELEVANCE ordering: event priority, impact, source tier and threat level, with a
+/// recency decay (half-life ~4 h). Priority-then-time alone kept a day-old FLASH item
+/// above every fresher story, and ranked a blog the same as a wire service.
+static double news_relevance(const services::NewsArticle& a, int64_t now_s) {
+    using services::Impact;
+    using services::Priority;
+    using services::ThreatLevel;
+    double s = 0.0;
+    switch (a.priority) {
+        case Priority::FLASH:
+            s += 4.0;
+            break;
+        case Priority::URGENT:
+            s += 3.0;
+            break;
+        case Priority::BREAKING:
+            s += 2.0;
+            break;
+        case Priority::ROUTINE:
+            break;
+    }
+    s += a.impact == Impact::HIGH ? 1.5 : (a.impact == Impact::MEDIUM ? 0.75 : 0.0);
+    s += std::max(0, 4 - a.tier) * 0.5; // tier 1 wire +1.5 … tier 4 blog +0
+    switch (a.threat.level) {
+        case ThreatLevel::CRITICAL:
+            s += 1.5;
+            break;
+        case ThreatLevel::HIGH:
+            s += 1.0;
+            break;
+        case ThreatLevel::MEDIUM:
+            s += 0.5;
+            break;
+        default:
+            break;
+    }
+    if (!a.tickers.isEmpty())
+        s += 0.25;
+    const double age_h = static_cast<double>(std::max<int64_t>(0, now_s - a.sort_ts)) / 3600.0;
+    s += 3.0 * std::exp(-age_h / 6.0);
+    return s;
+}
 // The notified-id sets only exist to dedupe; cap them so a long session can't
 // grow them forever (clearing at worst re-notifies something still in the feed).
 static constexpr int kNewsNotifiedSetCap = 20000;
@@ -62,10 +140,16 @@ static QString news_screen_local_rules() {
                    " padding: 0 6px; font-weight: 700; font-size: 10px; }"
                    "QPushButton#newsLiveBadge[live=\"true\"] { color: %7; border-color: %7; }"
                    "QLabel#newsDetailAiCredits { color: %8; font-size: 10px; }"
-                   "QLabel#newsDetailAiCredits[low=\"true\"] { color: %6; }")
+                   "QLabel#newsDetailAiCredits[low=\"true\"] { color: %6; }"
+                   "QPushButton#newsTickerBtn { background: transparent; font-size: 11px; text-align: left;"
+                   " border: none; border-bottom: 1px solid %9; padding: 2px 4px; font-family: %10; color: %11; }"
+                   "QPushButton#newsTickerBtn:hover { background: %9; }"
+                   "QPushButton#newsTickerBtn[tone=\"bull\"] { color: %7; }"
+                   "QPushButton#newsTickerBtn[tone=\"bear\"] { color: %5; }")
         .arg(priority_color(Priority::FLASH), priority_color(Priority::URGENT), priority_color(Priority::BREAKING),
-             priority_color(Priority::ROUTINE), ui::colors::NEGATIVE(), ui::colors::WARNING(),
-             ui::colors::POSITIVE(), ui::colors::TEXT_TERTIARY());
+             priority_color(Priority::ROUTINE), ui::colors::NEGATIVE(), ui::colors::WARNING(), ui::colors::POSITIVE(),
+             ui::colors::TEXT_TERTIARY(), ui::colors::BORDER_DIM())
+        .arg(ui::fonts::DATA_FAMILY, ui::colors::TEXT_SECONDARY());
 }
 
 NewsScreen::NewsScreen(QWidget* parent) : QWidget(parent) {
@@ -206,6 +290,24 @@ void NewsScreen::connect_signals() {
     connect(side_panel_, &NewsSidePanel::monitor_toggled, this, &NewsScreen::on_monitor_toggled);
     connect(side_panel_, &NewsSidePanel::monitor_deleted, this, &NewsScreen::on_monitor_deleted);
     connect(side_panel_, &NewsSidePanel::close_requested, this, [this]() { set_drawer_open(false); });
+    // Trending ticker / holding row → filter the feed by that symbol (ticker-aware).
+    connect(side_panel_, &NewsSidePanel::ticker_clicked, this, [this](const QString& symbol) {
+        SymbolRef ref;
+        ref.symbol = symbol;
+        on_group_symbol_changed(ref);
+    });
+
+    // Holdings changed in the Portfolio tab → re-read them for the drawer's
+    // "holdings in the news" list (only while this screen is on display).
+    auto& psvc = services::PortfolioService::instance();
+    auto on_holdings_changed = [this](const QString&) {
+        if (visible_)
+            refresh_holdings();
+    };
+    connect(&psvc, &services::PortfolioService::asset_added, this, on_holdings_changed);
+    connect(&psvc, &services::PortfolioService::asset_sold, this, on_holdings_changed);
+    connect(&psvc, &services::PortfolioService::ledger_changed, this, on_holdings_changed);
+    connect(&psvc, &services::PortfolioService::portfolio_deleted, this, on_holdings_changed);
 
     // Detail panel (overlay)
     connect(detail_panel_, &NewsDetailPanel::analyze_requested, this, &NewsScreen::on_analyze_requested);
@@ -447,6 +549,7 @@ void NewsScreen::showEvent(QShowEvent* e) {
     }
     services::NewsService::instance().connect_live_feed();
     subscribe_mcp_events();
+    refresh_holdings();
 
     if (!first_show_) {
         // Returning to the screen: articles_updated is ignored while hidden, so
@@ -617,10 +720,35 @@ void NewsScreen::on_view_mode_changed(const QString& mode) {
 }
 
 void NewsScreen::on_search_changed(const QString& query) {
+    apply_search(query, /*is_symbol=*/false); // typed by the user
+}
+
+void NewsScreen::apply_search(const QString& query, bool is_symbol) {
     search_query_ = query;
+    symbol_filter_ = is_symbol && !query.trimmed().isEmpty();
     visible_article_count_ = PAGE_SIZE;
     ScreenStateManager::instance().notify_changed(this);
     apply_filters_async();
+}
+
+void NewsScreen::refresh_holdings() {
+    QPointer<NewsScreen> self = this;
+    (void)QtConcurrent::run([self]() {
+        QStringList syms = services::PortfolioService::held_symbols(); // local SQLite, per-thread connection
+        syms.sort();
+        if (!self)
+            return;
+        QMetaObject::invokeMethod(
+            self,
+            [self, syms]() {
+                if (!self || syms == self->holding_symbols_)
+                    return;
+                self->holding_symbols_ = syms;
+                if (!self->all_articles_.isEmpty())
+                    self->apply_filters_async();
+            },
+            Qt::QueuedConnection);
+    });
 }
 
 void NewsScreen::on_group_symbol_changed(const SymbolRef& ref) {
@@ -632,7 +760,7 @@ void NewsScreen::on_group_symbol_changed(const SymbolRef& ref) {
     // is silently narrowed to a handful of articles with no visible reason and
     // no way to clear it.
     command_bar_->set_search_text(ref.symbol);
-    on_search_changed(ref.symbol);
+    apply_search(ref.symbol, /*is_symbol=*/true);
 }
 
 // Drop hook installed in the constructor below is wired via symbol_dnd —
@@ -879,8 +1007,17 @@ void NewsScreen::apply_filters_async() {
     const QString variant = active_variant_;
     const QString lang_filter = active_lang_.toLower();
 
+    // Symbol mode: match the ticker, not a substring — headlines name the company or the
+    // bare ticker, never the data-vendor suffix (see news_symbol_base / news_symbol_regex).
+    const QString symbol_full = symbol_filter_ ? search_query_.trimmed().toUpper() : QString();
+    const QString symbol_base = symbol_filter_ ? news_symbol_base(symbol_full) : QString();
+    const bool symbol_mode = symbol_filter_ && !symbol_base.isEmpty();
+    const QStringList holdings = holding_symbols_;
+
     (void)QtConcurrent::run([self, gen, articles_copy = std::move(articles_copy), category, time_range, search_lower,
-                             sort, variant, lang_filter]() mutable {
+                             sort, variant, lang_filter, symbol_mode, symbol_full, symbol_base, holdings]() mutable {
+        const QRegularExpression symbol_re = symbol_mode ? news_symbol_regex(symbol_base) : QRegularExpression();
+        const QString fts_query = symbol_mode ? symbol_base.toLower() : search_lower;
         // 7D/30D history merge — moved OFF the UI thread. Reading up to 5000 rows
         // from SQLite on the UI thread stuttered the UI on each filter keystroke.
         // Safe on a worker: Database hands out per-thread cloned connections.
@@ -896,8 +1033,8 @@ void NewsScreen::apply_filters_async() {
                     if (!live_ids.contains(a.id))
                         articles_copy.append(a);
             };
-            if (!search_lower.isEmpty()) {
-                auto fts_result = fincept::NewsArticleRepository::instance().search_fts(search_lower, cutoff, 1000);
+            if (!fts_query.isEmpty()) {
+                auto fts_result = fincept::NewsArticleRepository::instance().search_fts(fts_query, cutoff, 1000);
                 if (fts_result.is_ok())
                     merge_into(fts_result.value());
             } else {
@@ -981,7 +1118,22 @@ void NewsScreen::apply_filters_async() {
             }
 
             // Search filter
-            if (!search_lower.isEmpty()) {
+            if (symbol_mode) {
+                bool match = false;
+                for (const auto& t : std::as_const(a.tickers)) {
+                    if (t.compare(symbol_base, Qt::CaseInsensitive) == 0 ||
+                        t.compare(symbol_full, Qt::CaseInsensitive) == 0) {
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match)
+                    match = symbol_re.match(a.headline).hasMatch() || symbol_re.match(a.summary).hasMatch();
+                if (!match) {
+                    ++rejected_search;
+                    continue;
+                }
+            } else if (!search_lower.isEmpty()) {
                 const QString hl = a.headline.toLower();
                 const QString sum = a.summary.toLower();
                 bool match = hl.contains(search_lower) || sum.contains(search_lower) ||
@@ -1012,16 +1164,99 @@ void NewsScreen::apply_filters_async() {
         }
 
         // Sort
+        const int64_t now_s = QDateTime::currentSecsSinceEpoch();
         if (sort == "NEWEST") {
             std::sort(filtered.begin(), filtered.end(),
                       [](const auto& a, const auto& b) { return a.sort_ts > b.sort_ts; });
         } else {
-            std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) {
-                if (a.priority != b.priority)
-                    return static_cast<int>(a.priority) < static_cast<int>(b.priority);
-                return a.sort_ts > b.sort_ts;
+            // Score once per article, not once per comparison.
+            QVector<QPair<double, int>> order;
+            order.reserve(filtered.size());
+            for (int i = 0; i < filtered.size(); ++i)
+                order.append({news_relevance(filtered[i], now_s), i});
+            std::stable_sort(order.begin(), order.end(), [&filtered](const auto& x, const auto& y) {
+                if (x.first != y.first)
+                    return x.first > y.first;
+                return filtered[x.second].sort_ts > filtered[y.second].sort_ts;
             });
+            QVector<services::NewsArticle> ranked;
+            ranked.reserve(filtered.size());
+            for (const auto& o : order)
+                ranked.append(filtered[o.second]);
+            filtered = std::move(ranked);
         }
+
+        // ── Ticker mentions: what the current feed talks about, and in what tone ──
+        // Media / agency acronyms the ticker extractor cannot tell from symbols.
+        static const QSet<QString> kNotTickers = {"BBC", "CNN", "CNBC", "AP",  "AFP",  "NPR", "ABC", "NBC",
+                                                  "CBS", "WSJ", "FT",   "NYT", "RTRS", "EV",  "LNG", "OK"};
+        auto add_mention = [](NewsTickerMention& m, const services::NewsArticle& a, double tone) {
+            ++m.count;
+            m.net_sentiment += tone; // summed here, averaged below
+            if (a.sentiment == services::Sentiment::BULLISH)
+                ++m.bullish;
+            else if (a.sentiment == services::Sentiment::BEARISH)
+                ++m.bearish;
+            m.latest_ts = std::max<int64_t>(m.latest_ts, a.sort_ts);
+        };
+        auto finish = [](QHash<QString, NewsTickerMention>& by_sym, int min_count, int max_rows) {
+            QVector<NewsTickerMention> out;
+            for (auto it = by_sym.begin(); it != by_sym.end(); ++it) {
+                if (it->count < min_count)
+                    continue;
+                it->net_sentiment /= it->count;
+                out.append(*it);
+            }
+            std::sort(out.begin(), out.end(), [](const auto& x, const auto& y) {
+                if (x.count != y.count)
+                    return x.count > y.count;
+                return x.latest_ts > y.latest_ts;
+            });
+            if (out.size() > max_rows)
+                out.resize(max_rows);
+            return out;
+        };
+
+        QHash<QString, NewsTickerMention> trending_map;
+        struct HoldingMatcher {
+            QString symbol;
+            QString base;
+            QRegularExpression re;
+        };
+        QVector<HoldingMatcher> holding_matchers;
+        holding_matchers.reserve(holdings.size());
+        for (const auto& h : holdings) {
+            const QString base = news_symbol_base(h);
+            if (!base.isEmpty())
+                holding_matchers.append({h, base, news_symbol_regex(base)});
+        }
+        QHash<QString, NewsTickerMention> holdings_map;
+
+        for (const auto& a : std::as_const(filtered)) {
+            const double tone = news_signed_sentiment(a);
+            QSet<QString> seen;
+            for (const auto& t : std::as_const(a.tickers)) {
+                const QString up = t.toUpper();
+                if (up.isEmpty() || seen.contains(up) || kNotTickers.contains(up) || up == a.source.trimmed().toUpper())
+                    continue;
+                seen.insert(up);
+                auto& m = trending_map[up];
+                m.symbol = up;
+                add_mention(m, a, tone);
+            }
+            for (const auto& hm : std::as_const(holding_matchers)) {
+                bool hit = seen.contains(hm.base) || a.tickers.contains(hm.symbol, Qt::CaseInsensitive);
+                if (!hit)
+                    hit = hm.re.match(a.headline).hasMatch() || hm.re.match(a.summary).hasMatch();
+                if (!hit)
+                    continue;
+                auto& m = holdings_map[hm.symbol];
+                m.symbol = hm.symbol;
+                add_mention(m, a, tone);
+            }
+        }
+        const QVector<NewsTickerMention> trending = finish(trending_map, kNewsTrendingMinMentions, kNewsTrendingMax);
+        const QVector<NewsTickerMention> holding_mentions = finish(holdings_map, 1, 25);
 
         auto clusters = services::cluster_articles(filtered);
 
@@ -1041,7 +1276,7 @@ void NewsScreen::apply_filters_async() {
 
         QMetaObject::invokeMethod(
             self,
-            [self, gen, filtered, clusters, category_counts, bullish, bearish, neutral]() {
+            [self, gen, filtered, clusters, category_counts, bullish, bearish, neutral, trending, holding_mentions]() {
                 if (!self)
                     return;
                 if (gen < self->filter_generation_.load(std::memory_order_relaxed)) {
@@ -1049,6 +1284,8 @@ void NewsScreen::apply_filters_async() {
                     return;
                 }
                 self->update_ui_from_filtered(gen, filtered, clusters, category_counts, bullish, bearish, neutral);
+                self->side_panel_->update_trending(trending);
+                self->side_panel_->update_holdings_mentions(holding_mentions);
             },
             Qt::QueuedConnection);
     });
@@ -1189,7 +1426,7 @@ void NewsScreen::run_enrichment_now() {
 
     // NER + places -> entities / locations sections, feed-row geo dots, and the
     // per-article cache the detail panel reads. Only articles never enriched
-    // before reach Python (one process for all of them).
+    // before are processed (one worker-thread batch for all of them).
     services::NewsNlpService::instance().enrich_articles(
         subset, [self, gen](bool ok, services::NewsEnrichment result) {
             if (!self || gen != self->enrichment_generation_.load(std::memory_order_relaxed))
@@ -1405,32 +1642,6 @@ void NewsScreen::compute_deviations() {
         }
     }
 
-}
-
-void NewsScreen::sort_articles(QVector<services::NewsArticle>& articles) const {
-    if (sort_mode_ == "NEWEST") {
-        std::sort(articles.begin(), articles.end(), [](const auto& a, const auto& b) { return a.sort_ts > b.sort_ts; });
-    } else {
-        std::sort(articles.begin(), articles.end(), [](const auto& a, const auto& b) {
-            if (a.priority != b.priority)
-                return static_cast<int>(a.priority) < static_cast<int>(b.priority);
-            return a.sort_ts > b.sort_ts;
-        });
-    }
-}
-
-int64_t NewsScreen::time_window_seconds() const {
-    if (time_range_ == "1H")
-        return 3600;
-    if (time_range_ == "6H")
-        return 21600;
-    if (time_range_ == "24H")
-        return 86400;
-    if (time_range_ == "48H")
-        return 172800;
-    if (time_range_ == "7D")
-        return 604800;
-    return 86400;
 }
 
 // ── IStatefulScreen ─────────────────────────────────────────────────────────

@@ -196,9 +196,6 @@ class ExpandedFundsWrapper:
 
     # ==================== FINANCIAL FUNDS ====================
 
-    def get_fund_financial_fund_daily_em(self, symbol: str = "000647", period: str = "daily") -> Dict[str, Any]:
-        """Get financial fund daily data"""
-        return self._safe_call_with_retry(ak.fund_financial_fund_daily_em, symbol=symbol, period=period)
 
     def get_fund_financial_fund_info_em(self, symbol: str = "000647", indicator: str = "基金档案") -> Dict[str, Any]:
         """Get financial fund information"""
@@ -481,7 +478,7 @@ class ExpandedFundsWrapper:
             "get_fund_etf_hist_min_em", "get_fund_etf_spot_em", "get_fund_etf_hist_sina",
             "get_fund_etf_category_sina", "get_fund_etf_dividend_sina", "get_fund_etf_spot_ths",
             "get_fund_etf_scale_sse", "get_fund_etf_scale_szse",
-            "get_fund_financial_fund_daily_em", "get_fund_financial_fund_info_em",
+            "get_fund_financial_fund_info_em",
             "get_fund_graded_fund_daily_em", "get_fund_graded_fund_info_em",
             "get_fund_money_fund_daily_em", "get_fund_money_fund_info_em",
             "get_fund_hk_fund_hist_em",

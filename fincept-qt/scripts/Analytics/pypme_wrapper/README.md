@@ -136,4 +136,4 @@ python core.py
 
 ## License
 
-MIT License - Same as Fincept Terminal
+AGPL-3.0-or-later, as for the whole repository (the upstream `pypme` package has its own licence).

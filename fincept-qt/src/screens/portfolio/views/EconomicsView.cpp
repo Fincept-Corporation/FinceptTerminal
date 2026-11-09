@@ -42,6 +42,7 @@ EconomicsView::EconomicsView(QWidget* parent) : QWidget(parent) {
                 macro_loading_ = false;
                 macro_loaded_ = true;
                 macro_values_.clear();
+                macro_prior_.clear();
                 macro_dates_.clear();
 
                 if (res.success) {
@@ -56,6 +57,20 @@ EconomicsView::EconomicsView(QWidget* parent) : QWidget(parent) {
                         const auto last = obs.last().toObject();
                         macro_values_[id] = last.value("value").toDouble();
                         macro_dates_[id] = last.value("date").toString();
+                        // The level alone does not say which way rates / the dollar / oil are
+                        // moving. Keep the observation on or before one month earlier (the
+                        // fetch spans ~120 days) for the Δ 1M column.
+                        const QDate last_date = QDate::fromString(last.value("date").toString(), Qt::ISODate);
+                        if (last_date.isValid()) {
+                            const QString cutoff = last_date.addMonths(-1).toString(Qt::ISODate);
+                            for (qsizetype i = obs.size() - 1; i >= 0; --i) {
+                                const auto ob = obs.at(i).toObject();
+                                if (ob.value("date").toString() <= cutoff) {
+                                    macro_prior_[id] = ob.value("value").toDouble();
+                                    break;
+                                }
+                            }
+                        }
                     }
                 } else {
                     LOG_WARN("EconomicsView", "FRED macro fetch failed: " + res.error.left(200));
@@ -172,8 +187,10 @@ void EconomicsView::build_ui() {
     }
 
     macro_table_ = new QTableWidget;
-    macro_table_->setColumnCount(3);
-    macro_table_->setHorizontalHeaderLabels({tr("INDICATOR"), tr("CURRENT"), tr("AS OF")});
+    macro_table_->setColumnCount(4);
+    macro_table_->setHorizontalHeaderLabels({tr("INDICATOR"), tr("CURRENT"), tr("Δ 1M"), tr("AS OF")});
+    macro_table_->setToolTip(tr("Δ 1M: change since the observation one month before the latest — in percentage "
+                                "points for rates, in percent for index and price levels."));
     macro_table_->setSelectionMode(QAbstractItemView::NoSelection);
     macro_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     macro_table_->setShowGrid(false);
@@ -201,7 +218,11 @@ void EconomicsView::build_ui() {
         QString("color:%1; font-size:11px; font-weight:700; letter-spacing:1px;").arg(ui::colors::AMBER()));
     sens_layout->addWidget(sens_title_);
 
-    sens_note_ = new QLabel(tr("Estimated portfolio impact from macro factor shocks, weighted by holdings"));
+    // Say what this table is: fixed rule-of-thumb sector sensitivities weighted by the book,
+    // not betas estimated from these holdings' own price history.
+    sens_note_ = new QLabel(tr("Rule-of-thumb impact of macro shocks: typical sector sensitivities weighted by your "
+                               "holdings — indicative, not regression estimates from your positions."));
+    sens_note_->setWordWrap(true);
     sens_note_->setStyleSheet(QString("color:%1; font-size:9px;").arg(ui::colors::TEXT_TERTIARY()));
     sens_layout->addWidget(sens_note_);
 
@@ -300,7 +321,25 @@ void EconomicsView::update_macro_table() {
             have ? (QString::number(macro_values_.value(m.id), 'f', 2) + m.suffix) : QStringLiteral("—");
         set(0, tr(m.label), ui::colors::TEXT_PRIMARY, Qt::AlignLeft);
         set(1, val, have ? ui::colors::CYAN : ui::colors::TEXT_TERTIARY, Qt::AlignRight);
-        set(2, macro_dates_.value(m.id, QStringLiteral("—")), ui::colors::TEXT_TERTIARY, Qt::AlignRight);
+        // Rates (suffix "%") move in percentage points; levels (index, $/bbl) in percent.
+        QString delta = QStringLiteral("—");
+        const char* delta_color = ui::colors::TEXT_TERTIARY;
+        if (have && macro_prior_.contains(m.id)) {
+            const double cur = macro_values_.value(m.id);
+            const double prior = macro_prior_.value(m.id);
+            const bool is_rate = QLatin1String(m.suffix) == QLatin1String("%");
+            if (is_rate) {
+                const double pp = cur - prior;
+                delta = QString("%1%2 pp").arg(pp >= 0 ? "+" : "").arg(QString::number(pp, 'f', 2));
+                delta_color = pp >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+            } else if (std::abs(prior) > 1e-9) {
+                const double pc = (cur / prior - 1.0) * 100.0;
+                delta = QString("%1%2%").arg(pc >= 0 ? "+" : "").arg(QString::number(pc, 'f', 1));
+                delta_color = pc >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
+            }
+        }
+        set(2, delta, delta_color, Qt::AlignRight);
+        set(3, macro_dates_.value(m.id, QStringLiteral("—")), ui::colors::TEXT_TERTIARY, Qt::AlignRight);
     }
 }
 
@@ -318,7 +357,10 @@ void EconomicsView::retranslateUi() {
     if (sens_title_)
         sens_title_->setText(tr("PORTFOLIO FACTOR SENSITIVITY"));
     if (sens_note_)
-        sens_note_->setText(tr("Estimated portfolio impact from macro factor shocks, weighted by holdings"));
+        sens_note_->setText(tr("Rule-of-thumb impact of macro shocks: typical sector sensitivities weighted by your "
+                               "holdings — indicative, not regression estimates from your positions."));
+    if (macro_table_)
+        macro_table_->setHorizontalHeaderLabels({tr("INDICATOR"), tr("CURRENT"), tr("Δ 1M"), tr("AS OF")});
 
     if (indicators_table_)
         indicators_table_->setHorizontalHeaderLabels(

@@ -270,7 +270,12 @@ jobs:
               cp "$icu_dll" "${BUILD_DIR}/" || true
           done
 
-          cp -r resources "${BUILD_DIR}/resources" 2>/dev/null || true
+          # MERGE (resources/. → resources/): windeployqt has already created
+          # ${BUILD_DIR}/resources for the WebEngine paks, so a plain
+          # `cp -r resources ${BUILD_DIR}/resources` nested a second copy at
+          # resources/resources/.
+          mkdir -p "${BUILD_DIR}/resources"
+          cp -r resources/. "${BUILD_DIR}/resources/"
           bash "${GITHUB_WORKSPACE}/.github/scripts/sync_scripts.sh" scripts "${BUILD_DIR}/scripts"
 
           # ── Qt WebEngine runtime (KLineChart trading chart) ──────────────────
@@ -289,9 +294,12 @@ jobs:
           else
             echo "::warning::QtWebEngineProcess.exe not found in ${QT_BIN} — WebEngine chart will be unavailable"
           fi
-          # Resource paks + ICU data live in Qt's resources/ dir.
+          # Resource paks + ICU data + V8 startup snapshot live in Qt's resources/
+          # dir. Without v8_context_snapshot.bin every renderer aborts at startup
+          # (FATAL "Error loading V8 startup snapshot file") and all WebEngine
+          # surfaces stay blank (#411).
           mkdir -p "${BUILD_DIR}/resources"
-          for pak in icudtl.dat qtwebengine_resources.pak qtwebengine_resources_100p.pak \
+          for pak in v8_context_snapshot.bin icudtl.dat qtwebengine_resources.pak qtwebengine_resources_100p.pak \
             qtwebengine_resources_200p.pak qtwebengine_devtools_resources.pak; do
             [ -f "${QT_ROOT_DIR}/resources/${pak}" ] && \
               cp "${QT_ROOT_DIR}/resources/${pak}" "${BUILD_DIR}/resources/" || true
@@ -328,10 +336,14 @@ jobs:
           # tab crashes Chromium at view creation (the v4.1.0 regression). These
           # are data files the dependency-closure gate can't see, so check here.
           if [ -f "${BUILD_DIR}/Qt6WebEngineCore.dll" ]; then
-            for we in QtWebEngineProcess.exe resources/icudtl.dat \
-              resources/qtwebengine_resources.pak; do
+            WE_REQUIRED="QtWebEngineProcess.exe resources/icudtl.dat resources/qtwebengine_resources.pak"
+            # Required whenever this Qt kit ships one (Qt 6.8.3 x64 does) — its
+            # absence kills every renderer at startup (#411).
+            [ -f "${QT_ROOT_DIR}/resources/v8_context_snapshot.bin" ] && \
+              WE_REQUIRED="${WE_REQUIRED} resources/v8_context_snapshot.bin"
+            for we in ${WE_REQUIRED}; do
               if [ ! -f "${BUILD_DIR}/${we}" ]; then
-                echo "::error::Missing WebEngine runtime file: ${we} (Equity chart would crash)"
+                echo "::error::Missing WebEngine runtime file: ${we} (Equity chart would crash or stay blank)"
                 MISSING=1
               fi
             done
@@ -670,6 +682,17 @@ jobs:
               'resources/icudtl.dat',
               'resources/qtwebengine_resources.pak'
             )
+            # 4.5.1 shipped without the V8 snapshot even though the stage dir had
+            # it (#411) — this check is what would have caught it. Require it
+            # whenever the staged tree carries one.
+            if (Test-Path 'Release/resources/v8_context_snapshot.bin') {
+              $required += 'resources/v8_context_snapshot.bin'
+            }
+          }
+          # Same failure class: yt-dlp.exe sat in the stage dir but no install()
+          # rule captured it, so installed builds had no video playback.
+          if (Test-Path 'Release/yt-dlp.exe') {
+            $required += 'yt-dlp.exe'
           }
           foreach ($f in $required) {
             if (-not (Test-Path (Join-Path $dest $f))) {
@@ -1118,6 +1141,24 @@ jobs:
           chmod +x "${APPIMAGE}"
           bash ../.github/scripts/ci_app_checks.sh smoke "${APPIMAGE}" ci-smoke 600
 
+      # ── Stage the .deb/.rpm install tree (#415) ───────────────────────────
+      # Both packages used to be `cmake --install --prefix /usr`: a bare binary
+      # linked against this runner's Qt 6.8.3 with no Qt in the package, so
+      # they failed at exec everywhere ("libQt6Charts.so.6: cannot open shared
+      # object file") — no distro ships Qt 6.8, and the binary uses Qt private
+      # API that is not ABI-stable across minor versions, so depending on the
+      # distro's Qt is not an option either. They now ship the AppDir above
+      # (Qt + plugins + WebEngine bundled) under /opt/fincept-terminal, with
+      # yt-dlp kept private there instead of colliding with the distro's
+      # /usr/bin/yt-dlp. The script fails on any unresolved or out-of-package
+      # Qt library and derives Depends from what the bundle takes from the host.
+      - name: Stage Linux package tree
+        working-directory: fincept-qt
+        run: |
+          set -euo pipefail
+          bash ../.github/scripts/stage_linux_package.sh \
+            build/AppDir build/yt-dlp . build/pkg-root build/pkg-depends.txt
+
       # ── Build .deb package ────────────────────────────────────────────────
       - name: Build .deb package
         working-directory: fincept-qt
@@ -1127,10 +1168,11 @@ jobs:
           DEB_NAME="fincept-terminal_${VERSION}_amd64"
           DEB_ROOT="build/${DEB_NAME}"
 
+          rm -rf "${DEB_ROOT}"
+          cp -a build/pkg-root "${DEB_ROOT}"
           mkdir -p "${DEB_ROOT}/DEBIAN"
-          mkdir -p "${DEB_ROOT}/usr"
-
-          cmake --install build --prefix "${DEB_ROOT}/usr"
+          DEPENDS="$(cat build/pkg-depends.txt)"
+          INSTALLED_SIZE="$(du -sk "${DEB_ROOT}" | cut -f1)"
 
           cat > "${DEB_ROOT}/DEBIAN/control" <<EOF
           Package: fincept-terminal
@@ -1138,7 +1180,8 @@ jobs:
           Section: finance
           Priority: optional
           Architecture: amd64
-          Depends: libgl1, libxcb-cursor0, libxkbcommon0, libfontconfig1, libfreetype6, libdbus-1-3
+          Installed-Size: ${INSTALLED_SIZE}
+          Depends: ${DEPENDS}
           Maintainer: Fincept Corporation <support@fincept.in>
           Homepage: https://github.com/Fincept-Corporation/FinceptTerminal
           Description: Professional financial intelligence terminal
@@ -1152,7 +1195,44 @@ jobs:
           mv "build/${DEB_NAME}.deb" "build/FinceptTerminal-${VERSION}-linux-x64.deb"
           echo "Built: FinceptTerminal-${VERSION}-linux-x64.deb ($(du -sh "build/FinceptTerminal-${VERSION}-linux-x64.deb" | cut -f1))"
 
+      # ── Install the .deb and run it the way a user would (#415) ────────────
+      # 4.5.1's .deb got no runtime check and shipped unable to start. Install
+      # it through apt, which also proves Depends resolves on the oldest base
+      # we support (22.04), then smoke-test /usr/bin/FinceptTerminal with
+      # install-qt-action's LD_LIBRARY_PATH removed, so every Qt library has to
+      # come from /opt/fincept-terminal. QT_PLUGIN_PATH is kept on purpose: the
+      # bundle carries only the xcb platform plugin, and this headless run needs
+      # offscreen.
+      - name: Verify .deb installs and runs on its bundled Qt
+        working-directory: fincept-qt
+        timeout-minutes: 15
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QTWEBENGINE_DISABLE_SANDBOX: '1'
+        run: |
+          set -euo pipefail
+          DEB=$(ls build/FinceptTerminal-*-linux-x64.deb | head -1)
+          sudo apt-get install -y --no-install-recommends "./${DEB}"
+
+          LAUNCHER_TARGET="$(readlink -f /usr/bin/FinceptTerminal)"
+          if [ "${LAUNCHER_TARGET}" != /opt/fincept-terminal/bin/FinceptTerminal ]; then
+            echo "::error::/usr/bin/FinceptTerminal resolves to ${LAUNCHER_TARGET}, not the bundled binary"
+            exit 1
+          fi
+          # grep without -q: an early exit would SIGPIPE dpkg-query and, under
+          # pipefail, turn a match into a pass.
+          if dpkg-query -L fincept-terminal | grep -x '/usr/bin/yt-dlp' >/dev/null; then
+            echo "::error::package ships /usr/bin/yt-dlp, which collides with the distro yt-dlp package (#415)"
+            exit 1
+          fi
+          /opt/fincept-terminal/bin/yt-dlp --version
+
+          env -u LD_LIBRARY_PATH \
+            bash ../.github/scripts/ci_app_checks.sh smoke /usr/bin/FinceptTerminal ci-deb-smoke 600
+
       # ── Build .rpm package ────────────────────────────────────────────────
+      # Same staged tree as the .deb. AutoReqProv stays off: the bundled libs
+      # would otherwise become Provides/Requires of the package.
       - name: Build .rpm package
         working-directory: fincept-qt
         run: |
@@ -1160,24 +1240,11 @@ jobs:
           sudo apt-get install -y rpm -qq
 
           VERSION=$(grep -Po 'project\(FinceptTerminal VERSION \K[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
-          RPM_ROOT="build/rpm-root"
-
-          mkdir -p "${RPM_ROOT}/usr"
-          cmake --install build --prefix "${RPM_ROOT}/usr"
-
-          # Belt-and-suspenders: the %files manifest hard-requires
-          # fincept-terminal.png. The "Generate Linux icon PNG" step should have
-          # made cmake install it, but if that ever regresses, fall back to the
-          # always-installed flatpak-named copy so rpmbuild never fails here.
-          ICON_DIR="${RPM_ROOT}/usr/share/icons/hicolor/256x256/apps"
-          if [ ! -f "${ICON_DIR}/fincept-terminal.png" ] && [ -f "${ICON_DIR}/in.fincept.FinceptTerminal.png" ]; then
-            cp "${ICON_DIR}/in.fincept.FinceptTerminal.png" "${ICON_DIR}/fincept-terminal.png"
-          fi
-          if [ ! -f "${ICON_DIR}/fincept-terminal.png" ]; then
-            echo "::error::fincept-terminal.png missing from staged RPM tree (${ICON_DIR})"
-            ls -la "${ICON_DIR}" 2>&1 || true
+          PKG_ROOT="${PWD}/build/pkg-root"
+          [ -x "${PKG_ROOT}/opt/fincept-terminal/bin/FinceptTerminal" ] || {
+            echo "::error::${PKG_ROOT} is not staged — the 'Stage Linux package tree' step must run first"
             exit 1
-          fi
+          }
 
           mkdir -p ~/rpmbuild/{SPECS,BUILDROOT}
 
@@ -1190,22 +1257,23 @@ jobs:
           URL:            https://github.com/Fincept-Corporation/FinceptTerminal
           AutoReqProv:    no
 
-          # cmake --install also stages flatpak-named copies
-          # (in.fincept.FinceptTerminal.{desktop,metainfo.xml,png}) that this
-          # curated %files list intentionally omits — warn, don't fail, on them.
-          %define _unpackaged_files_terminate_build 0
+          # The tree is final linuxdeploy output: do not strip it (strip drops the
+          # payload appended to the PyInstaller-built yt-dlp), byte-compile the
+          # Python scripts, or add /usr/lib/.build-id links for the bundled libs.
+          %global __os_install_post %{nil}
+          %global debug_package %{nil}
+          %global _build_id_links none
 
           %description
           Native C++20 desktop terminal with real-time market data, AI analytics,
           multi-broker trading, portfolio management, and 1300+ Python scripts.
 
           %install
-          cp -a ${PWD}/${RPM_ROOT}/* %{buildroot}/
+          cp -a ${PKG_ROOT}/. %{buildroot}/
 
           %files
+          /opt/fincept-terminal/
           /usr/bin/FinceptTerminal
-          /usr/bin/yt-dlp
-          /usr/share/fincept-terminal/
           /usr/share/applications/fincept-terminal.desktop
           /usr/share/metainfo/fincept-terminal.appdata.xml
           /usr/share/icons/hicolor/256x256/apps/fincept-terminal.png
@@ -1213,10 +1281,9 @@ jobs:
           # Remove leading whitespace from spec file
           sed -i 's/^          //' ~/rpmbuild/SPECS/fincept-terminal.spec
 
-          # --buildroot MUST differ from RPM_ROOT (the cmake-staged tree): rpmbuild
-          # wipes %{buildroot} before %install, so reusing RPM_ROOT would delete the
-          # staged files and the spec's `cp -a RPM_ROOT/* %{buildroot}/` would then
-          # copy an empty dir into itself ("cannot stat ... No such file or directory").
+          # --buildroot MUST differ from PKG_ROOT (the staged tree): rpmbuild
+          # wipes %{buildroot} before %install, so reusing PKG_ROOT would delete
+          # the staged files before the spec's `cp -a` could copy them.
           rpmbuild -bb ~/rpmbuild/SPECS/fincept-terminal.spec \
             --buildroot "${PWD}/build/rpm-buildroot" \
             --define "_rpmdir ${PWD}/build"
@@ -2347,6 +2414,9 @@ jobs:
           cp -R "dist/${{ env.APP_NAME }}.app" "${STAGING}/"
           # Symlink /Applications so users can drag the app across in the DMG.
           ln -s /Applications "${STAGING}/Applications"
+          # Complete uninstaller beside the app (outside the signed bundle, so the
+          # seal is untouched). A .command opens in Terminal on double-click.
+          install -m 755 packaging/uninstall/uninstall.sh "${STAGING}/Uninstall Fincept Terminal.command"
 
           hdiutil create \
             -volname "${{ env.APP_NAME }}" \
@@ -2537,14 +2607,14 @@ jobs:
             | Platform | File | Install |
             |----------|------|---------|
             | **Windows x64** | `FinceptTerminal-*-setup*.exe` | Run installer |
-            | **Linux (Debian/Ubuntu)** | `FinceptTerminal-*-linux-x64.deb` | `sudo dpkg -i *.deb` |
+            | **Linux (Debian/Ubuntu)** | `FinceptTerminal-*-linux-x64.deb` | `sudo apt install ./FinceptTerminal-*.deb` |
             | **Linux (Fedora/RHEL)** | `FinceptTerminal-*-linux-x64.rpm` | `sudo dnf install *.rpm` |
             | **Linux (portable)** | `FinceptTerminal-*-linux-x64-setup.run` | `chmod +x` then run |
             | **macOS Apple Silicon** | `FinceptTerminal-*.dmg` or setup | Open DMG → drag to Applications |
 
             ### Requirements
             - Windows 10/11 x64
-            - Ubuntu 20.04+ / Debian 11+ / Fedora 36+ / RHEL 9+
+            - Ubuntu 22.04+ / Debian 12+ / Fedora 36+ / RHEL 9+
             - macOS 13+ (Apple Silicon)
 
             See the [README](https://github.com/Fincept-Corporation/FinceptTerminal#readme) for full installation instructions.

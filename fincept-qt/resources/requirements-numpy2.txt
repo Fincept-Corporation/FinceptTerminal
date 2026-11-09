@@ -1,5 +1,10 @@
 # NumPy 2.x Environment - Modern Libraries (DEFAULT - USE THIS)
 # All libraries compatible with NumPy 2.x
+#
+# List only what a script under scripts/ imports (or a library they need at
+# runtime, e.g. a pandas file engine or an agent tool backend). Removed
+# 2026-11-09 because nothing used them: vnpy (+ PySide6 / TA-Lib),
+# google-generativeai, weasyprint, geopy, pmdarima, tsmoothie, finquant-enhanced.
 
 # Core dependencies
 # numpy + pandas also power the prebuilt Fincept Notebook library
@@ -8,33 +13,26 @@
 numpy>=2.2.3,<3.0
 pandas>=2.3.3,<3.0
 
-# Trading platform (requires NumPy 2.2+)
-# Excluded on Linux ARM64: vnpy pulls pyside6==6.8.2.1, which publishes no
-# aarch64 Linux wheel. Without the marker the ENTIRE numpy2 set is unresolvable
-# there and setup dies at "Install Analytics Libraries", taking every other
-# analytics library with it. Linux ARM64 is a source-build target only — CI
-# ships Linux x64, macOS arm64 and Windows x64.
-vnpy==4.3.0; platform_machine != "aarch64" or sys_platform != "linux"
-
 # Data fetching
 ccxt>=4.5.44,<5.0
 requests==2.32.5
 aiohttp==3.13.2
 websockets==15.0.1
 beautifulsoup4==4.14.2
-googletrans==4.0.2
 protobuf>=3.20.2,<6.0.0
 yfinance==0.2.66
 databento==0.66.0
 databento-dbn==0.44.0
 feedparser==6.0.12
 gnews==0.4.2
-# Offline, finance-tuned headline sentiment for the Equity Research → Sentiment
-# tab (news_nlp.py). Pure-python, no model download; news_nlp falls back to a
-# keyword scorer if this is absent.
-vaderSentiment==3.3.2
-geopy>=2.4.0
-akshare>=1.14.0
+# Pinned: akshare renames and drops functions between releases, which silently broke
+# ~150 calls in scripts/akshare_*.py before they were ported to this version.
+akshare==1.20.36
+# BaoStock China A-share connector (baostock_data.py); pure Python, needs only pandas
+baostock==0.9.4
+# Legacy .xls reader behind pandas.read_excel for EIA's petroleum history files
+# (eia_data.py); so far installed only as a dependency of akshare
+xlrd==2.0.2
 aiohappyeyeballs==2.6.1
 aiosignal==1.4.0
 attrs==25.4.0
@@ -73,11 +71,20 @@ edgartools>=5.6.0
 # LLM and AI
 openai>=2.8.1,<3.0
 anthropic>=0.71.0,<1.0
-google-generativeai>=0.8.5,<1.0
+# Google API client for the agents' Google Workspace tools (gmail, google_drive,
+# googlesheets, googlecalendar in agents/finagent_core/registries/tools_registry.py).
+# It used to arrive only as a dependency of the retired google-generativeai SDK;
+# Gemini models use google-genai, which comes with langchain-google-genai.
+google-api-python-client>=2.0
 langchain>=0.1.0
 langchain-community>=0.0.1
+# Deep Agent chat-model adapters (agents/deepagents/models.py): OpenAI and every
+# OpenAI-compatible provider (DeepSeek, OpenRouter, Fireworks, Together, Mistral,
+# Azure), Groq and Cohere. The Anthropic/Google adapters arrive with deepagents.
+langchain-openai==1.7.3
+langchain-groq==1.1.3
+langchain-cohere==0.6.0
 tiktoken>=0.5.0
-# Note: litellm removed - model data extracted to llm_models_data.json (240KB static file)
 
 # Agno AI Framework
 # Upper bound: agno 1.x → 2.x rewrote the Agent/Team API. `>=1.0.0` alone
@@ -89,6 +96,16 @@ agno>=1.0.0,<3.0
 # Without it, selecting the Ollama provider for an agent raises
 # ImportError("`ollama` not installed") at model-init time.
 ollama>=0.4.0
+
+# Imported directly by our scripts but so far installed only as a dependency of
+# something else (one dropped package away from a silent ImportError):
+#   mcp        — agno.tools.mcp, i.e. agents configured with MCP servers
+#                (agents/finagent_core/core_agent.py); came via pydantic-ai-slim
+#   defusedxml — oecd_data.py (top-level import); came via nbconvert
+#   httpx      — agents/finagent_core/registries/fincept_model.py; came via agno
+mcp>=1.30.0,<2.0
+defusedxml>=0.7.1
+httpx>=0.28.1,<1.0
 
 # Agno Tool Dependencies (free tools - no API keys required)
 ddgs>=6.0.0
@@ -107,21 +124,12 @@ catboost>=1.2.0,<1.3.0
 
 # Time series and forecasting (NumPy 2.x compatible)
 statsmodels>=0.14.2
-pmdarima>=2.1.1
-tsmoothie==1.0.5
 
 # Online/incremental learning
 river>=0.21.0
 
-# Technical analysis
-ta==0.11.0
 
 # Portfolio optimization
-# finquant-enhanced was the ONLY requirement in either file with no version
-# specifier at all — `uv` would install whatever the index served, which makes
-# it the single best target for a compromised/typosquatted release. Pinned to
-# the version currently resolved in venv-numpy2.
-finquant-enhanced==0.7.1
 cvxpy>=1.0.0
 cvxopt==1.3.2
 
@@ -142,9 +150,10 @@ deepagents==0.4.12
 gs-quant==1.4.67
 
 # Prediction Markets — Polymarket + Kalshi trading (Phase 6/7)
-# Polymarket uses EIP-712 signing via py_clob_client (Polygon wallet);
-# Kalshi uses RSA-PSS signing via the `cryptography` package.
-py-clob-client>=0.22.0
+# Polymarket uses EIP-712 signing via py_clob_client_v2 (Polygon wallet). The
+# legacy py-clob-client signs V1 orders, which the CLOB has rejected since its
+# V2 cutover on 2026-04-28. Kalshi uses RSA-PSS via the `cryptography` package.
+py-clob-client-v2>=1.2.1
 eth-account>=0.10.0
 cryptography>=42.0.0
 
@@ -153,7 +162,6 @@ plotly>=6.0.0
 matplotlib>=3.9.3,<4.0
 seaborn>=0.12.0
 jinja2==3.1.3
-weasyprint==62.3
 
 # Development tools
 jupyter>=1.0.0
@@ -172,7 +180,6 @@ ruamel.yaml>=0.17.38,<0.18.0
 python-redis-lock>=4.0.0
 setuptools-scm>=8.0.0
 tables>=3.8.0
-selenium>=4.0.0,<5.0
 pyarrow>=16.0.0
 pandarallel>=1.6.0
 gymnasium>=1.0.0

@@ -80,6 +80,7 @@
 #include "ui/navigation/FKeyBar.h"
 #include "ui/pushpins/PushpinBar.h"
 #include "ui/theme/Theme.h"
+#include "ui/widgets/PythonSetupBanner.h"
 
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -188,6 +189,10 @@ void WindowFrame::setup_docking_mode() {
 
     tab_bar_ = new ui::TabBar(dock_wrapper);
     dock_layout->addWidget(tab_bar_);
+
+    // Tells the user why data is not loading when the essential Python
+    // environment is missing (setup skipped or failed). Hides itself once ready.
+    dock_layout->addWidget(new ui::PythonSetupBanner(dock_wrapper));
 
     dock_manager_ = new ads::CDockManager(dock_wrapper);
     // ADS loads its own default.css via setStyleSheet() in its constructor.

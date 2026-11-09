@@ -71,6 +71,15 @@
   </provides>
 
   <releases>
+    <!-- 4.5.2: inert until v4.5.2 is tagged and the Flatpak manifest's tag+commit
+         are bumped to it (same rule as the blocks below).
+    <release version="4.5.2" date="2026-11-09">
+      <description>
+        <p>Connect Claude Code, Codex, Gemini CLI, Cursor, VS Code or Claude Desktop to the terminal from Settings › AI Agents (MCP): a built-in MCP server with ten tools that work the terminal the way you do, while orders, money moves, spends and deletions always ask you first.</p>
+        <p>Several analytics that ran as Python scripts now run natively in C++, and the version number is now shown on the sign-in and setup screens.</p>
+      </description>
+    </release>
+    -->
     <!-- 4.5.1: inert until v4.5.1 is tagged and the Flatpak manifest's tag+commit
          are bumped to it (same rule as the 4.5.0 block below).
     <release version="4.5.1" date="2026-10-31">

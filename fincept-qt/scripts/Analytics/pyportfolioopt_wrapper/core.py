@@ -33,14 +33,10 @@ PARAMETERS:
   - num_simulations: Monte Carlo simulations (default: 1000)
 """
 
+from __future__ import annotations
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
-import seaborn as sns
 import warnings
 from typing import Dict, List, Optional, Union, Tuple, Any
 from dataclasses import dataclass, field
@@ -528,7 +524,10 @@ class PyPortfolioOptAnalyticsEngine:
 
         # Create efficient frontier
         ef = EfficientFrontier(self.expected_returns, self.risk_model,
-                               weight_bounds=self.config.weight_bounds, gamma=self.config.gamma)
+                               weight_bounds=self.config.weight_bounds)
+        if self.config.gamma:
+            # L2 regularisation is an extra objective in PyPortfolioOpt, not a constructor argument.
+            ef.add_objective(objective_functions.L2_reg, gamma=self.config.gamma)
 
         # Add sector constraints if provided
         if self.config.sector_constraints:
@@ -881,6 +880,7 @@ class PyPortfolioOptAnalyticsEngine:
 
     def plot_weights(self, weights: pd.Series = None, top_n: int = 15) -> go.Figure:
         """Plot portfolio weights"""
+        import plotly.graph_objects as go
         weights = weights if weights is not None else pd.Series(self.weights)
 
         # Sort by absolute weight
@@ -912,6 +912,7 @@ class PyPortfolioOptAnalyticsEngine:
 
     def plot_efficient_frontier(self) -> go.Figure:
         """Plot efficient frontier"""
+        import plotly.graph_objects as go
         if not self.efficient_frontier_data:
             print("Generating efficient frontier...")
             self.generate_efficient_frontier()
@@ -956,6 +957,7 @@ class PyPortfolioOptAnalyticsEngine:
 
     def plot_risk_decomposition(self) -> go.Figure:
         """Plot risk decomposition"""
+        import plotly.graph_objects as go
         if self.weights is None:
             raise ValueError("No weights available. Run optimization first.")
 
@@ -989,6 +991,8 @@ class PyPortfolioOptAnalyticsEngine:
 
     def plot_backtest_results(self) -> go.Figure:
         """Plot backtest results"""
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
         if not self.backtest_results:
             raise ValueError("No backtest results. Run backtest_strategy() first.")
 
@@ -1028,6 +1032,7 @@ class PyPortfolioOptAnalyticsEngine:
 
     def plot_correlation_matrix(self) -> go.Figure:
         """Plot correlation matrix heatmap"""
+        import plotly.graph_objects as go
         correlation_matrix = self.returns.corr()
 
         fig = go.Figure(data=go.Heatmap(

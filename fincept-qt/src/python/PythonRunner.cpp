@@ -36,7 +36,13 @@ namespace fincept::python {
 // but not yet wired into the daemon dispatch table).
 //
 // Action names match scripts/yfinance_data.py::_daemon_dispatch.
-static bool route_yfinance_to_daemon(const QStringList& args, std::function<void(PythonResult)> cb) {
+//
+// `expect_json` mirrors RunOptions::expect_json: the daemon reply gets the same
+// script-level {"error": ...} envelope check as the subprocess path. Without it
+// a payload like {"error": "No data for XYZ"} reached every non-streaming
+// caller as success (EquityResearchService then cached the empty result).
+static bool extract_error_envelope(const QJsonDocument& doc, QString* out);
+static bool route_yfinance_to_daemon(const QStringList& args, bool expect_json, std::function<void(PythonResult)> cb) {
     if (args.isEmpty())
         return false;
     const QString action = args[0];
@@ -103,11 +109,17 @@ static bool route_yfinance_to_daemon(const QStringList& args, std::function<void
     }
 
     PythonWorker::instance().submit(
-        action, payload, [cb = std::move(cb), action](bool ok, QJsonObject result, QString error) {
+        action, payload, [cb = std::move(cb), action, expect_json](bool ok, QJsonObject result, QString error) {
             // Daemon may legitimately not know an action; fail cleanly so caller
             // sees a structured error instead of a silent hang.
             if (!ok) {
                 cb({false, {}, error.isEmpty() ? ("daemon error for " + action) : error, -1});
+                return;
+            }
+            QString envelope;
+            if (expect_json && extract_error_envelope(QJsonDocument(result), &envelope)) {
+                LOG_WARN("Python", QString("yfinance_data.py %1 (daemon) failed: %2").arg(action, envelope.left(200)));
+                cb({false, QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact)), envelope, 0});
                 return;
             }
             PythonResult r;
@@ -214,17 +226,13 @@ static bool script_supports_arg_spill(const QString& script, const QStringList& 
         return !args.isEmpty() && args[0] == QLatin1String("batch_all");
 
     static const QStringList kSpillCapableScripts = {
-        // scripts/*.py — resolve_arg()
-        QStringLiteral("news_nlp.py"),
-        QStringLiteral("news_geolocation.py"),
-        // scripts/Analytics/options/*.py — resolve_arg(), invoked via
-        // MAAnalyticsService::run_python_json()
+        // scripts/Analytics/options/*.py — resolve_arg(). No screen calls them; they
+        // take a whole option chain as JSON and are run by AI agents through the
+        // MCP `python` tool, which goes through run_with_options() like any caller.
         QStringLiteral("Analytics/options/gex_calculator.py"),
         QStringLiteral("Analytics/options/iv_smile.py"),
         QStringLiteral("Analytics/options/iv_surface.py"),
-        QStringLiteral("Analytics/options/oi_tracker.py"),
         QStringLiteral("Analytics/options/straddle_simulator.py"),
-        QStringLiteral("Analytics/options/strategy_chart.py"),
     };
     return kSpillCapableScripts.contains(script);
 }
@@ -241,6 +249,17 @@ static bool script_supports_arg_spill(const QString& script, const QStringList& 
 // and their callers live in files this change does not touch.
 static constexpr int kDefaultTimeoutMs = 300'000;  //  5 min — ordinary fetch/analytics
 static constexpr int kLongRunTimeoutMs = 3'600'000; // 60 min — training / backtests
+
+// Dynamic property the cancel poller sets on a process it kills for
+// RunOptions::cancel_token, so finished / errorOccurred report "Cancelled".
+static constexpr const char* kPyRunnerCancelledProp = "fincept_cancelled";
+// Set when a run's stdout passed RunOptions::max_output_bytes and it was killed.
+static constexpr const char* kPyRunnerOutputCappedProp = "fincept_output_capped";
+
+static QString pyrunner_output_capped_message() {
+    return QStringLiteral("The script printed more output than allowed and was stopped. Ask it for less data "
+                          "(fewer symbols, a shorter period, a summary option).");
+}
 
 static int default_timeout_for_script(const QString& script) {
     // Prefix match on the script's directory. These trees train models, build
@@ -324,6 +343,28 @@ static QString pyrunner_setup_pending_message() {
     return PythonRunner::tr("Analytics libraries are still installing (%1%). This feature will work when setup "
                             "finishes.")
         .arg(PythonSetupManager::instance().overall_percent());
+}
+
+static QString pyrunner_not_set_up_message() {
+    return PythonRunner::tr("Python is not set up yet — click PYTHON ENV · SET UP in the status bar, or open "
+                            "Settings → Python Env.");
+}
+
+// Install on demand. First run installs only the essentials, so an import
+// failure usually means "part of the optional full set": say so, and let
+// PythonSetupManager offer the full install (status-bar chip). While a run that
+// will bring the module is still going, it means "not installed yet". In a
+// complete environment it is a real error and the traceback is kept.
+static void pyrunner_explain_import_error(PythonResult& result, const QString& script) {
+    auto& setup = PythonSetupManager::instance();
+    if (setup.is_running() && (setup.running_scope() == SetupScope::Full || !setup.is_core_ready())) {
+        result.error = pyrunner_setup_pending_message(); // any ImportError, named module or not
+        return;
+    }
+    const QString text = result.error + QLatin1Char('\n') + result.output;
+    const QString explained = setup.explain_missing_module(text, script);
+    if (explained != text)
+        result.error = explained;
 }
 
 // Scripts that require NumPy 1.x environment
@@ -622,10 +663,10 @@ void PythonRunner::run_with_options(const QString& script, const QStringList& ar
     }
 
     if (python_init_done_ && python_path_.isEmpty()) {
-        cb({false, {},
-            PythonSetupManager::instance().is_running()
-                ? pyrunner_setup_pending_message()
-                : QStringLiteral("Python not available — run first-time setup from the app"),
+        cb({false,
+            {},
+            PythonSetupManager::instance().is_running() ? pyrunner_setup_pending_message()
+                                                        : pyrunner_not_set_up_message(),
             -1});
         return;
     }
@@ -643,7 +684,7 @@ void PythonRunner::run_with_options(const QString& script, const QStringList& ar
     // doesn't surface intermediate stdout lines. Falls through to subprocess
     // if the action isn't supported by the daemon dispatcher.
     if (!on_line && script == QLatin1String("yfinance_data.py")) {
-        if (route_yfinance_to_daemon(args, cb))
+        if (route_yfinance_to_daemon(args, opts.expect_json, cb))
             return;
     }
 
@@ -654,7 +695,8 @@ void PythonRunner::run_with_options(const QString& script, const QStringList& ar
         (opts.timeout_ms == kTimeoutFromScript) ? default_timeout_for_script(script) : opts.timeout_ms;
 
     queue_.enqueue({script, args, std::move(cb), std::move(on_line), opts.stdin_data,
-                    script_supports_arg_spill(script, args), opts.expect_json, resolved_timeout});
+                    script_supports_arg_spill(script, args), opts.expect_json, resolved_timeout, opts.cancel_token,
+                    opts.credential_allowlist, opts.max_output_bytes});
     start_next();
 }
 
@@ -671,10 +713,10 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
     }
 
     if (python_init_done_ && python_path_.isEmpty()) {
-        cb({false, {},
-            PythonSetupManager::instance().is_running()
-                ? pyrunner_setup_pending_message()
-                : QStringLiteral("Python not available — run first-time setup from the app"),
+        cb({false,
+            {},
+            PythonSetupManager::instance().is_running() ? pyrunner_setup_pending_message()
+                                                        : pyrunner_not_set_up_message(),
             -1});
         return;
     }
@@ -701,7 +743,8 @@ void PythonRunner::run_code(const QString& code, Callback cb) {
     // A watchdog floor here too: an endless cell would otherwise hold one of the
     // three concurrency slots forever. A notebook cell may legitimately train for
     // a long time, so use the long-run budget rather than the 5-minute default.
-    queue_.enqueue({"__code__:" + temp_path, {}, std::move(cb), {}, {}, false, true, kLongRunTimeoutMs});
+    queue_.enqueue(
+        {"__code__:" + temp_path, {}, std::move(cb), {}, {}, false, true, kLongRunTimeoutMs, nullptr, std::nullopt, 0});
     start_next();
 }
 
@@ -715,10 +758,17 @@ void PythonRunner::start_next() {
 
         if (python_path_.isEmpty()) {
             // Python became unavailable — fail the request
-            req.cb({false, {},
+            req.cb({false,
+                    {},
                     PythonSetupManager::instance().is_running() ? pyrunner_setup_pending_message()
-                                                                : QStringLiteral("Python not available"),
+                                                                : pyrunner_not_set_up_message(),
                     -1});
+            continue;
+        }
+
+        // Cancelled while it waited in the queue: never spawn it, never take a slot.
+        if (req.cancel_token && req.cancel_token->load()) {
+            req.cb({false, {}, QStringLiteral("Cancelled"), -1});
             continue;
         }
 
@@ -838,20 +888,36 @@ void PythonRunner::start_next() {
         // FINAGENT_DATA_DIR, base PYTHONPATH = scripts_dir_).
         QProcessEnvironment env = build_python_env();
 
-        // NOTE: do NOT prepend parent-of-pkg (e.g. <scripts>/mcp) to PYTHONPATH
-        // for sub-package scripts. scripts_dir_ is already on PYTHONPATH (see
-        // build_python_env line 141), so `python -m mcp.edgar.main` resolves
-        // both the package itself AND its relative imports correctly.
+        // NOTE: do NOT prepend parent-of-pkg (e.g. <scripts>/fincept_mcp) to
+        // PYTHONPATH for sub-package scripts. scripts_dir_ is already on
+        // PYTHONPATH (see build_python_env), so `python -m fincept_mcp.edgar.main`
+        // resolves both the package itself AND its relative imports correctly.
         //
         // Adding parent-of-pkg used to *shadow* third-party libraries: if a
         // local sub-package shares a name with a venv package (e.g. our
-        // `<scripts>/mcp/edgar/` vs the `edgartools` PyPI library which
+        // `<scripts>/fincept_mcp/edgar/` vs the `edgartools` PyPI library which
         // exports module `edgar`), Python's `from edgar import Company` would
         // resolve to the local empty package and fail with `ImportError:
         // cannot import name 'Company' from 'edgar'`. Removing this block
         // fixes the SEC EDGAR tools — and any other tool whose Python deps
-        // share a top-level name with a local package.
+        // share a top-level name with a local package. The same trap is why
+        // the package is `fincept_mcp`, not `mcp`: with scripts_dir_ on
+        // PYTHONPATH, a top-level `scripts/mcp/` hid the `mcp` SDK from every
+        // script (agno's MCP tools, rdagents' FastMCP server).
 
+        if (req.credential_allowlist.has_value()) {
+            // Agent-started run: only the credentials this script reads.
+            const QStringList allowed = req.credential_allowlist.value_or(QStringList{});
+            int withheld = 0;
+            for (const QString& key : kManagedCredentialKeys) {
+                if (!allowed.contains(key) && env.contains(key)) {
+                    env.remove(key);
+                    ++withheld;
+                }
+            }
+            if (withheld > 0)
+                LOG_DEBUG("Python", QString("Withheld %1 credentials the script does not read").arg(withheld));
+        }
         proc->setProcessEnvironment(env);
         proc->setWorkingDirectory(scripts_dir_);
 
@@ -895,8 +961,19 @@ void PythonRunner::start_next() {
         // Buffer stdout/stderr incrementally. After each append, drain complete lines
         // to the optional stream callback. The full buffer is still available for the
         // `finished` handler's authoritative parse.
-        connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc, drain_lines]() {
+        const qint64 max_output = req.max_output_bytes;
+        connect(proc, &QProcess::readyReadStandardOutput, this, [this, proc, drain_lines, max_output]() {
+            if (proc->property(kPyRunnerOutputCappedProp).toBool()) {
+                (void)proc->readAllStandardOutput(); // already over the cap and being killed: discard
+                return;
+            }
             proc_buffers_[proc].stdout_buf.append(proc->readAllStandardOutput());
+            if (max_output > 0 && proc_buffers_[proc].stdout_buf.size() > max_output) {
+                proc->setProperty(kPyRunnerOutputCappedProp, true);
+                LOG_WARN("Python", QString("Output passed %1 MB — stopping the script").arg(max_output >> 20));
+                proc->kill();
+                return;
+            }
             drain_lines(false);
         });
         connect(proc, &QProcess::readyReadStandardError, this, [this, proc, drain_lines]() {
@@ -926,6 +1003,9 @@ void PythonRunner::start_next() {
         // Set by the watchdog just before it kills the process, so the completion
         // handlers can report "timed out" rather than a bare crash with no message.
         auto timed_out = std::make_shared<std::atomic_bool>(false);
+        // A cancelled run is marked by the cancel poller (RunOptions::cancel_token)
+        // setting kPyRunnerCancelledProp on the process just before it kills it, so the
+        // completion handlers report "Cancelled".
         const int budget_ms = req.timeout_ms;
         auto script_name = std::move(req.script);
 
@@ -983,7 +1063,12 @@ void PythonRunner::start_next() {
                         // Callers then saw success-with-no-rows and rendered a blank
                         // screen instead of falling back to cached data.
                         QString json_out = extract_json(stdout_str);
-                        result.output = json_out.isEmpty() ? stdout_str : json_out;
+                        // expect_json=false means "this output is not (only) JSON":
+                        // hand it over whole. Extracting here replaced text such as
+                        // `… [done]` or a markdown `[link](url)` with its last
+                        // bracketed fragment. Every such caller (MCP python tool,
+                        // notebook runner, SEC workflow node) parses the text itself.
+                        result.output = (!expect_json || json_out.isEmpty()) ? stdout_str : json_out;
                         result.error = std::move(stderr_str);
                         result.success = (exit_code == 0);
 
@@ -1019,10 +1104,19 @@ void PythonRunner::start_next() {
                         if (result.error.isEmpty())
                             result.error = QString("Script timed out after %1 s and was killed").arg(budget_ms / 1000);
                     }
+                    if (proc->property(kPyRunnerCancelledProp).toBool()) {
+                        result.success = false;
+                        result.error = QStringLiteral("Cancelled");
+                    }
+                    if (proc->property(kPyRunnerOutputCappedProp).toBool()) {
+                        result.success = false;
+                        result.output.clear();
+                        result.error = pyrunner_output_capped_message();
+                    }
 
-                    if (!result.success && PythonSetupManager::instance().is_running() &&
+                    if (!result.success &&
                         (pyrunner_is_import_error(result.error) || pyrunner_is_import_error(result.output)))
-                        result.error = pyrunner_setup_pending_message();
+                        pyrunner_explain_import_error(result, script_name);
 
                     if (!result.success && !is_code) {
                         LOG_ERROR("Python", QString("Script %1 failed in %2ms (exit=%3): %4")
@@ -1072,7 +1166,11 @@ void PythonRunner::start_next() {
                     if (is_code && !temp_file.isEmpty())
                         QFile::remove(temp_file);
                     QString message = "Process error: " + error_msg;
-                    if (timed_out->load())
+                    if (proc->property(kPyRunnerCancelledProp).toBool())
+                        message = QStringLiteral("Cancelled");
+                    else if (proc->property(kPyRunnerOutputCappedProp).toBool())
+                        message = pyrunner_output_capped_message();
+                    else if (timed_out->load())
                         message = QString("Script timed out after %1 s and was killed").arg(budget_ms / 1000);
                     else if (err == QProcess::FailedToStart && PythonSetupManager::instance().is_running())
                         message = pyrunner_setup_pending_message(); // venv still being created
@@ -1138,6 +1236,29 @@ void PythonRunner::start_next() {
                 proc->kill();
             });
             watchdog->start();
+        }
+
+        // Cancellation (RunOptions::cancel_token). Polled rather than signalled:
+        // the token is a plain atomic the caller may raise from any thread, and a
+        // 250 ms poll owned by the process (deleted with it) needs no extra
+        // cross-thread plumbing. kill() drives the normal finished/errorOccurred
+        // path, so the slot is released and the callback reports "Cancelled".
+        if (req.cancel_token) {
+            auto* cancel_poll = new QTimer(proc);
+            cancel_poll->setInterval(250);
+            const auto token = req.cancel_token;
+            const QString cancel_script = script_name;
+            connect(cancel_poll, &QTimer::timeout, proc, [proc, cancel_poll, token, cancel_script]() {
+                if (!token->load())
+                    return;
+                cancel_poll->stop();
+                if (proc->state() == QProcess::NotRunning)
+                    return;
+                LOG_INFO("Python", QString("Cancelling %1 on request").arg(cancel_script));
+                proc->setProperty(kPyRunnerCancelledProp, true);
+                proc->kill();
+            });
+            cancel_poll->start();
         }
     }
 }

@@ -763,6 +763,7 @@ void AlgoEngine::list_deployments() {
             d.max_order_value = q.value("max_order_value").toDouble();
             d.max_daily_loss = q.value("max_daily_loss").toDouble();
             d.created_at = q.value("created_at").toString();
+            d.updated_at = q.value("updated_at").toString(); // last status change (UTC)
             deployments.append(d);
         }
 

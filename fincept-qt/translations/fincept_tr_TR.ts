@@ -1994,14 +1994,6 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
         <translation>Ağ üzerinden kullanım dağıtım sayılır</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>TİCARİ LİSANS</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Ticari dağıtım için gereklidir</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>Kaynak kodu paylaşımı gerekmez</translation>
     </message>
@@ -2048,18 +2040,6 @@ Piyasalar, hisse senetleri, portföy, makro içgörüler.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Lisans (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Ticari Lisans</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Ticari Marka Politikası</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>Katkıda Bulunan CLA</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32203,10 +32183,6 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Telif Hakkı 2024-2026 Fincept Corporation. Tüm hakları saklıdır.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Bu yazılım açık kaynak kullanımı için AGPL-3.0-or-later kapsamında lisanslanmıştır; kurumsal dağıtım için ayrı bir ticari lisans mevcuttur.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

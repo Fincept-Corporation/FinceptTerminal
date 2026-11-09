@@ -1,7 +1,17 @@
 """
 AI Quant Lab - Reinforcement Learning Module
 Qlib RL integration for portfolio management and trading strategy optimization
-Supports DQN, PPO, A2C, SAC algorithms for automated trading
+Supports PPO, DQN, A2C, SAC and TD3 (Stable-Baselines3) for automated trading
+
+CLI -- every command prints one {"event": "result", "success": ..., ...} line; `train`
+streams {"event": "progress" | "log", ...} lines before it:
+  train '{"ticker": "AAPL", "algorithm": "PPO", "episodes": 10, "start_date": "2024-01-01", "end_date": "2025-12-31"}'
+      Trains on the first 80% of the daily bars, evaluates out of sample on the rest
+      against buy-and-hold and saves the model; the result carries its model_path.
+  evaluate '{"model_path": "<from train>", "ticker": "AAPL", "start_date": "2026-01-01", "end_date": "2026-06-30", "n_episodes": 10}'
+      Replays a saved model over a window (default: the last 365 days) against buy-and-hold.
+      algorithm and ticker default to the parts of the file name train writes.
+  list_algorithms
 """
 
 import json
@@ -496,17 +506,6 @@ class RLTradingAgent:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    def save_model(self, path: str) -> Dict[str, Any]:
-        """Save trained RL model"""
-        if self.model is None:
-            return {'success': False, 'error': 'No model to save'}
-
-        try:
-            self.model.save(path)
-            return {'success': True, 'path': path}
-        except Exception as e:
-            return {'success': False, 'error': str(e)}
-
     def load_model(self, path: str, algorithm: str = 'PPO') -> Dict[str, Any]:
         """Load trained RL model"""
         if not STABLE_BASELINES_AVAILABLE:
@@ -554,18 +553,70 @@ def _json_safe(obj):
     return obj
 
 
-def main():
-    """Main CLI interface"""
-    if len(sys.argv) < 2:
-        print(json.dumps({
-            'success': False,
-            'error': 'Usage: python qlib_rl.py <command> [args...]'
-        }))
-        return
+_RL_ALGORITHMS = ('PPO', 'DQN', 'A2C', 'SAC', 'TD3')
 
-    command = sys.argv[1]
-    agent = RLTradingAgent()
 
+def _evaluate_saved_model(agent: RLTradingAgent, params: Dict[str, Any]) -> Dict[str, Any]:
+    """`evaluate`: replay a model saved by `train` over daily bars, next to buy-and-hold.
+
+    A fresh process has no agent in memory, so this loads the file `train` reported as
+    model_path (named <ALGO>_<TICKER>_<YYYYmmdd>_<HHMMSS>.zip -- algorithm and ticker
+    default to those parts) and evaluates it on start_date..end_date (default: the last
+    365 days). Pick a window after the training period for an out-of-sample score.
+    """
+    from datetime import date, timedelta
+    from pathlib import Path
+
+    if not isinstance(params, dict):
+        return {'success': False, 'error': 'evaluate takes a JSON object, e.g. {"model_path": "..."}'}
+    if not STABLE_BASELINES_AVAILABLE:
+        return {'success': False, 'error': 'Stable-Baselines3 not available'}
+    raw_path = str(params.get('model_path') or '').strip()
+    if not raw_path:
+        return {'success': False, 'error': "evaluate needs 'model_path' (the model_path a train run returned)"}
+    model_path = Path(raw_path).expanduser()
+    if not model_path.is_file():
+        return {'success': False, 'error': f'Model file not found: {model_path}'}
+
+    name_parts = model_path.stem.split('_')
+    algorithm = str(params.get('algorithm') or name_parts[0]).upper()
+    if algorithm not in _RL_ALGORITHMS:
+        return {'success': False,
+                'error': f"Unknown algorithm '{algorithm}' -- pass 'algorithm' ({', '.join(_RL_ALGORITHMS)})"}
+    ticker = str(params.get('ticker') or ('_'.join(name_parts[1:-2]) if len(name_parts) >= 4 else '')).strip()
+    if not ticker:
+        return {'success': False, 'error': "evaluate needs 'ticker' (the model file name does not carry one)"}
+
+    loaded = agent.load_model(str(model_path), algorithm)
+    if not loaded.get('success'):
+        return {'success': False,
+                'error': f"Could not load {model_path.name} as {algorithm}: {loaded.get('error')}"}
+
+    end_date = str(params.get('end_date') or date.today().isoformat())
+    start_date = str(params.get('start_date') or (date.today() - timedelta(days=365)).isoformat())
+    market_data = agent._download_market_data(ticker, start_date, end_date)
+    # The environment's action space must be the one the model was trained with
+    # (train builds a discrete env for DQN, a continuous one otherwise).
+    discrete = isinstance(agent.model.action_space, gym.spaces.Discrete)
+    agent.eval_env = TradingEnvironment(market_data=market_data,
+                                        initial_cash=float(params.get('initial_capital', 100000)),
+                                        action_space_type='discrete' if discrete else 'continuous')
+    result = agent.evaluate_agent(max(1, int(params.get('n_episodes', 10))))
+    if result.get('success'):
+        close = market_data['close']
+        result.update({
+            'algorithm': algorithm,
+            'ticker': ticker,
+            'model_path': str(model_path),
+            'period': [str(market_data.index[0].date()), str(market_data.index[-1].date())],
+            'bars': int(len(market_data)),
+            'buy_hold_return_pct': float((close.iloc[-1] / close.iloc[0] - 1) * 100),
+        })
+    return result
+
+
+def _dispatch(command: str, agent: RLTradingAgent) -> Dict[str, Any]:
+    """Run one CLI command; its arguments are sys.argv[2:]."""
     if command == 'list_algorithms':
         result = agent.get_available_algorithms()
 
@@ -628,20 +679,31 @@ def main():
                     result['model_save_error'] = str(e)
 
     elif command == 'evaluate':
-        n_episodes = int(sys.argv[2]) if len(sys.argv) > 2 else 10
-        result = agent.evaluate_agent(n_episodes)
-
-    elif command == 'save_model':
-        path = sys.argv[2] if len(sys.argv) > 2 else 'rl_model.zip'
-        result = agent.save_model(path)
-
-    elif command == 'load_model':
-        path = sys.argv[2] if len(sys.argv) > 2 else 'rl_model.zip'
-        algorithm = sys.argv[3] if len(sys.argv) > 3 else 'PPO'
-        result = agent.load_model(path, algorithm)
+        params = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+        result = _evaluate_saved_model(agent, params)
 
     else:
         result = {'success': False, 'error': f'Unknown command: {command}'}
+
+    return result
+
+
+def main():
+    """Main CLI interface"""
+    if len(sys.argv) < 2:
+        print(json.dumps({
+            'success': False,
+            'error': 'Usage: python qlib_rl.py <command> [args...]'
+        }))
+        return
+
+    command = sys.argv[1]
+    # A malformed JSON argument, a missing ticker or an unreadable model file used to
+    # escape as a bare traceback, leaving the caller no result line to read.
+    try:
+        result = _dispatch(command, RLTradingAgent())
+    except Exception as exc:
+        result = {'success': False, 'error': f'{command}: {exc}'}
 
     # Emit final result as a single-line "result" event so the C++ service can parse
     # it reliably. Intermediate progress/log events are already printed from

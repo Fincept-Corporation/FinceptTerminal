@@ -52,15 +52,11 @@ void emit_tool_done(const QString& display, const QJsonObject& args, const mcp::
 }
 
 LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& url,
-                                     const QMap<QString, QString>& headers, QSet<QString> activated_tools) {
+                                     const QMap<QString, QString>& headers) {
     LlmResponse resp;
     LlmResponse usage; // summed over every round of this loop
-    // Bounded, LRU-evicting view over the discovered-tool set — see
-    // ActivationTracker for why an unbounded set defeats Tier-0.
-    detail::ActivationTracker activated(activated_tools);
-    // MiniMax-style models spend 3 rounds per action (tool_list → tool_describe
-    // → actual call), so the default 40 gives ~13 real actions — enough for a
-    // full report template fill. Below ~12 silently cripples report-builder flows.
+    // Operating the terminal takes a few rounds per task (look, open, act,
+    // read), and ui_act batches up to ten steps per round.
     const int MAX_ROUNDS = active_max_tool_rounds();
     // Rounds bound the token spend; the deadline bounds the wait. A round that
     // long-polls a background job can take 30 s, so MAX_ROUNDS alone leaves the
@@ -86,8 +82,8 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         // Temperature intentionally omitted — provider default.
         apply_openai_token_limit(fu);
 
-        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(
-            detail::apply_request_policy(tool_filter_), activated.names());
+        QJsonArray tools =
+            mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
         if (!tools.isEmpty())
             fu["tools"] = tools;
 
@@ -153,9 +149,6 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 calls.push_back(std::move(c));
             }
 
-            // allow_defer is set inside execute_tool_calls: this is the one call
-            // site that knows about the job_* tools, so it is the one allowed to
-            // receive a receipt instead of a result for a long-running tool.
             QElapsedTimer round_clock;
             round_clock.start();
             const auto results = detail::execute_tool_calls(calls);
@@ -170,11 +163,6 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
                 // Completion record, in the model's order like the start lines.
                 // A multi-call round reports its wall time (calls overlap).
                 emit_tool_done(c.display, c.args, tr, round_ms, calls.size() > 1);
-                // If this was a discovery call (tool_list / tool_describe), declare
-                // what it surfaced so the model can actually call it next round.
-                // Applied in the model's order so the activation LRU evicts the
-                // same way it did when execution was sequential.
-                detail::note_tool_activations(c.display, c.args, tr, activated);
                 loop_messages.append(QJsonObject{{"role", "tool"},
                                                  {"tool_call_id", c.call_id},
                                                  {"content", detail::encode_tool_result_for_llm(c.display, tr)}});
@@ -244,10 +232,9 @@ LlmResponse LlmService::do_tool_loop(QJsonArray loop_messages, const QString& ur
         apply_openai_token_limit(fu);
         // Keep tools available so structured tool_calls still work. Stripping
         // them used to force text-markup mode (raw <minimax:tool_call> blobs)
-        // which leaked into the chat bubble. Carry the activated set so a
-        // last-ditch tool call can still reference a discovered tool.
-        QJsonArray tools = mcp::McpService::instance().format_tools_for_openai(
-            detail::apply_request_policy(tool_filter_), activated.names());
+        // which leaked into the chat bubble.
+        QJsonArray tools =
+            mcp::McpService::instance().format_tools_for_openai(detail::apply_request_policy(tool_filter_));
         if (!tools.isEmpty())
             fu["tools"] = tools;
 
@@ -385,7 +372,7 @@ std::optional<LlmResponse> LlmService::try_extract_and_execute_text_tool_calls(c
         // JSON valid and marks in-place what it dropped.
         //
         // No result_id handoff here: the follow-up request on this path attaches
-        // no tools, so pointing the model at result_fetch would be a dead
+        // no tools, so pointing the model at ui_read would be a dead
         // instruction. This path is the fallback for models without structured
         // tool calls; the structured loop above is where the overflow store applies.
         QString result_content;

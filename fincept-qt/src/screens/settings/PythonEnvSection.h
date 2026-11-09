@@ -2,6 +2,13 @@
 // PythonEnvSection.h — Python venv package manager panel for SettingsScreen.
 // Shows all packages from requirements-numpy1.txt and requirements-numpy2.txt,
 // their installed versions, and allows install/upgrade via uv pip.
+//
+// The PYTHON LIBRARIES card on top is the home of the optional full library
+// set: first run installs only the essentials, and INSTALL ALL LIBRARIES hands
+// the rest to PythonSetupManager, which installs it in the background while the
+// terminal stays usable (status-bar chip shows progress).
+
+#include "python/PythonSetupManager.h"
 
 #include <QComboBox>
 #include <QEvent>
@@ -45,6 +52,18 @@ class PythonEnvSection : public QWidget {
     QLabel* info_lbl_ = nullptr;
     QLabel* warn_text_ = nullptr;
 
+    // ── PYTHON LIBRARIES card (essentials / full set) ─────────────────────────
+    QLabel* lib_title_lbl_ = nullptr;
+    QLabel* lib_core_key_ = nullptr;
+    QLabel* lib_core_val_ = nullptr;
+    QLabel* lib_full_key_ = nullptr;
+    QLabel* lib_full_val_ = nullptr;
+    QLabel* lib_hint_lbl_ = nullptr;
+    QProgressBar* lib_bar_ = nullptr;
+    QPushButton* lib_setup_btn_ = nullptr; // SET UP PYTHON — only while the essentials are missing
+    QPushButton* lib_full_btn_ = nullptr;  // INSTALL ALL LIBRARIES / RETRY INSTALL / INSTALLING…
+    python::SetupStatus lib_status_;       // last check_status(); refreshed on run start/end and show
+
     // ── Processes — signal-driven, never waitForFinished on UI thread ─────────
     QProcess* list_proc_ = nullptr;   // uv pip list, reused sequentially
     QProcess* action_proc_ = nullptr; // uv pip install / upgrade
@@ -78,6 +97,12 @@ class PythonEnvSection : public QWidget {
 
     // ── Builders ──────────────────────────────────────────────────────────────
     void build_ui();
+    QWidget* build_library_card();
+    /// Re-render the library card. `recheck` re-reads the on-disk status (a few
+    /// file checks); progress ticks pass false and only read the live snapshot.
+    void refresh_library_card(bool recheck);
+    /// Confirm, then hand the full library set to PythonSetupManager (background).
+    void offer_full_install(const QString& reason);
 
     /// Re-apply tr() lookups to every widget whose text we keep a handle to.
     /// Called from changeEvent() on QEvent::LanguageChange.

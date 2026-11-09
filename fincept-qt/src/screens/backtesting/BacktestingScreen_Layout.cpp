@@ -267,7 +267,7 @@ QWidget* BacktestingScreen::build_center_panel() {
 
     summary_hint_ =
         new QLabel(tr("Select a provider, command, and strategy, then click RUN to execute.\n\n"
-                      "Supported providers: VectorBT, Backtesting.py, FastTrade, Zipline, BT, Fincept\n"
+                      "Supported providers: VectorBT, Backtesting.py, Zipline, BT, Fincept\n"
                       "Commands: Backtest, Optimize, Walk-Forward, Indicators, ML Labels, CV Splits, Returns"));
     summary_hint_->setObjectName("btHint");
     summary_hint_->setWordWrap(true);

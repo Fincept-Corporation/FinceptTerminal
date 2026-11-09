@@ -5,13 +5,20 @@ Wraps the quantstats library to provide portfolio performance analytics,
 risk metrics, drawdown analysis, rolling statistics, and benchmark comparisons.
 
 Usage:
-    python quantstats_analytics.py <action> <tickers_json> [benchmark] [period] [risk_free_rate]
+    python quantstats_analytics.py <action> <tickers_json> [benchmark] [period] [risk_free_rate] [num_sims]
+        tickers_json = {"AAPL": 0.6, "MSFT": 0.4}
+    python quantstats_analytics.py <action> <params_json>
+        params_json = {"tickers": {"AAPL": 0.6, "MSFT": 0.4} | ["AAPL", "MSFT"] | "AAPL,MSFT",
+                       "weights": [...], "benchmark": "SPY", "period": "1y", "risk_free_rate": 0.02,
+                       "num_sims": 1000}   (equal weights when only symbols are given)
+Prices come from yfinance (network).
 
 Actions:
     stats           - 50+ performance/risk metrics
     returns         - Monthly/yearly returns data + distribution
     drawdown        - Drawdown periods and analysis
     rolling         - Rolling Sharpe, volatility, beta
+    montecarlo      - Monte Carlo of the portfolio return path (num_sims)
     full_report     - All of the above combined
     html_report     - Full HTML tearsheet as base64
 """
@@ -28,6 +35,12 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
 import quantstats as qs
+
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import fincept_json
 import yfinance as yf
 
 
@@ -732,6 +745,26 @@ def main():
         print(json.dumps({"error": f"Invalid tickers JSON: {str(e)}"}))
         sys.exit(1)
 
+    # `<action> <params_json>` form: {"tickers": {sym: weight} | [syms] | "A,B", "weights": [...], "benchmark",
+    # "period", "risk_free_rate", "num_sims"}. Without a tickers/symbols key the JSON is the native
+    # {ticker: weight} map and the other settings come from argv.
+    if isinstance(tickers_weights, dict) and ("tickers" in tickers_weights or "symbols" in tickers_weights):
+        params = tickers_weights
+        syms = params.get("tickers", params.get("symbols"))
+        if isinstance(syms, str):
+            syms = [s.strip() for s in syms.split(",") if s.strip()]
+        if isinstance(syms, dict):
+            tickers_weights = {str(k): float(v) for k, v in syms.items()}
+        elif syms:
+            weights = params.get("weights") or [1.0 / len(syms)] * len(syms)  # equal weight by default
+            tickers_weights = {str(s): float(w) for s, w in zip(syms, weights)}
+        else:
+            tickers_weights = {}
+        benchmark = str(params.get("benchmark", benchmark))
+        period = str(params.get("period", period))
+        risk_free_rate = float(params.get("risk_free_rate", risk_free_rate))
+        num_sims = int(params.get("num_sims", num_sims))
+
     if not tickers_weights:
         print(json.dumps({"error": "No tickers provided"}))
         sys.exit(1)
@@ -782,7 +815,7 @@ def main():
         else:
             result = {"error": f"Unknown action: {action}"}
 
-        print(json.dumps(result))
+        print(fincept_json.dumps(result))  # quantstats metrics are NaN/inf on short or flat series
 
     except Exception as e:
         import traceback

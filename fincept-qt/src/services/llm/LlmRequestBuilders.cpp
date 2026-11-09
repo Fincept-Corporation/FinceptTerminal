@@ -114,16 +114,11 @@ QJsonObject LlmService::build_anthropic_request(const QString& user_message,
     return req;
 }
 
-QJsonArray LlmService::build_anthropic_tools(const QSet<QString>& activated) {
+QJsonArray LlmService::build_anthropic_tools() {
     if (!detail::effective_tools_enabled(tools_enabled_))
         return {};
-    // Same selection as the OpenAI path (Tier-0 + whatever the model has
-    // discovered this turn). This used to call get_all_tools(), which bypasses
-    // Tool RAG entirely and hands back an arbitrary 50-tool slice of a ~900
-    // tool catalogue — so `tool_list` was frequently not even declared and the
-    // model had no way to reach the rest.
-    return mcp::McpService::instance().format_tools_for_anthropic(detail::apply_request_policy(tool_filter_),
-                                                                  activated);
+    // Same selection as the OpenAI and Gemini paths (McpService shares it).
+    return mcp::McpService::instance().format_tools_for_anthropic(detail::apply_request_policy(tool_filter_));
 }
 
 QJsonObject LlmService::build_gemini_request(const QString& user_message,
@@ -155,7 +150,7 @@ QJsonObject LlmService::build_gemini_request(const QString& user_message,
     return req;
 }
 
-QJsonArray LlmService::build_gemini_tools(const QSet<QString>& activated) {
+QJsonArray LlmService::build_gemini_tools() {
     if (!detail::effective_tools_enabled(tools_enabled_))
         return {};
     // Gemini needs more than a reshuffle of the OpenAI payload: its
@@ -164,7 +159,7 @@ QJsonArray LlmService::build_gemini_tools(const QSet<QString>& activated) {
     // {"type":"object","properties":{}} — fails the ENTIRE request rather than
     // the offending declaration. format_tools_for_gemini does that
     // translation; see mcp/GeminiSchema.h.
-    return mcp::McpService::instance().format_tools_for_gemini(detail::apply_request_policy(tool_filter_), activated);
+    return mcp::McpService::instance().format_tools_for_gemini(detail::apply_request_policy(tool_filter_));
 }
 
 // (Fincept has no request builder here: its chat goes through

@@ -10,7 +10,6 @@ Modules:
 - vbt_metrics: Full metrics extraction (100+ metrics)
 - vbt_optimization: Vectorized parameter optimization + walk-forward
 - vbt_returns: Returns Accessor (30+ rolling/risk-adjusted methods)
-- vbt_data: Data classes (YFData, BinanceData, CCXTData, AlpacaData, GBMData)
 - vbt_signals: Signal factory + random generators + stop/take-profit generators
 - vbt_labels: Label generators (FIXLB, MEANLB, LEXLB, TRENDLB, BOLB)
 - vbt_splitters: Cross-validation splitters (Rolling, Expanding, Range, PurgedKFold)

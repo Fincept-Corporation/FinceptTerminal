@@ -18,7 +18,7 @@
 //
 // Result size: responses are shaped to a 24 KB budget (structure-aware, via
 // ResultStore/shrink_json). Anything trimmed is marked in place and the full
-// payload is parked for `result_fetch` — never silently cut.
+// payload is parked for `ui_read(ref=<result id>)` — never silently cut.
 //
 // Every request is also checked against auth/LoopbackGuard.h (Host must be our
 // own loopback authority; no cross-site fetch metadata), which is what stops a
@@ -46,14 +46,12 @@ class QThreadPool;
 
 namespace fincept::mcp {
 
-/// What an agent run is shown, and therefore what it may dispatch.
-///   Essentials — the agent config named no categories / name patterns: the
-///                curated essentials set (mcp/server/EssentialTools.h) incl.
-///                tool_list / tool_describe / tool_invoke, which reach every
-///                other tool the run's policy permits.
-///   Filtered   — the agent named categories or name patterns: exactly the
-///                matching tools (McpService::get_agent_tools), capped only by
-///                the agent's own max_tools.
+/// Which catalogue an agent run was configured for. The internal catalogue is
+/// the ten core tools, so both kinds now hold the same thing — every tool the
+/// run's policy permits (McpService::get_agent_tools, capped only by the
+/// agent's own max_tools). Kept so AgentService's run setup reads unchanged.
+///   Essentials — the agent config named no categories / name patterns.
+///   Filtered   — the agent named categories or name patterns.
 enum class AgentToolCatalog { Essentials, Filtered };
 
 class TerminalMcpBridge : public QObject {

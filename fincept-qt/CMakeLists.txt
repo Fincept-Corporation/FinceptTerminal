@@ -33,7 +33,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     unset(_fincept_sdk_dirs)
 endif()
 
-project(FinceptTerminal VERSION 4.5.1 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 4.5.2 LANGUAGES C CXX)
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -870,6 +870,7 @@ set(CORE_SOURCES
     src/core/components/ComponentCatalog.cpp
     src/core/components/PopularityTracker.cpp
     src/core/crash/CrashHandler.cpp
+    src/core/crypto/Totp.cpp
     src/core/window/WindowRegistry.cpp
 )
 
@@ -1045,7 +1046,6 @@ set(PYTHON_SOURCES
     src/python/PythonRunner.cpp
     src/python/PythonSetupManager.cpp
     src/python/PythonWorker.cpp
-    src/python/OptionGreeksWorker.cpp
 )
 
 # LLM service — provider-neutral chat / streaming / tools layer
@@ -1083,7 +1083,6 @@ set(MCP_SOURCES
     src/mcp/McpManager.cpp
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
-    src/mcp/ToolRetriever.cpp
     src/mcp/ToolSelfTest.cpp
     src/mcp/GeminiSchema.cpp
     src/mcp/ProviderToolFormatSelfTest.cpp
@@ -1098,56 +1097,18 @@ set(MCP_SOURCES
     src/mcp/server/McpHttpServer_Rpc.cpp
     src/mcp/server/McpHttpServer_Tools.cpp
     src/mcp/server/ToolApprovalDialog.cpp
-    src/mcp/server/EssentialTools.cpp
     src/mcp/server/McpServerSelfTest.cpp
 
-    # Tool modules
-    src/mcp/tools/JobTools.cpp
-    src/mcp/tools/NavigationTools.cpp
-    src/mcp/tools/MarketsTools.cpp
-    src/mcp/tools/WatchlistTools.cpp
-    src/mcp/tools/NewsTools.cpp
-    src/mcp/tools/NotesTools.cpp
-    src/mcp/tools/AgenticMemoryTools.cpp
-    src/mcp/tools/FileManagerTools.cpp
-    src/mcp/tools/AiChatTools.cpp
-    src/mcp/tools/PortfolioTools.cpp
-    src/mcp/tools/CryptoTradingTools.cpp
-    src/mcp/tools/PaperTradingTools.cpp
-    src/mcp/tools/LiveTradingTools.cpp
-    src/mcp/tools/EdgarTools.cpp
-    src/mcp/tools/MAAnalyticsTools.cpp
-    src/mcp/tools/AltInvestmentsTools.cpp
-    src/mcp/tools/DataSourcesTools.cpp
-    src/mcp/tools/ProfileTools.cpp
-    src/mcp/tools/SettingsTools.cpp
-    src/mcp/tools/PythonTools.cpp
-    src/mcp/tools/SystemTools.cpp
-    src/mcp/tools/DataHubTools.cpp
-    src/mcp/tools/ReportBuilderTools.cpp
-    src/mcp/tools/MetaTools.cpp
-    src/mcp/tools/McpServersTools.cpp
-    src/mcp/tools/QuantLabTools.cpp
-    # AgentsTools split by section; see AgentsTools.cpp header.
-    src/mcp/tools/AgentsTools.cpp
-    src/mcp/tools/AgentsTools_Discovery.cpp
-    src/mcp/tools/AgentsTools_Execution.cpp
-    src/mcp/tools/AgentsTools_Repos.cpp
-    src/mcp/tools/DBnomicsTools.cpp
-    src/mcp/tools/GovDataTools.cpp
-    src/mcp/tools/EquityResearchTools.cpp
-    # WorkspaceTools split by section; see WorkspaceTools.cpp header.
-    src/mcp/tools/WorkspaceTools.cpp
-    src/mcp/tools/WorkspaceTools_MonitorsWindows.cpp
-    src/mcp/tools/WorkspaceTools_Panels.cpp
-    src/mcp/tools/WorkspaceTools_LayoutsSnapshots.cpp
-    src/mcp/tools/WorkspaceTools_SymbolsActions.cpp
-    src/mcp/tools/DashboardTools.cpp
-    src/mcp/tools/GeopoliticsTools.cpp
-    src/mcp/tools/ExcelTools.cpp
-    src/mcp/tools/SurfaceAnalyticsTools.cpp
-    # Agent Workbench (local Claude Code / Codex runs) — see services/coding_agents/
-    src/mcp/tools/CodingAgentTools.cpp
+    # Core tools — the whole internal tool surface: ten tools that operate the UI
+    # like a person plus `python` for the bundled scripts. See src/mcp/core/CoreTools.h
+    src/mcp/core/CoreTools.cpp
+    src/mcp/core/CoreApproval.cpp
+    src/mcp/core/PythonScriptTool.cpp
+    src/mcp/core/UiModel.cpp
+    src/mcp/core/UiObserve.cpp
+    src/mcp/core/UiAct.cpp
+    src/mcp/core/UiNavigate.cpp
+    src/mcp/core/CoreToolsSelfTest.cpp
 )
 
 # Trading
@@ -1203,7 +1164,6 @@ set(TRADING_SOURCES
     src/trading/websocket/IciciDirectWebSocket.cpp
     # Indian brokers
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
-    src/trading/brokers/zerodha/Totp.cpp
     src/trading/brokers/zerodha/ZerodhaAutoLogin.cpp
     src/trading/auth/RedirectServer.cpp
     src/trading/brokers/angelone/AngelOneBroker.cpp
@@ -1323,6 +1283,7 @@ set(SERVICE_SOURCES
     src/services/options/StrategyTemplates.cpp
     src/services/options/OptionPricing.cpp
     src/services/options/StrategyAnalytics.cpp
+    src/services/options/DerivativesPricing.cpp
     src/services/options/FiiDiiService.cpp
     src/services/data_normalization/DataNormalizationService.cpp
     src/services/data_normalization/DataMappingTestClient.cpp
@@ -1336,6 +1297,9 @@ set(SERVICE_SOURCES
     src/services/news/NewsClusterService.cpp
     src/services/news/NewsMonitorService.cpp
     src/services/news/NewsNlpService.cpp
+    src/services/news/NewsNlpEngine.cpp
+    src/services/news/VaderSentiment.cpp
+    resources/vader/vader.qrc
     src/services/news/NewsCorrelationService.cpp
     src/services/news/NewsSignalDetector.cpp
     src/services/news/RssFeedProbeService.cpp
@@ -1354,6 +1318,7 @@ set(SERVICE_SOURCES
     src/services/equity/EquitySentimentService.cpp
     src/services/equity/MarketSentimentService.cpp
     src/services/equity/MarketSentimentSupport.cpp
+    src/services/equity/TechnicalIndicators.cpp
     src/services/ma_analytics/MAAnalyticsService.cpp
     src/services/geopolitics/GeopoliticsService.cpp
     src/services/maritime/MaritimeService.cpp
@@ -1387,7 +1352,6 @@ set(SERVICE_SOURCES
     src/services/agents/AgentService_Discovery.cpp
     src/services/agents/AgentService_Execution.cpp
     src/services/agents/AgentService_Workflows.cpp
-    src/services/agents/AgentService_Repositories.cpp
     # Agent Workbench — local Claude Code / Codex CLI runs wired to the
     # terminal's MCP server; CodingAgentService is split, see its header.
     src/services/coding_agents/CodingAgentTypes.cpp
@@ -1468,6 +1432,7 @@ set(SERVICE_SOURCES
     src/services/prediction/polymarket/PolymarketTypeMap.cpp
     src/services/prediction/polymarket/PolymarketAdapter.cpp
     src/services/prediction/kalshi/KalshiRestClient.cpp
+    src/services/prediction/kalshi/KalshiMarketProducer.cpp
     src/services/prediction/kalshi/KalshiWsClient.cpp
     src/services/prediction/kalshi/KalshiAdapter.cpp
     # Phase 4 — Fincept Internal prediction-market adapter (demo mode until
@@ -1525,6 +1490,7 @@ set(UI_SOURCES
     src/ui/widgets/ConfettiOverlay.cpp
     src/ui/widgets/SpeedSparkline.cpp
     src/ui/widgets/PythonSetupChip.cpp
+    src/ui/widgets/PythonSetupBanner.cpp
     src/ui/widgets/LanguageSwitcher.cpp
     src/ui/widgets/EnterprisePromo.cpp
     src/ui/tables/DataTable.cpp
@@ -1607,6 +1573,7 @@ set(SCREEN_SOURCES
     src/screens/settings/LlmConfigSection_Providers.cpp
     src/screens/settings/LlmConfigSection_Profiles.cpp
     src/screens/settings/McpServersSection.cpp
+    src/screens/settings/AgentConnectSection.cpp
     src/screens/settings/LoggingSection.cpp
     src/screens/settings/SecuritySection.cpp
     src/screens/settings/ProfilesSection.cpp
@@ -1698,6 +1665,14 @@ set(SCREEN_SOURCES
     src/screens/dashboard/widgets/GeopoliticsEventsWidget.cpp
     src/screens/dashboard/widgets/MaritimeVesselsWidget.cpp
     src/screens/dashboard/widgets/NotesWidget.cpp
+    src/screens/dashboard/widgets/ConnectionHealthWidget.cpp
+    src/screens/dashboard/widgets/ScanAlertsWidget.cpp
+    src/screens/dashboard/widgets/AutomationRunsWidget.cpp
+    src/screens/dashboard/widgets/MacroSeriesWidget.cpp
+    src/screens/dashboard/widgets/AiQuickAskWidget.cpp
+    src/screens/dashboard/widgets/OptionsSnapshotWidget.cpp
+    src/screens/dashboard/widgets/FiiDiiFlowsWidget.cpp
+    src/screens/dashboard/widgets/KalshiPricesWidget.cpp
     # ReportBuilderScreen split; see header.
     src/screens/report_builder/ReportBuilderScreen.cpp
     src/screens/report_builder/ReportBuilderScreen_Components.cpp
@@ -1992,7 +1967,6 @@ set(SCREEN_SOURCES
     src/screens/agent_workbench/AgentTranscriptView.cpp
     src/screens/agent_workbench/AgentRunsPanel.cpp
     src/screens/agent_workbench/AgentSchedulesPanel.cpp
-    src/screens/agent_workbench/AgentConnectPanel.cpp
     src/screens/agent_workbench/AgentWorkbenchTemplates.cpp
     src/screens/agent_workbench/AgentWorkbenchCommon.cpp
 
@@ -2331,6 +2305,14 @@ set_source_files_properties(
     src/screens/dashboard/widgets/GeopoliticsEventsWidget.cpp
     src/screens/dashboard/widgets/MaritimeVesselsWidget.cpp
     src/screens/dashboard/widgets/NotesWidget.cpp
+    src/screens/dashboard/widgets/ConnectionHealthWidget.cpp
+    src/screens/dashboard/widgets/ScanAlertsWidget.cpp
+    src/screens/dashboard/widgets/AutomationRunsWidget.cpp
+    src/screens/dashboard/widgets/MacroSeriesWidget.cpp
+    src/screens/dashboard/widgets/AiQuickAskWidget.cpp
+    src/screens/dashboard/widgets/OptionsSnapshotWidget.cpp
+    src/screens/dashboard/widgets/FiiDiiFlowsWidget.cpp
+    src/screens/dashboard/widgets/KalshiPricesWidget.cpp
     src/screens/data_mapping/DataMappingScreen.cpp
     src/screens/data_mapping/DataMappingScreen_Data.cpp
     src/screens/data_mapping/DataMappingScreen_Layout.cpp
@@ -2445,7 +2427,6 @@ set_source_files_properties(
     src/screens/agent_workbench/AgentTranscriptView.cpp
     src/screens/agent_workbench/AgentRunsPanel.cpp
     src/screens/agent_workbench/AgentSchedulesPanel.cpp
-    src/screens/agent_workbench/AgentConnectPanel.cpp
     src/screens/agent_workbench/AgentWorkbenchTemplates.cpp
     src/screens/agent_workbench/AgentWorkbenchCommon.cpp
     src/screens/news/NewsCommandBar.cpp
@@ -2519,6 +2500,7 @@ set_source_files_properties(
     src/screens/settings/LlmConfigSection_Profiles.cpp
     src/screens/settings/LoggingSection.cpp
     src/screens/settings/McpServersSection.cpp
+    src/screens/settings/AgentConnectSection.cpp
     src/screens/settings/NotificationsSection.cpp
     src/screens/settings/ProfilesSection.cpp
     src/screens/settings/PythonEnvSection.cpp
@@ -2654,7 +2636,6 @@ set_source_files_properties(
     src/trading/websocket/AngelOneWebSocket.cpp
     # Trading broker files — each defines static now_ts() in same namespace
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
-    src/trading/brokers/zerodha/Totp.cpp
     src/trading/brokers/zerodha/ZerodhaAutoLogin.cpp
     src/trading/auth/RedirectServer.cpp
     src/trading/brokers/angelone/AngelOneBroker.cpp
@@ -2731,7 +2712,6 @@ set_source_files_properties(
     src/mcp/McpManager.cpp
     src/mcp/McpInit.cpp
     src/mcp/SchemaValidator.cpp
-    src/mcp/ToolRetriever.cpp
     src/mcp/ToolSelfTest.cpp
     src/mcp/GeminiSchema.cpp
     src/mcp/ProviderToolFormatSelfTest.cpp
@@ -2741,50 +2721,15 @@ set_source_files_properties(
     src/mcp/server/McpHttpServer_Rpc.cpp
     src/mcp/server/McpHttpServer_Tools.cpp
     src/mcp/server/ToolApprovalDialog.cpp
-    src/mcp/server/EssentialTools.cpp
     src/mcp/server/McpServerSelfTest.cpp
-    src/mcp/tools/NavigationTools.cpp
-    src/mcp/tools/MarketsTools.cpp
-    src/mcp/tools/WatchlistTools.cpp
-    src/mcp/tools/NewsTools.cpp
-    src/mcp/tools/NotesTools.cpp
-    src/mcp/tools/AgenticMemoryTools.cpp
-    src/mcp/tools/FileManagerTools.cpp
-    src/mcp/tools/AiChatTools.cpp
-    src/mcp/tools/PortfolioTools.cpp
-    src/mcp/tools/CryptoTradingTools.cpp
-    src/mcp/tools/PaperTradingTools.cpp
-    src/mcp/tools/LiveTradingTools.cpp
-    src/mcp/tools/EdgarTools.cpp
-    src/mcp/tools/MAAnalyticsTools.cpp
-    src/mcp/tools/AltInvestmentsTools.cpp
-    src/mcp/tools/DataSourcesTools.cpp
-    src/mcp/tools/ProfileTools.cpp
-    src/mcp/tools/SettingsTools.cpp
-    src/mcp/tools/PythonTools.cpp
-    src/mcp/tools/SystemTools.cpp
-    src/mcp/tools/DataHubTools.cpp
-    src/mcp/tools/ReportBuilderTools.cpp
-    src/mcp/tools/MetaTools.cpp
-    src/mcp/tools/McpServersTools.cpp
-    src/mcp/tools/QuantLabTools.cpp
-    src/mcp/tools/AgentsTools.cpp
-    src/mcp/tools/AgentsTools_Discovery.cpp
-    src/mcp/tools/AgentsTools_Execution.cpp
-    src/mcp/tools/AgentsTools_Repos.cpp
-    src/mcp/tools/DBnomicsTools.cpp
-    src/mcp/tools/GovDataTools.cpp
-    src/mcp/tools/EquityResearchTools.cpp
-    src/mcp/tools/WorkspaceTools.cpp
-    src/mcp/tools/WorkspaceTools_MonitorsWindows.cpp
-    src/mcp/tools/WorkspaceTools_Panels.cpp
-    src/mcp/tools/WorkspaceTools_LayoutsSnapshots.cpp
-    src/mcp/tools/WorkspaceTools_SymbolsActions.cpp
-    src/mcp/tools/DashboardTools.cpp
-    src/mcp/tools/GeopoliticsTools.cpp
-    src/mcp/tools/ExcelTools.cpp
-    src/mcp/tools/SurfaceAnalyticsTools.cpp
-    src/mcp/tools/CodingAgentTools.cpp
+    src/mcp/core/CoreTools.cpp
+    src/mcp/core/CoreApproval.cpp
+    src/mcp/core/PythonScriptTool.cpp
+    src/mcp/core/UiModel.cpp
+    src/mcp/core/UiObserve.cpp
+    src/mcp/core/UiAct.cpp
+    src/mcp/core/UiNavigate.cpp
+    src/mcp/core/CoreToolsSelfTest.cpp
     src/algo_engine/fno/FnoAlgoSelftest.cpp
     src/algo_engine/fno/FnoLegResolver.cpp
     src/trading/PaperTradingSelftest.cpp
@@ -2801,7 +2746,6 @@ set_source_files_properties(
 # ODR collision if batched, must stay excluded from unity
 set_source_files_properties(
     src/trading/brokers/zerodha/ZerodhaBroker.cpp
-    src/trading/brokers/zerodha/Totp.cpp
     src/trading/brokers/zerodha/ZerodhaAutoLogin.cpp
     src/trading/auth/RedirectServer.cpp
     src/trading/brokers/angelone/AngelOneBroker.cpp
@@ -2848,14 +2792,18 @@ set_source_files_properties(
     src/trading/OrderThreadPool.cpp
     src/trading/StrategyPortfolio.cpp
     src/trading/OptionsStrategyBuilder.cpp
+    src/services/options/DerivativesPricing.cpp
+    src/services/news/NewsNlpEngine.cpp
+    src/services/news/VaderSentiment.cpp
     # Phase 3 storage/core — file-scope kLog / anonymous-namespace helpers
     src/storage/HistoricalDataStore.cpp
     src/core/HealthMonitor.cpp
+    src/core/crypto/Totp.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
 # Logging tags: each of these files defines a file-scope `kTag` ("WS",
-# "FwspImporter", "InstanceLock", "OptionGreeksWorker") in an
+# "FwspImporter", "InstanceLock") in an
 # anonymous namespace. Under unity, any two that land in the same batch merge
 # into one TU and clash ("redefinition of 'kTag'"). Keep every free-standing
 # kTag definer out of unity so a batch-grouping shift can't re-trigger it.
@@ -2863,7 +2811,6 @@ set_source_files_properties(
     src/network/websocket/WebSocketClient.cpp
     src/storage/workspace/WorkspaceFwspImporter.cpp
     src/app/InstanceLock.cpp
-    src/python/OptionGreeksWorker.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
@@ -3516,7 +3463,11 @@ endif()
 # the build output kept the stale copy. The dependency list is filtered the same
 # way sync_scripts.cmake filters its walk — a stray scripts/.venv must never
 # become 115k ninja dependencies.
-file(GLOB_RECURSE FINCEPT_SCRIPT_DEPS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/*")
+# CONFIGURE_DEPENDS: every build re-checks this file list and re-runs CMake when a
+# script was added or removed. Without it a deleted script stayed a DEPENDS of the
+# stamp below and ninja failed ("missing and no known rule to make it") until
+# someone reconfigured by hand.
+file(GLOB_RECURSE FINCEPT_SCRIPT_DEPS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/*")
 list(FILTER FINCEPT_SCRIPT_DEPS EXCLUDE REGEX
      "/(\\.venv|venv|env|__pycache__|\\.pytest_cache|\\.benchmarks|\\.firecrawl|\\.git|\\.mypy_cache|\\.ruff_cache|node_modules)/")
 list(FILTER FINCEPT_SCRIPT_DEPS EXCLUDE REGEX "\\.(pyc|pyo|bak|log|db|sqlite|sqlite3)$")
@@ -3634,7 +3585,14 @@ if(FINCEPT_YTDLP_EXE AND EXISTS "${FINCEPT_YTDLP_EXE}")
     message(STATUS "yt-dlp: using override ${FINCEPT_YTDLP_EXE}")
 elseif(FINCEPT_DOWNLOAD_YTDLP)
     # 2. Auto-download the pinned, hash-verified release into the build tree.
-    set(FINCEPT_YTDLP_DL_DIR  "${CMAKE_BINARY_DIR}/yt-dlp")
+    # The download dir must not be named "yt-dlp": on Linux that is exactly the
+    # POST_BUILD target <bin_dir>/yt-dlp below, so the copy landed back inside
+    # the directory and no runnable yt-dlp ever sat beside the binary (#415).
+    # Drop a directory left at that path by older build trees.
+    if(IS_DIRECTORY "${CMAKE_BINARY_DIR}/yt-dlp")
+        file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/yt-dlp")
+    endif()
+    set(FINCEPT_YTDLP_DL_DIR  "${CMAKE_BINARY_DIR}/_ytdlp_download")
     set(FINCEPT_YTDLP_DL_FILE "${FINCEPT_YTDLP_DL_DIR}/${FINCEPT_YTDLP_ASSET}")
     set(FINCEPT_YTDLP_URL
         "https://github.com/yt-dlp/yt-dlp/releases/download/${FINCEPT_YTDLP_VERSION}/${FINCEPT_YTDLP_ASSET}")
@@ -3730,6 +3688,19 @@ if(WIN32)
     # Python data-connector catalogue (ConnectorCatalog: <exe_dir>/resources/).
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/data_connectors.json"
             DESTINATION "resources" COMPONENT core)
+    # yt-dlp (dashboard video playback). POST_BUILD copies it beside the exe in
+    # the build dir, but no install rule captured it — the installer's *.dll
+    # pattern skips .exe files — so installed builds reported "yt-dlp not found".
+    # VideoPlayerWidget looks for <exe_dir>/yt-dlp.exe first.
+    if(FINCEPT_YTDLP_TO_BUNDLE AND EXISTS "${FINCEPT_YTDLP_TO_BUNDLE}")
+        install(PROGRAMS "${FINCEPT_YTDLP_TO_BUNDLE}"
+                DESTINATION "." RENAME "yt-dlp.exe" COMPONENT core)
+    endif()
+    # Complete uninstaller (app + all user data); see packaging/uninstall/README.md.
+    install(FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.cmd"
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.ps1"
+            DESTINATION "." COMPONENT core)
 
 elseif(APPLE)
     if(FINCEPT_BUILD_INSTALLER)
@@ -3791,6 +3762,9 @@ elseif(FINCEPT_BUILD_INSTALLER AND FINCEPT_IFW_PAYLOAD)
     # install location (an IFW install has no AppRun launcher to set env vars).
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/qt.conf"
             DESTINATION "bin" COMPONENT core)
+    # Complete uninstaller (app + all user data); see packaging/uninstall/README.md.
+    install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.sh"
+            DESTINATION "." COMPONENT core)
     # NOTE: scripts/, resources/, and requirements live INSIDE the linuxdeploy
     # AppDir payload already (staged into usr/bin/ by the CI AppImage step), so
     # they are captured by the install(DIRECTORY) above — no separate scripts
@@ -3857,6 +3831,17 @@ else()
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/data_connectors.json"
             DESTINATION "share/fincept-terminal/resources" COMPONENT core)
 
+    # Remaining runtime-read assets, resolved via AppPaths::bundled_resource()
+    # (which searches <exe_dir>/../share/fincept-terminal/resources/). Without
+    # these the .deb/.rpm had no KLineChart page (blank Equity charts), no
+    # wallet connect/swap pages and an empty Component Browser.
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/component_catalog.json"
+            DESTINATION "share/fincept-terminal/resources" COMPONENT core)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/charts"
+                      "${CMAKE_CURRENT_SOURCE_DIR}/resources/wallet"
+            DESTINATION "share/fincept-terminal/resources" COMPONENT core
+            PATTERN "README.md" EXCLUDE)
+
     # App icon (PNG required for hicolor theme; convert .ico → .png in CI)
     set(_ICON_PNG "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.png")
     if(EXISTS "${_ICON_PNG}")
@@ -3876,10 +3861,16 @@ else()
     install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/linux/fincept-terminal.appdata.xml"
             DESTINATION "share/metainfo" COMPONENT core)
 
-    # yt-dlp (if bundled)
+    # Complete uninstaller (app + all user data); see packaging/uninstall/README.md.
+    install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall/uninstall.sh"
+            DESTINATION "share/fincept-terminal" COMPONENT core)
+
+    # yt-dlp (if bundled) — private to the app, never in <prefix>/bin: a
+    # `--prefix /usr` install would overwrite the distro's /usr/bin/yt-dlp (#415).
+    # VideoPlayerWidget::resolve_ytdlp_program() searches this location.
     if(FINCEPT_YTDLP_TO_BUNDLE AND EXISTS "${FINCEPT_YTDLP_TO_BUNDLE}")
         install(PROGRAMS "${FINCEPT_YTDLP_TO_BUNDLE}"
-                DESTINATION "bin"
+                DESTINATION "libexec/fincept-terminal"
                 RENAME "yt-dlp" COMPONENT core)
     endif()
 endif()
@@ -3926,11 +3917,17 @@ if(FINCEPT_BUILD_INSTALLER)
         # Qt-Charts fallback in that case.
         install(FILES "$<TARGET_FILE_DIR:FinceptTerminal>/QtWebEngineProcess.exe"
                 DESTINATION "." COMPONENT core OPTIONAL)
-        # Chromium resource paks + ICU data. The source resources/ tree is
-        # installed separately below (app assets); these are *additional* files
-        # the CI stage step dropped into the build dir's resources/ folder, so
-        # capture them by name from the staged dir rather than re-globbing.
+        # Chromium resource paks + ICU data + V8 startup snapshot. The source
+        # resources/ tree is installed separately below (app assets); these are
+        # *additional* files the CI stage step dropped into the build dir's
+        # resources/ folder, so capture them by name from the staged dir rather
+        # than re-globbing. v8_context_snapshot.bin was missing from this list in
+        # 4.5.1 (#411): the stage dir had it (windeployqt deploys it), so the
+        # smoke test passed, but the installer dropped it and every renderer then
+        # died on "Error loading V8 startup snapshot file" — blank Equity charts.
+        # (v8_context_snapshot.debug.bin is debugger-only and not shipped.)
         install(FILES
+                "$<TARGET_FILE_DIR:FinceptTerminal>/resources/v8_context_snapshot.bin"
                 "$<TARGET_FILE_DIR:FinceptTerminal>/resources/icudtl.dat"
                 "$<TARGET_FILE_DIR:FinceptTerminal>/resources/qtwebengine_resources.pak"
                 "$<TARGET_FILE_DIR:FinceptTerminal>/resources/qtwebengine_resources_100p.pak"
@@ -3979,8 +3976,19 @@ if(FINCEPT_BUILD_INSTALLER)
         "Professional financial intelligence terminal with AI analytics")
     set(CPACK_PACKAGE_HOMEPAGE_URL
         "https://github.com/Fincept-Corporation/FinceptTerminal")
-    set(CPACK_RESOURCE_FILE_LICENSE
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/license.txt")
+    # Installer licence page = the repository-root LICENSE (verbatim
+    # AGPL-3.0-or-later), the project's single licence file (#401). Copied at
+    # configure time under a .txt name so every generator treats it as plain
+    # text; there is deliberately no second checked-in copy to drift from it.
+    set(_fincept_license_src "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE")
+    if(NOT EXISTS "${_fincept_license_src}")
+        message(FATAL_ERROR
+            "FINCEPT_BUILD_INSTALLER needs the repository-root LICENSE "
+            "(expected at ${_fincept_license_src}). Build from a full checkout.")
+    endif()
+    set(FINCEPT_LICENSE_TXT "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
+    configure_file("${_fincept_license_src}" "${FINCEPT_LICENSE_TXT}" COPYONLY)
+    set(CPACK_RESOURCE_FILE_LICENSE "${FINCEPT_LICENSE_TXT}")
     set(CPACK_PACKAGE_ICON
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/fincept.ico")
 
@@ -4160,7 +4168,7 @@ if(FINCEPT_BUILD_INSTALLER)
         NAME "com.fincept.terminal.core"
         VERSION "${CMAKE_PROJECT_VERSION}"
         SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/installscript.qs"
-        LICENSES "AGPL-3.0" "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/packages/com.fincept.terminal.core/meta/license.txt"
+        LICENSES "AGPL-3.0-or-later" "${FINCEPT_LICENSE_TXT}"
         SORTING_PRIORITY 100
         DEFAULT TRUE
         FORCED_INSTALLATION)

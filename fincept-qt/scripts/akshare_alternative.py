@@ -155,9 +155,6 @@ class AlternativeDataWrapper:
 
     # ==================== ENERGY ====================
 
-    def get_energy_carbon(self) -> Dict[str, Any]:
-        """Get carbon emission trading data (domestic)"""
-        return self._safe_call_with_retry(ak.energy_carbon_domestic)
 
     def get_energy_oil_hist(self) -> Dict[str, Any]:
         """Get historical oil price data"""
@@ -173,9 +170,6 @@ class AlternativeDataWrapper:
         """Get daily movie box office data"""
         return self._safe_call_with_retry(ak.movie_boxoffice_daily)
 
-    def get_movie_boxoffice_weekly(self) -> Dict[str, Any]:
-        """Get weekly movie box office data"""
-        return self._safe_call_with_retry(ak.movie_boxoffice_weekly)
 
     def get_movie_boxoffice_monthly(self) -> Dict[str, Any]:
         """Get monthly movie box office data"""
@@ -201,15 +195,17 @@ class AlternativeDataWrapper:
 
     def get_car_sale_rank(self) -> Dict[str, Any]:
         """Get car sales ranking from Gasgoo"""
-        return self._safe_call_with_retry(ak.car_sale_rank_gasgoo)
+        # Gasgoo's ranking left akshare; CPCA's manufacturer sales ranking (passenger cars, year to date,
+        # wholesale) is the same kind of table.
+        return self._safe_call_with_retry(ak.car_market_man_rank_cpca, symbol="狭义乘用车-累计", indicator="批发")
 
     # ==================== UTILITY FUNCTIONS ====================
 
     def get_all_available_endpoints(self) -> Dict[str, Any]:
         """Get list of all available endpoints"""
         endpoints = [
-            "energy_carbon", "energy_oil_hist", "energy_oil_detail",
-            "movie_boxoffice_daily", "movie_boxoffice_weekly", "movie_boxoffice_monthly",
+            "energy_oil_hist", "energy_oil_detail",
+            "movie_boxoffice_daily", "movie_boxoffice_monthly",
             "movie_boxoffice_yearly", "movie_boxoffice_realtime",
             "car_market_total", "car_market_segment", "car_sale_rank"
         ]

@@ -261,7 +261,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
 
             // What each Python provider actually consumes (verified against the scripts):
             // vectorbt applies commission + slippage + SL/TP; zipline commission + slippage;
-            // backtesting.py, BT and FastTrade commission only; the Fincept engine applies none
+            // backtesting.py and BT commission only; the Fincept engine applies none
             // of them. Claiming "Costs applied" for a setting the provider drops would
             // overstate how conservative the run is.
             QString pname = slug;
@@ -269,8 +269,7 @@ void BacktestingScreen::display_result(const QString& command, const QJsonObject
                 if (pr.slug == slug)
                     pname = pr.display_name;
             const bool sup_comm = (slug == QLatin1String("vectorbt") || slug == QLatin1String("zipline") ||
-                                   slug == QLatin1String("backtestingpy") || slug == QLatin1String("bt") ||
-                                   slug == QLatin1String("fasttrade"));
+                                   slug == QLatin1String("backtestingpy") || slug == QLatin1String("bt"));
             const bool sup_slip = (slug == QLatin1String("vectorbt") || slug == QLatin1String("zipline"));
             const bool sup_stops = (slug == QLatin1String("vectorbt"));
 
@@ -863,7 +862,7 @@ void BacktestingScreen::on_command_options_loaded(const QString& provider, const
 
     // Providers using json_response() emit camelCase keys; fincept_provider
     // uses raw json.dumps so its keys stay snake_case. Try camelCase first
-    // (the dominant form across vectorbt/bt/backtestingpy/fasttrade/zipline),
+    // (the dominant form across vectorbt/bt/backtestingpy/zipline),
     // then fall back to snake_case for fincept.
     auto pick = [&](const char* camel, const char* snake) -> QJsonArray {
         auto a = options.value(camel).toArray();

@@ -45,8 +45,9 @@ inline constexpr const char* kTag = "McpHttpServer";
 // Persisted settings — AppConfig (QSettings), the same store that holds
 // `mcp/allow_destructive_tools`. The bearer token lives in SecureStorage.
 inline constexpr const char* kKeyEnabledAtStartup = "mcp_server/enabled_at_startup";
-inline constexpr const char* kKeyAllowActions = "mcp_server/allow_actions";
-inline constexpr const char* kKeyToolset = "mcp_server/toolset";
+inline constexpr const char* kKeyAllowUiControl = "mcp_server/allow_ui_control";
+inline constexpr const char* kKeyAllowScripts = "mcp_server/allow_scripts";
+inline constexpr const char* kKeyResultBudgetKb = "mcp_server/result_budget_kb";
 inline constexpr const char* kKeyPort = "mcp_server/port";
 inline constexpr const char* kTokenStorageKey = "mcp_server/token";
 
@@ -60,20 +61,22 @@ inline constexpr int kSweepIntervalMs = 5000;
 inline constexpr quint16 kMinUserPort = 1024;
 
 // MCP surface.
-inline constexpr int kPoolThreads = 4;
+// Pool threads mostly WAIT (a UI tool waits on the GUI thread, ui_wait for up to
+// a minute, an approval for up to 50 s), so this is sized for concurrency, not
+// CPU. Python work is capped separately by PythonRunner.
+inline constexpr int kPoolThreads = 12;
 inline constexpr int kToolsPageSize = 100;
 inline constexpr int kMaxAdvertisedNameLen = 50; // "mcp__fincept__" + 50 ≤ the 64-char API limit
 inline constexpr int kAliasPrefixLen = 41;       // 41 + '_' + 8 hex = 50
-inline constexpr int kResultBudgetBytes = 24 * 1024;
+inline constexpr int kDefaultResultBudgetKb = 32;
+inline constexpr int kMinResultBudgetKb = 8;
+inline constexpr int kMaxResultBudgetKb = 256;
 inline constexpr int kMaxErrorTextChars = 8000;
 inline constexpr int kActivityCapacity = 200;
 inline constexpr int kSummaryMaxChars = 120;
 inline constexpr int kClientNameMaxChars = 64;
 inline constexpr int kMaxTrackedClients = 256;
-inline constexpr const char* kLatestProtocol = "2025-06-18";
-inline constexpr const char* kToolInvoke = "tool_invoke";
-inline constexpr const char* kResultFetch = "result_fetch";
-inline constexpr const char* kLiveTradingCategory = "live-trading";
+inline constexpr const char* kLatestProtocol = "2025-11-25";
 
 // ── Small shared helpers (McpHttpServer_Tools.cpp) ───────────────────────────
 qint64 now_ms();
@@ -129,12 +132,20 @@ int decode_chunked_body(Conn& c, int* status);
 QByteArray request_path(const QByteArray& target);
 const char* reason_phrase(int status);
 
+/// Raised when the client gives up on a tools/call: a `notifications/cancelled`
+/// naming its request id, the client closing the connection the answer was due
+/// on, or the server stopping. The running tool sees it through
+/// ToolContext::is_cancelled, so an approval prompt, a ui_wait or a queued call
+/// stops holding a pool thread for a client that is no longer listening.
+using CancelFlag = std::shared_ptr<std::atomic<bool>>;
+
 // ── One POST whose replies include tools/call results still running ─────────
 struct PendingHttp {
     QPointer<QTcpSocket> sock;
     bool batch = false;
     QVector<QJsonValue> responses; // one per request in the message, in order
     int outstanding = 0;
+    QVector<CancelFlag> cancels; // one per tools/call still running for this POST
 };
 
 // ── Tool catalogue snapshot (McpHttpServer_Tools.cpp) ───────────────────────
@@ -148,17 +159,20 @@ struct CatalogTool {
     AuthLevel auth = AuthLevel::None;
 };
 
-/// Live-trading tools and tools at AuthLevel >= Verified (ExplicitConfirm in
-/// practice) need the user's per-call approval in ToolApprovalDialog.
+/// Tools at AuthLevel >= Verified (ExplicitConfirm in practice) need the user's
+/// per-call approval in ToolApprovalDialog. (The core tools ask per ACTION
+/// themselves; this covers any tool that declares the level.)
 bool needs_approval(const CatalogTool& tool);
+
+/// True for tools that operate or rearrange the UI (categories ui-control and
+/// navigation) — refused while allow_ui_control is off.
+bool is_ui_control(const CatalogTool& tool);
 
 struct Catalogue {
     quint64 generation = 0;                // McpProvider::generation() it was built from
     QHash<QString, CatalogTool> tools;     // enabled internal tools, by internal name
     QHash<QString, QString> by_advertised; // advertised name → internal name
-    QJsonArray full_entries;               // tools/list entries, every tool, sorted
-    QJsonArray essential_entries;          // tools/list entries, curated subset, curated order
-    bool has_tool_invoke = false;
+    QJsonArray entries;                    // tools/list entries, catalogue order
 };
 using CataloguePtr = std::shared_ptr<const Catalogue>;
 
@@ -170,7 +184,9 @@ QString resolve_tool_name(const Catalogue& catalogue, const QString& called);
 struct WorkerShared {
     std::atomic<bool> alive{true};     // false once the server object is being destroyed
     std::atomic<bool> accepting{false}; // false while stopped: queued calls bail out
-    std::atomic<bool> allow_actions{false};
+    std::atomic<bool> allow_ui_control{true};
+    std::atomic<bool> allow_scripts{true};
+    std::atomic<int> result_budget_bytes{kDefaultResultBudgetKb * 1024};
     QMutex catalogue_mutex;
     CataloguePtr catalogue;
 };
@@ -188,6 +204,8 @@ struct CallJob {
     QString called_name;
     QJsonObject args;
     QString client;
+    CancelFlag cancel;  // never null for a job built by handle_message
+    QString cancel_key; // entry in Impl::cancel_by_request ("<user-agent>|<id>")
 };
 
 struct CallOutcome {
@@ -217,15 +235,20 @@ struct McpHttpServer::Impl {
     QTimer* sweeper = nullptr;
     QHash<QTcpSocket*, mcp_http_detail::Conn> conns;
     QHash<quint64, mcp_http_detail::PendingHttp> pending;
+    // Running tools/call requests by "<user-agent>|<JSON-RPC id>", so a
+    // notifications/cancelled (which arrives in a later POST — the server is
+    // stateless) can find the call it names.
+    QHash<QString, mcp_http_detail::CancelFlag> cancel_by_request;
     quint64 next_conn_id = 1;
     quint64 next_http_id = 1;
     quint64 epoch = 0; // bumped by every start(); replies from an older epoch are dropped
     QString last_error;
 
-    // Settings cache (persisted values; allow_actions lives in `shared`).
+    // Settings cache (persisted values; the permissions live in `shared`).
     bool enabled_at_startup = false;
-    bool persisted_allow_actions = false;
-    ExternalToolset toolset = ExternalToolset::Essentials;
+    bool persisted_allow_ui_control = true;
+    bool persisted_allow_scripts = true;
+    int persisted_result_budget_kb = mcp_http_detail::kDefaultResultBudgetKb;
     quint16 configured_port = McpHttpServer::kDefaultPort;
 
     mutable QMutex token_mutex;
@@ -237,11 +260,12 @@ struct McpHttpServer::Impl {
     QString test_token;
 
     // Client identification — the server is stateless, so remember who said hello.
-    QHash<QByteArray, QString> client_by_agent; // User-Agent → clientInfo.name
-    QHash<QString, QString> distinct_clients;   // "name|user-agent" → name, since start()
+    QHash<QByteArray, QString> client_by_agent;          // User-Agent → clientInfo.name
+    QHash<QString, ExternalClientInfo> distinct_clients; // "name|user-agent" → info, since start()
 
     mutable QMutex activity_mutex;
     QList<ExternalCallRecord> activity; // newest first
+    ExternalServerStats counters;       // guarded by activity_mutex
 
     // McpHttpServer.cpp
     QString effective_token() const;
@@ -273,11 +297,22 @@ struct McpHttpServer::Impl {
     QJsonObject handle_initialize(const QJsonValue& id, const QJsonObject& params, mcp_http_detail::Conn& conn,
                                   const QByteArray& user_agent);
     QJsonObject handle_tools_list(const QJsonValue& id, const QJsonObject& params);
+    QJsonObject handle_prompts_list(const QJsonValue& id);
+    QJsonObject handle_prompts_get(const QJsonValue& id, const QJsonObject& params);
+    QJsonObject handle_resources_list(const QJsonValue& id);
+    QJsonObject handle_resources_read(const QJsonValue& id, const QJsonObject& params);
     void write_rpc_response(QTcpSocket* sock, const mcp_http_detail::PendingHttp& ph);
     void start_call(const mcp_http_detail::CallJob& job);
+    /// notifications/cancelled: raise the cancel flag of the call it names.
+    void cancel_request(const QByteArray& user_agent, const QJsonValue& request_id, const QString& reason);
+    /// Raise every cancel flag of the calls whose answer is due on `sock`.
+    void cancel_calls_on(QTcpSocket* sock);
+    /// Raise every cancel flag (server stopping) and forget them.
+    void cancel_all_calls();
     void on_call_finished(const mcp_http_detail::CallJob& job, const mcp_http_detail::CallOutcome& outcome,
                           qint64 duration_ms);
     QString client_for(const mcp_http_detail::Conn& conn, const QByteArray& user_agent) const;
+    void note_client_call(const QString& client);
 };
 
 } // namespace fincept::mcp

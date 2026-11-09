@@ -87,7 +87,7 @@ class CongressGovWrapper:
         except requests.exceptions.HTTPError as e:
             if response.status_code == 401:
                 return {"error": "Invalid API key", "auth_error": True, "status_code": response.status_code}
-            elif response.status_code == 403:
+            elif response.status_code in (403, 429):
                 return {"error": "Rate limit exceeded", "rate_limit_error": True, "status_code": response.status_code}
             elif response.status_code == 404:
                 return {"error": "Resource not found", "not_found": True, "status_code": response.status_code}
@@ -365,7 +365,7 @@ class CongressGovWrapper:
             # Fetch cosponsors
             cosponsors_data = bill_data.get('cosponsors', {})
             if cosponsors_data.get('count', 0) > 0:
-                cosponsors_url = cosponsors_data.get('url', '').replace('?format=json', f'?format=json&api_key={self.api_key}')
+                cosponsors_url = cosponsors_data.get('url', '')
                 cosponsors_result = self._make_request(cosponsors_url)
                 if cosponsors_result.get('success'):
                     additional_data['cosponsors'] = cosponsors_result['data'].get('cosponsors', [])
@@ -373,7 +373,7 @@ class CongressGovWrapper:
             # Fetch subjects
             subjects_data = bill_data.get('subjects', {})
             if subjects_data.get('count', 0) > 0:
-                subjects_url = subjects_data.get('url', '').replace('?format=json', f'?format=json&api_key={self.api_key}')
+                subjects_url = subjects_data.get('url', '')
                 subjects_result = self._make_request(subjects_url)
                 if subjects_result.get('success'):
                     additional_data['subjects'] = subjects_result['data'].get('subjects', {}).get('legislativeSubjects', [])
@@ -381,7 +381,7 @@ class CongressGovWrapper:
             # Fetch summaries
             summaries_data = bill_data.get('summaries', {})
             if summaries_data.get('count', 0) > 0:
-                summaries_url = summaries_data.get('url', '').replace('?format=json', f'?format=json&api_key={self.api_key}')
+                summaries_url = summaries_data.get('url', '')
                 summaries_result = self._make_request(summaries_url)
                 if summaries_result.get('success'):
                     additional_data['summaries'] = summaries_result['data'].get('summaries', [])
@@ -389,7 +389,7 @@ class CongressGovWrapper:
             # Fetch committees
             committees_data = bill_data.get('committees', {})
             if committees_data.get('count', 0) > 0:
-                committees_url = committees_data.get('url', '').replace('?format=json', f'?format=json&api_key={self.api_key}')
+                committees_url = committees_data.get('url', '')
                 committees_result = self._make_request(committees_url)
                 if committees_result.get('success'):
                     additional_data['committees'] = committees_result['data'].get('committees', [])
@@ -397,7 +397,7 @@ class CongressGovWrapper:
             # Fetch actions
             actions_data = bill_data.get('actions', {})
             if actions_data.get('count', 0) > 0:
-                actions_url = actions_data.get('url', '').replace('?format=json', f'?format=json&api_key={self.api_key}')
+                actions_url = actions_data.get('url', '')
                 actions_result = self._make_request(actions_url)
                 if actions_result.get('success'):
                     additional_data['actions'] = actions_result['data'].get('actions', [])
@@ -405,7 +405,7 @@ class CongressGovWrapper:
             # Fetch titles
             titles_data = bill_data.get('titles', {})
             if titles_data.get('count', 0) > 0:
-                titles_url = titles_data.get('url', '').replace('?format=json', f'?format=json&api_key={self.api_key}')
+                titles_url = titles_data.get('url', '')
                 titles_result = self._make_request(titles_url)
                 if titles_result.get('success'):
                     additional_data['titles'] = titles_result['data'].get('titles', [])
@@ -429,7 +429,16 @@ class CongressGovWrapper:
             return CongressGovError('bill_info', str(e)).to_dict()
 
     def _generate_bill_markdown(self, bill_data: Dict[str, Any]) -> str:
-        """Generate markdown content for bill info"""
+        """Generate markdown content for bill info.
+
+        Sub-resources (cosponsors, summaries, actions, ...) are lists only when their follow-up
+        request succeeded; otherwise they are still the API's {count, url} stub and are skipped.
+        Returns "" on failure so the caller's own summary is shown instead of an error string.
+        """
+        def items(key: str) -> List[Dict[str, Any]]:
+            value = bill_data.get(key)
+            return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
+
         try:
             title = bill_data.get('title', 'Unknown Title')
             congress = bill_data.get('congress', 'Unknown')
@@ -439,7 +448,7 @@ class CongressGovWrapper:
             introduced_date = bill_data.get('introducedDate', 'Unknown')
             update_date = bill_data.get('updateDate', 'Unknown')
 
-            latest_action = bill_data.get('latestAction', {})
+            latest_action = bill_data.get('latestAction') or {}
             latest_action_date = latest_action.get('actionDate', 'Unknown')
             latest_action_text = latest_action.get('text', 'No action taken')
 
@@ -456,12 +465,12 @@ class CongressGovWrapper:
 """
 
             # Policy Area
-            policy_area = bill_data.get('policyArea', {}).get('name', '')
+            policy_area = (bill_data.get('policyArea') or {}).get('name', '')
             if policy_area:
                 markdown += f"- **Policy Area**: {policy_area}\n"
 
             # Sponsors
-            sponsors = bill_data.get('sponsors', [])
+            sponsors = items('sponsors')
             if sponsors:
                 markdown += "\n## Sponsors\n\n"
                 for sponsor in sponsors:
@@ -469,7 +478,7 @@ class CongressGovWrapper:
                     markdown += f"- **{sponsor_name}**\n"
 
             # Cosponsors
-            cosponsors = bill_data.get('cosponsors', [])
+            cosponsors = items('cosponsors')
             if cosponsors:
                 markdown += "\n## Cosponsors\n\n"
                 for cosponsor in cosponsors:
@@ -481,7 +490,7 @@ class CongressGovWrapper:
                     markdown += f"- **{cosponsor_name}** ({sponsorship_date})\n"
 
             # Summaries
-            summaries = bill_data.get('summaries', [])
+            summaries = items('summaries')
             if summaries:
                 markdown += "\n## Summaries\n\n"
                 for summary in summaries:
@@ -489,7 +498,7 @@ class CongressGovWrapper:
                     markdown += f"{summary_text}\n\n"
 
             # Actions
-            actions = bill_data.get('actions', [])
+            actions = items('actions')
             if actions:
                 markdown += "\n## Actions\n\n"
                 for action in actions:
@@ -501,7 +510,8 @@ class CongressGovWrapper:
             return markdown
 
         except Exception as e:
-            return f"Error generating markdown: {str(e)}"
+            print(f"congress_gov_data: bill markdown failed: {e}", file=sys.stderr)
+            return ""
 
     def _html_to_markdown(self, html_text: str) -> str:
         """Convert HTML to Markdown"""

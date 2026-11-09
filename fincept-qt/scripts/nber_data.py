@@ -127,12 +127,18 @@ def get_business_cycle_dates() -> Dict:
     post_wwii = [c for c in NBER_BUSINESS_CYCLES if c["peak"] >= "1945"]
     avg_expansion_post_wwii = sum(c["expansion_months"] for c in post_wwii if c["expansion_months"]) / len([c for c in post_wwii if c["expansion_months"]])
     avg_contraction_post_wwii = sum(c["contraction_months"] for c in post_wwii if c["contraction_months"]) / len([c for c in post_wwii if c["contraction_months"]])
+    # From the dated cycles, not a literal: the last entry is either a completed cycle (expansion since
+    # its trough) or an announced peak without a trough yet (recession since that peak).
+    latest = NBER_BUSINESS_CYCLES[-1]
+    latest_trough = latest["trough"] or next((c["trough"] for c in reversed(NBER_BUSINESS_CYCLES) if c["trough"]), None)
+    current_status = (f"Expansion since the {latest['trough']} trough (no later NBER-dated peak)" if latest["trough"]
+                      else f"Recession since the {latest['peak']} peak (NBER-dated, trough not yet announced)")
     return {
         "source": "NBER Business Cycle Dating Committee",
         "url": "https://www.nber.org/research/business-cycle-dating",
         "total_cycles": len(NBER_BUSINESS_CYCLES),
-        "latest_trough": "2020-04",
-        "current_status": "Expansion (as of 2024)",
+        "latest_trough": latest_trough,
+        "current_status": current_status,
         "statistics": {
             "all_cycles": {
                 "avg_expansion_months": round(avg_expansion, 1),
@@ -148,11 +154,14 @@ def get_business_cycle_dates() -> Dict:
     }
 
 
-def get_recession_indicator(start_date: str = "2000-01", end_date: str = "2024-12") -> Dict:
+def get_recession_indicator(start_date: str = "2000-01", end_date: str = "") -> Dict:
+    from datetime import datetime
+    end_date = end_date or datetime.now().strftime("%Y-%m")  # default: through the current month
+
     def in_recession(date_str: str) -> bool:
         for cycle in NBER_BUSINESS_CYCLES:
             peak = cycle["peak"]
-            trough = cycle["trough"]
+            trough = cycle["trough"] or "9999-12"  # an announced peak without a trough: still in recession
             if peak <= date_str <= trough:
                 return True
         return False
@@ -319,7 +328,7 @@ def main(args=None):
         result = get_business_cycle_dates()
     elif command == "recession":
         start_date = args[1] if len(args) > 1 else "2000-01"
-        end_date = args[2] if len(args) > 2 else "2024-12"
+        end_date = args[2] if len(args) > 2 else ""
         result = get_recession_indicator(start_date, end_date)
     elif command == "macro":
         series_id = args[1] if len(args) > 1 else ""

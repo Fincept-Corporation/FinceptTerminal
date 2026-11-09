@@ -1290,11 +1290,10 @@ void NodeEditorScreen::on_show_templates() {
         auto n2 = make_node("market.get_news", "Fetch News", 400, 200);
         set_param(n2, "symbol", "AAPL");
         set_param(n2, "limit", 20);
-        auto n3 = make_node("transform.filter", "Filter Relevant", 700, 200);
-        set_param(n3, "field", "relevance");
-        set_param(n3, "operator", "greater_than");
-        set_param(n3, "value", "0.7");
-        auto n4 = make_node("agent.run", "Sentiment Agent", 1000, 200);
+        // The fetched articles go straight to the agent. (A "relevance > 0.7" filter used to
+        // sit here, but articles carry no relevance field, and transform.filter treats the
+        // {articles: [...]} object as one item — so it always passed nothing on.)
+        auto n4 = make_node("agent.run", "Sentiment Agent", 700, 200);
         set_param(n4, "extra_instructions",
                   "Analyze the sentiment of the news articles in the context. "
                   "Answer with one word, BULLISH or BEARISH, followed by a one-sentence reason.");
@@ -1307,8 +1306,7 @@ void NodeEditorScreen::on_show_templates() {
         auto n8 = make_node("output.results_display", "Signal", 1900, 100);
         auto n9 = make_node("output.results_display", "No Action", 1900, 350);
         make_edge(n1.id, "output_main", n2.id, "input_0");
-        make_edge(n2.id, "output_main", n3.id, "input_0");
-        make_edge(n3.id, "output_main", n4.id, "input_0");
+        make_edge(n2.id, "output_main", n4.id, "input_0");
         make_edge(n4.id, "output_main", n5.id, "input_0");
         make_edge(n5.id, "output_true", n6.id, "input_0");
         make_edge(n5.id, "output_false", n7.id, "input_0");

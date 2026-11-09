@@ -15,3 +15,7 @@ updates.json.sig -text
 # a Windows checkout (core.autocrlf=false) fails there with
 # "/usr/bin/env: 'bash\r': No such file or directory".
 *.sh text eol=lf
+
+# ── The Windows uninstaller wrapper must stay CRLF ──────────────────────────
+# cmd.exe mis-parses LF-only batch files (labels, parenthesised blocks).
+fincept-qt/packaging/uninstall/*.cmd text eol=crlf

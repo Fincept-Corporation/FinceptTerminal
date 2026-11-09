@@ -1,4 +1,9 @@
-"""SQLite Database Schema for M&A Deals"""
+"""SQLite Database Schema for M&A Deals
+
+CLI: python database_schema.py create <json>   a deal row in ma_deals columns (acquirer_name, target_name,
+  deal_value, deal_type, industry, ...; deal_id / announcement_date / status default)
+     python database_schema.py update '{"deal_id": "...", <column>: <value>, ...}'
+"""
 import sys
 import sqlite3
 from pathlib import Path

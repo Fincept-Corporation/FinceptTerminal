@@ -4,17 +4,16 @@
 
 #include "core/config/AppConfig.h"
 #include "core/logging/Logger.h"
-#include "mcp/JobRegistry.h"
 #include "mcp/SchemaValidator.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "mcp/server/CallApproval.h"
 
 #include <QCoreApplication>
+#include <QEventLoop>
 #include <QFutureWatcher>
 #include <QPointer>
 #include <QPromise>
 #include <QRegularExpression>
-#include <QSemaphore>
 #include <QSet>
 #include <QThread>
 #include <QTimer>
@@ -60,7 +59,7 @@ void McpProvider::register_tool(ToolDef tool) {
     QMutexLocker lock(&mutex_);
     QString name = tool.name;
     snapshots_.insert(name, make_snapshot(tool)); // serialise schema once
-    tools_.insert(name, std::move(tool));
+    tools_.emplace(name, std::move(tool));        // QHash::insert only copies
     ++generation_;
 }
 
@@ -69,7 +68,7 @@ void McpProvider::register_tools(std::vector<ToolDef> tools) {
     for (auto& t : tools) {
         QString name = t.name;
         snapshots_.insert(name, make_snapshot(t));
-        tools_.insert(name, std::move(t));
+        tools_.emplace(name, std::move(t));
     }
     ++generation_;
 }
@@ -148,11 +147,6 @@ std::vector<McpProvider::ToolAuditInfo> McpProvider::audit_all_tools() const {
         info.has_handler = static_cast<bool>(def.handler) || static_cast<bool>(def.async_handler);
         info.is_async = static_cast<bool>(def.async_handler);
         info.default_timeout_ms = def.default_timeout_ms;
-        info.supports_async = def.supports_async;
-        // Mirrors supports_async_jobs() without re-locking (we already hold the
-        // mutex). Kept next to it so the two can't drift.
-        info.job_eligible = static_cast<bool>(def.async_handler) &&
-                            (def.supports_async || def.default_timeout_ms > kMcpAsyncJobThresholdMs);
         info.enabled = !disabled_tools_.contains(it.key());
         info.is_destructive = def.is_destructive;
         info.auth_required = def.auth_required;
@@ -182,99 +176,32 @@ bool McpProvider::has_tool(const QString& name) const {
 // ============================================================================
 
 ToolResult McpProvider::call_tool(const QString& name, const QJsonObject& args) {
-    // Sync entry point. If the registered tool is async, we still want to
-    // give legacy callers (LlmService, TerminalToolBridge, workflow nodes)
-    // a blocking ToolResult — so we dispatch async and wait. The caller is
-    // already on a background thread (every existing call site is) so
-    // blocking here is safe; .result() drains the QFuture.
+    // Sync entry point for callers that want a blocking ToolResult (the LLM
+    // tool loops, the workflow engine, the MCP servers' worker threads). Every
+    // such caller runs on a background thread, where blocking is safe.
     auto future = call_tool_async(name, args);
+    if (qApp && QThread::currentThread() == qApp->thread() && !future.isFinished()) {
+        // Never block the GUI thread on a tool: the core UI tools do their work
+        // ON the GUI thread (and McpProvider's own watchdog lives there), so a
+        // waitForFinished() here would deadlock. Serve the event loop instead.
+        LOG_WARN(TAG, QString("call_tool('%1') on the GUI thread — serving events until it answers").arg(name));
+        QEventLoop loop;
+        QFutureWatcher<ToolResult> watcher;
+        QObject::connect(&watcher, &QFutureWatcher<ToolResult>::finished, &loop, &QEventLoop::quit);
+        watcher.setFuture(future);
+        if (!future.isFinished())
+            loop.exec();
+    }
     future.waitForFinished();
     if (future.resultCount() == 0)
         return ToolResult::fail("Tool '" + name + "' produced no result");
     return future.result();
 }
 
-bool McpProvider::supports_async_jobs(const QString& name) const {
-    QMutexLocker lock(&mutex_);
-    auto it = tools_.constFind(name);
-    if (it == tools_.constEnd() || disabled_tools_.contains(name))
-        return false;
-    // An async handler is the hard prerequisite — a sync handler runs to
-    // completion on the calling thread and can be neither observed nor
-    // interrupted, so there is nothing a job wrapper could add.
-    if (!it->async_handler)
-        return false;
-    // Eligibility is derived from the declared budget, with the explicit flag
-    // as an override. A tool that raised `default_timeout_ms` above the 30 s
-    // default has already stated its p95 is tens of seconds, which is exactly
-    // the condition the flag was supposed to encode; requiring both meant the
-    // fact had to be written twice and, in practice, was written once. Twelve
-    // tools carried the flag while ~125 qualified — 97 AI Quant Lab tools at a
-    // 300 s budget among them, each able to hold the provider's HTTP turn open
-    // for five minutes with no receipt the model could poll.
-    return it->supports_async || it->default_timeout_ms > kMcpAsyncJobThresholdMs;
-}
-
 int McpProvider::effective_timeout_ms(const QString& name) const {
     QMutexLocker lock(&mutex_);
     auto it = tools_.constFind(name);
     return it == tools_.constEnd() ? kMcpDefaultTimeoutMs : it->default_timeout_ms;
-}
-
-ToolResult McpProvider::call_tool_or_defer(const QString& name, const QJsonObject& args, int grace_ms) {
-    if (!supports_async_jobs(name))
-        return call_tool(name, args);
-
-    auto& jobs = JobRegistry::instance();
-    const QString job_id = jobs.create(name, effective_timeout_ms(name));
-
-    // Wire the job into the handler's context: cancellation reads the job's own
-    // atomic flag (no registry lock in the handler's polling loop), progress
-    // writes straight back to the snapshot the model polls.
-    ToolContext ctx;
-    if (auto flag = jobs.cancel_flag(job_id))
-        ctx.is_cancelled = [flag]() { return flag->load(); };
-    ctx.on_progress = [job_id](double progress, const QString& message) {
-        JobRegistry::instance().set_progress(job_id, progress, message);
-    };
-
-    auto future = call_tool_async(name, args, ctx);
-
-    // One continuation per QFuture is the Qt limit, and this is it — the future
-    // is never handed to anyone else, so there is no contention.
-    auto gate = std::make_shared<QSemaphore>(0);
-    future.then([job_id, gate](QFuture<ToolResult> f) {
-        // A handler is allowed to finish without ever adding a result; treat
-        // that as a failure rather than dereferencing an empty future.
-        JobRegistry::instance().complete(job_id, f.resultCount() > 0
-                                                     ? f.result()
-                                                     : ToolResult::fail("Tool produced no result"));
-        gate->release();
-    });
-
-    if (gate->tryAcquire(1, std::max(0, grace_ms))) {
-        // Beat the grace window — hand back the real result and let the job
-        // record expire on the short collected-TTL. The model never learns a
-        // job existed, which is the point: fast calls stay one round-trip.
-        if (auto r = jobs.take_result(job_id))
-            return *r;
-        return ToolResult::fail("Job " + job_id + " finished without a result");
-    }
-
-    LOG_INFO(TAG, QString("Tool '%1' exceeded the %2 ms grace window — backgrounded as %3")
-                      .arg(name)
-                      .arg(grace_ms)
-                      .arg(job_id));
-
-    return ToolResult::ok(QString("Started background job %1 for '%2'. Poll job_status(job_id='%1', wait_ms=20000) "
-                                  "until status is 'succeeded' or 'failed', then call job_result(job_id='%1'). "
-                                  "Do NOT call '%2' again — it is already running.")
-                              .arg(job_id, name),
-                          QJsonObject{
-                              {"job_id", job_id},
-                              {"status", "running"},
-                              {"tool", name},
-                          });
 }
 
 QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJsonObject& args, ToolContext ctx) {
@@ -353,7 +280,7 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
         // hook. Wired into ctx.is_cancelled below.
         auto cancelled = std::make_shared<std::atomic<bool>>(false);
         // Whether the CALLER supplied a hook (i.e. this call runs under a job and
-        // `job_cancel` can flip it). Composition below hides that distinction, and
+        // a cancel can flip it). Composition below hides that distinction, and
         // it decides whether the cancellation watch is worth arming: our own
         // internal flag is only ever raised by the timeout timer, which already
         // resolves the promise itself.
@@ -429,7 +356,7 @@ QFuture<ToolResult> McpProvider::call_tool_async(const QString& name, const QJso
         QMetaObject::invokeMethod(
             watchdog, [watchdog, ms = ctx.timeout_ms]() { watchdog->start(ms); }, Qt::QueuedConnection);
 
-        // Cancellation watch. `job_cancel` raises a flag and the contract says
+        // Cancellation watch. A cancel raises a flag and the contract says
         // handlers poll it — but almost none do, and the ones that do check it
         // only in their completion callback, i.e. after the work they were meant
         // to abandon has already finished. So cancelling a 300 s backtest freed

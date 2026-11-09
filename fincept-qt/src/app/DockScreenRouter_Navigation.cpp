@@ -301,6 +301,15 @@ void DockScreenRouter::add_alongside(const QString& primary, const QString& seco
 void DockScreenRouter::remove_screen(const QString& primary) {
     // Close all panels except primary, which expands to fill the area.
     auto* keep = find_dock_widget(primary);
+    if (!keep || !keep->dockManager()) {
+        // Never built, or closed earlier and detached by prune_hidden_panels():
+        // it has no dock area to expand into, so the loop below would close
+        // every other panel and toggleView(true) would then show nothing — an
+        // empty frame. navigate(exclusive) creates / re-attaches it and closes
+        // the rest itself (and refuses an unknown id without closing anything).
+        navigate(primary, /*exclusive=*/true);
+        return;
+    }
     for (auto* dw : manager_->dockWidgetsMap()) {
         if (dw != keep && !dw->isClosed())
             dw->toggleView(false);
@@ -342,17 +351,25 @@ void DockScreenRouter::ensure_all_registered() {
     suppress_visibility_materialize_ = true;
     ads::CDockAreaWidget* first_area = nullptr;
     for (const QString& id : all_ids) {
-        if (!dock_widgets_.contains(id)) {
-            auto* dw = create_dock_widget(id);
-            // Add all widgets as tabs in the SAME dock area to avoid
-            // creating 47 vertical splits. The first widget creates the area,
-            // all subsequent ones tab into it.
-            if (first_area)
-                manager_->addDockWidget(ads::CenterDockWidgetArea, dw, first_area);
-            else
-                first_area = manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
-            dw->toggleView(false); // start hidden
-        }
+        ads::CDockWidget* dw = dock_widgets_.value(id, nullptr);
+        // "Registered" means the MANAGER can find it by objectName — that is
+        // the lookup restoreState() does. Owning it in dock_widgets_ is not
+        // enough: prune_hidden_panels() removeDockWidget()s every closed panel
+        // but keeps it alive here, so after the user navigated away from a
+        // panel, applying a saved layout that contains it found nothing to
+        // place and restored an empty frame (#412).
+        if (dw && manager_->findDockWidget(id))
+            continue;
+        if (!dw)
+            dw = create_dock_widget(id);
+        // Add all widgets as tabs in the SAME dock area to avoid
+        // creating 47 vertical splits. The first widget creates the area,
+        // all subsequent ones tab into it.
+        if (first_area)
+            manager_->addDockWidget(ads::CenterDockWidgetArea, dw, first_area);
+        else
+            first_area = manager_->addDockWidget(ads::CenterDockWidgetArea, dw);
+        dw->toggleView(false); // start hidden
     }
     suppress_visibility_materialize_ = false;
     // Apply theme directly to all title bars and tabs created above.

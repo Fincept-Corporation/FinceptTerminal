@@ -1,4 +1,8 @@
-"""Integration Cost Analysis"""
+"""Integration Cost Analysis
+
+CLI: python integration_costs.py estimate <json>   keys deal_value, combined_revenue, combined_headcount,
+  integration_complexity. Native form: integration <category> <json>.
+"""
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum

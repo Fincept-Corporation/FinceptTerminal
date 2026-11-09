@@ -1,8 +1,10 @@
 // src/screens/economics/panels/TradingEconomicsPanel.cpp
 // Trading Economics panel. Requires TRADING_ECONOMICS_API_KEY env var.
 //
-// Working commands (with key): ratings, ratings_by_agency, bonds,
-//   us_treasuries, european_bonds, yield_curve, country_data, calendar
+// Commands (with key): ratings, us_treasuries, european_bonds, yield_curve <country>,
+//   country_data <country>, calendar. Countries go to the API by name ("united states"), the form
+//   its URLs take. "ratings" answers one row per country and agency (Country, Date, Agency, Rating,
+//   Outlook) — the API has no agency filter, so there is no separate by-agency dataset.
 // Response shape varies per command — normalised via extract_te_rows().
 #include "screens/economics/panels/TradingEconomicsPanel.h"
 
@@ -29,16 +31,27 @@ struct TeDataset {
 };
 
 static const QList<TeDataset> kTEDatasets = {
-    {"Credit Ratings (All)", "ratings", ""},         {"Credit Ratings by Agency", "ratings_by_agency", ""},
-    {"US Treasuries", "us_treasuries", ""},          {"European Bonds", "european_bonds", ""},
-    {"Bond Yield Curve", "yield_curve", "required"}, {"Country Economic Data", "country_data", "required"},
+    {"Credit Ratings (All)", "ratings", ""},
+    {"US Treasuries", "us_treasuries", ""},
+    {"European Bonds", "european_bonds", ""},
+    {"Bond Yield Curve", "yield_curve", "required"},
+    {"Country Economic Data", "country_data", "required"},
     {"Economic Calendar", "calendar", ""},
 };
 
 static const QList<QPair<QString, QString>> kTECountries = {
-    {"United States", "US"}, {"Germany", "DE"},   {"Japan", "JP"},  {"United Kingdom", "GB"},
-    {"France", "FR"},        {"Italy", "IT"},     {"China", "CN"},  {"Brazil", "BR"},
-    {"India", "IN"},         {"Australia", "AU"}, {"Canada", "CA"}, {"Spain", "ES"},
+    {"United States", "united states"},
+    {"Germany", "germany"},
+    {"Japan", "japan"},
+    {"United Kingdom", "united kingdom"},
+    {"France", "france"},
+    {"Italy", "italy"},
+    {"China", "china"},
+    {"Brazil", "brazil"},
+    {"India", "india"},
+    {"Australia", "australia"},
+    {"Canada", "canada"},
+    {"Spain", "spain"},
 };
 
 TradingEconomicsPanel::TradingEconomicsPanel(QWidget* parent)
@@ -129,9 +142,14 @@ static QJsonArray extract_te_rows(const QJsonObject& data) {
     if (!arr.isEmpty())
         return arr;
 
-    // Shape 5: single object with country data fields — wrap in array
-    if (data.contains("country") || data.contains("gdp") || data.contains("inflation")) {
-        return QJsonArray{data};
+    // Shape 5: country_data — {country, credit_ratings: {data: [...]}, bond_yields: {data: [...]},
+    // summary}: list the rating rows and the bond rows (each part may hold an {error} instead).
+    if (data.contains("credit_ratings") || data.contains("bond_yields")) {
+        QJsonArray rows;
+        for (const char* part : {"credit_ratings", "bond_yields"})
+            for (const auto& v : data.value(QLatin1String(part)).toObject().value(QStringLiteral("data")).toArray())
+                rows.append(v);
+        return rows;
     }
 
     return {};

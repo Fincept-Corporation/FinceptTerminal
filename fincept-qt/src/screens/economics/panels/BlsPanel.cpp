@@ -1,12 +1,12 @@
 // src/screens/economics/panels/BlsPanel.cpp
 // BLS data panel. Requires BLS_API_KEY environment variable.
 //
-// Response shape (series overview commands):
-//   { series: [{series_id, title, data:[{year,period,value,...}]}] }
-// or for overview commands:
-//   { series_data: [...] } / { data: [...] }
+// Response shape (bls_data.py):
+//   get_series:  { success, data: { series_data: [row...], metadata, messages: [string...] } }
+//   overviews:   { success, data: { <group>: [row...], ..., summary | description } }
+//   row:         { symbol, year, period, date, value, title?, footnotes?, latest, annual_average? }
 //
-// Error shape when no key:
+// Error shape (PythonRunner turns it into a failed result):
 //   { error: true, message: "BLS API key required...", endpoint, status_code, timestamp }
 #include "screens/economics/panels/BlsPanel.h"
 
@@ -142,52 +142,66 @@ void BlsPanel::on_fetch() {
     }
 }
 
-// Normalize various BLS response shapes into a flat QJsonArray for display().
-static QJsonArray extract_bls_rows(const QJsonObject& data) {
-    // Shape 1: {series:[{series_id, title, data:[{year,period,value}]}]}
-    const QJsonArray series_arr = data["series"].toArray();
-    if (!series_arr.isEmpty()) {
-        QJsonArray rows;
-        for (const auto& sv : series_arr) {
-            const QJsonObject s = sv.toObject();
-            const QString title = s["title"].toString(s["series_id"].toString());
-            for (const auto& dv : s["data"].toArray()) {
-                QJsonObject row = dv.toObject();
-                row["series"] = title;
-                // BLS periods: M01–M12 monthly, M13 = ANNUAL AVERAGE,
-                // Q01–Q04 quarterly (Q05 = annual avg), S01–S02 semi-annual
-                // (S03 = annual avg), A01 annual.
-                const QString year = row["year"].toString();
-                const QString period = row["period"].toString();
-                if (year.isEmpty() || period.isEmpty())
-                    continue;
-                // Drop the synthetic annual-average rows: mixing them into a
-                // monthly/quarterly series inflates the point count and skews
-                // MIN/MAX/AVG, and (having no calendar date) they sorted to the
-                // front and could be picked up as CHANGE's "previous" value.
-                if (period == "M13" || period == "Q05" || period == "S03")
-                    continue;
-                const QChar freq = period.at(0);
-                const int num = period.mid(1).toInt();
-                if (freq == QLatin1Char('M'))
-                    row["date"] = year + "-" + QString::number(num).rightJustified(2, '0'); // 2024-03
-                else if (freq == QLatin1Char('Q'))
-                    row["date"] = year + "-Q" + QString::number(num); // 2024-Q1 (sorts correctly)
-                else if (freq == QLatin1Char('S'))
-                    row["date"] = year + "-S" + QString::number(num);
-                else
-                    row["date"] = year; // annual
-                rows.append(row);
-            }
-        }
-        return rows;
+// Flatten bls_data.py's answer (see the shape at the top of this file) into display rows
+// {date, value, series, series_id[, footnotes]}.
+static QJsonArray extract_bls_rows(const QJsonObject& result) {
+    const QJsonObject payload = result.value(QStringLiteral("data")).toObject();
+    QJsonArray source = payload.value(QStringLiteral("series_data")).toArray();
+    if (source.isEmpty()) {
+        // Overview commands: one array of rows per group (unemployment_rate, core_cpi, ...).
+        for (auto it = payload.constBegin(); it != payload.constEnd(); ++it)
+            if (it.value().isArray())
+                for (const auto& v : it.value().toArray())
+                    source.append(v);
     }
 
-    // Shape 2: {series_data:[...]} or {data:[...]}
-    QJsonArray fallback = data["series_data"].toArray();
-    if (fallback.isEmpty())
-        fallback = data["data"].toArray();
-    return fallback;
+    QJsonArray rows;
+    for (const auto& v : std::as_const(source)) {
+        if (!v.isObject())
+            continue; // e.g. the "messages" strings
+        const QJsonObject r = v.toObject();
+        // BLS periods: M01–M12 monthly, M13 = ANNUAL AVERAGE, Q01–Q04 quarterly (Q05 = annual
+        // avg), S01–S02 semi-annual (S03 = annual avg), A01 annual.
+        const QString year = r.value(QStringLiteral("year")).toString();
+        const QString period = r.value(QStringLiteral("period")).toString();
+        // Drop the synthetic annual-average rows: mixing them into a monthly/quarterly series
+        // inflates the point count and skews MIN/MAX/AVG and CHANGE's "previous" value.
+        if (r.value(QStringLiteral("annual_average")).toBool() || period == QLatin1String("M13") ||
+            period == QLatin1String("Q05") || period == QLatin1String("S03"))
+            continue;
+        QString date;
+        if (!year.isEmpty() && period.size() >= 2) {
+            const QChar freq = period.at(0);
+            const int num = period.mid(1).toInt();
+            if (freq == QLatin1Char('M'))
+                date = year + "-" + QString::number(num).rightJustified(2, '0'); // 2024-03
+            else if (freq == QLatin1Char('Q'))
+                date = year + "-Q" + QString::number(num); // 2024-Q1 (sorts correctly)
+            else if (freq == QLatin1Char('S'))
+                date = year + "-S" + QString::number(num);
+            else
+                date = year; // annual
+        } else {
+            date = r.value(QStringLiteral("date")).toString(); // period-start date (older answers)
+        }
+        if (date.isEmpty())
+            continue;
+
+        const QString series_id = r.value(QStringLiteral("symbol")).toString();
+        QString series = r.value(QStringLiteral("title")).toString();
+        if (series.isEmpty())
+            series = series_id; // BLS has no catalog entry for some surveys (e.g. JOLTS)
+        QJsonObject row;
+        row[QStringLiteral("date")] = date;
+        row[QStringLiteral("value")] = r.value(QStringLiteral("value"));
+        row[QStringLiteral("series")] = series;
+        row[QStringLiteral("series_id")] = series_id;
+        const QString footnotes = r.value(QStringLiteral("footnotes")).toString();
+        if (!footnotes.isEmpty())
+            row[QStringLiteral("footnotes")] = footnotes;
+        rows.append(row);
+    }
+    return rows;
 }
 
 void BlsPanel::on_result(const QString& request_id, const services::EconomicsResult& result) {

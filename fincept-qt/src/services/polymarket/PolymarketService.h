@@ -14,7 +14,7 @@ namespace fincept::services::polymarket {
 /// Uses three public APIs:
 ///   - Gamma API  (gamma-api.polymarket.com) — markets, events, tags, comments, teams, search
 ///   - CLOB API   (clob.polymarket.com)      — order book, prices, price history
-///   - Data API   (data-api.polymarket.com)   — trades, top holders, leaderboard, activity
+///   - Data API v2 (data-api.polymarket.com/v2) — trades, top holders, leaderboard, activity
 class PolymarketService : public QObject {
     Q_OBJECT
   public:
@@ -33,7 +33,8 @@ class PolymarketService : public QObject {
     void fetch_event_by_id(int id);
     void fetch_related_markets(int event_id);
     void fetch_tags();
-    void fetch_comments(const QString& condition_id, int limit = 50);
+    /// Comments are attached to the market's parent event, not the market itself.
+    void fetch_comments(int event_id, int limit = 50);
     void fetch_teams(const QString& league = "");
 
     // ── CLOB API ─────────────────────────────────────────────────────────
@@ -47,7 +48,8 @@ class PolymarketService : public QObject {
     void fetch_trades(const QString& condition_id, int limit = 100);
     void fetch_top_holders(const QString& condition_id, int limit = 20);
     void fetch_leaderboard(int limit = 50);
-    void fetch_activity(const QString& condition_id, int limit = 50);
+    /// Wallet activity feed (v2 /activity is user-anchored; a market id alone is rejected).
+    void fetch_activity(const QString& user, int limit = 50);
     void fetch_live_volume(const QString& event_id);
     void fetch_open_interest(const QStringList& condition_ids);
 

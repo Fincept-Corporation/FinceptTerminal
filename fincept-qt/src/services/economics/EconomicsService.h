@@ -45,6 +45,14 @@ class EconomicsService : public QObject, public fincept::datahub::Producer {
     void execute(const QString& source_id, const QString& script, const QString& command, const QStringList& args,
                  const QString& request_id);
 
+    /// Record how to produce `econ:<source_id>:<request_id>` WITHOUT running it, so a pure hub
+    /// subscriber (e.g. a dashboard tile) gets its data from refresh() alone: the hub's cold-start
+    /// fetch, TTL refreshes and `request(topic, true)`. Same arguments as execute(); returns the topic.
+    /// Calling execute() and then subscribing would run the script twice on a cache miss (execute()
+    /// plus the hub's cold-start refresh()).
+    QString remember_topic(const QString& source_id, const QString& script, const QString& command,
+                           const QStringList& args, const QString& request_id);
+
     /// Register with the hub + install econ:* policies. Idempotent.
     void ensure_registered_with_hub();
 
@@ -54,7 +62,7 @@ class EconomicsService : public QObject, public fincept::datahub::Producer {
     /// usually carries the series id or query hash).
     QStringList topic_patterns() const override;
     /// Split topic by `:` → source, request_id. If a pending dispatch
-    /// record exists for that topic (registered via `remember_topic_*`),
+    /// record exists for that topic (left by execute() or remember_topic()),
     /// re-execute it. Otherwise no-op — scheduler-driven refresh without
     /// a prior execute() call is a no-op since we don't know the script.
     void refresh(const QStringList& topics) override;

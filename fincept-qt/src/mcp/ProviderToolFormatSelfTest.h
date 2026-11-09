@@ -8,14 +8,12 @@
 // until a user with that provider selected finds that tool calling silently
 // does nothing.
 //
-// Why this exists: the three dialects had drifted apart. The OpenAI path went
-// through format_tools_for_openai (Tool RAG Tier-0, activation feedback,
-// name encoding) while Anthropic and Gemini called get_all_tools() and hand-
-// rolled their arrays, so they shipped an arbitrary 50-tool slice of a ~900
-// tool catalogue; Gemini additionally forwarded raw JSON Schema into a field
-// that only accepts an OpenAPI subset, where one unrecognised key or one
-// empty `properties` object fails the whole request. Nothing in the build
-// caught any of it.
+// Why this exists: the three dialects once drifted apart — Anthropic and Gemini
+// hand-rolled their arrays from a different selection than OpenAI, and Gemini
+// forwarded raw JSON Schema into a field that only accepts an OpenAPI subset,
+// where one unrecognised key or one empty `properties` object fails the whole
+// request. All three now go through McpService::format_tools_for_*, and this
+// suite keeps them honest.
 //
 // Invoked from main() via `--selftest-llm-tools`, after initialize_all_tools()
 // registers the real catalog, so it tests exactly what ships.

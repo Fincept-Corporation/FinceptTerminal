@@ -2,6 +2,8 @@
 Business Cycle Indicators — Fetch key economic indicators via yfinance/FRED proxies.
 Input: JSON via stdin (can be empty {})
 Output: JSON with current economic indicators
+
+CLI: python business_cycle.py get_indicators '{}'   (market proxies via yfinance; no parameters)
 """
 import sys
 import json

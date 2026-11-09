@@ -46,6 +46,17 @@ class KalshiRestClient : public QObject {
                        const QString& cursor = QString());
     /// GET /markets/{ticker} — single market detail.
     void fetch_market(const QString& ticker);
+
+    using MarketsCallback = std::function<void(const QVector<fincept::services::prediction::PredictionMarket>&)>;
+    using ErrorCallback = std::function<void(const QString& message)>;
+    /// GET /markets?tickers=A,B,… — one batched request, answered through the callbacks only.
+    /// Unlike fetch_markets() it emits NO signal: markets_ready / request_error are broadcast to every
+    /// KalshiAdapter listener (the Prediction Markets screen), which must not see hub-producer traffic.
+    /// No status filter, so closed / settled markets come back too. Tickers Kalshi does not know are
+    /// simply absent from the result. Each market carries parse_market()'s extras plus
+    /// previous_price_dollars / previous_yes_bid_dollars / previous_yes_ask_dollars (24 h ago) and
+    /// result ("yes" / "no" once determined). Called on this object's thread; the callbacks run there.
+    void fetch_markets_by_tickers(const QStringList& tickers, MarketsCallback on_ok, ErrorCallback on_error);
     /// GET /events — paginated; event_list with optional status filter.
     void fetch_events(const QString& status = QStringLiteral("open"), const QString& series_ticker = QString(),
                       bool with_nested_markets = true, int limit = 100, const QString& cursor = QString());

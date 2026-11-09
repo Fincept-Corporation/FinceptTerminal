@@ -15,6 +15,14 @@ import requests
 import pandas as pd
 from numpy import nan
 
+# Every result print goes through fincept_json: a non-finite number prints null instead of the
+# bare NaN token, which is not JSON and makes the terminal discard the whole payload.
+try:
+    import fincept_json
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_json
+
 # Constants
 BASE_API_URL = "https://api.eia.gov/v2/"
 USER_AGENTS = [
@@ -51,9 +59,19 @@ WPSR_FILE_MAP = {
     "imports": "https://ir.eia.gov/wpsr/psw07.xls",
     "imports_by_country": "https://ir.eia.gov/wpsr/psw08.xls",
     "weekly_estimates": "https://ir.eia.gov/wpsr/psw09.xls",
-    "spot_prices_crude_gas_heating": "https://ir.eia.gov/wpsr/psw11.xls",
-    "spot_prices_diesel_jet_fuel_propane": "https://ir.eia.gov/wpsr/psw12.xls",
-    "retail_prices": "https://ir.eia.gov/wpsr/psw14.xls",
+    # psw11 / psw12 / psw14 answer HTTP 403 now (checked 2026-11-09). EIA's own history
+    # workbooks carry the same series in the same layout: daily spot prices (sheets
+    # Data 1-4 crude / gasoline / RBOB / heating oil, Data 5-7 ULSD / jet fuel / propane)
+    # and weekly retail gasoline and diesel prices.
+    "spot_prices_crude_gas_heating": "https://www.eia.gov/dnav/pet/xls/PET_PRI_SPT_S1_D.xls",
+    "spot_prices_diesel_jet_fuel_propane": "https://www.eia.gov/dnav/pet/xls/PET_PRI_SPT_S1_D.xls",
+    "retail_prices": "https://www.eia.gov/dnav/pet/xls/PET_PRI_GND_DCUS_NUS_W.xls",
+}
+
+# Categories that read only some sheets of a shared workbook
+WPSR_SHEETS = {
+    "spot_prices_crude_gas_heating": {"Data 1", "Data 2", "Data 3", "Data 4"},
+    "spot_prices_diesel_jet_fuel_propane": {"Data 5", "Data 6", "Data 7"},
 }
 
 # STEO Table mappings (subset for commonly used tables)
@@ -126,58 +144,72 @@ class EIADataFetcher:
             raise EIAError(_redact_api_key(f"Unexpected error fetching {url}: {str(e)}"))
 
     def _parse_petroleum_excel(self, excel_data: bytes, category: str, tables: List[str]) -> List[Dict]:
-        """Parse petroleum status report Excel data"""
+        """Parse an EIA petroleum workbook into long rows.
+
+        Every "Data N" sheet has a title row ("Data 1: Stocks of Crude Oil ..."), a "Sourcekey" row
+        with the series ids, a "Date" row with the series names, then one row per date; the
+        "Contents" sheet has no data. Reading the title row as the header labelled every series
+        with the sheet title or "Unnamed: N", so the values could not be told apart.
+
+        `tables` keeps only the series whose sheet name, sheet title or series name contains one of
+        the given words ("conventional_gas" matches "Conventional Gasoline"); "all" keeps all.
+        """
         try:
-            # Read all sheets
             xls = pd.ExcelFile(BytesIO(excel_data))
-            sheet_names = xls.sheet_names
+            wanted_sheets = WPSR_SHEETS.get(category)
+            words = [t.strip().lower().replace("_", " ") for t in (tables or []) if t and t.strip()]
+            if "all" in words:
+                words = []
             results = []
 
-            for sheet_name in sheet_names:
-                df = pd.read_excel(xls, sheet_name=sheet_name)
-
-                # Skip empty sheets
-                if df.empty or len(df) < 2:
+            for sheet_name in xls.sheet_names:
+                if wanted_sheets is not None and sheet_name not in wanted_sheets:
+                    continue
+                raw = pd.read_excel(xls, sheet_name=sheet_name, header=None)
+                if raw.empty or raw.shape[1] < 2:
                     continue
 
-                # Find date column (could be various names)
-                date_col = None
-                for col in df.columns:
-                    if any(keyword in str(col).lower() for keyword in ['date', 'week', 'period']):
-                        date_col = col
-                        break
+                first_col = raw.iloc[:, 0].astype(str).str.strip()
+                date_rows = list(first_col.index[first_col == "Date"])
+                if not date_rows:
+                    continue  # the Contents sheet, or a layout this parser does not know
+                header = date_rows[0]
+                key_rows = list(first_col.index[first_col == "Sourcekey"])
+                names = raw.iloc[header].tolist()
+                keys = raw.iloc[key_rows[0]].tolist() if key_rows else names
+                sheet_title = str(raw.iloc[0, 1]).strip() if header > 0 and pd.notna(raw.iloc[0, 1]) else sheet_name
 
-                if date_col is None:
-                    # Try first column as date
-                    date_col = df.columns[0]
+                data = raw.iloc[header + 1:]
+                dates = pd.to_datetime(data.iloc[:, 0], errors="coerce")
 
-                # Clean and convert date column
-                df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-                df = df.dropna(subset=[date_col])
-                df[date_col] = df[date_col].dt.date
-
-                # Melt the dataframe to long format
-                id_vars = [date_col]
-                value_vars = [col for col in df.columns if col != date_col]
-
-                if len(value_vars) > 0:
-                    melted_df = df.melt(id_vars=id_vars, value_vars=value_vars,
-                                      var_name='symbol', value_name='value')
-                    melted_df = melted_df.dropna(subset=['value'])
-
-                    # Add results
-                    for _, row in melted_df.iterrows():
+                for col in range(1, raw.shape[1]):
+                    title = str(names[col]).strip() if pd.notna(names[col]) else ""
+                    symbol = str(keys[col]).strip() if pd.notna(keys[col]) else ""
+                    if not title and not symbol:
+                        continue
+                    haystack = f"{sheet_name} {sheet_title} {title}".lower()
+                    if words and not any(w in haystack for w in words):
+                        continue
+                    values = pd.to_numeric(data.iloc[:, col], errors="coerce")
+                    for day, value in zip(dates, values):
+                        if pd.isna(day) or pd.isna(value):
+                            continue
                         results.append({
-                            "date": row[date_col].strftime("%Y-%m-%d"),
+                            "date": day.strftime("%Y-%m-%d"),
                             "category": category,
-                            "table": sheet_name,
-                            "symbol": str(row['symbol']),
-                            "value": float(row['value']) if pd.notna(row['value']) else None,
+                            "table": sheet_title,
+                            "symbol": symbol or title,
+                            "title": title,
+                            "value": float(value),
                             "source": "petroleum_status_report"
                         })
 
+            if not results and words:
+                raise EIAError(f"No {category} series match tables={','.join(tables)}")
             return results
 
+        except EIAError:
+            raise
         except Exception as e:
             raise EIAError(f"Error parsing petroleum Excel data for {category}: {str(e)}")
 
@@ -394,7 +426,7 @@ class EIADataFetcher:
             except Exception as e:
                 errors.append(("natural_gas", str(e)))
 
-        return {
+        overview = {
             "success": len(results) > 0,
             "results": results,
             "errors": errors,
@@ -402,6 +434,11 @@ class EIADataFetcher:
             "successful_fetches": len(results),
             "failed_fetches": len(errors)
         }
+        if not results:
+            # "success": false alone is not read as a failure by the terminal (it looks for
+            # "error"), so a run where every fetch failed showed as an empty success.
+            overview["error"] = "; ".join(f"{name}: {msg}" for name, msg in errors) or "No EIA data fetched"
+        return overview
 
 def main(args=None):
     
@@ -438,7 +475,7 @@ def main(args=None):
             end_date = args[4] if len(args) + 1 > 5 else None
 
             result = fetcher.get_petroleum_status_report(category, tables, start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "get_steo":
             # Usage: get_steo <table> [symbols_csv] [frequency] [start_date] [end_date]
@@ -456,52 +493,52 @@ def main(args=None):
             end_date = sys.argv[6] if len(args) + 1 > 6 else None
 
             result = fetcher.get_short_term_energy_outlook(table, symbols, frequency, start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "available_categories":
             result = fetcher.get_available_categories()
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "available_steo_tables":
             result = fetcher.get_available_steo_tables()
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "energy_overview":
             limit = int(args[1]) if len(args) + 1 > 2 else None
             result = fetcher.get_energy_overview(limit)
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "get_crude_stocks":
             # Convenience method for crude stocks
             result = fetcher.get_petroleum_status_report("crude_petroleum_stocks", ["stocks"])
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "get_gasoline_stocks":
             # Convenience method for gasoline stocks
             result = fetcher.get_petroleum_status_report("gasoline_fuel_stocks", ["stocks"])
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "get_petroleum_imports":
             # Convenience method for petroleum imports
             start_date = args[1] if len(args) + 1 > 2 else None
             end_date = args[2] if len(args) + 1 > 3 else None
             result = fetcher.get_petroleum_status_report("imports", ["imports"], start_date, end_date)
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "get_spot_prices":
             # Convenience method for spot prices
             result = fetcher.get_petroleum_status_report("spot_prices_crude_gas_heating", ["crude", "conventional_gas"])
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "get_energy_markets_summary":
             # Convenience method for energy markets summary
             result = fetcher.get_short_term_energy_outlook("01", frequency="month")
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         elif command == "get_natural_gas_summary":
             # Convenience method for natural gas summary
             result = fetcher.get_short_term_energy_outlook("05a", frequency="month")
-            print(json.dumps(result, indent=2))
+            print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
         else:
             print(json.dumps({

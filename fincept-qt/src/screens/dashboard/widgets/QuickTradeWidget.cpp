@@ -38,6 +38,9 @@ QuickTradeWidget::QuickTradeWidget(const QJsonObject& cfg, QWidget* parent)
     vl->setContentsMargins(10, 10, 10, 10);
     vl->setSpacing(8);
 
+    // Order entry: follows a link group only once the user links the tile.
+    enable_symbol_link(/*follows=*/true, /*joins_default_group=*/false);
+
     // ── Symbol search bar ──
     auto* search_row = new QWidget(this);
     auto* srl = new QHBoxLayout(search_row);
@@ -189,6 +192,20 @@ void QuickTradeWidget::apply_config(const QJsonObject& cfg) {
         lookup_symbol();
 }
 
+void QuickTradeWidget::on_linked_symbol(const SymbolRef& ref) {
+    const QString sym = ref.symbol.trimmed().toUpper();
+    // Indices, FX, futures and crypto pairs cannot be ordered here.
+    if (sym.isEmpty() || !is_tradable_equity(sym) || sym == current_symbol_)
+        return;
+    symbol_input_->setText(sym);
+    lookup_symbol(); // persists the symbol; subscribes only while visible
+}
+
+SymbolRef QuickTradeWidget::linked_symbol() const {
+    const QString sym = current_symbol_.isEmpty() ? symbol_input_->text().trimmed() : current_symbol_;
+    return sym.isEmpty() ? SymbolRef{} : SymbolRef::equity(sym);
+}
+
 void QuickTradeWidget::update_estimate() {
     const double qty = qty_input_->text().toDouble();
     const bool priced_order = order_type_->currentIndex() != 0;
@@ -268,8 +285,10 @@ void QuickTradeWidget::lookup_symbol() {
     // The first lookup on show just confirms the configured symbol.
     const bool symbol_changed = !current_symbol_.isEmpty() && sym != current_symbol_;
     current_symbol_ = sym;
-    if (symbol_changed)
+    if (symbol_changed) {
         emit config_changed(config());
+        publish_symbol(sym); // no-op when unlinked or already the group's symbol
+    }
     // Subscribing while hidden (e.g. an MCP "refresh all") would keep the
     // topic polled until the next hide; showEvent() looks up again.
     if (!isVisible())

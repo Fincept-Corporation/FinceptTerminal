@@ -116,6 +116,24 @@ QString validate_legacy(const QString& /*key*/, const QJsonObject& spec, const Q
 } // anonymous namespace
 
 Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
+    // ── Step 0: an explicit null for an OPTIONAL parameter means "not given" ──
+    // OpenAI strict function calling, and many models without it, send every
+    // optional field as null ("symbol": null). That used to fail the whole call
+    // with "expected string", so the model retried with guesses. Dropping the key
+    // lets its default apply. A null for a REQUIRED parameter is still an error.
+    {
+        QStringList required = schema.required;
+        for (auto it = schema.params.constBegin(); it != schema.params.constEnd(); ++it) {
+            if (it.value().required)
+                required.append(it.key());
+        }
+        const QStringList keys = args.keys();
+        for (const QString& key : keys) {
+            if (args.value(key).isNull() && !required.contains(key))
+                args.remove(key);
+        }
+    }
+
     // ── Step 1: inject defaults from structured params ──────────────────
     for (auto it = schema.params.constBegin(); it != schema.params.constEnd(); ++it) {
         const QString& key = it.key();
@@ -166,9 +184,8 @@ Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
         if (!unknown.isEmpty()) {
             QStringList accepted = schema.params.keys();
             accepted.sort();
-            return Result<void>::err(("Unknown parameter(s): " + unknown.join(", ") +
-                                      ". This tool accepts only: " + accepted.join(", ") +
-                                      ". Call tool_describe for its schema before calling it again.")
+            return Result<void>::err(("Unknown parameter(s): " + unknown.join(", ") + ". This tool accepts only: " +
+                                      accepted.join(", ") + ". Check the tool's input schema before calling it again.")
                                          .toStdString());
         }
     }
@@ -187,10 +204,26 @@ Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
             return schema.properties[key].toObject()["type"].toString();
         return {};
     };
+    auto item_type = [&](const QString& key) -> QString {
+        if (schema.params.contains(key))
+            return schema.params[key].items.value(QStringLiteral("type")).toString();
+        return schema.properties[key]
+            .toObject()
+            .value(QStringLiteral("items"))
+            .toObject()
+            .value(QStringLiteral("type"))
+            .toString();
+    };
     const QStringList keys = args.keys();
     for (const QString& key : keys) {
         const QString want = expected_type(key);
         const QJsonValue cur = args.value(key);
+        // A lone item where a list is expected — `steps: {action: …}`, or an
+        // object-item list given one object — is a list of one.
+        if (want == QLatin1String("array") && cur.isObject() && item_type(key) == QLatin1String("object")) {
+            args[key] = QJsonArray{cur};
+            continue;
+        }
         if (!cur.isString())
             continue;
         const QString s = cur.toString().trimmed();
@@ -199,17 +232,28 @@ Result<void> validate_args(const ToolSchema& schema, QJsonObject& args) {
 
         if (want == "object" || want == "array") {
             const auto doc = QJsonDocument::fromJson(s.toUtf8());
-            if (doc.isNull())
+            if (doc.isNull()) {
+                // `columns: "Close"` — one plain string where a string list is expected.
+                if (want == "array" && item_type(key) == QLatin1String("string"))
+                    args[key] = QJsonArray{s};
                 continue;
+            }
             if (want == "object" && doc.isObject())
                 args[key] = doc.object();
             else if (want == "array" && doc.isArray())
                 args[key] = doc.array();
+            else if (want == "array" && doc.isObject() && item_type(key) == QLatin1String("object"))
+                args[key] = QJsonArray{doc.object()};
         } else if (want == "integer") {
             bool ok = false;
             const qint64 n = s.toLongLong(&ok);
-            if (ok)
+            if (ok) {
                 args[key] = static_cast<double>(n);
+            } else {
+                const double d = s.toDouble(&ok); // "5.0" is 5; "5.5" stays a string and fails below
+                if (ok && d == static_cast<double>(static_cast<qint64>(d)))
+                    args[key] = d;
+            }
         } else if (want == "number") {
             bool ok = false;
             const double d = s.toDouble(&ok);

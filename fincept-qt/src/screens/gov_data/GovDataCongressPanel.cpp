@@ -341,7 +341,12 @@ void GovDataCongressPanel::populate_bills(const QJsonObject& json) {
         type_item->setData(Qt::UserRole, b["bill_type"].toString());
         bills_table_->setItem(i, 1, type_item);
 
-        bills_table_->setItem(i, 2, new QTableWidgetItem(QString::number(b["bill_number"].toInt())));
+        // Congress.gov v3 sends bill numbers as strings ("3076"); toInt() on those gave 0, so every row
+        // showed 0 and a row click asked bill_info for bill 0. Accept a JSON number too.
+        const QJsonValue bill_number = b["bill_number"];
+        bills_table_->setItem(i, 2,
+                              new QTableWidgetItem(bill_number.isDouble() ? QString::number(bill_number.toInteger())
+                                                                          : bill_number.toString()));
 
         QString title = b["title"].toString();
         if (title.length() > 120)

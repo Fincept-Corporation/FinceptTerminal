@@ -123,7 +123,12 @@ DcfResult dcf(const DcfInputs& in) {
     double fcf_t = in.fcf;
     double pv = 0.0;
     for (int t = 1; t <= in.years; ++t) {
-        fcf_t *= 1.0 + in.growth;
+        // Linear fade: year 1 grows at `growth`, year n at `terminal_growth`.
+        const double g = (in.fade && in.years > 1)
+                             ? in.growth + (in.terminal_growth - in.growth) * static_cast<double>(t - 1) /
+                                               static_cast<double>(in.years - 1)
+                             : in.growth;
+        fcf_t *= 1.0 + g;
         pv += fcf_t / std::pow(1.0 + in.discount, t);
     }
     const double terminal = fcf_t * (1.0 + in.terminal_growth) / (in.discount - in.terminal_growth);
@@ -137,6 +142,34 @@ DcfResult dcf(const DcfInputs& in) {
     if (!r.ok)
         r.error = vtr("The DCF did not produce a finite value.");
     return r;
+}
+
+double implied_growth(const DcfInputs& in, double price) {
+    if (!(price > 0.0) || !std::isfinite(price))
+        return std::nan("");
+    // Per-share value rises monotonically with growth (positive FCF), so bisect.
+    auto value_at = [&in](double g) {
+        DcfInputs probe = in;
+        probe.growth = g;
+        const DcfResult r = dcf(probe);
+        return r.ok ? r.per_share : std::nan("");
+    };
+    double lo = -0.5, hi = 1.0;
+    const double v_lo = value_at(lo);
+    const double v_hi = value_at(hi);
+    if (!std::isfinite(v_lo) || !std::isfinite(v_hi) || price < v_lo || price > v_hi)
+        return std::nan("");
+    for (int i = 0; i < 80 && hi - lo > 1e-7; ++i) {
+        const double mid = 0.5 * (lo + hi);
+        const double v = value_at(mid);
+        if (!std::isfinite(v))
+            return std::nan("");
+        if (v < price)
+            lo = mid;
+        else
+            hi = mid;
+    }
+    return 0.5 * (lo + hi);
 }
 
 AltmanResult altman_z(const FiscalYear& fy, double market_cap) {
@@ -161,6 +194,14 @@ AltmanResult altman_z(const FiscalYear& fy, double market_cap) {
         r.missing = vtr("EBIT");
         return r;
     }
+    // Z'' needs no price and no sales line, so it is available even where Z is not
+    // (statements in another currency than the quote, no revenue line).
+    r.x1 = (fy.current_assets - fy.current_liabilities) / fy.total_assets;
+    r.x2 = fy.retained_earnings / fy.total_assets;
+    r.x3 = fy.ebit / fy.total_assets;
+    r.x4_book = (fy.total_assets - fy.total_liabilities) / fy.total_liabilities;
+    r.z2 = 6.56 * r.x1 + 3.26 * r.x2 + 6.72 * r.x3 + 1.05 * r.x4_book;
+    r.z2_ok = has(r.z2);
     if (!has(fy.revenue)) {
         r.missing = vtr("revenue");
         return r;

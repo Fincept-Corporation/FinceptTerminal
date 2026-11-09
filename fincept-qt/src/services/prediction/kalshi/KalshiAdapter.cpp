@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/prediction/kalshi/KalshiMarketProducer.h"
 #include "services/prediction/kalshi/KalshiRestClient.h"
 #include "services/prediction/kalshi/KalshiWsClient.h"
 
@@ -152,13 +153,13 @@ void KalshiAdapter::fetch_price_history(const QString& asset_id, const QString& 
 
     // Default to last 7 days if the caller didn't give us a range.
     const qint64 end = QDateTime::currentSecsSinceEpoch();
-    qint64 start = end - (7 * 24 * 3600);
+    qint64 start = end - (qint64{7} * 24 * 3600);
     if (interval == QStringLiteral("1w"))
-        start = end - (7 * 24 * 3600);
+        start = end - (qint64{7} * 24 * 3600);
     else if (interval == QStringLiteral("1m"))
-        start = end - (30 * 24 * 3600);
+        start = end - (qint64{30} * 24 * 3600);
     else if (interval == QStringLiteral("6h"))
-        start = end - (6 * 3600);
+        start = end - (qint64{6} * 3600);
     else if (interval == QStringLiteral("1h"))
         start = end - 3600;
 
@@ -604,6 +605,9 @@ void KalshiAdapter::ensure_registered_with_hub() {
     if (hub_registered_)
         return;
     ws_->ensure_registered_with_hub();
+    // Keyless REST snapshots (`prediction:kalshi:market:*`) — a standalone singleton so consumers
+    // can also register it on demand; idempotent.
+    KalshiMarketProducer::instance().ensure_registered_with_hub();
     hub_registered_ = true;
 }
 

@@ -68,6 +68,7 @@ QString NewsService::serialize_articles(const QVector<NewsArticle>& articles) {
         o["tier"] = a.tier;
         o["priority"] = priority_string(a.priority);
         o["sentiment"] = sentiment_string(a.sentiment);
+        o["sentiment_score"] = a.sentiment_score;
         o["impact"] = impact_string(a.impact);
         o["lang"] = a.lang;
         QJsonArray tickers;
@@ -98,6 +99,7 @@ QVector<NewsArticle> NewsService::deserialize_articles(const QString& json) {
         a.tier = o["tier"].toInt(4);
         a.priority = priority_from_string(o["priority"].toString());
         a.sentiment = sentiment_from_string(o["sentiment"].toString());
+        a.sentiment_score = o["sentiment_score"].toDouble();
         a.impact = impact_from_string(o["impact"].toString());
         a.lang = o["lang"].toString();
         for (const auto& t : o["tickers"].toArray())

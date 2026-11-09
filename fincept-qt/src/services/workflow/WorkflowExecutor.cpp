@@ -100,13 +100,11 @@ QString WorkflowExecutor::effective_mcp_tool(const QJsonObject& params, const QV
 }
 
 bool WorkflowExecutor::mcp_tool_moves_money(const QString& tool) {
-    if (tool.isEmpty() || tool.contains(QLatin1String("__")))
-        return false; // external tools carry no category metadata
-    for (const auto& t : mcp::McpService::instance().get_all_tools()) {
-        if (t.is_internal && t.name == tool)
-            return t.is_destructive && t.category == QLatin1String("live-trading");
-    }
-    return false;
+    // The internal tools that can reach a real order: ui_act operates any screen, an
+    // order ticket included, and python runs the exchange / broker scripts. (Both ask
+    // the user before any order, and refuse outright in a PAPER run — see
+    // mcp::ScopedPaperRun.) External tools ("server__tool") carry no such metadata.
+    return tool == QLatin1String("ui_act") || tool == QLatin1String("python");
 }
 
 QStringList WorkflowExecutor::find_cycle(const QHash<QString, QVector<QString>>& adjacency) {
@@ -625,19 +623,20 @@ QString WorkflowExecutor::enforce_trading_mode(const NodeDef& node, QJsonObject&
         return {};
     }
     if (type == QLatin1String("mcp.tool_call")) {
-        const QString tool = effective_mcp_tool(params, inputs);
-        if (mcp_tool_moves_money(tool)) {
-            if (!live_allowed_)
-                return QString("Blocked: MCP tool '%1' places or cancels real broker orders and this workflow is "
-                               "running in PAPER mode. Arm LIVE in SAVE & RUN to use it.")
-                    .arg(tool);
-            // A tool chosen at run time (Tool Picker / upstream data) was never shown in
-            // the LIVE confirmation — it may not trade. Name it in the node's Tool param.
-            if (params.value(QStringLiteral("tool")).toString().trimmed().isEmpty())
-                return QString("Blocked: the live-trading MCP tool '%1' was chosen at run time, not set on the node. "
-                               "Set the node's Tool parameter explicitly to allow it.")
-                    .arg(tool);
+        if (!live_allowed_) {
+            // PAPER: the tool still runs, but anything that would place, change or
+            // cancel a real order or move money is refused inside the tool itself
+            // (ServiceBridges wraps the call in mcp::ScopedPaperRun).
+            params[QStringLiteral("_paper_run")] = true;
+            return {};
         }
+        // A tool chosen at run time (Tool Picker / upstream data) was never shown in
+        // the LIVE confirmation — it may not trade. Name it in the node's Tool param.
+        const QString tool = effective_mcp_tool(params, inputs);
+        if (mcp_tool_moves_money(tool) && params.value(QStringLiteral("tool")).toString().trimmed().isEmpty())
+            return QString("Blocked: MCP tool '%1' can place real orders and was chosen at run time, not set on the "
+                           "node. Set the node's Tool parameter explicitly to allow it.")
+                .arg(tool);
     }
     return {};
 }

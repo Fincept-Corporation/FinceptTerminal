@@ -243,7 +243,7 @@ static void ensure_network_manager() {
     auto* cache = new QNetworkDiskCache(nam);
     QString cache_dir = fincept::AppPaths::cache() + "/map_tiles";
     cache->setCacheDirectory(cache_dir);
-    cache->setMaximumCacheSize(100 * 1024 * 1024); // 100 MB
+    cache->setMaximumCacheSize(qint64{100} * 1024 * 1024); // 100 MB
     nam->setCache(cache);
     QGV::setNetworkManager(nam);
 }
@@ -348,7 +348,7 @@ QImage WorldMapWidget::make_marker_image(const QColor& color, double radius) con
     p.setRenderHint(QPainter::Antialiasing);
 
     double cx = size / 2.0;
-    double cy = size / 2.0;
+    double cy = cx;
     double r = size / 2.0 - 1;
 
     // Outer glow

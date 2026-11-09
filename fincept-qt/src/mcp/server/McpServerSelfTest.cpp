@@ -4,7 +4,7 @@
 
 #include "mcp/McpInit.h"
 #include "mcp/McpProvider.h"
-#include "mcp/server/EssentialTools.h"
+#include "mcp/core/CoreTools.h"
 #include "mcp/server/McpHttpServer.h"
 
 #include <QElapsedTimer>
@@ -209,14 +209,15 @@ int run_mcp_server_selftest() {
         pump_until([&provider]() { return provider.tool_count() > 0; }, 8000);
     if (provider.tool_count() == 0)
         initialize_all_tools();
-    rep.check(provider.tool_count() > 0, QStringLiteral("internal tool catalogue registered"),
+    rep.check(provider.tool_count() == static_cast<std::size_t>(core::core_tool_names().size()),
+              QStringLiteral("the ten core tools are registered"),
               QStringLiteral("%1 tools").arg(provider.tool_count()));
 
     auto& server = McpHttpServer::instance();
     server.stop(); // in case "start with the terminal" already started it on the real port
     const QString token = QString::number(QRandomGenerator::system()->generate64(), 16) +
                           QString::number(QRandomGenerator::system()->generate64(), 16);
-    server.set_selftest_overrides(0, token, /*allow_actions=*/false);
+    server.set_selftest_overrides(0, token, /*allow_ui_control=*/true, /*allow_scripts=*/true);
     const bool started = server.start();
     const quint16 port = server.port();
     rep.check(started && server.is_running() && port != 0, QStringLiteral("listens on an OS-assigned loopback port"),
@@ -253,6 +254,8 @@ int run_mcp_server_selftest() {
                       res.value(QStringLiteral("serverInfo")).toObject().value(QStringLiteral("name")).toString() ==
                           QLatin1String("fincept-terminal") &&
                       res.value(QStringLiteral("capabilities")).toObject().contains(QStringLiteral("tools")) &&
+                      res.value(QStringLiteral("capabilities")).toObject().contains(QStringLiteral("prompts")) &&
+                      res.value(QStringLiteral("capabilities")).toObject().contains(QStringLiteral("resources")) &&
                       !res.value(QStringLiteral("instructions")).toString().isEmpty(),
                   QStringLiteral("initialize negotiates 2025-06-18 and describes the server"));
         const RpcReply older = rpc(port, token,
@@ -267,9 +270,12 @@ int run_mcp_server_selftest() {
             port, token,
             QJsonDocument(request(QStringLiteral("initialize"), 3,
                                   {{QStringLiteral("protocolVersion"), QStringLiteral("2099-01-01")}})));
-        rep.check(future.doc.object().value(QStringLiteral("result")).toObject().value(QStringLiteral("protocolVersion"))
-                          .toString() == QLatin1String("2025-06-18"),
-                  QStringLiteral("initialize answers 2025-06-18 to an unknown version"));
+        rep.check(future.doc.object()
+                          .value(QStringLiteral("result"))
+                          .toObject()
+                          .value(QStringLiteral("protocolVersion"))
+                          .toString() == QLatin1String("2025-11-25"),
+                  QStringLiteral("initialize answers 2025-11-25 (the latest) to an unknown version"));
         rep.check(server.connected_client_count() >= 1, QStringLiteral("connected_client_count() counts the client"),
                   QString::number(server.connected_client_count()));
         const RpcReply note = rpc(port, token,
@@ -285,110 +291,206 @@ int run_mcp_server_selftest() {
         const RpcReply r = rpc(port, token, QJsonDocument(request(QStringLiteral("tools/list"), 4)));
         const QJsonObject res = r.doc.object().value(QStringLiteral("result")).toObject();
         const QJsonArray tools = res.value(QStringLiteral("tools")).toArray();
-        QSet<QString> listed;
+        QStringList listed;
         bool names_ok = !tools.isEmpty();
         bool schemas_ok = true;
-        bool read_only = true;
+        bool read_hints_ok = true;
         for (const QJsonValue& v : tools) {
             const QJsonObject t = v.toObject();
             const QString name = t.value(QStringLiteral("name")).toString();
-            listed.insert(name);
+            listed << name;
             names_ok = names_ok && name_rx.match(name).hasMatch();
             const QJsonObject schema = t.value(QStringLiteral("inputSchema")).toObject();
             schemas_ok = schemas_ok && schema.value(QStringLiteral("type")).toString() == QLatin1String("object") &&
                          schema.value(QStringLiteral("properties")).isObject();
-            read_only = read_only &&
-                        !t.value(QStringLiteral("annotations")).toObject().value(QStringLiteral("destructiveHint")).toBool();
+            const QJsonObject ann = t.value(QStringLiteral("annotations")).toObject();
+            const bool read_only = ann.value(QStringLiteral("readOnlyHint")).toBool();
+            const bool should_be = name == QLatin1String("ui_overview") || name == QLatin1String("ui_snapshot") ||
+                                   name == QLatin1String("ui_read") || name == QLatin1String("ui_wait") ||
+                                   name == QLatin1String("ui_screenshot");
+            // Observing tools are never destructive; every tool that acts may be.
+            read_hints_ok = read_hints_ok && read_only == should_be &&
+                            ann.value(QStringLiteral("destructiveHint")).toBool() == !should_be;
         }
-        rep.check(r.http.status == 200 && !tools.isEmpty(), QStringLiteral("tools/list returns the essentials"),
-                  QStringLiteral("%1 tools").arg(tools.size()));
+        rep.check(r.http.status == 200 && listed == core::core_tool_names(),
+                  QStringLiteral("tools/list returns exactly the ten core tools, in order"),
+                  listed.join(QLatin1Char(',')));
+        rep.check(!res.contains(QStringLiteral("nextCursor")), QStringLiteral("the whole catalogue fits one page"));
         rep.check(names_ok, QStringLiteral("every advertised name matches ^[a-zA-Z0-9_-]{1,50}$"));
         rep.check(schemas_ok, QStringLiteral("every inputSchema is an object schema with properties"));
-        rep.check(read_only, QStringLiteral("essentials advertise no destructive tool"));
-        QStringList missing;
-        for (const QString& meta : essential_meta_tool_names()) {
-            if (provider.has_tool(meta) && provider.is_tool_enabled(meta) && !listed.contains(meta))
-                missing << meta;
-        }
-        rep.check(missing.isEmpty(), QStringLiteral("every registered meta tool is advertised"), missing.join(QStringLiteral(", ")));
+        rep.check(read_hints_ok,
+                  QStringLiteral("readOnlyHint marks exactly the five observing tools; the rest are destructiveHint"));
     }
 
-    // Deterministic picks from the live catalogue.
-    auto catalogue = provider.list_tools();
-    std::sort(catalogue.begin(), catalogue.end(),
-              [](const UnifiedTool& a, const UnifiedTool& b) { return a.name < b.name; });
-    QString destructive_tool;
-    QString live_read_tool;
-    for (const auto& t : catalogue) {
-        if (destructive_tool.isEmpty() && t.is_destructive && t.category != QLatin1String("live-trading"))
-            destructive_tool = t.name;
-        if (live_read_tool.isEmpty() && !t.is_destructive && t.category == QLatin1String("live-trading"))
-            live_read_tool = t.name;
+    // ── prompts & resources ──
+    {
+        const RpcReply list = rpc(port, token, QJsonDocument(request(QStringLiteral("prompts/list"), 50)));
+        const QJsonArray prompts =
+            list.doc.object().value(QStringLiteral("result")).toObject().value(QStringLiteral("prompts")).toArray();
+        rep.check(prompts.size() >= 5, QStringLiteral("prompts/list offers the workflow prompts"),
+                  QString::number(prompts.size()));
+        const RpcReply got =
+            rpc(port, token,
+                QJsonDocument(request(
+                    QStringLiteral("prompts/get"), 51,
+                    {{QStringLiteral("name"), QStringLiteral("research_company")},
+                     {QStringLiteral("arguments"), QJsonObject{{QStringLiteral("symbol"), QStringLiteral("MSFT")}}}})));
+        const QJsonArray msgs =
+            got.doc.object().value(QStringLiteral("result")).toObject().value(QStringLiteral("messages")).toArray();
+        rep.check(msgs.size() == 1 && msgs.at(0)
+                                          .toObject()
+                                          .value(QStringLiteral("content"))
+                                          .toObject()
+                                          .value(QStringLiteral("text"))
+                                          .toString()
+                                          .contains(QStringLiteral("MSFT")),
+                  QStringLiteral("prompts/get fills the argument into the prompt"));
+        const RpcReply missing =
+            rpc(port, token,
+                QJsonDocument(request(QStringLiteral("prompts/get"), 52,
+                                      {{QStringLiteral("name"), QStringLiteral("research_company")}})));
+        rep.check(error_code(missing.doc) == -32602,
+                  QStringLiteral("prompts/get without a required argument → -32602"));
+        const RpcReply rl = rpc(port, token, QJsonDocument(request(QStringLiteral("resources/list"), 53)));
+        rep.check(rl.doc.object()
+                          .value(QStringLiteral("result"))
+                          .toObject()
+                          .value(QStringLiteral("resources"))
+                          .toArray()
+                          .size() == 2,
+                  QStringLiteral("resources/list offers the guide and the screen list"));
+        const RpcReply guide =
+            rpc(port, token,
+                QJsonDocument(request(QStringLiteral("resources/read"), 54,
+                                      {{QStringLiteral("uri"), QStringLiteral("fincept://guide")}})));
+        rep.check(guide.doc.object()
+                      .value(QStringLiteral("result"))
+                      .toObject()
+                      .value(QStringLiteral("contents"))
+                      .toArray()
+                      .at(0)
+                      .toObject()
+                      .value(QStringLiteral("text"))
+                      .toString()
+                      .contains(QStringLiteral("ui_overview")),
+                  QStringLiteral("resources/read fincept://guide returns the guide"));
+        const RpcReply nores = rpc(port, token,
+                                   QJsonDocument(request(QStringLiteral("resources/read"), 55,
+                                                         {{QStringLiteral("uri"), QStringLiteral("fincept://nope")}})));
+        rep.check(error_code(nores.doc) == -32002, QStringLiteral("unknown resource → -32002"));
     }
-    if (provider.has_tool(QStringLiteral("delete_watchlist")))
-        destructive_tool = QStringLiteral("delete_watchlist"); // harmless even if the policy were broken
 
     // ── tools/call ──
     {
-        const QJsonObject res = call_tool(port, token, QStringLiteral("tool_list"),
-                                          {{QStringLiteral("query"), QStringLiteral("latest stock quote")},
-                                           {QStringLiteral("top_k"), 3}},
-                                          5)
-                                    .value(QStringLiteral("result"))
-                                    .toObject();
-        rep.check(!res.value(QStringLiteral("isError")).toBool(true) && !first_text(res).isEmpty() &&
-                      res.value(QStringLiteral("structuredContent")).toObject().contains(QStringLiteral("tools")),
-                  QStringLiteral("tools/call tool_list returns content + structuredContent"), clip(first_text(res)));
+        // Headless: no terminal window exists, and the tools must say so rather
+        // than hang or crash.
+        const QJsonObject ov =
+            call_tool(port, token, QStringLiteral("ui_overview"), {}, 5).value(QStringLiteral("result")).toObject();
+        rep.check(!ov.value(QStringLiteral("isError")).toBool(true) &&
+                      first_text(ov).contains(QStringLiteral("Fincept Terminal")),
+                  QStringLiteral("ui_overview answers with no window open"), clip(first_text(ov)));
+        QElapsedTimer t;
+        t.start();
+        const QJsonObject snap =
+            call_tool(port, token, QStringLiteral("ui_snapshot"), {}, 6).value(QStringLiteral("result")).toObject();
+        rep.check(snap.value(QStringLiteral("isError")).toBool() && t.elapsed() < 5000,
+                  QStringLiteral("ui_snapshot fails fast and cleanly with no window"), clip(first_text(snap)));
+        const QJsonObject py = call_tool(port, token, QStringLiteral("python"),
+                                         {{QStringLiteral("action"), QStringLiteral("search")},
+                                          {QStringLiteral("query"), QStringLiteral("fred economic data")}},
+                                         7)
+                                   .value(QStringLiteral("result"))
+                                   .toObject();
+        rep.check(py.contains(QStringLiteral("content")), QStringLiteral("python search answers"),
+                  clip(first_text(py)));
     }
-    if (!destructive_tool.isEmpty()) {
-        const QString advertised = McpHttpServer::advertised_name(destructive_tool);
-        const QJsonObject res = call_tool(port, token, advertised,
-                                          {{QStringLiteral("id"), QStringLiteral("selftest-does-not-exist")}}, 6)
+    {
+        // Look-only mode refuses the UI-changing tools, and the refusal is logged.
+        server.set_allow_ui_control(false);
+        const QJsonObject res = call_tool(port, token, QStringLiteral("ui_open"),
+                                          {{QStringLiteral("screen"), QStringLiteral("markets")}}, 8)
                                     .value(QStringLiteral("result"))
                                     .toObject();
         rep.check(res.value(QStringLiteral("isError")).toBool() &&
-                      first_text(res).contains(QStringLiteral("has not allowed external agents")),
-                  QStringLiteral("destructive tool refused while actions are not allowed"), destructive_tool);
-        if (provider.has_tool(QStringLiteral("tool_invoke"))) {
-            const QJsonObject inv = call_tool(port, token, QStringLiteral("tool_invoke"),
-                                              {{QStringLiteral("tool"), destructive_tool},
-                                               {QStringLiteral("arguments"), QJsonObject{}}},
-                                              7)
-                                        .value(QStringLiteral("result"))
-                                        .toObject();
-            rep.check(inv.value(QStringLiteral("isError")).toBool() &&
-                          first_text(inv).contains(QStringLiteral("has not allowed external agents")),
-                      QStringLiteral("tool_invoke is held to the inner tool's policy"), destructive_tool);
-        }
-        const auto activity = server.recent_activity();
-        const bool logged = std::any_of(activity.cbegin(), activity.cend(), [&advertised](const ExternalCallRecord& r) {
-            return r.denied && r.tool == advertised;
-        });
-        rep.check(logged, QStringLiteral("the refusal is recorded in recent_activity() as denied"),
-                  QStringLiteral("%1 records").arg(activity.size()));
-    } else {
-        rep.check(false, QStringLiteral("a destructive tool exists to exercise the policy"));
-    }
-    if (!live_read_tool.isEmpty()) {
-        QElapsedTimer t;
-        t.start();
-        const QJsonObject res = call_tool(port, token, McpHttpServer::advertised_name(live_read_tool), {}, 8)
+                      first_text(res).contains(QStringLiteral("look-only")),
+                  QStringLiteral("look-only mode refuses ui_open"), clip(first_text(res)));
+        const QJsonObject act = call_tool(port, token, QStringLiteral("ui_act"),
+                                          {{QStringLiteral("action"), QStringLiteral("click")},
+                                           {QStringLiteral("name"), QStringLiteral("Refresh")}},
+                                          9)
                                     .value(QStringLiteral("result"))
                                     .toObject();
-        rep.check(res.value(QStringLiteral("isError")).toBool() && first_text(res).contains(QStringLiteral("approve")) &&
-                      t.elapsed() < 10000,
-                  QStringLiteral("approval-gated tool is refused at once when no window can ask"),
-                  QStringLiteral("%1, %2 ms").arg(live_read_tool).arg(t.elapsed()));
+        rep.check(act.value(QStringLiteral("isError")).toBool() &&
+                      first_text(act).contains(QStringLiteral("look-only")),
+                  QStringLiteral("look-only mode refuses ui_act"));
+        const auto activity = server.recent_activity();
+        const bool logged = std::any_of(activity.cbegin(), activity.cend(), [](const ExternalCallRecord& r) {
+            return r.denied && r.tool == QLatin1String("ui_open");
+        });
+        rep.check(logged, QStringLiteral("the refusal is recorded in recent_activity() as denied"));
+        server.set_allow_ui_control(true);
+
+        server.set_allow_scripts(false);
+        const QJsonObject run = call_tool(port, token, QStringLiteral("python"),
+                                          {{QStringLiteral("action"), QStringLiteral("run")},
+                                           {QStringLiteral("script"), QStringLiteral("fred_data")}},
+                                          10)
+                                    .value(QStringLiteral("result"))
+                                    .toObject();
+        rep.check(run.value(QStringLiteral("isError")).toBool() &&
+                      first_text(run).contains(QStringLiteral("not allowed external agents to run")),
+                  QStringLiteral("scripts off refuses python run"), clip(first_text(run)));
+        const QJsonObject info =
+            call_tool(port, token, QStringLiteral("python"), {{QStringLiteral("action"), QStringLiteral("search")}}, 11)
+                .value(QStringLiteral("result"))
+                .toObject();
+        rep.check(!first_text(info).contains(QStringLiteral("not allowed external agents")),
+                  QStringLiteral("scripts off still allows python search"));
+        server.set_allow_scripts(true);
     }
     {
-        const QJsonObject resp = call_tool(port, token, QStringLiteral("no_such_tool_selftest"), {}, 9);
+        const QJsonObject resp = call_tool(port, token, QStringLiteral("no_such_tool_selftest"), {}, 12);
         rep.check(resp.value(QStringLiteral("error")).toObject().value(QStringLiteral("code")).toInt() == -32602,
                   QStringLiteral("unknown tool → JSON-RPC -32602"));
         const RpcReply bad_args = rpc(port, token,
-                                      QJsonDocument(request(QStringLiteral("tools/call"), 10,
-                                                            {{QStringLiteral("name"), QStringLiteral("tool_list")},
+                                      QJsonDocument(request(QStringLiteral("tools/call"), 13,
+                                                            {{QStringLiteral("name"), QStringLiteral("ui_overview")},
                                                              {QStringLiteral("arguments"), QStringLiteral("x")}})));
         rep.check(error_code(bad_args.doc) == -32602, QStringLiteral("non-object arguments → -32602"));
+    }
+    {
+        // notifications/cancelled ends a running call: a 20 s pause answers
+        // within a few seconds once the client cancels it (from another POST —
+        // the server is stateless, so the request id + User-Agent find it).
+        QTcpSocket sock;
+        QElapsedTimer t;
+        t.start();
+        bool answered_fast = false;
+        bool says_cancelled = false;
+        if (connect_socket(sock, port)) {
+            const QJsonObject params{
+                {QStringLiteral("name"), QStringLiteral("ui_wait")},
+                {QStringLiteral("arguments"), QJsonObject{{QStringLiteral("until"), QStringLiteral("time")},
+                                                          {QStringLiteral("timeout_ms"), 20000}}}};
+            sock.write(build_request("POST", "/mcp", port, auth_headers(token),
+                                     to_json_bytes(request(QStringLiteral("tools/call"), 31, params))));
+            pump_until([]() { return false; }, 400); // let the call start
+            const RpcReply cancel =
+                rpc(port, token,
+                    QJsonDocument(QJsonObject{{QStringLiteral("jsonrpc"), QStringLiteral("2.0")},
+                                              {QStringLiteral("method"), QStringLiteral("notifications/cancelled")},
+                                              {QStringLiteral("params"),
+                                               QJsonObject{{QStringLiteral("requestId"), 31},
+                                                           {QStringLiteral("reason"), QStringLiteral("selftest")}}}}));
+            const HttpReply r = exchange(sock, QByteArray(), 10000);
+            answered_fast = cancel.http.status == 202 && r.ok && t.elapsed() < 8000;
+            const QJsonObject res = QJsonDocument::fromJson(r.body).object().value(QStringLiteral("result")).toObject();
+            says_cancelled = res.value(QStringLiteral("isError")).toBool() &&
+                             first_text(res).contains(QStringLiteral("Cancelled"), Qt::CaseInsensitive);
+            sock.abort();
+        }
+        rep.check(answered_fast && says_cancelled, QStringLiteral("notifications/cancelled stops a running tools/call"),
+                  QStringLiteral("%1 ms").arg(t.elapsed()));
     }
 
     // ── auth & origin ──
@@ -424,9 +526,8 @@ int run_mcp_server_selftest() {
                   QStringLiteral("batch → one response per request, in order"));
         const QJsonArray mixed{request(QStringLiteral("ping"), 23),
                                request(QStringLiteral("tools/call"), 24,
-                                       {{QStringLiteral("name"), QStringLiteral("tool_list")},
-                                        {QStringLiteral("arguments"),
-                                         QJsonObject{{QStringLiteral("query"), QStringLiteral("news")}}}})};
+                                       {{QStringLiteral("name"), QStringLiteral("ui_overview")},
+                                        {QStringLiteral("arguments"), QJsonObject{}}})};
         const RpcReply m = rpc(port, token, QJsonDocument(mixed));
         rep.check(m.http.status == 200 && m.doc.array().size() == 2 &&
                       m.doc.array().at(1).toObject().contains(QStringLiteral("result")),
@@ -485,7 +586,7 @@ int run_mcp_server_selftest() {
         const QString dotted = McpHttpServer::advertised_name(QStringLiteral("report.add.section"));
         rep.check(name_rx.match(dotted).hasMatch() && dotted != QLatin1String("report_add_section"),
                   QStringLiteral("names with invalid characters get a hashed alias"), dotted);
-        rep.check(McpHttpServer::advertised_name(QStringLiteral("get_quote")) == QLatin1String("get_quote"),
+        rep.check(McpHttpServer::advertised_name(QStringLiteral("ui_act")) == QLatin1String("ui_act"),
                   QStringLiteral("valid names are advertised unchanged"));
     }
 
@@ -514,8 +615,27 @@ int run_mcp_server_selftest() {
                       QLatin1String("Bearer ${FINCEPT_MCP_TOKEN}"),
                   QStringLiteral("claude_mcp_config_env() uses ${FINCEPT_MCP_TOKEN} expansion"));
         rep.check(server.codex_config_toml().contains(QStringLiteral("url = \"") + url + QLatin1Char('"')) &&
-                      server.codex_config_overrides().size() == 4,
+                      server.codex_config_toml().contains(QStringLiteral("tool_timeout_sec")) &&
+                      server.codex_config_overrides().size() == 6,
                   QStringLiteral("codex_config_toml() / codex_config_overrides()"));
+        const QJsonObject gemini = QJsonDocument::fromJson(server.gemini_settings_json().toUtf8())
+                                       .object()
+                                       .value(QStringLiteral("mcpServers"))
+                                       .toObject()
+                                       .value(QStringLiteral("fincept_terminal"))
+                                       .toObject();
+        rep.check(gemini.value(QStringLiteral("httpUrl")).toString() == url &&
+                      server.gemini_add_command().contains(url),
+                  QStringLiteral("gemini_settings_json() / gemini_add_command() carry the URL"));
+        const QJsonObject vscode = QJsonDocument::fromJson(server.vscode_json().toUtf8())
+                                       .object()
+                                       .value(QStringLiteral("servers"))
+                                       .toObject()
+                                       .value(QStringLiteral("fincept_terminal"))
+                                       .toObject();
+        rep.check(vscode.value(QStringLiteral("url")).toString() == url &&
+                      vscode.value(QStringLiteral("type")).toString() == QLatin1String("http"),
+                  QStringLiteral("vscode_json() uses the servers/type=http shape"));
     }
 
     server.stop();

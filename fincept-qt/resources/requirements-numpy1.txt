@@ -8,17 +8,26 @@
 numpy>=1.26.4,<2.0
 pandas>=2.0.0,<2.3.0
 
-# Spreadsheet I/O (local xlsx/csv + Google Sheets)
+# pandas Excel I/O for code run in this environment (Code Editor › NUMPY1)
 openpyxl>=3.1.0
-gspread>=6.0.0
 
 # Backtesting and trading (NumPy 1.x dependent)
 vectorbt==0.28.2
 backtesting==0.6.5
 zipline-reloaded>=3.0
-exchange-calendars>=4.0
+exchange-calendars>=4.0,<4.12
 bt>=1.1.2
 ffn>=1.1.2
+
+# Market data for everything PythonRunner routes to this environment: every
+# Analytics/backtesting/** provider (VectorBT, Backtesting.py, Zipline, BT,
+# Fincept) and ffn_analysis.py download prices through yfinance. Without it a
+# full install broke all backtests and the Portfolio › FFN tab. Same pins as
+# requirements-numpy2.txt.
+yfinance==0.2.66
+curl_cffi==0.13.0
+protobuf>=3.20.2,<6.0.0
+websockets==15.0.1
 
 # peewee is a transitive dependency of zipline-reloaded (via empyrical-reloaded)
 # Pin it explicitly so UV can resolve it early; the PEEWEE_NO_SQLITE_EXTENSIONS=1
@@ -26,9 +35,21 @@ ffn>=1.1.2
 # embedded Python (missing sqlite3.h header).
 peewee>=3.17.0
 
-# Time series and forecasting (NumPy 1.x dependent)
-gluonts[torch]==0.16.2
-functime==0.1.10
+# PyTorch for the "PytorchNeuralNetworkAlgorithm" strategy the Fincept backtesting
+# provider runs in this environment. It used to arrive only through gluonts[torch];
+# the gluonts and functime libraries themselves were never imported — the
+# functime_wrapper / gluonts_wrapper services are self-contained (scikit-learn,
+# statsmodels, scipy). Unpinned so each platform keeps its newest wheel.
+torch
+
+# Held at the versions this environment resolved to while gluonts/functime were
+# installed (they constrained them): letting them float jumps python-dateutil to
+# 4.x and toolz to 1.x under zipline-reloaded / vectorbt, untested here.
+python-dateutil==2.9.0.post0
+toolz==0.12.1
+scipy==1.15.3
+packaging==24.2
+fsspec==2025.12.0
 
 # Financial modeling (requires old numba - incompatible with NumPy 2.x)
 llvmlite==0.43.0

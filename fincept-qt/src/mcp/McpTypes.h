@@ -22,18 +22,6 @@ namespace fincept::mcp {
 /// the 30s default referenced by ToolContext, ToolDef, and McpProvider.
 constexpr int kMcpDefaultTimeoutMs = 30000;
 
-/// How long an LLM-originated call to a `supports_async` tool waits for an
-/// inline result before it converts to a background job and hands back a
-/// receipt. Tuned so genuinely fast paths (warm cache, cheap query) still
-/// answer in one round-trip while a real long-runner backgrounds promptly.
-/// Overridable via the `mcp/job_grace_ms` setting.
-constexpr int kMcpJobGraceMs = 2500;
-
-/// A tool whose declared `default_timeout_ms` exceeds this is treated as
-/// job-eligible without setting `ToolDef::supports_async` (see the note there).
-/// Equal to the default timeout on purpose: a tool that kept the default has
-/// said nothing about being slow, while one that raised it has.
-constexpr int kMcpAsyncJobThresholdMs = kMcpDefaultTimeoutMs;
 
 // ============================================================================
 // Tool Result — returned by tool handlers
@@ -44,6 +32,11 @@ struct ToolResult {
     QJsonValue data; // arbitrary result data
     QString message; // human-readable message
     QString error;   // error message if !success
+    /// Extra MCP content blocks (e.g. `{"type":"image","data":<base64>,"mimeType":"image/jpeg"}`)
+    /// for clients that render them — the external MCP server forwards them as-is.
+    /// LLM tool loops never splice these into a transcript (a base64 image would
+    /// cost more than the whole conversation); they see `message` only.
+    QJsonArray content;
 
     QJsonObject to_json() const {
         QJsonObject j;
@@ -317,42 +310,13 @@ struct ToolDef {
 
     bool enabled = true;
 
-    /// Hard timeout for async handlers in milliseconds. Sync handlers ignore
-    /// this — they block as long as they need. Override with smaller values
-    /// for snappy tools (e.g. registry lookups, paper-trading orders) and
-    /// larger for slow ones (e.g. analytics scripts that run a full backtest).
-    /// Per-call overrides are merged from `_meta.timeout_ms` (Phase 6).
+    /// Hard timeout for async handlers in milliseconds — McpProvider's watchdog
+    /// resolves the call with a timeout error when it expires. Sync handlers
+    /// ignore it. Tools are never backgrounded generically: a tool whose work
+    /// can outlive a call (the `python` core tool) runs its own jobs under
+    /// JobRegistry and keeps this budget short.
     int default_timeout_ms = kMcpDefaultTimeoutMs;
 
-    /// Opt-in to the async job protocol. When true, an LLM-originated call that
-    /// hasn't finished within the grace window (see `kMcpJobGraceMs`) returns a
-    /// `{job_id, status:"running"}` receipt instead of blocking, and the work
-    /// continues in the background under `JobRegistry`. The model then polls
-    /// `job_status` / collects with `job_result`.
-    ///
-    /// Set this on tools whose p95 runtime is measured in tens of seconds —
-    /// agent runs, backtests, bulk EDGAR pulls. Leave it false for everything
-    /// else: a fast tool that returns a receipt costs the model an extra
-    /// round-trip for no benefit. Tools that finish inside the grace window
-    /// return their real result inline regardless, so setting it on a
-    /// sometimes-slow tool is safe.
-    ///
-    /// Requires `async_handler` — a sync handler cannot be interrupted or
-    /// backgrounded, so the flag is ignored for those.
-    ///
-    /// USUALLY YOU DO NOT NEED TO SET THIS. Eligibility is *derived* from
-    /// `default_timeout_ms` (see `kMcpAsyncJobThresholdMs`): a tool that
-    /// declares a budget longer than the default 30 s has already said its p95
-    /// is tens of seconds, so it opts in automatically. The flag was
-    /// hand-maintained for a while and reached 12 of the ~125 tools that
-    /// qualified — the other ~113, including 97 AI Quant Lab tools carrying a
-    /// 300 s budget, blocked the provider's HTTP turn for their full timeout
-    /// with no receipt and no progress. Deriving it removes the second place
-    /// the same fact had to be written down.
-    ///
-    /// Set it explicitly only for a tool that is slow in practice but declares
-    /// a short nominal timeout — it is an override, never a requirement.
-    bool supports_async = false;
 
     // ── Phase 6: Authorization ──────────────────────────────────────────
     /// Required auth level — checked by McpProvider::call_tool before the
@@ -377,8 +341,7 @@ struct ToolDef {
 //
 //   • prompt cost shrinks for non-cached providers
 //   • the LLM has fewer distractors when picking a tool
-//   • dangerous categories can be excluded by default and lazy-discovered
-//     via the tool_list / tool_describe meta-tools (Phase 6.2).
+//   • categories an agent must not use (the UI-driving ones) are excluded
 
 struct ToolFilter {
     /// Inclusive — only tools whose category matches one of these are kept.
@@ -449,7 +412,7 @@ struct UnifiedTool {
     QJsonObject input_schema;
     bool is_internal = false;
     QString category;            // Phase 6: enables ToolFilter category include/exclude
-    bool is_destructive = false; // Tool RAG / tool_list surfacing — flag mutating tools
+    bool is_destructive = false; // flag mutating tools
 };
 
 // ============================================================================

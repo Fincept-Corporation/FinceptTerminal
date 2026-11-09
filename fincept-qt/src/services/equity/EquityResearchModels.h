@@ -1,20 +1,12 @@
 // src/services/equity/EquityResearchModels.h
 #pragma once
+#include <QDate>
+#include <QDateTime>
 #include <QJsonObject>
 #include <QString>
 #include <QVector>
 
 namespace fincept::services::equity {
-
-// ── Symbol search ─────────────────────────────────────────────────────────────
-struct SearchResult {
-    QString symbol;
-    QString name;
-    QString exchange;
-    QString type;
-    QString currency;
-    QString industry;
-};
 
 // ── Real-time quote ───────────────────────────────────────────────────────────
 struct QuoteData {
@@ -138,7 +130,7 @@ enum class TechSignal { StrongBuy, Buy, Neutral, Sell, StrongSell };
 
 struct TechIndicator {
     QString name;
-    QString key; ///< compute_technicals.py column ("rsi", "macd_diff", "bb_wband", …)
+    QString key; ///< Technicals frame column ("rsi", "macd_diff", "bb_wband", …; see TechnicalIndicators.h)
     double value = 0.0;
     TechSignal signal = TechSignal::Neutral;
     QString category; // "trend" | "momentum" | "volatility" | "volume"
@@ -192,7 +184,30 @@ struct NewsArticle {
     QString url;
     QString publisher;
     QString published_date;
+    /// Finance-tuned VADER tone of title + description (the model the News tab and the
+    /// Sentiment tab use): "BULLISH" | "BEARISH" | "NEUTRAL", score -1..1.
+    QString sentiment;
+    double sentiment_score = 0.0;
 };
+
+/// Unix seconds of a provider news timestamp — ISO-8601 (with or without a zone),
+/// "yyyy-MM-dd HH:mm:ss", RFC 2822, or a bare date. 0 when unparseable.
+inline qint64 news_timestamp(const QString& raw) {
+    const QString s = raw.trimmed();
+    if (s.isEmpty())
+        return 0;
+    QDateTime dt = QDateTime::fromString(s, Qt::ISODate);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(s, Qt::RFC2822Date);
+    if (!dt.isValid())
+        dt = QDateTime::fromString(s.left(19), QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    if (!dt.isValid()) {
+        const QDate d = QDate::fromString(s.left(10), Qt::ISODate);
+        if (d.isValid())
+            dt = d.startOfDay();
+    }
+    return dt.isValid() ? dt.toSecsSinceEpoch() : 0;
+}
 
 // ── Optional market sentiment snapshot ──────────────────────────────────────
 struct SentimentSourceSnapshot {

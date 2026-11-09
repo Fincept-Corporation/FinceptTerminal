@@ -21,8 +21,9 @@ namespace fincept::screens {
 ///   - OVERVIEW: KPI strip, donut + sector table, 4 performer cards, HHI +
 ///               top-3 concentration badges. Everything the user needs to
 ///               reason about sector exposure on one page.
-///   - CORRELATION: symbol×symbol Pearson correlation matrix computed from
-///                  real trailing-30-day daily returns (PortfolioService).
+///   - CORRELATION: symbol×symbol Pearson correlation matrix of daily returns over
+///                  PortfolioService::kCorrelationWindowDays, plus a summary line
+///                  (weighted average correlation, most / least correlated pair).
 class AnalyticsSectorsView : public QWidget {
     Q_OBJECT
   public:
@@ -108,6 +109,7 @@ class AnalyticsSectorsView : public QWidget {
     QWidget* corr_panel_ = nullptr;
     QGridLayout* corr_grid_ = nullptr;
     QLabel* corr_note_ = nullptr;
+    QLabel* corr_summary_ = nullptr; // weighted avg correlation + extreme pairs
 
     // Data
     portfolio::PortfolioSummary summary_;

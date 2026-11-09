@@ -33,7 +33,7 @@ QString format_relative(const QString& iso) {
         return QString::number(secs / 60) + QStringLiteral("m");
     if (secs < 86400)
         return QString::number(secs / 3600) + QStringLiteral("h");
-    if (secs < 7 * 86400)
+    if (secs < qint64{7} * 86400)
         return QString::number(secs / 86400) + QStringLiteral("d");
     return dt.toString("MMM d");
 }
@@ -90,7 +90,7 @@ NotesWidget::NotesWidget(const QJsonObject& cfg, QWidget* parent)
 
     set_configurable(true);
     apply_styles();
-    apply_config(cfg);
+    NotesWidget::apply_config(cfg); // qualified: no dynamic dispatch inside a constructor
 }
 
 QJsonObject NotesWidget::config() const {

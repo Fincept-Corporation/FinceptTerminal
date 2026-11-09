@@ -23,5 +23,5 @@ Comprehensive Zipline API coverage:
 The provider class and its re-exports are intentionally not loaded here. See
 backtestingpy __init__.py for the rationale (avoids RuntimeWarning when
 zipline_provider is run via `python -m`). Import the symbols you need directly
-from zipline_provider / zl_pipeline.
+from zipline_provider.
 """

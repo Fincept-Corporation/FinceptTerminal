@@ -8,6 +8,7 @@
 #include <QCheckBox>
 #include <QFileInfo>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -113,6 +114,10 @@ void PythonEnvSection::build_ui() {
     info_lbl_->setWordWrap(true);
     info_lbl_->setStyleSheet(label_ss());
     root->addWidget(info_lbl_);
+    root->addSpacing(10);
+
+    // ── PYTHON LIBRARIES: essentials vs. the optional full set ───────────────
+    root->addWidget(build_library_card());
     root->addSpacing(10);
 
     // ── Warning banner ────────────────────────────────────────────────────────
@@ -332,10 +337,181 @@ void PythonEnvSection::build_ui() {
     });
 }
 
+// ── PYTHON LIBRARIES card ─────────────────────────────────────────────────────
+
+QWidget* PythonEnvSection::build_library_card() {
+    auto* card = new QFrame(this);
+    card->setObjectName(QStringLiteral("pyLibCard"));
+    // One stylesheet for the whole card, objectName selectors (P7).
+    card->setStyleSheet(
+        QString("QFrame#pyLibCard{background:%1;border:1px solid %2;}"
+                "QLabel#pyLibTitle{color:%3;font-weight:700;letter-spacing:0.5px;background:transparent;border:none;}"
+                "QLabel#pyLibKey{color:%4;font-weight:700;letter-spacing:0.5px;background:transparent;border:none;}"
+                "QLabel#pyLibVal{color:%5;background:transparent;border:none;}"
+                "QLabel#pyLibHint{color:%4;font-size:11px;background:transparent;border:none;}"
+                "QProgressBar#pyLibBar{background:%6;border:1px solid %2;}"
+                "QProgressBar#pyLibBar::chunk{background:%3;}"
+                "QPushButton#pyLibPrimary{background:%3;color:%6;border:none;font-weight:700;padding:0 14px;"
+                "height:30px;}"
+                "QPushButton#pyLibPrimary:hover{background:%7;}"
+                "QPushButton#pyLibPrimary:disabled{background:%1;color:%4;border:1px solid %2;}"
+                "QPushButton#pyLibSecondary{background:%1;color:%5;border:1px solid %8;padding:0 12px;height:30px;}"
+                "QPushButton#pyLibSecondary:hover{background:%9;}"
+                "QPushButton#pyLibSecondary:disabled{color:%4;border-color:%2;}")
+            .arg(ui::colors::BG_RAISED(), ui::colors::BORDER_DIM(), ui::colors::AMBER(), ui::colors::TEXT_TERTIARY(),
+                 ui::colors::TEXT_PRIMARY(), ui::colors::BG_BASE(), ui::colors::AMBER_DIM(),
+                 ui::colors::BORDER_BRIGHT(), ui::colors::BG_HOVER()));
+
+    auto* v = new QVBoxLayout(card);
+    v->setContentsMargins(12, 10, 12, 10);
+    v->setSpacing(6);
+
+    lib_title_lbl_ = new QLabel(card);
+    lib_title_lbl_->setObjectName(QStringLiteral("pyLibTitle"));
+    v->addWidget(lib_title_lbl_);
+
+    auto* grid = new QGridLayout;
+    grid->setContentsMargins(0, 0, 0, 0);
+    grid->setHorizontalSpacing(14);
+    grid->setVerticalSpacing(4);
+    const auto make = [card](const char* object_name) {
+        auto* l = new QLabel(card);
+        l->setObjectName(QString::fromLatin1(object_name));
+        return l;
+    };
+    lib_core_key_ = make("pyLibKey");
+    lib_core_val_ = make("pyLibVal");
+    lib_full_key_ = make("pyLibKey");
+    lib_full_val_ = make("pyLibVal");
+    lib_core_val_->setWordWrap(true);
+    lib_full_val_->setWordWrap(true);
+    grid->addWidget(lib_core_key_, 0, 0, Qt::AlignTop);
+    grid->addWidget(lib_core_val_, 0, 1);
+    grid->addWidget(lib_full_key_, 1, 0, Qt::AlignTop);
+    grid->addWidget(lib_full_val_, 1, 1);
+    grid->setColumnStretch(1, 1);
+    v->addLayout(grid);
+
+    lib_bar_ = new QProgressBar(card);
+    lib_bar_->setObjectName(QStringLiteral("pyLibBar"));
+    lib_bar_->setRange(0, 100);
+    lib_bar_->setTextVisible(false);
+    lib_bar_->setFixedHeight(4);
+    lib_bar_->setVisible(false);
+    v->addWidget(lib_bar_);
+
+    auto* actions = new QHBoxLayout;
+    actions->setContentsMargins(0, 4, 0, 0);
+    actions->setSpacing(8);
+    lib_setup_btn_ = new QPushButton(card);
+    lib_setup_btn_->setObjectName(QStringLiteral("pyLibSecondary"));
+    lib_setup_btn_->setCursor(Qt::PointingHandCursor);
+    actions->addWidget(lib_setup_btn_);
+    lib_full_btn_ = new QPushButton(card);
+    lib_full_btn_->setObjectName(QStringLiteral("pyLibPrimary"));
+    lib_full_btn_->setCursor(Qt::PointingHandCursor);
+    actions->addWidget(lib_full_btn_);
+    lib_hint_lbl_ = make("pyLibHint");
+    lib_hint_lbl_->setWordWrap(true);
+    actions->addWidget(lib_hint_lbl_, 1);
+    v->addLayout(actions);
+
+    // Static texts (retranslateUi() re-applies them); refresh_library_card() owns the rest.
+    lib_title_lbl_->setText(tr("PYTHON LIBRARIES"));
+    lib_core_key_->setText(tr("ESSENTIALS"));
+    lib_full_key_->setText(tr("FULL SET"));
+    lib_setup_btn_->setText(tr("SET UP PYTHON"));
+
+    connect(lib_setup_btn_, &QPushButton::clicked, this, [this]() {
+        auto& setup = python::PythonSetupManager::instance();
+        LOG_INFO("PythonEnv", "User started the Python setup from Settings");
+        setup.set_background_mode();
+        setup.run_setup();
+        refresh_library_card(true);
+    });
+    connect(lib_full_btn_, &QPushButton::clicked, this,
+            [this]() { offer_full_install(tr("Adds AI agents, machine learning, quant and backtesting libraries.")); });
+
+    // Signal-driven only — no timers (P3). Progress ticks are coalesced by the manager.
+    auto& setup = python::PythonSetupManager::instance();
+    connect(&setup, &python::PythonSetupManager::progress_changed, this,
+            [this](const python::SetupProgress&) { refresh_library_card(false); });
+    connect(&setup, &python::PythonSetupManager::running_changed, this, [this](bool) { refresh_library_card(true); });
+    connect(&setup, &python::PythonSetupManager::setup_complete, this, [this](bool, const QString&) {
+        refresh_library_card(true);
+        // Show what the run installed (never underneath a running install/upgrade).
+        if (isVisible() && action_proc_->state() == QProcess::NotRunning)
+            load_packages();
+    });
+    return card;
+}
+
+void PythonEnvSection::refresh_library_card(bool recheck) {
+    if (!lib_full_btn_)
+        return;
+    auto& setup = python::PythonSetupManager::instance();
+    if (recheck)
+        lib_status_ = setup.check_status();
+    const python::SetupSnapshot snap = setup.snapshot();
+    const bool running = snap.running;
+    const bool full_run = running && snap.scope == python::SetupScope::Full;
+    const bool full_failed =
+        snap.finished && !snap.succeeded && !snap.cancelled && snap.scope == python::SetupScope::Full;
+    const bool core_ready = lib_status_.core_ready || setup.is_core_ready();
+    const bool full_ready = lib_status_.full_ready || setup.is_full_installed();
+
+    if (core_ready)
+        lib_core_val_->setText(tr("Ready — market data, quotes, charts and technicals"));
+    else if (running)
+        lib_core_val_->setText(tr("Installing… %1%").arg(snap.overall_percent));
+    else
+        lib_core_val_->setText(tr("Not installed — market data needs it (about a minute to set up)"));
+
+    if (full_ready)
+        lib_full_val_->setText(tr("Installed — AI agents, machine learning, quant and backtesting libraries"));
+    else if (full_run)
+        lib_full_val_->setText(
+            tr("Installing in the background… %1% — keep using the terminal").arg(snap.overall_percent));
+    else if (full_failed)
+        lib_full_val_->setText(tr("Install did not finish — retry; packages already downloaded are reused"));
+    else
+        lib_full_val_->setText(
+            tr("Not installed (optional) — AI agents, machine learning, quant and backtesting libraries"));
+
+    lib_bar_->setVisible(running);
+    lib_bar_->setValue(snap.overall_percent);
+
+    lib_setup_btn_->setVisible(!core_ready);
+    lib_setup_btn_->setEnabled(!running);
+    lib_full_btn_->setVisible(!full_ready);
+    lib_full_btn_->setEnabled(!full_run);
+    lib_full_btn_->setText(full_run      ? tr("INSTALLING…")
+                           : full_failed ? tr("RETRY INSTALL")
+                                         : tr("INSTALL ALL LIBRARIES"));
+    lib_hint_lbl_->setText(full_ready ? tr("Every Python feature is available.")
+                                      : tr("Installs in the background (several GB) — keep working; progress shows "
+                                           "in the status bar."));
+}
+
+void PythonEnvSection::offer_full_install(const QString& reason) {
+    const auto answer = QMessageBox::question(
+        this, tr("Install all Python libraries"),
+        tr("%1\n\nThe full library set downloads several GB and installs in the background — you can keep using "
+           "the terminal. Progress shows in the status bar (PYTHON ENV). Install it now?")
+            .arg(reason),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (answer != QMessageBox::Yes)
+        return;
+    LOG_INFO("PythonEnv", "User requested the full Python library set");
+    python::PythonSetupManager::instance().request_full_install();
+    refresh_library_card(true);
+}
+
 // ── showEvent ─────────────────────────────────────────────────────────────────
 
 void PythonEnvSection::showEvent(QShowEvent* e) {
     QWidget::showEvent(e);
+    refresh_library_card(true);
     if (all_packages_.isEmpty())
         load_packages();
 }
@@ -377,7 +553,7 @@ void PythonEnvSection::load_packages() {
     using python::PythonSetupManager;
 
     if (!QFileInfo::exists(PythonSetupManager::instance().uv_path())) {
-        show_status(tr("Python environment not set up — run Setup first"), true);
+        show_status(tr("Python is not set up yet — use SET UP PYTHON above"), true);
         return;
     }
 
@@ -630,6 +806,19 @@ void PythonEnvSection::start_action(const QList<ActionBatch>& batches) {
     if (batches.isEmpty())
         return;
 
+    // First run installs only the essentials, so venv-numpy1 (and on a skipped
+    // setup venv-numpy2) may not exist yet — `uv pip install --python` into a
+    // missing interpreter can only fail. Creating environments is the setup
+    // pipeline's job: offer the full install instead.
+    for (const auto& b : batches) {
+        if (!QFileInfo::exists(python::PythonSetupManager::instance().python_path(b.venv))) {
+            offer_full_install(b.venv == QLatin1String("venv-numpy1")
+                                   ? tr("The Trading environment (venv-numpy1) is not installed yet.")
+                                   : tr("The Analytics environment (venv-numpy2) is not installed yet."));
+            return;
+        }
+    }
+
     action_queue_ = batches;
     set_actions_enabled(false);
     install_bar_->setValue(0);
@@ -798,6 +987,14 @@ void PythonEnvSection::retranslateUi() {
             tr("<b>Upgrading packages may break the terminal.</b> "
                "Only proceed if you know what you are doing. "
                "Incompatible version changes can cause analytics scripts to crash or produce incorrect results."));
+
+    if (lib_title_lbl_) {
+        lib_title_lbl_->setText(tr("PYTHON LIBRARIES"));
+        lib_core_key_->setText(tr("ESSENTIALS"));
+        lib_full_key_->setText(tr("FULL SET"));
+        lib_setup_btn_->setText(tr("SET UP PYTHON"));
+        refresh_library_card(false);
+    }
 
     if (search_input_)
         search_input_->setPlaceholderText(tr("Filter packages..."));

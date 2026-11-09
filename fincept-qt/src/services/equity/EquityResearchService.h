@@ -4,7 +4,6 @@
 
 #include <QHash>
 #include <QObject>
-#include <QTimer>
 
 #include <functional>
 
@@ -22,9 +21,6 @@ class EquityResearchService : public QObject {
     static EquityResearchService& instance();
 
     // ── Async API — results delivered via signals ─────────────────────────────
-    void search_symbols(const QString& query);
-    void schedule_search(const QString& query); // debounced entry point
-
     /// Fetches quote + info + historical in parallel (three Python calls).
     /// Used by the UI panels that need all three. Tool handlers that only
     /// need one slice should use the per-data loaders below to avoid wasting
@@ -61,7 +57,6 @@ class EquityResearchService : public QObject {
                              HistoryCallback done);
 
   signals:
-    void search_results_loaded(QVector<fincept::services::equity::SearchResult> results);
     void quote_loaded(fincept::services::equity::QuoteData quote);
     void info_loaded(fincept::services::equity::StockInfo info);
     void historical_loaded(QString symbol, QVector<fincept::services::equity::Candle> candles);
@@ -113,14 +108,9 @@ class EquityResearchService : public QObject {
     // after the 10-minute copy expired, while the refresh runs — and kept on screen, still
     // flagged, if that refresh fails.
     static constexpr int kFinancialsLkgTtlSec = 30 * 24 * 3600;
-    // Indicator values off DAILY bars; recomputing them on every Technicals-tab visit spawned
-    // a compute_technicals.py process each time.
+    // Indicator values off DAILY bars; without this every Technicals-tab visit / Sentiment blend
+    // re-fetched the candles and recomputed the frame.
     static constexpr int kTechnicalsTtlSec = 300;
-
-    // ── Debounce ──────────────────────────────────────────────────────────────
-    static constexpr int kDebounceMs = 350;
-    QTimer* search_debounce_ = nullptr;
-    QString pending_query_;
 
     // Dedicated NAM for third-party NewsAPI.org calls — kept separate from the
     // Fincept-backend HttpClient singleton (which carries base-url/session token).

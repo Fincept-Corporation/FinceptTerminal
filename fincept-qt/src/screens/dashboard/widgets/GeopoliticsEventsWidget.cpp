@@ -86,7 +86,7 @@ GeopoliticsEventsWidget::GeopoliticsEventsWidget(const QJsonObject& cfg, QWidget
 
     set_configurable(true);
     apply_styles();
-    apply_config(cfg);
+    GeopoliticsEventsWidget::apply_config(cfg); // qualified: no dynamic dispatch inside a constructor
     set_loading(true);
 }
 

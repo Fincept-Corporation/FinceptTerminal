@@ -99,8 +99,19 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
 
             if (!py.success) {
                 res.success = false;
-                res.error = econ_svc_redact_secrets(
-                    py.error.isEmpty() ? QString("Script exited with code %1").arg(py.exit_code) : py.error);
+                QString message =
+                    py.error.isEmpty() ? QString("Script exited with code %1").arg(py.exit_code) : py.error;
+                // PythonRunner fails an {"error": ..., "error_code": ...} answer before it reaches the parsing
+                // below and keeps only the message. Recover the code from the script's own output so panels
+                // can still branch on the "[CODE] " prefix (FredPanel: MISSING_API_KEY, RATE_LIMITED, ...).
+                const QString envelope_json = python::extract_json(py.output);
+                if (!envelope_json.isEmpty()) {
+                    const QString error_code =
+                        QJsonDocument::fromJson(envelope_json.toUtf8()).object().value("error_code").toString();
+                    if (!error_code.isEmpty() && !message.startsWith(QLatin1Char('[')))
+                        message = QStringLiteral("[") + error_code + QStringLiteral("] ") + message;
+                }
+                res.error = econ_svc_redact_secrets(message);
                 LOG_ERROR("EconomicsService", "Script failed: " + res.error);
                 report_failure();
                 return;
@@ -171,6 +182,13 @@ void EconomicsService::execute(const QString& source_id, const QString& script, 
 
 QString EconomicsService::hub_topic(const QString& source_id, const QString& request_id) {
     return QStringLiteral("econ:") + source_id + QLatin1Char(':') + request_id;
+}
+
+QString EconomicsService::remember_topic(const QString& source_id, const QString& script, const QString& command,
+                                         const QStringList& args, const QString& request_id) {
+    const QString topic = hub_topic(source_id, request_id);
+    dispatch_records_.insert(topic, DispatchRecord{source_id, script, command, args, request_id});
+    return topic;
 }
 
 QStringList EconomicsService::topic_patterns() const {

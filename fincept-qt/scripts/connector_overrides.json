@@ -92,7 +92,6 @@
   "baostock_data.py": {
    "category": "China & Asia",
    "region": "China",
-   "broken": "needs the 'baostock' package (pure-Python, BSD, depends only on pandas; verified working 2026-10-13 from a side install) - add it to the app requirements to enable this connector",
    "desc": "BaoStock: China A-share daily bars, fundamentals (profit, growth, balance sheet, cash flow, DuPont), index constituents and macro rates."
   },
   "bcb_data.py": {
@@ -177,7 +176,13 @@
    "category": "Markets & Equities",
    "region": "United States",
    "title": "Cboe",
-   "desc": "Cboe delayed quotes and history for equities and indices, index constituents and snapshots, the VIX futures curve and option chains from Cboe's public CDN.",
+   "desc": "Cboe delayed quotes and history for equities and indices, index constituents and snapshots, symbol / index search and option chains with greeks from Cboe's public CDN.",
+   "commands_drop": [
+    "futures_curve"
+   ],
+   "args_hints": {
+    "options_chains": "<symbol> [expiration=all|nearest|YYYY-MM-DD] [option_type=both|call|put]"
+   },
    "default_command": "index_snapshots",
    "ttl_sec": 120
   },
@@ -323,7 +328,10 @@
    "category": "Macro & Central Banks",
    "region": "Euro Area",
    "title": "European Central Bank (ECB)",
-   "desc": "ECB statistical data: euro reference exchange rates, euro-area AAA / all-ratings yield curves and balance-of-payments statistics."
+   "desc": "ECB statistical data: euro reference exchange rates and euro-area AAA / all-ratings yield curves (spot, instantaneous forward, par).",
+   "commands_drop": [
+    "balance_of_payments"
+   ]
   },
   "ecb_sdmx_data.py": {
    "category": "Macro & Central Banks",
@@ -820,7 +828,6 @@
    "name": "data_openafrica",
    "title": "openAFRICA",
    "key_required": false,
-   "broken": "open.africa blocks automated access (Cloudflare challenge, HTTP 403) (re-checked 2026-10-13)",
    "desc": "openAFRICA: African open-data portal (CKAN) organizations and datasets."
   },
   "openaq_data.py": {

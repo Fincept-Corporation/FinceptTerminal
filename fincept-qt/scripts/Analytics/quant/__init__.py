@@ -9,7 +9,6 @@ Modules:
 - data_validator: Data validation and quality control
 - exceptions: Custom exception classes
 - quant_modules_3042: Advanced quantitative analyzer
-- rate_calculations: Interest rate and yield calculations
 """
 
 from .exceptions import (

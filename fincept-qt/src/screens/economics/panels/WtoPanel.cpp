@@ -3,18 +3,22 @@
 //
 // Three sections with different commands and response shapes:
 //
-// TRADE STATISTICS — requires WTO_API_KEY (Ocp-Apim-Subscription-Key)
-//   Command: timeseries_data --i <indicator> --r <reporter> --ps <years>
-//   Response: { "success": true, "data": { "Dataset": [...], "dataTotalRecords": N } }
-//   Dataset[] rows: { "ReporterCode": "840", "ReporterName": "United States",
-//                     "ProductOrSectorCode": "...", "Year": 2023, "Value": 1234567.8,
-//                     "ValueFlag": null }
+// Every WTO API (Timeseries, QR, ...) requires WTO_API_KEY (Ocp-Apim-Subscription-Key).
 //
-// QR MEMBERS — free, no API key
+// TRADE STATISTICS (Timeseries API)
+//   Command: timeseries_data --i=<indicator> --r=<reporter> --ps=<years> --head=M [--pc=<product> --p=000]
+//            (wto_data.py turns ISO reporter codes into WTO codes, e.g. US -> 840, and 2015-2023 into
+//            the comma-separated year list the API takes)
+//   Response: { "success": true, "data": { "Dataset": [...] } }
+//   Dataset[] rows (head=M): { "IndicatorCode", "ReportingEconomyCode": "840",
+//                     "ReportingEconomy": "United States of America", "PartnerEconomyCode",
+//                     "ProductOrSectorCode", "ProductOrSector", "Year": 2023, "Unit", "Value": 2018059 }
+//
+// QR MEMBERS
 //   Command: qr_members
 //   Response: { "success": true, "data": [{"code": "US", "name": "United States", ...}] }
 //
-// QR NOTIFICATIONS — free, no API key
+// QR NOTIFICATIONS
 //   Command: qr_notifications --reporter_member_code <code>
 //   Response: { "success": true, "data": [{"notification_year", "reporter_member_code",
 //               "product_description", "measure_type", ...}] }
@@ -22,7 +26,6 @@
 
 #include "core/logging/Logger.h"
 #include "services/economics/EconomicsService.h"
-#include "ui/theme/Theme.h"
 
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -36,16 +39,32 @@ namespace {
 static constexpr const char* kWtoScript = "wto_data.py";
 static constexpr const char* kWtoSourceId = "wto";
 static constexpr const char* kWtoColor = "#E91E63"; // pink-red
-// Trade Statistics indicators (WTO Timeseries API)
-static const QList<QPair<QString, QString>> kWtoIndicators = {
-    {"Total Merchandise Trade (TP_A_0010)", "TP_A_0010"},
-    {"Merchandise Exports (TX_A_0010)", "TX_A_0010"},
-    {"Merchandise Imports (TM_A_0010)", "TM_A_0010"},
-    {"Commercial Services Trade (TS_A_0010)", "TS_A_0010"},
-    {"Services Exports (SX_A_0010)", "SX_A_0010"},
-    {"Services Imports (SM_A_0010)", "SM_A_0010"},
-    {"Tariff Rate, All Products (TRF_A_0010)", "TRF_A_0010"},
+// Trade Statistics indicators: annual series from the WTO Timeseries catalogue
+// (GET /timeseries/v1/indicators). Product/sector indicators are asked for their total (TO = total
+// merchandise, SOX = commercial services) against the World partner (000), so the answer is one
+// series per reporter.
+struct WtoIndicator {
+    const char* code;
+    const char* label;
+    const char* product; // pc filter; nullptr: the indicator has no product/partner dimension
 };
+static const WtoIndicator kWtoIndicators[] = {
+    {"ITS_MTV_AX", "Merchandise exports, total (ITS_MTV_AX)", "TO"},
+    {"ITS_MTV_AM", "Merchandise imports, total (ITS_MTV_AM)", "TO"},
+    {"ITS_CS_AX6", "Commercial services exports (ITS_CS_AX6)", "SOX"},
+    {"ITS_CS_AM6", "Commercial services imports (ITS_CS_AM6)", "SOX"},
+    {"TP_A_0010", "Simple average MFN applied tariff, all products (TP_A_0010)", nullptr},
+    {"TP_A_0160", "Simple average MFN applied tariff, agricultural (TP_A_0160)", nullptr},
+    {"TP_A_0430", "Simple average MFN applied tariff, non-agricultural (TP_A_0430)", nullptr},
+    {"TP_A_0030", "Trade-weighted MFN applied tariff average, all products (TP_A_0030)", nullptr},
+};
+
+const WtoIndicator* wto_find_indicator(const QString& code) {
+    for (const auto& ind : kWtoIndicators)
+        if (code == QLatin1String(ind.code))
+            return &ind;
+    return nullptr;
+}
 
 } // namespace
 
@@ -59,8 +78,8 @@ WtoPanel::WtoPanel(QWidget* parent) : EconPanelBase(kWtoSourceId, kWtoColor, par
 
 void WtoPanel::activate() {
     show_empty(tr("Select a section and click FETCH\n"
-                  "QR Members & Notifications are free — no API key needed\n"
-                  "Trade Statistics requires WTO_API_KEY (Ocp-Apim-Subscription-Key)"));
+                  "Every WTO API used here requires WTO_API_KEY\n"
+                  "(Ocp-Apim-Subscription-Key from apiportal.wto.org)"));
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
@@ -73,16 +92,16 @@ void WtoPanel::build_controls(QHBoxLayout* thl) {
     };
 
     section_combo_ = new QComboBox;
-    section_combo_->addItem(tr("Trade Statistics (API key)"), "timeseries");
-    section_combo_->addItem(tr("QR Members (free)"), "qr_members");
-    section_combo_->addItem(tr("QR Notifications (free)"), "qr_notifications");
+    section_combo_->addItem(tr("Trade Statistics"), "timeseries");
+    section_combo_->addItem(tr("QR Members"), "qr_members");
+    section_combo_->addItem(tr("QR Notifications"), "qr_notifications");
     section_combo_->setFixedHeight(26);
     section_combo_->setMinimumWidth(200);
     connect(section_combo_, &QComboBox::currentIndexChanged, this, &WtoPanel::on_section_changed);
 
     indicator_combo_ = new QComboBox;
     for (const auto& ind : kWtoIndicators)
-        indicator_combo_->addItem(ind.first, ind.second);
+        indicator_combo_->addItem(QString::fromLatin1(ind.label), QString::fromLatin1(ind.code));
     indicator_combo_->setFixedHeight(26);
     indicator_combo_->setMinimumWidth(270);
 
@@ -117,16 +136,9 @@ void WtoPanel::on_section_changed(int index) {
     indicator_combo_->setEnabled(is_timeseries);
     years_input_->setEnabled(is_timeseries);
 
-    if (is_timeseries) {
-        apikey_notice_->setText(tr("Requires WTO_API_KEY"));
-        apikey_notice_->setStyleSheet(notice_style());
-        reporter_input_->setPlaceholderText(tr("Reporter (e.g. US, CN, DE)"));
-    } else {
-        apikey_notice_->setText(tr("Free — no API key"));
-        apikey_notice_->setStyleSheet(
-            QString("color:%1; font-size:9px; background:transparent;").arg(ui::colors::POSITIVE()));
-        reporter_input_->setPlaceholderText(tr("Member code (e.g. US, CN)"));
-    }
+    // The QR API needs the same subscription key as the Timeseries API (apikey_notice_ says so).
+    reporter_input_->setPlaceholderText(is_timeseries ? tr("Reporter (e.g. US, CN, DE)")
+                                                      : tr("Member code (e.g. US, CN)"));
 }
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
@@ -148,13 +160,17 @@ void WtoPanel::on_fetch() {
             return;
         }
 
-        // wto_data.py uses --flag=value style args
-        // CLI: timeseries_data --i TP_A_0010 --r US --ps 2015-2023
+        // wto_data.py takes --flag=value args named like the API parameters. head=M asks for the
+        // machine-readable row keys on_result() reads (ReportingEconomy, Year, Value, ...).
+        QStringList args = {"--i=" + indicator, "--r=" + reporter,
+                            "--ps=" + (years.isEmpty() ? QStringLiteral("default") : years),
+                            QStringLiteral("--head=M")};
+        const WtoIndicator* ind = wto_find_indicator(indicator);
+        if (ind && ind->product)
+            args << QStringLiteral("--pc=") + QLatin1String(ind->product) << QStringLiteral("--p=000");
         show_loading(tr("Fetching WTO Trade Statistics: %1 for %2…").arg(indicator_combo_->currentText(), reporter));
-        services::EconomicsService::instance().execute(
-            kWtoSourceId, kWtoScript, "timeseries_data",
-            {"--i=" + indicator, "--r=" + reporter, "--ps=" + (years.isEmpty() ? "default" : years)},
-            "wto_ts_" + indicator + "_" + reporter);
+        services::EconomicsService::instance().execute(kWtoSourceId, kWtoScript, "timeseries_data", args,
+                                                       "wto_ts_" + indicator + "_" + reporter);
 
     } else if (section == "qr_members") {
         QStringList args;
@@ -196,7 +212,7 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
     QJsonArray rows;
 
     if (request_id.startsWith("wto_ts_")) {
-        // Trade Statistics: data is { "Dataset": [...], "dataTotalRecords": N }
+        // Trade Statistics: data is { "Dataset": [...] } (rows described at the top of this file)
         // or data is the Dataset array directly
         const QJsonObject data_obj = result.data["data"].toObject();
         QJsonArray dataset = data_obj["Dataset"].toArray();
@@ -206,15 +222,27 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
             dataset = result.data["data"].toArray();
         }
 
+        // Describe the request this answer belongs to ("wto_ts_<indicator>_<reporter>"; indicator
+        // codes contain '_'), not whatever the combo shows now.
+        const QString req_tail = request_id.mid(QStringLiteral("wto_ts_").size());
+        const QString req_indicator = req_tail.left(req_tail.lastIndexOf(QLatin1Char('_')));
+
         // Flatten to clean display rows: Reporter | Year | Value | Product
+        QString unit;
         for (const auto& v : dataset) {
             const auto obj = v.toObject();
             QJsonObject row;
-            row["reporter"] = obj["ReporterName"].isUndefined() ? obj["ReporterCode"] : obj["ReporterName"];
-            row["year"] = obj["Year"];
-            row["value"] = obj["Value"];
-            row["product"] = obj["ProductOrSectorCode"];
-            row["indicator"] = indicator_combo_->currentData().toString();
+            const QJsonValue reporter_name = obj.value(QStringLiteral("ReportingEconomy"));
+            row["reporter"] =
+                reporter_name.isString() ? reporter_name : obj.value(QStringLiteral("ReportingEconomyCode"));
+            row["year"] = obj.value(QStringLiteral("Year"));
+            row["value"] = obj.value(QStringLiteral("Value"));
+            const QJsonValue product = obj.value(QStringLiteral("ProductOrSector"));
+            if (product.isString())
+                row["product"] = product;
+            row["indicator"] = obj.value(QStringLiteral("IndicatorCode")).toString(req_indicator);
+            if (unit.isEmpty())
+                unit = obj.value(QStringLiteral("Unit")).toString();
             rows.append(row);
         }
 
@@ -223,7 +251,11 @@ void WtoPanel::on_result(const QString& request_id, const services::EconomicsRes
                           "Also verify WTO_API_KEY is set correctly"));
             return;
         }
-        display(rows, "WTO Trade Statistics: " + indicator_combo_->currentText());
+        SeriesMeta meta;
+        meta.units = unit; // "Million US dollar", "Percent"
+        set_series_meta(meta);
+        const WtoIndicator* ind = wto_find_indicator(req_indicator);
+        display(rows, "WTO Trade Statistics: " + (ind ? QString::fromLatin1(ind->label) : req_indicator));
 
     } else if (request_id.startsWith("wto_qrm_")) {
         // QR Members: data is array of { code, name, ... }
@@ -265,9 +297,9 @@ void WtoPanel::retranslateUi() {
     if (years_lbl_)
         years_lbl_->setText(tr("YEARS"));
     if (section_combo_ && section_combo_->count() >= 3) {
-        section_combo_->setItemText(0, tr("Trade Statistics (API key)"));
-        section_combo_->setItemText(1, tr("QR Members (free)"));
-        section_combo_->setItemText(2, tr("QR Notifications (free)"));
+        section_combo_->setItemText(0, tr("Trade Statistics"));
+        section_combo_->setItemText(1, tr("QR Members"));
+        section_combo_->setItemText(2, tr("QR Notifications"));
     }
     if (years_input_)
         years_input_->setPlaceholderText(tr("Years (e.g. 2015-2023)"));
@@ -277,7 +309,7 @@ void WtoPanel::retranslateUi() {
         reporter_input_->setPlaceholderText(is_timeseries ? tr("Reporter (e.g. US, CN, DE)")
                                                           : tr("Member code (e.g. US, CN)"));
     if (apikey_notice_)
-        apikey_notice_->setText(is_timeseries ? tr("Requires WTO_API_KEY") : tr("Free — no API key"));
+        apikey_notice_->setText(tr("Requires WTO_API_KEY"));
     EconPanelBase::retranslateUi();
 }
 

@@ -31,8 +31,8 @@ namespace fincept::ui {
 
 namespace enterprise {
 
-/// Canonical destinations. Keep in sync with README.md and
-/// docs/COMMERCIAL_LICENSE.md — those are the published surfaces.
+/// Canonical destinations. Keep in sync with README.md and its
+/// docs/translations/README.*.md copies — those are the published surfaces.
 QString site_url();
 QString pricing_url();
 QString comparison_url();

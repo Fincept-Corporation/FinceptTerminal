@@ -27,9 +27,9 @@ struct PredictionMarket {
 /// Feed-level intelligence for the News screen's intel drawer.
 ///
 /// * detect_signals() runs in-process (NewsSignalDetector) — no Python.
-/// * fetch_predictions() reads scripts/polymarket.py, which serves MANIFOLD
-///   Markets (a play-money site; Polymarket is geo-blocked in places). Results are
-///   cached for kPredictionsTtlSec and concurrent requests share one process.
+/// * fetch_predictions() queries the MANIFOLD Markets public API through HttpClient
+///   (a play-money site; Polymarket is geo-blocked in places). Results are cached
+///   for kPredictionsTtlSec and concurrent requests share one HTTP request.
 class NewsCorrelationService : public QObject {
     Q_OBJECT
   public:

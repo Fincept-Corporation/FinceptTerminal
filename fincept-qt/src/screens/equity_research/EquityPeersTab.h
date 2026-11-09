@@ -38,6 +38,9 @@ class EquityPeersTab : public QWidget {
     void build_ui();
     void retranslateUi();
     void populate_table(const QVector<services::equity::PeerData>& peers);
+    /// Subject vs the peer median (premium / discount per metric) and the price the
+    /// subject would trade at on the peers' median multiples.
+    void update_relative_summary(const QVector<services::equity::PeerData>& peers);
     void show_row_menu(const QPoint& pos);
     QString symbol_at_row(int row) const;
     QStringList default_peers(const QString& symbol) const;
@@ -50,6 +53,7 @@ class EquityPeersTab : public QWidget {
     QLabel* peers_caption_ = nullptr; ///< "PEERS (comma-separated):"
     QLabel* status_label_ = nullptr;
     QTableWidget* peer_table_ = nullptr;
+    QLabel* relative_lbl_ = nullptr; ///< "vs peer median" summary under the table
     QPushButton* load_btn_ = nullptr;
     QList<QLabel*> legend_text_lbls_; ///< Legend captions for retranslate
     QLabel* units_lbl_ = nullptr;

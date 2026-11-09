@@ -62,13 +62,20 @@ response = agent.run("Analyze AAPL", config)
 
 ## Usage from the Qt/C++ app
 
-```python
-# Via agent_manager.py
-python agent_manager.py execute_single_agent \
-  '{"query": "Analyze NVDA stock"}' \
-  '{"model": {"provider": "anthropic", "model_id": "claude-sonnet-4-5"}, "instructions": "Portfolio analyst"}' \
-  '{"ANTHROPIC_API_KEY": "sk-..."}'
+`src/services/agents/AgentService*.cpp` runs `main.py --stdin` (plus `--stream`
+for token streaming) and writes ONE JSON payload to its stdin — API keys travel
+there, never on the command line:
+
+```bash
+echo '{"action": "run",
+       "api_keys": {"ANTHROPIC_API_KEY": "sk-..."},
+       "params": {"query": "Analyze NVDA stock"},
+       "config": {"model": {"provider": "anthropic", "model_id": "claude-sonnet-4-5"},
+                  "instructions": "Portfolio analyst"}}' \
+  | python agents/finagent_core/main.py --stdin
 ```
+
+The full action list is in `main()`'s docstring.
 
 ## Supported Models
 

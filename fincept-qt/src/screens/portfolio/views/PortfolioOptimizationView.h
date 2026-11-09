@@ -31,6 +31,9 @@ class PortfolioOptimizationView : public QWidget {
     explicit PortfolioOptimizationView(QWidget* parent = nullptr);
 
     void set_data(const portfolio::PortfolioSummary& summary, const QString& currency);
+    /// Per-holding betas from the market-analytics run, so the STRESS tab moves each
+    /// equity line by its own beta (same model as the RISK view).
+    void set_analytics(const portfolio::MarketAnalytics& analytics);
 
     /// "Optimize for this return" hand-off from the Planning view: switch to the
     /// Target Return method at @p annual_return (fraction, e.g. 0.08) and run it.
@@ -123,6 +126,8 @@ class PortfolioOptimizationView : public QWidget {
     // ── FRONTIER tab ──────────────────────────────────────────────────────────
     QStackedWidget* frontier_stack_ = nullptr; // 0=placeholder, 1=chart
     QChartView* frontier_chart_ = nullptr;
+    QJsonObject frontier_current_; // {return, volatility, sharpe} of today's weights (same model)
+    QJsonObject frontier_assets_;  // symbol -> {return, volatility}: each holding on its own
 
     // ── ALLOCATION tab ────────────────────────────────────────────────────────
     QChartView* alloc_chart_ = nullptr;
@@ -138,6 +143,7 @@ class PortfolioOptimizationView : public QWidget {
 
     // ── State ─────────────────────────────────────────────────────────────────
     portfolio::PortfolioSummary summary_;
+    portfolio::MarketAnalytics analytics_;
     QString currency_;
     bool running_ = false;
     bool has_data_ = false;

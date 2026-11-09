@@ -1,4 +1,10 @@
-"""Complete Merger Model - Accretion/Dilution Analysis"""
+"""Complete Merger Model - Accretion/Dilution Analysis
+
+CLI (python merger_model.py <command> <json>): build | accretion_dilution | pro_forma, keys acquirer {revenue,
+ebitda, net_income, shares}, target {revenue, net_income, ...}, deal_value, cash_pct, synergies,
+integration_costs; pro_forma also takes years (horizon, 1-10) and revenue_growth (fraction a year).
+Native positional forms: build <acq> <tgt> <terms> | accretion_dilution <model_json> | pro_forma <acq> <tgt> <year>.
+"""
 import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -344,7 +350,8 @@ def _service_dispatch(argv):
         return False  # the native `accretion_dilution <model_data_json>` form (same argv shape) — not a flat call
     try:
         acquirer, target, terms = _svc_merger_inputs(p)
-        results = MergerModel(acquirer, target, terms).build_complete_model()
+        model = MergerModel(acquirer, target, terms)
+        results = model.build_complete_model()
         if argv[1] == "build":
             data = results
         elif argv[1] == "accretion_dilution":
@@ -354,11 +361,25 @@ def _service_dispatch(argv):
                 "deal_overview": results.get("deal_overview", {}),
             }
         else:
-            year = int(_svc_num(p, "years", "year", default=1.0))
-            projections = results.get("multi_year_projections", {})
+            # `years` is the projection horizon; year 1 = the companies' figures as supplied, later years grow
+            # revenue (and revenue-driven costs) at `revenue_growth` a year.
+            years = min(max(int(_svc_num(p, "years", "year", default=1.0)), 1), 10)
+            growth = _svc_num(p, "revenue_growth", default=0.0)
+            builder = model.pro_forma_builder
+            projections = []
+            for yr in range(1, years + 1):
+                row = builder.build_pro_forma_income_statement(yr, growth)
+                projections.append({
+                    "year": yr, "revenue": row["revenue"], "ebitda": row["ebitda"],
+                    "ebitda_margin_pct": row["ebitda_margin"], "ebit": row["ebit"],
+                    "interest_expense": row["interest_expense"], "net_income": row["net_income"], "eps": row["eps"],
+                    "synergies_realized": row["synergies_realized"], "integration_costs": row["integration_costs"],
+                })
             data = {
-                "pro_forma": projections.get(str(year), results.get("pro_forma_year1", {})),
-                "year": year,
+                "pro_forma": builder.build_pro_forma_income_statement(years, growth),
+                "year": years,
+                "revenue_growth": growth,
+                "projections": projections,
                 "standalone_vs_proforma": results.get("standalone_vs_proforma", {}),
             }
         print(json.dumps({"success": True, "data": data}, default=str))
@@ -467,8 +488,8 @@ def main():
             model = MergerModel(acquirer, target, deal_terms)
             results = model.build_complete_model()
 
-            pro_forma_data = results.get('multi_year_projections', {})
-            year_data = pro_forma_data.get(str(year), results.get('pro_forma_year1', {}))
+            pro_forma_data = results.get('multi_year_projections', {})  # keyed by int year
+            year_data = pro_forma_data.get(year, results.get('pro_forma_year1', {}))
 
             result = {
                 "success": True,

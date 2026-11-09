@@ -14,7 +14,7 @@ namespace fincept::services {
 
 namespace {
 
-constexpr qint64 kNegativeTtlSeconds = 7 * 24 * 3600; // 7 days
+constexpr qint64 kNegativeTtlSeconds = qint64{7} * 24 * 3600; // 7 days
 
 // quote_type marker written for rows whose sector is a fallback placeholder
 // rather than a real upstream answer. Distinguishes them from a user override
@@ -228,6 +228,8 @@ void SectorResolver::resolve_async(const QString& symbol) {
             const QString tsx_symbol = symbol + ".TO";
             // `finish` / `give_up` already carry `symbol`, so it is not captured again.
             MarketDataService::instance().fetch_info(tsx_symbol, [self, finish, give_up](bool ok2, InfoData info2) {
+                // Runs later, on a second reply: `self` may have died since the outer check.
+                // cppcheck-suppress identicalConditionAfterEarlyExit
                 if (!self)
                     return;
                 if (!ok2) {

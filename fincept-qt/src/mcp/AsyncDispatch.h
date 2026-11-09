@@ -74,7 +74,7 @@ class AsyncDispatch {
     /// one when `ctx` has no progress hook — so a caller can pass the result
     /// straight through without branching.
     ///
-    /// What this deliberately does NOT do is invent a percentage. `job_status`
+    /// What this deliberately does NOT do is invent a percentage. Job status once
     /// reported `progress: 0.0` for every job in the catalogue because no
     /// handler ever called `on_progress`, and the obvious repair — synthesising
     /// elapsed/timeout as a completion ratio — would have replaced "no

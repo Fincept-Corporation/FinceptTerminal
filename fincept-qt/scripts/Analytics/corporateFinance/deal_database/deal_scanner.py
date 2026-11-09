@@ -7,6 +7,9 @@ Real data sources (no mocks, no demo data):
 
 The scanner works without any third-party library such as edgartools.
 All HTTP calls use the standard library (urllib) so there are zero extra deps.
+
+CLI: python deal_scanner.py scan '{"days_back": 30}' | scan_company '{"ticker": "MSFT", "years_back": 5}'
+     | high_confidence '{"min_confidence": 0.75}'   (native: positional scalars)
 """
 import sys
 import json

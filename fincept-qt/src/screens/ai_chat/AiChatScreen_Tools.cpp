@@ -248,9 +248,9 @@ void AiChatScreen::append_tool_chunk(const QString& text) {
         s.label = line;
         s.base = line.section(QStringLiteral(" · "), 0, 0);
         s.started_ms = now;
-        // The model polling a background job: show that job's live status too.
-        if (s.base == QLatin1String("job_status") || s.base == QLatin1String("job_result") ||
-            s.base == QLatin1String("job_cancel")) {
+        // The model polling a background Python job: show that job's live status too.
+        if (s.base == QLatin1String("Python status") || s.base == QLatin1String("Python cancel") ||
+            s.base == QLatin1String("Python run")) {
             const QString id = line.section(QStringLiteral(" · "), 1, 1).trimmed();
             if (id.startsWith(QLatin1String("job_")))
                 track_job(id);

@@ -438,11 +438,8 @@ WindowFrame::WindowFrame(int window_id, QWidget* parent, const WindowId& adopted
     // Update the main window title bar to reflect the current screen name.
     connect(dock_router_, &DockScreenRouter::screen_changed, this, [this](const QString&) { update_window_title(); });
 
-    // Per-screen tool filter wiring removed (Tool RAG / Tier-0 model).
-    // The LLM now sees a 6-tool Tier-0 prefix on every turn and discovers
-    // the rest via tool_list — making per-screen scoping unnecessary and
-    // counterproductive (it would prevent the LLM from finding tools the
-    // user might want regardless of which screen happens to be active).
+    // No per-screen tool filter: the LLM sees the ten core tools on every turn
+    // and reaches every screen through them, whichever screen is active.
 
     // Chat bubble — floats over dock_manager_ content area
     chat_bubble_ = new AiChatBubble(dock_manager_);

@@ -2,7 +2,7 @@
 //
 // Hot path for running a single agent / team / multi-agent flow:
 // run_agent, run_agent_streaming, route_query (intent routing), run_team,
-// run_agent_structured, execute_routed_query, execute_multi_query.
+// run_agent_structured, execute_routed_query.
 //
 // Part of the partial-class split of AgentService.cpp.
 
@@ -14,6 +14,7 @@
 #include "mcp/McpTypes.h"
 #include "mcp/TerminalMcpBridge.h"
 #include "python/PythonRunner.h"
+#include "python/PythonSetupManager.h"
 #include "services/agents/AgentService.h"
 #include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
@@ -35,6 +36,24 @@
 #include <memory>
 
 namespace fincept::services {
+
+namespace {
+
+/// Agents need the optional full Python library set (agno & co.). A "No module
+/// named" failure becomes an actionable message that also offers the install
+/// (status-bar chip); anything else passes through. `scan` is the text to
+/// search — the whole stderr when `error` is only its head.
+QString agent_exec_explain_missing(const QString& error, const QString& scan) {
+    const QString explained =
+        python::PythonSetupManager::instance().explain_missing_module(scan, QStringLiteral("agents"));
+    return explained != scan ? explained : error;
+}
+
+QString agent_exec_explain_missing(const QString& error) {
+    return agent_exec_explain_missing(error, error);
+}
+
+} // namespace
 
 QString AgentService::run_agent(const QString& query, const QJsonObject& config) {
     const QString req_id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -62,7 +81,7 @@ QString AgentService::run_agent(const QString& query, const QJsonObject& config)
             else
                 r.response = QJsonDocument(result).toJson(QJsonDocument::Indented);
         } else {
-            r.error = result["error"].toString("Agent execution failed");
+            r.error = agent_exec_explain_missing(result["error"].toString("Agent execution failed"));
         }
 
         emit self->agent_result(r);
@@ -185,7 +204,7 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                             AgentExecutionResult r;
                             r.request_id = req_id;
                             r.success = false;
-                            r.error = extract(line, "ERROR:");
+                            r.error = agent_exec_explain_missing(extract(line, "ERROR:"));
                             emit self->agent_stream_done(r);
                             self->publish_agent_result(r, /*final=*/true);
                         }
@@ -233,7 +252,8 @@ QString AgentService::run_agent_streaming(const QString& query, const QJsonObjec
                 r.response = accumulated->trimmed();
             } else {
                 r.success = false;
-                r.error = exit_code != 0 ? stderr_str.left(500) : "No response received";
+                r.error = exit_code != 0 ? agent_exec_explain_missing(stderr_str.left(500), stderr_str)
+                                         : QStringLiteral("No response received");
             }
 
             LOG_INFO("AgentService", QString("Streaming completed in %1ms").arg(elapsed));
@@ -441,7 +461,7 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
                             AgentExecutionResult r;
                             r.request_id = req_id;
                             r.success = false;
-                            r.error = extract(line, "ERROR:");
+                            r.error = agent_exec_explain_missing(extract(line, "ERROR:"));
                             emit self->agent_stream_done(r);
                             self->publish_agent_result(r, /*final=*/true);
                         }
@@ -485,7 +505,8 @@ QString AgentService::run_team(const QString& query, const QJsonObject& team_con
                     r.response = accumulated->trimmed();
                 } else {
                     r.success = false;
-                    r.error = exit_code != 0 ? stderr_str.left(500) : "No response from team";
+                    r.error = exit_code != 0 ? agent_exec_explain_missing(stderr_str.left(500), stderr_str)
+                                             : QStringLiteral("No response from team");
                 }
 
                 LOG_INFO("AgentService", QString("Team completed in %1ms").arg(elapsed));
@@ -544,7 +565,7 @@ QString AgentService::run_agent_structured(const QString& query, const QJsonObje
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
-        r.error = result["error"].toString();
+        r.error = agent_exec_explain_missing(result["error"].toString());
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);
     });
@@ -569,32 +590,11 @@ void AgentService::execute_routed_query(const QString& query, const QJsonObject&
         r.execution_time_ms = result["execution_time_ms"].toInt();
         r.response = result.contains("response") ? result["response"].toString()
                                                  : QJsonDocument(result).toJson(QJsonDocument::Indented);
-        r.error = result["error"].toString();
+        r.error = agent_exec_explain_missing(result["error"].toString());
         emit self->agent_result(r);
         self->publish_agent_result(r, /*final=*/true);
     });
 }
-
-// ── Multi-query ──────────────────────────────────────────────────────────────
-
-void AgentService::execute_multi_query(const QString& query, bool aggregate, const QJsonObject& config) {
-    LOG_INFO("AgentService", QString("Multi-query: %1").arg(query.left(60)));
-    QJsonObject params;
-    params["query"] = query;
-    params["aggregate"] = aggregate;
-
-    QPointer<AgentService> self = this;
-    run_python_stdin("execute_multi_query", params, config, [self](bool ok, QJsonObject result) {
-        if (!self)
-            return;
-        if (ok)
-            emit self->multi_query_result(result);
-        else
-            emit self->error_occurred("multi_query", result["error"].toString());
-    });
-}
-
-// ── Financial workflows (specialized) ────────────────────────────────────────
 
 // ── Agentic Mode ─────────────────────────────────────────────────────────────
 // Spawns a streaming Python subprocess that runs an AgenticRunner. Events
@@ -878,7 +878,7 @@ void AgentService::tick_schedules() {
             // Keep the schedule alive: retry on the safety re-check instead of
             // dropping it (a transient Python failure must not stop a cadence).
             LOG_WARN("AgentService", "Schedule tick failed: " + result.value("error").toString().left(200));
-            self->next_schedule_due_ms_ = QDateTime::currentMSecsSinceEpoch() + 60 * 1000;
+            self->next_schedule_due_ms_ = QDateTime::currentMSecsSinceEpoch() + qint64{60} * 1000;
             self->rearm_schedule_timer();
             return;
         }

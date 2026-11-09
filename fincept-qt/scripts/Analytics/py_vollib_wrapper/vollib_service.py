@@ -4,6 +4,11 @@ py_vollib Worker Handler
 Provides a main() function interface for worker pool execution.
 Covers all 3 models: Black, Black-Scholes, Black-Scholes-Merton.
 Each model supports: price, greeks, implied_volatility.
+
+CLI: python vollib_service.py <operation> <json>
+  black_price | bs_price | bsm_price   {S, K, t (years), r, sigma, flag: "c"|"p"} (+ q for bsm_*)
+  black_greeks | bs_greeks | bsm_greeks   same keys -> delta, gamma, vega, theta, rho
+  black_iv | bs_iv | bsm_iv            {price, S, K, t, r, flag} (+ q) -> implied_volatility
 """
 
 import json

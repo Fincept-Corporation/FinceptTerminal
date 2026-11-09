@@ -46,6 +46,7 @@ static const char* const kColumnKeys[] = {
     QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L"),
     QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "P&L%"),
     QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "CHG%"),
+    QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "DAY P&L"),
     QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "TREND"),
     QT_TRANSLATE_NOOP("fincept::screens::PortfolioBlotter", "WT%"),
 };
@@ -65,8 +66,9 @@ enum Column {
     kColPnl = 6,
     kColPnlPct = 7,
     kColChgPct = 8,
-    kColTrend = 9,
-    kColWeight = 10,
+    kColDayPnl = 9, // today's move in money: CHG% alone hides which line moved the book
+    kColTrend = 10,
+    kColWeight = 11,
 };
 static_assert(kColWeight + 1 == kColumnCount, "Column enum and kColumnKeys are out of sync");
 
@@ -498,6 +500,17 @@ void PortfolioBlotter::update_row_price(const QString& symbol, double ltp, doubl
             chg->setText(QString("%1%2%").arg(change_pct >= 0 ? "+" : "").arg(format_value(change_pct)));
             chg->setForeground(QColor(change_pct >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
         }
+        if (auto* day = table_->item(r, kColDayPnl)) {
+            // Previous close implied by the tick: ltp / (1 + chg%).
+            const int idx = r + (current_page_ - 1) * page_size_;
+            const auto& view = visible_view();
+            if (idx >= 0 && idx < view.size() && change_pct > -100.0) {
+                const double prev = ltp / (1.0 + change_pct / 100.0);
+                const double day_pnl = (ltp - prev) * view[idx].quantity;
+                day->setText(QString("%1%2").arg(day_pnl >= 0 ? "+" : "").arg(format_value(day_pnl)));
+                day->setForeground(QColor(day_pnl >= 0 ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
+            }
+        }
         break;
     }
 }
@@ -791,6 +804,11 @@ void PortfolioBlotter::populate_table() {
                  QString("%1%2%").arg(h.day_change_percent >= 0 ? "+" : "").arg(format_value(h.day_change_percent)),
                  chg_color);
 
+        // DAY P&L — per-share move × quantity
+        const double day_pnl = h.day_change * h.quantity;
+        set_cell(kColDayPnl, QString("%1%2").arg(day_pnl >= 0 ? "+" : "").arg(format_value(day_pnl)),
+                 day_pnl >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE);
+
         // TREND — show loaded data, a pending shimmer, or a failure dash.
         // Reuse the row's existing sparkline widget when there is one.
         auto* sparkline = qobject_cast<PortfolioSparkline*>(table_->cellWidget(r, kColTrend));
@@ -964,11 +982,12 @@ void PortfolioBlotter::export_csv() {
                      portfolio_csv::num(h.avg_buy_price, 6), portfolio_csv::num(h.market_value, 2),
                      portfolio_csv::num(h.cost_basis, 2), portfolio_csv::num(h.unrealized_pnl, 2),
                      portfolio_csv::num(h.unrealized_pnl_percent, 4), portfolio_csv::num(h.day_change, 6),
-                     portfolio_csv::num(h.day_change_percent, 4), portfolio_csv::num(h.weight, 4)});
+                     portfolio_csv::num(h.day_change_percent, 4), portfolio_csv::num(h.day_change * h.quantity, 2),
+                     portfolio_csv::num(h.weight, 4)});
     }
     portfolio_csv::save(this, QStringLiteral("positions_%1.csv").arg(QDate::currentDate().toString(Qt::ISODate)),
                         {"symbol", "sector", "quantity", "last_price", "avg_cost", "market_value", "cost_basis",
-                         "unrealized_pnl", "unrealized_pnl_pct", "day_change_per_share", "day_change_pct",
+                         "unrealized_pnl", "unrealized_pnl_pct", "day_change_per_share", "day_change_pct", "day_pnl",
                          "weight_pct"},
                         rows);
 }

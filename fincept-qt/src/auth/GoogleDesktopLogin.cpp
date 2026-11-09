@@ -35,6 +35,10 @@ GoogleDesktopLogin::GoogleDesktopLogin(QObject* parent) : QObject(parent) {}
 GoogleDesktopLogin::~GoogleDesktopLogin() = default;
 
 void GoogleDesktopLogin::start() {
+    if (server_) { // started again: retire the previous listener instead of leaking it
+        server_->close();
+        server_->deleteLater();
+    }
     server_ = new QTcpServer(this);
     connect(server_, &QTcpServer::newConnection, this, &GoogleDesktopLogin::on_new_connection);
 

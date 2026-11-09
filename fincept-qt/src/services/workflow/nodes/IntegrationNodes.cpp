@@ -117,14 +117,18 @@ void register_integration_nodes(NodeRegistry& registry) {
                 args["range"] = params.value("range").toString("A1:Z1000");
                 args["credentials_path"] = params.value("credentials_path").toString();
 
-                // Attach input data for write/append operations
-                if (!inputs.isEmpty())
+                // Attach input data for write/append operations only, and send the JSON on stdin:
+                // on the command line a few hundred upstream rows passed Windows' 32,767-character
+                // limit and the process never started (read and clear carried the data too).
+                const QString operation = args.value("operation").toString();
+                if (!inputs.isEmpty() && (operation == QLatin1String("write") || operation == QLatin1String("append")))
                     args["data"] = inputs[0];
 
-                QString args_json = QString::fromUtf8(QJsonDocument(args).toJson(QJsonDocument::Compact));
+                const QByteArray args_json = QJsonDocument(args).toJson(QJsonDocument::Compact);
 
                 PythonRunner::instance().run(
-                    "spreadsheet.py", {"--args", args_json}, [cb](const fincept::python::PythonResult& res) {
+                    "spreadsheet.py", {"--args", "-"},
+                    [cb](const fincept::python::PythonResult& res) {
                         if (!res.success) {
                             cb(false, {}, res.error.isEmpty() ? "spreadsheet.py failed" : res.error);
                             return;
@@ -140,7 +144,8 @@ void register_integration_nodes(NodeRegistry& registry) {
                             return;
                         }
                         cb(true, doc.isObject() ? QJsonValue(doc.object()) : QJsonValue(doc.array()), {});
-                    });
+                    },
+                    {}, args_json);
             },
     });
 

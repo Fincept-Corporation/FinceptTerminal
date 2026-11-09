@@ -230,6 +230,7 @@ bool DashboardCanvas::build_tile(const GridItem& item) {
         LOG_WARN("Canvas", QString("Factory returned null for widget type: %1").arg(item.id));
         return false;
     }
+    widget->restore_link_group(item.config);
     auto* tile = new WidgetTile(item.instance_id, widget, this);
     connect_tile(tile);
     tiles_.append(tile);
@@ -430,10 +431,21 @@ bool DashboardCanvas::set_item_cell(const QString& instance_id, int x, int y, in
     return true;
 }
 
-bool DashboardCanvas::set_item_config(const QString& instance_id, const QJsonObject& config) {
+bool DashboardCanvas::set_item_config(const QString& instance_id, const QJsonObject& config_in) {
     GridItem* item = item_for_id(instance_id);
     if (!item)
         return false;
+    // A config without a link group keeps the tile's current one.
+    QJsonObject config = config_in;
+    auto* tile = tile_for_id(instance_id);
+    auto* content = tile ? tile->content_widget() : nullptr;
+    const QLatin1String link_key(widgets::BaseWidget::kLinkGroupKey);
+    if (!config.contains(link_key)) {
+        if (content)
+            content->store_link_group(config);
+        else if (item->config.contains(link_key))
+            config.insert(link_key, item->config.value(link_key));
+    }
     item->config = config;
     for (auto& ci : canonical_items_) {
         if (ci.instance_id == instance_id) {
@@ -441,8 +453,10 @@ bool DashboardCanvas::set_item_config(const QString& instance_id, const QJsonObj
             break;
         }
     }
-    if (auto* tile = tile_for_id(instance_id); tile && tile->content_widget())
-        tile->content_widget()->apply_config(config);
+    if (content) {
+        content->apply_config(config);
+        content->restore_link_group(config);
+    }
     // A still-queued tile is built from item->config, which is already updated.
     emit layout_changed(layout_);
     return true;
@@ -832,7 +846,8 @@ void DashboardCanvas::connect_tile(WidgetTile* tile) {
     // and emit layout_changed so the DashboardScreen writes it through to sqlite.
     if (auto* content = tile->content_widget()) {
         const QString instance_id = tile->instance_id();
-        connect(content, &widgets::BaseWidget::config_changed, this, [this, instance_id](const QJsonObject& cfg) {
+        // Widgets emit only their own keys; the link group rides along.
+        const auto store_config = [this, instance_id](const QJsonObject& cfg) {
             if (auto* item = item_for_id(instance_id)) {
                 item->config = cfg;
                 // Geometry is untouched, so the as-designed snapshot stays valid
@@ -845,6 +860,27 @@ void DashboardCanvas::connect_tile(WidgetTile* tile) {
                 }
                 emit layout_changed(layout_);
             }
+        };
+        connect(content, &widgets::BaseWidget::config_changed, this, [content, store_config](const QJsonObject& cfg) {
+            QJsonObject merged = cfg;
+            content->store_link_group(merged);
+            store_config(merged);
+        });
+        connect(content, &widgets::BaseWidget::link_group_changed, this, [this, instance_id](SymbolGroup) {
+            auto* item = item_for_id(instance_id);
+            auto* t = tile_for_id(instance_id);
+            if (!item || !t || !t->content_widget())
+                return;
+            QJsonObject cfg = item->config;
+            t->content_widget()->store_link_group(cfg);
+            item->config = cfg;
+            for (auto& ci : canonical_items_) {
+                if (ci.instance_id == instance_id) {
+                    ci.config = cfg;
+                    break;
+                }
+            }
+            emit layout_changed(layout_);
         });
     }
 }

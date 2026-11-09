@@ -1,6 +1,7 @@
 // src/screens/portfolio/views/RiskManagementView.cpp
 #include "screens/portfolio/views/RiskManagementView.h"
 
+#include "screens/portfolio/PortfolioStress.h"
 #include "ui/theme/Theme.h"
 
 #include <QEvent>
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <numeric>
 #include <optional>
 
@@ -43,34 +45,6 @@ void clear_layout(QLayout* layout) {
 }
 
 } // namespace
-
-// Pre-defined stress test scenarios
-struct StressScenario {
-    const char* name;
-    const char* description;
-    double equity_shock; // percentage shock to equities
-    double bond_shock;
-    double commodity_shock;
-};
-
-static const StressScenario kScenarios[] = {
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "2008 Financial Crisis"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Lehman collapse, credit freeze"), -38.5, 5.2, -33.0},
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "2020 COVID Crash"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Pandemic selloff (Feb-Mar 2020)"), -33.9, 1.2, -20.0},
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Dot-com Bust"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Tech bubble burst (2000-2002)"), -49.1, 8.5, -10.0},
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Interest Rate Shock +3%"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Aggressive Fed tightening"), -15.0, -12.0, -5.0},
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Black Monday 1987"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Single-day market crash"), -22.6, 2.0, -8.0},
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Inflation Surge"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "1970s-style stagflation"), -10.0, -15.0, 25.0},
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Geopolitical Crisis"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Major conflict escalation"), -12.0, 3.0, 15.0},
-    {QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Currency Crisis"),
-     QT_TRANSLATE_NOOP("fincept::screens::RiskManagementView", "Emerging market contagion"), -18.0, 1.0, 5.0},
-};
 
 RiskManagementView::RiskManagementView(QWidget* parent) : QWidget(parent) {
     build_ui();
@@ -147,9 +121,9 @@ void RiskManagementView::build_ui() {
     contrib_layout->addWidget(contrib_title_);
 
     contrib_table_ = new QTableWidget;
-    contrib_table_->setColumnCount(6);
-    contrib_table_->setHorizontalHeaderLabels(
-        {tr("SYMBOL"), tr("WEIGHT"), tr("ANN. VOL"), tr("BETA"), tr("RISK CONTRIB"), tr("CONCENTRATION")});
+    contrib_table_->setColumnCount(7);
+    contrib_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("WEIGHT"), tr("ANN. VOL"), tr("BETA"),
+                                               tr("RISK CONTRIB"), tr("≈ VaR CONTRIB"), tr("CONCENTRATION")});
     contrib_table_->setSelectionMode(QAbstractItemView::NoSelection);
     contrib_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     contrib_table_->setShowGrid(false);
@@ -208,8 +182,8 @@ void RiskManagementView::retranslateUi() {
         stress_table_->setHorizontalHeaderLabels(
             {tr("SCENARIO"), tr("DESCRIPTION"), tr("EQUITY SHOCK"), tr("PORTFOLIO IMPACT"), tr("P&L IMPACT")});
     if (contrib_table_)
-        contrib_table_->setHorizontalHeaderLabels(
-            {tr("SYMBOL"), tr("WEIGHT"), tr("ANN. VOL"), tr("BETA"), tr("RISK CONTRIB"), tr("CONCENTRATION")});
+        contrib_table_->setHorizontalHeaderLabels({tr("SYMBOL"), tr("WEIGHT"), tr("ANN. VOL"), tr("BETA"),
+                                                   tr("RISK CONTRIB"), tr("≈ VaR CONTRIB"), tr("CONCENTRATION")});
 
     // re-render dynamic content so tr() row labels (scenario names, ratings) pick up new locale
     if (has_data_) {
@@ -231,8 +205,11 @@ void RiskManagementView::set_metrics(const portfolio::ComputedMetrics& metrics) 
 
 void RiskManagementView::set_analytics(const portfolio::MarketAnalytics& analytics) {
     analytics_ = analytics;
-    if (has_data_)
+    if (has_data_) {
+        update_overview();    // parametric VaR card
+        update_stress_test(); // per-holding betas
         update_contribution();
+    }
 }
 
 void RiskManagementView::update_overview() {
@@ -329,49 +306,62 @@ void RiskManagementView::update_overview() {
              conc_top3 > 60 ? ui::colors::NEGATIVE : ui::colors::WARNING, tr("Sum of top 3"));
     add_card(1, 2, tr("TOP 5 CONCENTRATION"), QString("%1%").arg(fmt(conc_top5, 1)), ui::colors::CYAN,
              tr("Sum of top 5"));
-    add_card(1, 3, tr("DIVERSIFICATION"), tr("%n holdings", "", summary_.total_positions),
-             summary_.total_positions >= 10 ? ui::colors::POSITIVE : ui::colors::WARNING,
-             summary_.total_positions >= 10 ? tr("Well diversified") : tr("Consider adding more"));
+    // Diversification by WEIGHT, not by count: 1/Σw² is how many equal-sized positions
+    // the book behaves like (ten holdings with one at 80% ≈ 1.5). The card used to grade
+    // the position count alone, so that book read "Well diversified".
+    const double eff_n = metrics_.effective_n.value_or(0.0);
+    const bool have_eff = metrics_.effective_n.has_value();
+    add_card(1, 3, tr("EFFECTIVE POSITIONS"), have_eff ? fmt(eff_n, 1) : na,
+             !have_eff    ? ui::colors::TEXT_TERTIARY
+             : eff_n >= 8 ? ui::colors::POSITIVE
+             : eff_n >= 4 ? ui::colors::WARNING
+                          : ui::colors::NEGATIVE,
+             tr("1/Σw² of %n holding(s)", "", summary_.total_positions));
+
+    // Market sensitivity, correlation benefit and tail shape.
+    const bool have_beta = metrics_.beta.has_value();
+    add_card(2, 0, tr("BETA"), have_beta ? fmt(*metrics_.beta) : na,
+             !have_beta                       ? ui::colors::TEXT_TERTIARY
+             : std::abs(*metrics_.beta) > 1.3 ? ui::colors::NEGATIVE
+                                              : ui::colors::CYAN,
+             tr("vs %1").arg(metrics_.benchmark_symbol.isEmpty() ? tr("benchmark") : metrics_.benchmark_symbol));
+    const bool have_dr = metrics_.diversification_ratio.has_value();
+    add_card(2, 1, tr("DIVERSIFICATION RATIO"), have_dr ? fmt(*metrics_.diversification_ratio) : na,
+             !have_dr                                  ? ui::colors::TEXT_TERTIARY
+             : *metrics_.diversification_ratio >= 1.25 ? ui::colors::POSITIVE
+                                                       : ui::colors::WARNING,
+             tr("Σ wᵢσᵢ / σₚ — above 1 = correlation cuts risk"));
+    add_card(2, 2, tr("10-DAY VaR (95%)"),
+             metrics_.var_95_10d ? QString("%1 %2").arg(currency_, fmt(*metrics_.var_95_10d)) : na,
+             metrics_.var_95_10d ? ui::colors::NEGATIVE : ui::colors::TEXT_TERTIARY,
+             tr("√10 × 1-day — assumes i.i.d. returns"));
+    const bool same_book = analytics_.portfolio_id == summary_.portfolio.id;
+    const bool have_pvar = same_book && analytics_.param_var_95_1d.has_value() && total_mv > 0;
+    const double pvar = have_pvar ? *analytics_.param_var_95_1d * total_mv : 0.0;
+    QString pvar_sub = tr("Normal-distribution 1-day VaR");
+    if (have_pvar && var95 && pvar > 0 && *var95 > pvar * 1.2)
+        pvar_sub = tr("Historical VaR is %1x this — fat tails").arg(fmt(*var95 / pvar, 1));
+    add_card(2, 3, tr("PARAMETRIC VaR (95%)"), have_pvar ? QString("%1 %2").arg(currency_, fmt(pvar)) : na,
+             have_pvar ? ui::colors::WARNING : ui::colors::TEXT_TERTIARY, pvar_sub);
 
     layout->addLayout(grid);
     layout->addStretch();
 }
 
 void RiskManagementView::update_stress_test() {
-    double total_mv = summary_.total_market_value;
+    namespace ps = portfolio_stress;
+    const double total_mv = summary_.total_market_value;
+    // Per-holding betas from the analytics run, only when they describe this book.
+    const bool have_betas = !analytics_.holdings.isEmpty() && analytics_.portfolio_id == summary_.portfolio.id;
+    const QHash<QString, portfolio::HoldingRisk>* risk = have_betas ? &analytics_.holdings : nullptr;
 
-    // ── Compute actual asset-class weights from holdings ──────────────────────
-    // Classify each holding into equity / bond / commodity / crypto for the
-    // stress scenarios below. This is an asset-class heuristic distinct from
-    // the GICS-style sector used by SectorResolver / AnalyticsSectorsView.
-    double equity_wt = 0, bond_wt = 0, commodity_wt = 0, crypto_wt = 0;
-    for (const auto& h : summary_.holdings) {
-        const QString s = h.symbol.toUpper();
-        bool is_crypto = s.endsWith("-USD") || s.endsWith("-USDT");
-        bool is_bond = s == "TLT" || s == "AGG" || s == "BND" || s == "IEF" || s == "SHY" || s == "LQD" || s == "HYG" ||
-                       s == "EMB" || s.contains("BOND") || s.contains("TREAS");
-        bool is_comm = s == "GLD" || s == "IAU" || s == "SLV" || s == "USO" || s.contains("OIL") || s.contains("GOLD");
-
-        if (is_crypto)
-            crypto_wt += h.weight;
-        else if (is_bond)
-            bond_wt += h.weight;
-        else if (is_comm)
-            commodity_wt += h.weight;
-        else
-            equity_wt += h.weight;
-    }
-    // Normalise to fractions
-    equity_wt /= 100.0;
-    bond_wt /= 100.0;
-    commodity_wt /= 100.0;
-    crypto_wt /= 100.0;
-
-    int n = sizeof(kScenarios) / sizeof(kScenarios[0]);
+    const int n = static_cast<int>(std::size(ps::kScenarios));
     stress_table_->setRowCount(n);
+    int equity_lines = 0;
+    int beta_lines = 0;
 
     for (int r = 0; r < n; ++r) {
-        const auto& s = kScenarios[r];
+        const auto& s = ps::kScenarios[r];
         stress_table_->setRowHeight(r, 32);
 
         auto set_cell = [&](int col, const QString& text, const char* color = nullptr,
@@ -383,29 +373,21 @@ void RiskManagementView::update_stress_test() {
             stress_table_->setItem(r, col, item);
         };
 
-        // Weighted impact using actual portfolio composition
-        double impact_pct = s.equity_shock * equity_wt + s.bond_shock * bond_wt + s.commodity_shock * commodity_wt +
-                            s.equity_shock * 1.5 * crypto_wt; // crypto amplified
-
-        // Scale by portfolio beta vs SPY (if available from OLS).
-        // Beta > 1 means portfolio amplifies market moves; beta < 1 dampens.
-        // SPY equity_shock is the base market scenario, so multiply equity
-        // component by beta. Bond/commodity/crypto retain their own sensitivities.
-        if (metrics_.beta.has_value()) {
-            const double beta = std::max(0.0, *metrics_.beta); // clamp negative beta to 0
-            const double equity_impact = s.equity_shock * equity_wt * beta;
-            const double other_impact =
-                s.bond_shock * bond_wt + s.commodity_shock * commodity_wt + s.equity_shock * 1.5 * crypto_wt;
-            impact_pct = equity_impact + other_impact;
-        }
+        // Each equity line moves by ITS OWN beta × the market shock (the old code scaled
+        // the whole equity slice by the portfolio beta, which already includes the bond
+        // and commodity lines, and clamped a hedge's negative beta to zero).
+        const ps::Result res = ps::apply(s, summary_.holdings, risk, total_mv);
+        const double impact_pct = res.impact_pct;
+        equity_lines = res.equity_lines;
+        beta_lines = res.beta_lines;
 
         // Signed currency delta. The column used to hard-code a leading "-"
         // even for scenarios the portfolio profits from (e.g. Inflation Surge
         // on a commodity-heavy book), reporting a gain as a loss.
-        const double delta = total_mv * impact_pct / 100.0;
+        const double delta = res.pnl;
 
-        set_cell(0, tr(s.name), ui::colors::TEXT_PRIMARY);
-        set_cell(1, tr(s.description), ui::colors::TEXT_SECONDARY);
+        set_cell(0, ps::scenario_name(s), ui::colors::TEXT_PRIMARY);
+        set_cell(1, ps::scenario_description(s), ui::colors::TEXT_SECONDARY);
         set_cell(2, QString("%1%").arg(QString::number(s.equity_shock, 'f', 1)),
                  s.equity_shock < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE, Qt::AlignRight | Qt::AlignVCenter);
         set_cell(3, QString("%1%2%").arg(impact_pct < 0 ? "" : "+").arg(QString::number(impact_pct, 'f', 1)),
@@ -416,6 +398,18 @@ void RiskManagementView::update_stress_test() {
                      .arg(currency_)
                      .arg(QString::number(std::abs(delta), 'f', 0)),
                  delta < 0 ? ui::colors::NEGATIVE : ui::colors::POSITIVE, Qt::AlignRight | Qt::AlignVCenter);
+    }
+
+    if (stress_note_) {
+        stress_note_->setText(
+            beta_lines > 0
+                ? tr("Equity lines move by their own beta × the scenario's market shock (%1 of %2 equity holdings have "
+                     "an estimated beta; the rest move with the market). Bonds, commodities and crypto take "
+                     "asset-class shocks.")
+                      .arg(beta_lines)
+                      .arg(equity_lines)
+                : tr("Asset-class shocks applied to current weights; per-holding betas refine this once the price "
+                     "history has loaded."));
     }
 }
 
@@ -466,14 +460,25 @@ void RiskManagementView::update_contribution() {
             // Risk share well above capital share = the line punches above its weight.
             set_cell(4, QString("%1%").arg(QString::number(rc, 'f', 1)),
                      rc > h.weight + 5.0 ? ui::colors::NEGATIVE : ui::colors::TEXT_PRIMARY);
+            // Share of the 1-day VaR in currency (Euler: exact for parametric VaR,
+            // a close approximation for the historical figure).
+            if (metrics_.var_95) {
+                set_cell(
+                    5,
+                    QString("%1 %2").arg(currency_, QString::number(*it->risk_contribution * *metrics_.var_95, 'f', 0)),
+                    ui::colors::TEXT_SECONDARY);
+            } else {
+                set_cell(5, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
+            }
         } else {
             set_cell(4, row_have ? QStringLiteral("--") : tr("no data"), ui::colors::TEXT_TERTIARY);
+            set_cell(5, QStringLiteral("--"), ui::colors::TEXT_TERTIARY);
         }
 
         const char* conc_color = h.weight > 20   ? ui::colors::NEGATIVE
                                  : h.weight > 10 ? ui::colors::WARNING
                                                  : ui::colors::POSITIVE;
-        set_cell(5, h.weight > 20 ? tr("HIGH") : h.weight > 10 ? tr("MEDIUM") : tr("LOW"), conc_color);
+        set_cell(6, h.weight > 20 ? tr("HIGH") : h.weight > 10 ? tr("MEDIUM") : tr("LOW"), conc_color);
     }
 }
 

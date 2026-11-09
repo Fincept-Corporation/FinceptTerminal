@@ -14,9 +14,11 @@
 #include "storage/secure/SecureStorage.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QHostAddress>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QMutexLocker>
 #include <QRandomGenerator>
@@ -135,6 +137,13 @@ void McpHttpServer::Impl::record_activity(const ExternalCallRecord& record) {
         activity.prepend(record);
         while (activity.size() > mcp_http_detail::kActivityCapacity)
             activity.removeLast();
+        ++counters.calls;
+        if (record.denied)
+            ++counters.denied;
+        else if (record.success)
+            ++counters.ok;
+        else
+            ++counters.failed;
     }
     emit q->activity(record);
 }
@@ -149,14 +158,19 @@ McpHttpServer& McpHttpServer::instance() {
 McpHttpServer::McpHttpServer(QObject* parent) : QObject(parent), d_(new Impl(this)) {
     using namespace mcp_http_detail;
     qRegisterMetaType<fincept::mcp::ExternalCallRecord>();
+    qRegisterMetaType<fincept::mcp::ExternalClientInfo>();
     auto& cfg = AppConfig::instance();
     d_->enabled_at_startup = cfg.get(QString::fromLatin1(kKeyEnabledAtStartup), false).toBool();
-    d_->persisted_allow_actions = cfg.get(QString::fromLatin1(kKeyAllowActions), false).toBool();
-    d_->shared->allow_actions.store(d_->persisted_allow_actions);
-    d_->toolset = cfg.get(QString::fromLatin1(kKeyToolset), QStringLiteral("essentials")).toString() ==
-                          QLatin1String("full")
-                      ? ExternalToolset::Full
-                      : ExternalToolset::Essentials;
+    d_->persisted_allow_ui_control = cfg.get(QString::fromLatin1(kKeyAllowUiControl), true).toBool();
+    d_->persisted_allow_scripts = cfg.get(QString::fromLatin1(kKeyAllowScripts), true).toBool();
+    d_->persisted_result_budget_kb =
+        std::clamp(cfg.get(QString::fromLatin1(kKeyResultBudgetKb), kDefaultResultBudgetKb).toInt(), kMinResultBudgetKb,
+                   kMaxResultBudgetKb);
+    d_->shared->allow_ui_control.store(d_->persisted_allow_ui_control);
+    d_->shared->allow_scripts.store(d_->persisted_allow_scripts);
+    d_->shared->result_budget_bytes.store(d_->persisted_result_budget_kb * 1024);
+    // Seed auto mode here so pool threads never read QSettings themselves.
+    ToolApprovalDialog::load_auto_approve_setting();
     const int port = cfg.get(QString::fromLatin1(kKeyPort), static_cast<int>(kDefaultPort)).toInt();
     d_->configured_port = (port >= kMinUserPort && port <= 65535) ? static_cast<quint16>(port) : kDefaultPort;
 
@@ -180,6 +194,7 @@ McpHttpServer::~McpHttpServer() {
     }
     for (auto it = d_->conns.cbegin(); it != d_->conns.cend(); ++it)
         QObject::disconnect(it.key(), nullptr, this, nullptr);
+    d_->cancel_all_calls(); // lets running tools resolve, so the pool can drain below
     if (d_->pool) {
         d_->pool->clear();
         // A tool still running at process exit is not worth hanging the exit for:
@@ -234,6 +249,11 @@ bool McpHttpServer::start() {
                          : QString();
     d_->distinct_clients.clear();
     d_->client_by_agent.clear();
+    {
+        QMutexLocker lock(&d_->activity_mutex);
+        d_->counters = ExternalServerStats{};
+        d_->counters.started_at = QDateTime::currentDateTime();
+    }
     d_->shared->accepting.store(true);
     d_->sweeper->start();
 
@@ -242,10 +262,9 @@ bool McpHttpServer::start() {
     std::shared_ptr<WorkerShared> state = d_->shared;
     d_->pool->start([state]() { (void)current_catalogue(*state); });
 
-    LOG_INFO(kTag, QStringLiteral("Listening on %1 (toolset: %2, actions: %3)")
-                       .arg(url(), d_->toolset == ExternalToolset::Full ? QStringLiteral("full")
-                                                                        : QStringLiteral("essentials"),
-                            allow_actions() ? QStringLiteral("allowed") : QStringLiteral("read-only")));
+    LOG_INFO(kTag, QStringLiteral("Listening on %1 (UI control: %2, Python scripts: %3)")
+                       .arg(url(), allow_ui_control() ? QStringLiteral("on") : QStringLiteral("look-only"),
+                            allow_scripts() ? QStringLiteral("on") : QStringLiteral("off")));
     emit status_changed();
     return true;
 }
@@ -268,6 +287,7 @@ void McpHttpServer::stop() {
         s->abort();
     }
     srv->deleteLater(); // the accepted sockets are its children and go with it
+    d_->cancel_all_calls(); // running tools stop instead of finishing for nobody
     d_->pending.clear();
     if (d_->pool)
         d_->pool->clear(); // calls that have not started yet are dropped
@@ -338,38 +358,74 @@ void McpHttpServer::set_enabled_at_startup(bool on) {
     emit status_changed();
 }
 
-bool McpHttpServer::allow_actions() const {
-    return d_->shared->allow_actions.load();
+bool McpHttpServer::allow_ui_control() const {
+    return d_->shared->allow_ui_control.load();
 }
 
-void McpHttpServer::set_allow_actions(bool on) {
+void McpHttpServer::set_allow_ui_control(bool on) {
     using namespace mcp_http_detail;
     if (d_->test_mode) { // self-test: in memory only
-        d_->shared->allow_actions.store(on);
+        d_->shared->allow_ui_control.store(on);
         emit status_changed();
         return;
     }
-    if (d_->persisted_allow_actions == on && d_->shared->allow_actions.load() == on)
+    if (d_->persisted_allow_ui_control == on && d_->shared->allow_ui_control.load() == on)
         return;
-    d_->persisted_allow_actions = on;
-    d_->shared->allow_actions.store(on);
-    AppConfig::instance().set(QString::fromLatin1(kKeyAllowActions), on);
-    LOG_INFO(kTag, on ? QStringLiteral("External agents may now run state-changing tools (live trading still needs "
-                                       "per-call approval)")
-                      : QStringLiteral("External agents are limited to read-only tools"));
+    d_->persisted_allow_ui_control = on;
+    d_->shared->allow_ui_control.store(on);
+    AppConfig::instance().set(QString::fromLatin1(kKeyAllowUiControl), on);
+    LOG_INFO(kTag, on ? QStringLiteral("External agents may operate the terminal's UI (risky steps still ask first)")
+                      : QStringLiteral("External agents are limited to looking at the terminal"));
     emit status_changed();
 }
 
-ExternalToolset McpHttpServer::toolset() const {
-    return d_->toolset;
+bool McpHttpServer::allow_scripts() const {
+    return d_->shared->allow_scripts.load();
 }
 
-void McpHttpServer::set_toolset(ExternalToolset t) {
-    if (d_->toolset == t)
+void McpHttpServer::set_allow_scripts(bool on) {
+    using namespace mcp_http_detail;
+    if (d_->test_mode) {
+        d_->shared->allow_scripts.store(on);
+        emit status_changed();
         return;
-    d_->toolset = t;
-    AppConfig::instance().set(QString::fromLatin1(mcp_http_detail::kKeyToolset),
-                              t == ExternalToolset::Full ? QStringLiteral("full") : QStringLiteral("essentials"));
+    }
+    if (d_->persisted_allow_scripts == on && d_->shared->allow_scripts.load() == on)
+        return;
+    d_->persisted_allow_scripts = on;
+    d_->shared->allow_scripts.store(on);
+    AppConfig::instance().set(QString::fromLatin1(kKeyAllowScripts), on);
+    LOG_INFO(kTag, on ? QStringLiteral("External agents may run the bundled Python scripts")
+                      : QStringLiteral("External agents may no longer run Python scripts"));
+    emit status_changed();
+}
+
+bool McpHttpServer::auto_approve() const {
+    return ToolApprovalDialog::auto_approve();
+}
+
+void McpHttpServer::set_auto_approve(bool on) {
+    if (d_->test_mode) // self-test: never persist
+        return;
+    if (ToolApprovalDialog::auto_approve() == on)
+        return;
+    ToolApprovalDialog::set_auto_approve(on);
+    emit status_changed();
+}
+
+int McpHttpServer::result_budget_kb() const {
+    return d_->shared->result_budget_bytes.load() / 1024;
+}
+
+void McpHttpServer::set_result_budget_kb(int kb) {
+    using namespace mcp_http_detail;
+    const int clamped = std::clamp(kb, kMinResultBudgetKb, kMaxResultBudgetKb);
+    if (d_->persisted_result_budget_kb == clamped && result_budget_kb() == clamped)
+        return;
+    d_->persisted_result_budget_kb = clamped;
+    d_->shared->result_budget_bytes.store(clamped * 1024);
+    if (!d_->test_mode)
+        AppConfig::instance().set(QString::fromLatin1(kKeyResultBudgetKb), clamped);
     emit status_changed();
 }
 
@@ -397,8 +453,28 @@ QList<ExternalCallRecord> McpHttpServer::recent_activity() const {
     return d_->activity;
 }
 
+void McpHttpServer::clear_activity() {
+    {
+        QMutexLocker lock(&d_->activity_mutex);
+        d_->activity.clear();
+    }
+    emit status_changed();
+}
+
 int McpHttpServer::connected_client_count() const {
     return static_cast<int>(d_->distinct_clients.size());
+}
+
+QList<ExternalClientInfo> McpHttpServer::clients() const {
+    QList<ExternalClientInfo> out = d_->distinct_clients.values();
+    std::sort(out.begin(), out.end(),
+              [](const ExternalClientInfo& a, const ExternalClientInfo& b) { return a.last_seen > b.last_seen; });
+    return out;
+}
+
+ExternalServerStats McpHttpServer::stats() const {
+    QMutexLocker lock(&d_->activity_mutex);
+    return d_->counters;
 }
 
 // ── Snippets ─────────────────────────────────────────────────────────────────
@@ -417,8 +493,38 @@ QString McpHttpServer::codex_add_command() const {
 
 QString McpHttpServer::codex_config_toml() const {
     using namespace mcp_http_detail;
-    return QStringLiteral("[mcp_servers.fincept_terminal]\nurl = %1\nbearer_token_env_var = %2\n")
+    // tool_timeout_sec: an approval (≤ 50 s) or a ui_wait (≤ 60 s) can outlast
+    // Codex's 60 s default.
+    return QStringLiteral("[mcp_servers.fincept_terminal]\nurl = %1\nbearer_token_env_var = %2\n"
+                          "tool_timeout_sec = 300\n")
         .arg(toml_string(d_->effective_url()), toml_string(QString::fromLatin1(kTokenEnvVar)));
+}
+
+QString McpHttpServer::gemini_add_command() const {
+    return QStringLiteral("gemini mcp add --transport http fincept_terminal %1 -H \"Authorization: Bearer %2\" -s user")
+        .arg(d_->effective_url(), token());
+}
+
+QString McpHttpServer::gemini_settings_json() const {
+    const QJsonObject server{
+        {QStringLiteral("httpUrl"), d_->effective_url()},
+        {QStringLiteral("headers"),
+         QJsonObject{{QStringLiteral("Authorization"), QStringLiteral("Bearer ") + token()}}},
+        {QStringLiteral("timeout"), 300000},
+    };
+    const QJsonObject root{{QStringLiteral("mcpServers"), QJsonObject{{QStringLiteral("fincept_terminal"), server}}}};
+    return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
+}
+
+QString McpHttpServer::vscode_json() const {
+    const QJsonObject server{
+        {QStringLiteral("type"), QStringLiteral("http")},
+        {QStringLiteral("url"), d_->effective_url()},
+        {QStringLiteral("headers"),
+         QJsonObject{{QStringLiteral("Authorization"), QStringLiteral("Bearer ") + token()}}},
+    };
+    const QJsonObject root{{QStringLiteral("servers"), QJsonObject{{QStringLiteral("fincept_terminal"), server}}}};
+    return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
 }
 
 QString McpHttpServer::generic_http_json() const {
@@ -475,7 +581,7 @@ QString McpHttpServer::python_for_bridge() const {
 QString McpHttpServer::bridge_script_path() const {
     const QString scripts = python::PythonRunner::instance().scripts_dir();
     return QDir::toNativeSeparators(
-        QFileInfo(scripts + QStringLiteral("/mcp/fincept_mcp_stdio.py")).absoluteFilePath());
+        QFileInfo(scripts + QStringLiteral("/fincept_mcp/fincept_mcp_stdio.py")).absoluteFilePath());
 }
 
 QJsonObject McpHttpServer::claude_mcp_config_env() const {
@@ -490,25 +596,34 @@ QJsonObject McpHttpServer::claude_mcp_config_env() const {
 }
 
 QStringList McpHttpServer::codex_config_overrides() const {
-    return {QStringLiteral("-c"), QStringLiteral("mcp_servers.fincept.url=\"%1\"").arg(d_->effective_url()),
+    // tool_timeout_sec: Codex's 60 s default is shorter than ui_act (approvals,
+    // 180 s budget) and ui_wait (≤ 60 s + overhead) — same value as the snippet.
+    return {QStringLiteral("-c"),
+            QStringLiteral("mcp_servers.fincept.url=\"%1\"").arg(d_->effective_url()),
             QStringLiteral("-c"),
-            QStringLiteral("mcp_servers.fincept.bearer_token_env_var=\"%1\"").arg(QString::fromLatin1(kTokenEnvVar))};
+            QStringLiteral("mcp_servers.fincept.bearer_token_env_var=\"%1\"").arg(QString::fromLatin1(kTokenEnvVar)),
+            QStringLiteral("-c"),
+            QStringLiteral("mcp_servers.fincept.tool_timeout_sec=300")};
 }
 
 // ── Self-test hooks ──────────────────────────────────────────────────────────
 
-void McpHttpServer::set_selftest_overrides(quint16 port, const QString& token, bool allow_actions) {
+void McpHttpServer::set_selftest_overrides(quint16 port, const QString& token, bool allow_ui_control,
+                                           bool allow_scripts) {
     d_->test_mode = true;
     d_->test_port = port;
     d_->test_token = token;
-    d_->shared->allow_actions.store(allow_actions);
+    d_->shared->allow_ui_control.store(allow_ui_control);
+    d_->shared->allow_scripts.store(allow_scripts);
 }
 
 void McpHttpServer::clear_selftest_overrides() {
     d_->test_mode = false;
     d_->test_port = 0;
     d_->test_token.clear();
-    d_->shared->allow_actions.store(d_->persisted_allow_actions);
+    d_->shared->allow_ui_control.store(d_->persisted_allow_ui_control);
+    d_->shared->allow_scripts.store(d_->persisted_allow_scripts);
+    d_->shared->result_budget_bytes.store(d_->persisted_result_budget_kb * 1024);
 }
 
 QString McpHttpServer::advertised_name(const QString& internal_name) {

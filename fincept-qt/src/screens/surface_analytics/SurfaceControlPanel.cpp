@@ -487,14 +487,29 @@ QGroupBox* SurfaceControlPanel::build_lineage_section() {
 }
 
 void SurfaceControlPanel::prefill_datasets() {
-    // Static seed list — the screen calls list_datasets() asynchronously and
-    // updates this combo when results arrive (see SurfaceAnalyticsScreen).
+    // Static seed list, shown until set_datasets() replaces it with Databento's
+    // dataset listing (SurfaceAnalyticsScreen::load_dataset_list, API key required).
     QStringList seed = {"OPRA.PILLAR", "GLBX.MDP3",   "EQUS.MINI",  "XNAS.ITCH",
                         "XNYS.PILLAR", "IFEU.IMPACT", "IFUS.IMPACT"};
     dataset_combo_->blockSignals(true);
     dataset_combo_->clear();
     for (const QString& s : seed)
         dataset_combo_->addItem(s);
+    dataset_combo_->blockSignals(false);
+}
+
+void SurfaceControlPanel::set_datasets(const QStringList& datasets) {
+    if (datasets.isEmpty() || !dataset_combo_)
+        return;
+    // The selection survives the swap (a pick the listing lacks stays selectable), so
+    // state_.dataset is still right and no controls_changed is due.
+    const QString current = dataset_combo_->currentText();
+    dataset_combo_->blockSignals(true);
+    dataset_combo_->clear();
+    dataset_combo_->addItems(datasets);
+    if (!current.isEmpty() && dataset_combo_->findText(current) < 0)
+        dataset_combo_->addItem(current);
+    dataset_combo_->setCurrentIndex(std::max(0, dataset_combo_->findText(current)));
     dataset_combo_->blockSignals(false);
 }
 
@@ -792,17 +807,8 @@ void SurfaceControlPanel::set_provider_status(const QString& provider_name, cons
     // translated rendering of it rather than the raw token.
     QString color = colors::TEXT_DIM();
     QString text = provider_state;
-    if (provider_state == "connected") {
-        color = colors::POSITIVE();
-        text = tr("connected");
-    } else if (provider_state == "disconnected") {
-        color = colors::NEGATIVE();
-        text = tr("disconnected");
-    } else if (provider_state == "error") {
-        color = colors::NEGATIVE();
-        text = tr("error");
-    } else if (provider_state == "configured") {
-        color = QString("rgb(217,164,6)"); // amber, key set but not yet tested
+    if (provider_state == "configured") {
+        color = QString("rgb(217,164,6)"); // amber: a key is set
         text = tr("configured");
     } else if (provider_state == "not configured") {
         text = tr("not configured");

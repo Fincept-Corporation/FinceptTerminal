@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """
-PyPortfolioOpt Worker Handler
-Provides a main() function interface for worker pool execution.
-Covers 100% of pyportfolioopt_wrapper: core, additional_optimizers, advanced_objectives.
+PyPortfolioOpt service - portfolio optimisation with the PyPortfolioOpt library (runs in venv-numpy1).
+
+Usage: python pyportfolioopt_service.py <operation> <json_data>
+  json_data = {"prices_json": "<pandas DataFrame.to_json() of prices: date index, one column per asset>",
+               "config": {PyPortfolioOptConfig fields, e.g. "optimization_method", "objective", "risk_free_rate"}}
+  operations: optimize, efficient_frontier, discrete_allocation, backtest, risk_decomposition, black_litterman,
+              hrp, generate_report, sensitivity_analysis, risk_parity, equal_weight, inverse_volatility,
+              market_neutral, min_tracking_error, max_diversification, custom_constraints, views_optimization
+Output JSON; {"error": ...} on failure.
 """
 
+import io
 import json
 import sys
 import numpy as np
@@ -29,7 +36,8 @@ import pandas as pd
 def _parse_prices(data):
     """Parse prices from request data into a DataFrame."""
     prices_json = data.get("prices_json")
-    return pd.read_json(prices_json)
+    # A literal JSON string must be wrapped: pandas >= 2.1 deprecates (and 3.x rejects) parsing it as a path.
+    return pd.read_json(io.StringIO(prices_json) if isinstance(prices_json, str) else prices_json)
 
 
 def _build_engine(data):
@@ -43,14 +51,20 @@ def _build_engine(data):
 
 
 def _safe_float(v):
-    """Convert numpy types to native Python for JSON serialization."""
+    """Convert numpy types to native Python for JSON serialization (NaN / inf -> None)."""
     if isinstance(v, (np.floating, np.integer)):
-        return float(v)
+        v = float(v)
+    if isinstance(v, float) and not np.isfinite(v):
+        return None
     return v
 
 
 def _safe_dict(d):
-    """Recursively convert numpy types in a dict."""
+    """Recursively convert numpy / pandas types in a dict (a Series keeps its labels)."""
+    if isinstance(d, pd.Series):
+        d = d.to_dict()
+    elif isinstance(d, np.ndarray):
+        d = d.tolist()
     if isinstance(d, dict):
         return {k: _safe_dict(v) for k, v in d.items()}
     if isinstance(d, (list, tuple)):

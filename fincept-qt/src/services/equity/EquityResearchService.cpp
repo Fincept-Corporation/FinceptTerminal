@@ -3,6 +3,8 @@
 
 #include "core/logging/Logger.h"
 #include "python/PythonRunner.h"
+#include "services/equity/TechnicalIndicators.h"
+#include "services/news/NewsNlpEngine.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/DataSourceRepository.h"
 #include "trading/AccountManager.h"
@@ -21,6 +23,7 @@
 #include <QPointer>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
 #include <cmath>
@@ -102,8 +105,8 @@ int candle_lookback_days(const QString& period) {
     return 730;
 }
 
-// trading-layer BrokerCandle[] → the yfinance-shaped JSON array the indicator
-// scripts consume: [{timestamp(sec), open, high, low, close, volume}, …], ascending.
+// trading-layer BrokerCandle[] → the yfinance-shaped JSON array the Technicals
+// computation consumes: [{timestamp(sec), open, high, low, close, volume}, …], ascending.
 // Timestamps are normalised to epoch SECONDS (some brokers, e.g. Fyers, return
 // milliseconds — the chart and the indicator engine assume seconds).
 QString broker_candles_to_json(const QVector<fincept::trading::BrokerCandle>& candles) {
@@ -137,46 +140,6 @@ QString broker_candles_to_json(const QVector<fincept::trading::BrokerCandle>& ca
     return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
 }
 
-// compute_technicals.py receives the candle series as ONE command-line argument (it is shared
-// with the workflow nodes, so its interface is left alone). Windows caps a whole command line
-// at ~32 K characters and QProcess backslash-escapes every embedded quote, so a candle costs
-// ~112 characters on the wire: a 24/7 instrument (crypto: 365 bars/yr) or any 5y request blew
-// the limit, the process failed to start, and the Technicals tab just showed an error.
-// Re-serialise compactly and keep the most recent bars that fit — the indicators are read off
-// the LAST row only, and ~260 bars is ample warm-up for every window the script uses.
-QString equity_svc_fit_candles_for_argv(const QString& hist_json) {
-    constexpr qsizetype kBudgetChars = 30000; // leaves ~2 K for the interpreter + script paths
-    const QJsonArray arr = QJsonDocument::fromJson(hist_json.toUtf8()).array();
-    if (arr.isEmpty())
-        return hist_json; // not a candle array — pass through untouched
-
-    QVector<QByteArray> parts;
-    parts.reserve(arr.size());
-    for (const auto& v : arr)
-        parts.append(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
-
-    qsizetype used = 2; // the enclosing [ ]
-    qsizetype first = arr.size();
-    for (qsizetype i = arr.size() - 1; i >= 0; --i) {
-        const qsizetype cost = parts[i].size() + parts[i].count('"') + 1; // +1: separating comma
-        if (used + cost > kBudgetChars)
-            break;
-        used += cost;
-        first = i;
-    }
-    if (first >= arr.size())
-        return hist_json;
-
-    QByteArray out = "[";
-    for (qsizetype i = first; i < arr.size(); ++i) {
-        if (i > first)
-            out += ',';
-        out += parts[i];
-    }
-    out += ']';
-    return QString::fromUtf8(out);
-}
-
 // True when an identical request is already running and young enough to still be
 // trusted (see EquityResearchService::kInflightMaxAgeMs).
 bool equity_svc_inflight_busy(const QHash<QString, qint64>& inflight, const QString& key, qint64 max_age_ms) {
@@ -192,12 +155,7 @@ EquityResearchService& EquityResearchService::instance() {
     return inst;
 }
 
-EquityResearchService::EquityResearchService(QObject* parent) : QObject(parent) {
-    search_debounce_ = new QTimer(this);
-    search_debounce_->setSingleShot(true);
-    search_debounce_->setInterval(kDebounceMs);
-    connect(search_debounce_, &QTimer::timeout, this, [this]() { search_symbols(pending_query_); });
-}
+EquityResearchService::EquityResearchService(QObject* parent) : QObject(parent) {}
 
 // ── Python helper ─────────────────────────────────────────────────────────────
 void EquityResearchService::run_python(const QString& script, const QStringList& args,
@@ -207,50 +165,6 @@ void EquityResearchService::run_python(const QString& script, const QStringList&
         if (!self)
             return;
         cb(result.success, result.success ? result.output : result.error);
-    });
-}
-
-// ── Search ────────────────────────────────────────────────────────────────────
-void EquityResearchService::schedule_search(const QString& query) {
-    pending_query_ = query;
-    search_debounce_->start();
-}
-
-void EquityResearchService::search_symbols(const QString& query) {
-    if (query.trimmed().isEmpty())
-        return;
-    run_python("yfinance_data.py", {"search", query, "20"}, [this, query](bool ok, const QString& out) {
-        // Report failures on error_occurred("Search", …) — every listener filters by
-        // context — so callers waiting on the result (the MCP search tool) fail fast
-        // instead of running into their timeout.
-        if (!ok) {
-            LOG_WARN("EquityResearch", "Symbol search failed");
-            emit error_occurred("Search", "Symbol search failed for '" + query + "'");
-            return;
-        }
-        auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-        const QString script_error = doc.object().value("error").toString();
-        if (!script_error.isEmpty()) {
-            LOG_WARN("EquityResearch", "Symbol search failed: " + script_error);
-            emit error_occurred("Search", script_error);
-            return;
-        }
-        auto arr = doc.object()["results"].toArray();
-        QVector<SearchResult> results;
-        results.reserve(arr.size());
-        for (const auto& v : arr) {
-            auto o = v.toObject();
-            SearchResult r;
-            r.symbol = o["symbol"].toString();
-            r.name = o["name"].toString();
-            r.exchange = o["exchange"].toString();
-            r.type = o["type"].toString();
-            r.currency = o["currency"].toString();
-            r.industry = o["industry"].toString();
-            if (!r.symbol.isEmpty())
-                results.append(r);
-        }
-        emit search_results_loaded(results);
     });
 }
 
@@ -408,8 +322,8 @@ void EquityResearchService::fetch_financials(const QString& symbol) {
 
 // ── Technicals ────────────────────────────────────────────────────────────────
 void EquityResearchService::fetch_technicals(const QString& symbol, const QString& period) {
-    // Indicators off daily bars: serve a recent computation instead of spawning another
-    // compute_technicals.py process on every Technicals-tab visit / Sentiment blend.
+    // Indicators off daily bars: serve a recent computation instead of re-fetching the candles
+    // and recomputing on every Technicals-tab visit / Sentiment blend.
     const QString result_key = "equity:technicals:" + symbol + ":" + period;
     if (const auto hit = fincept::CacheManager::instance().try_get(result_key)) {
         const QJsonArray rows = QJsonDocument::fromJson(hit->toUtf8()).array();
@@ -419,44 +333,19 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
         }
     }
 
-    // The Technicals tab and the Sentiment blend both ask for the same symbol; the
-    // second request would only spawn a duplicate compute_technicals.py process.
+    // The Technicals tab and the Sentiment blend both ask for the same symbol; the second
+    // request would only repeat the candle fetch and the computation.
     const QString inflight_key = symbol + QLatin1Char(':') + period;
     if (equity_svc_inflight_busy(technicals_inflight_, inflight_key, kInflightMaxAgeMs))
         return;
     technicals_inflight_.insert(inflight_key, QDateTime::currentMSecsSinceEpoch());
 
-    // Candles come from ensure_candles (cache → region-matched connected broker →
-    // yfinance fallback); compute_technicals.py then derives the rating + indicators.
-    auto run_compute = [this, symbol, inflight_key, result_key](const QString& hist_json) {
-        run_python("compute_technicals.py", {equity_svc_fit_candles_for_argv(hist_json)},
-                   [this, symbol, inflight_key, result_key](bool ok2, const QString& out2) {
-                       technicals_inflight_.remove(inflight_key);
-                       if (!ok2) {
-                           emit error_occurred("Technicals", "Indicator computation failed");
-                           return;
-                       }
-                       auto doc = QJsonDocument::fromJson(python::extract_json(out2).toUtf8()).object();
-                       if (!doc["success"].toBool()) {
-                           emit error_occurred("Technicals", "compute_technicals returned failure");
-                           return;
-                       }
-                       const QJsonArray rows = doc["data"].toArray();
-                       // parse_technicals() reads the last row plus the last 50 closes (SMA 50);
-                       // keep a 60-row tail rather than the whole indicator frame.
-                       QJsonArray tail;
-                       for (qsizetype i = std::max<qsizetype>(0, rows.size() - 60); i < rows.size(); ++i)
-                           tail.append(rows.at(i));
-                       if (!tail.isEmpty())
-                           fincept::CacheManager::instance().put(
-                               result_key, QVariant(QString::fromUtf8(QJsonDocument(tail).toJson(QJsonDocument::Compact))),
-                               kTechnicalsTtlSec, "equity");
-                       emit technicals_loaded(parse_technicals(symbol, rows));
-                   });
-    };
-
+    // Candles come from ensure_candles (cache → region-matched connected broker → yfinance
+    // fallback). The indicators are computed natively over the whole series on a worker thread
+    // (a 5-year daily series is ~5 ms, a 'max' history ~40 ms). parse_technicals() reads the last
+    // row plus the last 50 closes (SMA 50), so only the frame's 60-row tail is built and cached.
     QPointer<EquityResearchService> self = this;
-    ensure_candles(symbol, period, [self, run_compute, inflight_key](bool ok, const QString& hist_json) {
+    ensure_candles(symbol, period, [self, symbol, inflight_key, result_key](bool ok, const QString& hist_json) {
         if (!self)
             return;
         if (!ok || hist_json.trimmed().isEmpty()) {
@@ -464,7 +353,31 @@ void EquityResearchService::fetch_technicals(const QString& symbol, const QStrin
             emit self->error_occurred("Technicals", "Failed historical fetch");
             return;
         }
-        run_compute(hist_json);
+        (void)QtConcurrent::run([self, symbol, inflight_key, result_key, hist_json]() {
+            const technicals::TechnicalsFrame frame =
+                technicals::compute_frame(QJsonDocument::fromJson(hist_json.toUtf8()).array(), 60);
+            if (!self)
+                return;
+            QMetaObject::invokeMethod(
+                self.data(),
+                [self, symbol, inflight_key, result_key, frame]() {
+                    if (!self)
+                        return;
+                    self->technicals_inflight_.remove(inflight_key);
+                    if (!frame.ok) {
+                        LOG_WARN("EquityResearch", QString("Technicals for %1 failed: %2").arg(symbol, frame.error));
+                        emit self->error_occurred("Technicals", "Indicator computation failed: " + frame.error);
+                        return;
+                    }
+                    if (!frame.rows.isEmpty())
+                        fincept::CacheManager::instance().put(
+                            result_key,
+                            QVariant(QString::fromUtf8(QJsonDocument(frame.rows).toJson(QJsonDocument::Compact))),
+                            kTechnicalsTtlSec, "equity");
+                    emit self->technicals_loaded(self->parse_technicals(symbol, frame.rows));
+                },
+                Qt::QueuedConnection);
+        });
     });
 }
 
@@ -1103,12 +1016,12 @@ TechnicalsData EquityResearchService::parse_technicals(const QString& symbol, co
     if (rows.isEmpty())
         return td;
 
-    // Use the last row (most recent values) — compute_technicals.py outputs lowercase snake_case
+    // Use the last row (most recent values) — Technicals frame columns are lowercase snake_case
     auto last = rows.last().toObject();
 
-    // compute_technicals.py only emits sma_20, so the "SMA 50" row and the SMA 20/50 crossover
-    // signal below could never appear. Every row carries its close, so derive the 50-bar mean
-    // here (the script is shared with the workflow nodes and is left alone).
+    // The frame (the `ta` library's default set) has sma_20 but no sma_50, which the "SMA 50" row
+    // and the SMA 20/50 crossover signal below need. Every row carries its close, so derive the
+    // 50-bar mean here.
     if (rows.size() >= 50 && (!last.contains("sma_50") || last["sma_50"].isNull())) {
         double sum = 0.0;
         bool complete = true;
@@ -1259,6 +1172,8 @@ QVector<PeerData> EquityResearchService::parse_peers(const QJsonArray& arr) cons
         p.current_ratio = o["currentRatio"].toDouble();
         p.quick_ratio = o["quickRatio"].toDouble();
         p.dividend_yield = o["dividendYield"].toDouble();
+        p.revenue_growth = o["revenueGrowth"].toDouble(); // were declared but never filled
+        p.earnings_growth = o["earningsGrowth"].toDouble();
         peers.append(p);
     }
     return peers;
@@ -1277,6 +1192,23 @@ QVector<NewsArticle> EquityResearchService::parse_news(const QJsonArray& arr) co
         a.published_date = o["published_date"].toString();
         if (!a.title.isEmpty())
             articles.append(a);
+    }
+    // Tone per headline — the finance-tuned VADER model the News tab and the Sentiment
+    // tab score with, so all three agree on the same story. Pure, in-process, ~µs each.
+    if (!articles.isEmpty()) {
+        QVector<news_nlp::TextItem> items;
+        items.reserve(articles.size());
+        for (int i = 0; i < articles.size(); ++i)
+            items.append({QString::number(i), articles[i].title, articles[i].description});
+        const NewsSentimentResult sr = news_nlp::analyze_sentiment(items);
+        for (const auto& r : sr.per_article) {
+            bool ok = false;
+            const int i = r.id.toInt(&ok);
+            if (ok && i >= 0 && i < articles.size()) {
+                articles[i].sentiment = r.label;
+                articles[i].sentiment_score = r.score;
+            }
+        }
     }
     return articles;
 }

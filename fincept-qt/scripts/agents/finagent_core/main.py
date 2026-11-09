@@ -243,25 +243,28 @@ def main(args=None):
         "params": {...}
     }
 
-    Actions (each one has a caller in src/services/agents/AgentService*.cpp):
+    Actions. The terminal calls these from src/services/agents/AgentService*.cpp
+    (workflow types arrive through AgentService::run_workflow):
     - Core agent: run, run_team, run_structured
     - Discovery: discover_agents
     - SuperAgent: route_query, execute_query, execute_multi_query
-    - Execution planner: create_stock_plan, create_portfolio_plan, execute_plan,
-      generate_dynamic_plan
+    - Execution planner: execute_plan, generate_dynamic_plan
     - Workflows (AgentService::workflow_types): stock_analysis, portfolio_rebal,
-      risk_assessment, macro_scan, earnings_brief, sector_rotation,
-      options_scan, sentiment_scan, custom_query
+      risk_assessment, execute_multi_query, macro_scan, earnings_brief,
+      sector_rotation, options_scan, sentiment_scan, custom_query
+    - System: system_info, list_tools, list_models
+    Python-only (no terminal caller since the per-feature MCP tools were replaced
+    by the core tools; kept for code that drives this module directly):
+    - Execution planner: create_stock_plan, create_portfolio_plan
     - Repositories / memory: save_session, get_session, add_message,
       save_memory, search_memories, save_trade_decision, get_decisions,
       store_memory, recall_memories, search_knowledge
-    - System: system_info, list_tools, list_models
     - Agentic Mode: agentic_start_task / agentic_resume_task /
       agentic_reply_question (streaming), agentic_pause_task,
       agentic_cancel_task, get_task, list_tasks, delete_task, agentic_startup,
       agentic_schedule_*, agentic_skills_list, agentic_skill_delete,
       agentic_memory_list, agentic_memory_delete, agentic_reflexion_list
-    (Paper trading is not here: agents use the terminal's pt_* MCP tools.)
+    (Paper trading is not here: it lives in the terminal's C++ paper engine.)
 
     Streaming mode:
     - Pass --stream flag to enable streaming output

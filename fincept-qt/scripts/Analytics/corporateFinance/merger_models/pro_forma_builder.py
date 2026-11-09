@@ -62,19 +62,25 @@ class ProFormaBuilder:
 
         return self.goodwill
 
-    def build_pro_forma_income_statement(self, year: int = 1) -> Dict[str, float]:
-        """Build pro forma income statement"""
+    def build_pro_forma_income_statement(self, year: int = 1, revenue_growth: float = 0.0) -> Dict[str, float]:
+        """Build pro forma income statement for `year` (1 = the companies' figures as supplied).
+
+        `revenue_growth` (fraction a year) scales the combined revenue and the revenue-driven costs (COGS, SG&A,
+        R&D, depreciation) by (1 + g)^(year - 1); interest, synergies and integration costs follow their own
+        schedules.
+        """
 
         synergy_realization = self._get_synergy_realization(year)
         integration_cost_impact = self._get_integration_cost(year)
+        scale = (1.0 + revenue_growth) ** (year - 1)
 
-        pf_revenue = self.acquirer.revenue + self.target.revenue
-        pf_cogs = self.acquirer.cogs + self.target.cogs
+        pf_revenue = (self.acquirer.revenue + self.target.revenue) * scale
+        pf_cogs = (self.acquirer.cogs + self.target.cogs) * scale
         pf_gross_profit = pf_revenue - pf_cogs
 
-        pf_sg_a = self.acquirer.sg_a + self.target.sg_a - (self.synergies * synergy_realization * 0.6)
-        pf_r_d = self.acquirer.r_d + self.target.r_d
-        pf_depreciation = self.acquirer.depreciation + self.target.depreciation
+        pf_sg_a = (self.acquirer.sg_a + self.target.sg_a) * scale - (self.synergies * synergy_realization * 0.6)
+        pf_r_d = (self.acquirer.r_d + self.target.r_d) * scale
+        pf_depreciation = (self.acquirer.depreciation + self.target.depreciation) * scale
 
         pf_ebitda = pf_gross_profit - pf_sg_a - pf_r_d + integration_cost_impact
         pf_ebit = pf_ebitda - pf_depreciation
@@ -140,13 +146,13 @@ class ProFormaBuilder:
             'equity_to_assets': pf_shareholders_equity / pf_total_assets if pf_total_assets else 0
         }
 
-    def build_multi_year_projections(self, years: int = 5) -> Dict[int, Dict[str, float]]:
-        """Build multi-year pro forma projections"""
+    def build_multi_year_projections(self, years: int = 5, revenue_growth: float = 0.0) -> Dict[int, Dict[str, float]]:
+        """Build multi-year pro forma projections (keyed by int year)"""
 
         projections = {}
 
         for year in range(1, years + 1):
-            projections[year] = self.build_pro_forma_income_statement(year)
+            projections[year] = self.build_pro_forma_income_statement(year, revenue_growth)
 
         return projections
 

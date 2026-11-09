@@ -1996,14 +1996,6 @@ Mercados, ações, carteira, insights macro.</translation>
         <translation>Uso em rede conta como distribuição</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>LICENÇA COMERCIAL</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Necessária para implantação comercial</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>Não é necessário compartilhar o código-fonte</translation>
     </message>
@@ -2050,18 +2042,6 @@ Mercados, ações, carteira, insights macro.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Licença (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Licença Comercial</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Política de Marcas</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>CLA do Contribuidor</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32211,10 +32191,6 @@ Crie um chamado real e nossa equipe responderá em até 24 horas.</translation>
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Copyright 2024-2026 Fincept Corporation. Todos os direitos reservados.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Este software é licenciado sob a AGPL-3.0-or-later para uso de código aberto, com uma licença comercial separada disponível para implantação corporativa.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

@@ -120,7 +120,8 @@ QWidget* MAModulePanel::build_valuation_panel() {
     double_inputs_["lbo_exit"] = lbo_exit;
     lbo_vl->addWidget(build_input_row(tr("Exit Valuation") + " ($)", lbo_exit, lbo));
 
-    auto* lbo_equity = make_double_spin(0, 1e15, 300e6, 0, "", lbo);
+    // Default equity funds the default entry valuation with the default debt: 600M + 300M + 100M = 1B.
+    auto* lbo_equity = make_double_spin(0, 1e15, 600e6, 0, "", lbo);
     double_inputs_["lbo_equity"] = lbo_equity;
     lbo_vl->addWidget(build_input_row(tr("Equity Invested") + " ($)", lbo_equity, lbo));
 
@@ -296,8 +297,15 @@ QWidget* MAModulePanel::build_valuation_panel() {
         params["exit_base"] = double_inputs_["sens_exit_base"]->value();
         params["range"] = double_inputs_["sens_range"]->value();
         params["steps"] = int_inputs_["sens_steps"]->value();
-        params["equity_invested"] = double_inputs_["lbo_equity"]->value();
-        params["holding_period"] = int_inputs_["lbo_period"]->value();
+        // The base case is the LBO Model tab's operating case and debt; equity is the entry EV less that debt.
+        params["ebitda"] = double_inputs_["lbof_ebitda"]->value();
+        params["revenue_growth"] = double_inputs_["lbof_rev_growth"]->value() / 100.0;
+        params["ebitda_margin"] = double_inputs_["lbof_margin"]->value() / 100.0;
+        params["holding_period"] = int_inputs_["lbof_years"]->value();
+        params["senior_debt"] = double_inputs_["lbo_sr_debt"]->value();
+        params["senior_rate"] = double_inputs_["lbo_sr_rate"]->value() / 100.0;
+        params["sub_debt"] = double_inputs_["lbo_sub_debt"]->value();
+        params["sub_rate"] = double_inputs_["lbo_sub_rate"]->value() / 100.0;
         MAAnalyticsService::instance().calculate_lbo_sensitivity(params);
     });
     sens_vl->addWidget(sens_run);

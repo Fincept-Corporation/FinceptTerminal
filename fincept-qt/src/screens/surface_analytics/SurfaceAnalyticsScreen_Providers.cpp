@@ -698,12 +698,6 @@ void SurfaceAnalyticsScreen::on_db_fetch_failed(const QString& err) {
     }
 }
 
-void SurfaceAnalyticsScreen::on_db_connection_tested(bool ok, const QString& msg) {
-    if (!control_panel_)
-        return;
-    control_panel_->set_provider_status("databento", ok ? "connected" : "error", ok ? QString() : msg);
-}
-
 void SurfaceAnalyticsScreen::on_db_raw_response(const QString& cmd, const QString& raw_stdout) {
     if (!data_inspector_)
         return;

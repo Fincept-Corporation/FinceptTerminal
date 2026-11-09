@@ -57,6 +57,29 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     layout->setSpacing(10);
 
     build_top_stories_section(layout);
+
+    // Trending tickers + the user's holdings in the news — hidden until there is
+    // something to show (both are recomputed with every filter pass).
+    auto make_mention_section = [&](const QString& title, QVBoxLayout*& out_layout, QLabel*& title_out) {
+        auto* section = new QWidget(this);
+        section->hide();
+        auto* inner = new QVBoxLayout(section);
+        inner->setContentsMargins(0, 0, 0, 0);
+        inner->setSpacing(2);
+        title_out = new QLabel(title, section);
+        title_out->setObjectName("newsDrawerSectionTitle");
+        inner->addWidget(title_out);
+        auto* container = new QWidget(section);
+        out_layout = new QVBoxLayout(container);
+        out_layout->setContentsMargins(0, 0, 0, 0);
+        out_layout->setSpacing(1);
+        inner->addWidget(container);
+        layout->addWidget(section);
+        return section;
+    };
+    holdings_section_ = make_mention_section(tr("YOUR HOLDINGS IN THE NEWS"), holdings_layout_, holdings_title_);
+    trending_section_ = make_mention_section(tr("TRENDING TICKERS"), trending_layout_, trending_title_);
+
     build_categories_section(layout);
     build_monitors_section(layout);
     build_deviations_section(layout);
@@ -87,8 +110,8 @@ NewsSidePanel::NewsSidePanel(QWidget* parent) : QWidget(parent) {
     locations_section_ = build_hidden_section(tr("LOCATIONS"), locations_layout_, &locations_title_);
     signals_section_ = build_hidden_section(tr("SIGNALS"), signals_layout_, &signals_title_);
     predictions_section_ = build_hidden_section(tr("PREDICTIONS"), predictions_layout_, &predictions_title_);
-    // Say where the odds come from: polymarket.py serves Manifold Markets, a
-    // play-money site — not tradable real-money prices.
+    // Say where the odds come from: Manifold Markets, a play-money site — not
+    // tradable real-money prices.
     predictions_source_ = new QLabel(services::NewsCorrelationService::predictions_source_label(), predictions_section_);
     predictions_source_->setObjectName("newsPredSource");
     if (auto* inner = qobject_cast<QVBoxLayout*>(predictions_section_->layout()))
@@ -111,6 +134,10 @@ void NewsSidePanel::retranslateUi() {
         drawer_title_->setText(tr("INTELLIGENCE"));
     if (top_stories_title_)
         top_stories_title_->setText(tr("TOP STORIES"));
+    if (holdings_title_)
+        holdings_title_->setText(tr("YOUR HOLDINGS IN THE NEWS"));
+    if (trending_title_)
+        trending_title_->setText(tr("TRENDING TICKERS"));
     if (categories_title_)
         categories_title_->setText(tr("CATEGORIES"));
     if (monitors_title_)
@@ -271,6 +298,53 @@ void NewsSidePanel::update_top_stories(const QVector<services::NewsArticle>& top
 
         top_stories_layout_->addWidget(btn);
     }
+}
+
+void NewsSidePanel::fill_mentions(QVBoxLayout* layout, QWidget* section, const QVector<NewsTickerMention>& rows) {
+    if (!layout || !section)
+        return;
+    while (layout->count() > 0) {
+        auto* item = layout->takeAt(0);
+        if (item->widget())
+            item->widget()->deleteLater();
+        delete item;
+    }
+    section->setVisible(!rows.isEmpty());
+    for (const auto& r : rows) {
+        auto* btn = new QPushButton(this);
+        btn->setObjectName("newsTickerBtn");
+        btn->setCursor(Qt::PointingHandCursor);
+        // Same ±0.15 band the sentiment engine labels articles with.
+        const char* tone = r.net_sentiment >= 0.15 ? "bull" : (r.net_sentiment <= -0.15 ? "bear" : "flat");
+        const QString arrow = r.net_sentiment >= 0.15    ? QStringLiteral("▲")
+                              : r.net_sentiment <= -0.15 ? QStringLiteral("▼")
+                                                         : QStringLiteral("•");
+        btn->setText(QString("%1  %2  %3 %4%5")
+                         .arg(r.symbol, -10)
+                         .arg(r.count, 3)
+                         .arg(arrow)
+                         .arg(r.net_sentiment >= 0 ? "+" : "")
+                         .arg(QString::number(r.net_sentiment, 'f', 2)));
+        btn->setToolTip(tr("%1: %n article(s) in the current feed", "", r.count).arg(r.symbol) +
+                        tr("\n%1 bullish · %2 bearish · mean tone %3")
+                            .arg(r.bullish)
+                            .arg(r.bearish)
+                            .arg(QString::number(r.net_sentiment, 'f', 2)) +
+                        (r.latest_ts > 0 ? tr("\nLatest: %1").arg(services::relative_time(r.latest_ts)) : QString()) +
+                        tr("\nClick to filter the feed by %1.").arg(r.symbol));
+        btn->setProperty("tone", QString::fromLatin1(tone));
+        const QString sym = r.symbol;
+        connect(btn, &QPushButton::clicked, this, [this, sym]() { emit ticker_clicked(sym); });
+        layout->addWidget(btn);
+    }
+}
+
+void NewsSidePanel::update_trending(const QVector<NewsTickerMention>& trending) {
+    fill_mentions(trending_layout_, trending_section_, trending);
+}
+
+void NewsSidePanel::update_holdings_mentions(const QVector<NewsTickerMention>& mentions) {
+    fill_mentions(holdings_layout_, holdings_section_, mentions);
 }
 
 void NewsSidePanel::update_categories(const QMap<QString, int>& counts) {

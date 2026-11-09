@@ -30,6 +30,10 @@ PARAMETERS:
   - optimization_method: Portfolio optimization method (default: 'mean_variance')
   - lookback_period: Historical lookback window (default: 252)
   - currency: Portfolio base currency (default: 'USD')
+
+CLI: python portfolio_analytics.py <command> <json>   comprehensive_analysis {returns_data: {asset: [returns]},
+  weights, market_returns}; calculate_portfolio_metrics | tax_report | pme_analysis | allocation_analysis
+  take their params dict as the JSON argument (or on stdin when no argument is given).
 """
 
 import numpy as np
@@ -39,7 +43,7 @@ import warnings
 
 from config import (
     AssetClass, MathConstants, PortfolioParameters,
-    DEFAULT_PORTFOLIO_PARAMS, validate_weights, ERROR_MESSAGES
+    DEFAULT_PORTFOLIO_PARAMS, validate_weights, validate_covariance_matrix, ERROR_MESSAGES
 )
 from math_engine import (
     StatisticalCalculations, PortfolioMath, PerformanceCalculations,
@@ -1020,22 +1024,21 @@ if __name__ == "__main__":
         except Exception:
             pass
 
-    # Read params from stdin if available (C++ execute_with_stdin pipes data here)
+    # Params: the `<command> <json>` form carries them in argv[2]. stdin is read only when argv has none — a
+    # caller that leaves stdin open without writing to it would otherwise block this read until it is killed.
     stdin_params = None
-    try:
-        if not sys.stdin.isatty():
-            stdin_data = sys.stdin.read()
-            if stdin_data.strip():
-                stdin_params = json.loads(stdin_data)
-    except (json.JSONDecodeError, OSError):
-        pass
-
-    # Fallback: the Qt bridge (run_python_json) passes the params object as argv[2],
-    # not stdin — so the stdin-based commands still receive their dict.
-    if stdin_params is None and len(sys.argv) > 2:
+    if len(sys.argv) > 2:
         try:
             stdin_params = json.loads(sys.argv[2])
         except (json.JSONDecodeError, ValueError):
+            pass
+    if stdin_params is None:
+        try:
+            if not sys.stdin.isatty():
+                stdin_data = sys.stdin.read()
+                if stdin_data.strip():
+                    stdin_params = json.loads(stdin_data)
+        except (json.JSONDecodeError, OSError):
             pass
 
     try:

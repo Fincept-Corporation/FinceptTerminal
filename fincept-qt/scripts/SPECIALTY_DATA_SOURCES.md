@@ -15,12 +15,6 @@ Specialized data sources and tools for specific financial tasks including econom
 | 📅 **Economic Calendar** | `economic_calendar.py` | ❌ No | Economic events and release calendar |
 | 📰 **Company News** | `fetch_company_news.py` | ❌ No | Company-specific news aggregation |
 
-## Financial Analysis Tools
-
-| Tool | File Name | API Key | Purpose |
-|------|-----------|---------|---------|
-| 🔧 **Technical Indicators** | `compute_technicals.py` | ❌ No | Compute technical indicators from OHLCV data |
-
 ## Data Categories
 
 | Category | Tools | Use Cases |
@@ -28,7 +22,6 @@ Specialized data sources and tools for specific financial tasks including econom
 | **Economic Data** | EconDB, Economic Calendar | Macro research, event tracking |
 | **Market Valuation** | Multpl | P/E ratios, yields, historical context |
 | **News & Events** | Company News, Economic Calendar | Sentiment, event-driven trading |
-| **Technical Analysis** | Compute Technicals | Chart analysis, indicators |
 | **Financial Modeling** | FinancePy, Report Generator | Valuations, bond pricing, derivatives |
 
 ## Usage
@@ -162,7 +155,7 @@ export ECONDB_API_KEY="your_key_here"  # Get from: https://www.econdb.com/
 - **Protocol**: REST API (data sources), Python libraries (tools)
 - **Format**: JSON (APIs), Pandas DataFrames (tools)
 - **Authentication**: API keys where required
-- **Dependencies**: NumPy, Pandas, TA-Lib (for technicals)
+- **Dependencies**: NumPy, Pandas
 - **Performance**: Optimized for large datasets
 
 ## Use Case Examples
@@ -172,14 +165,6 @@ export ECONDB_API_KEY="your_key_here"  # Get from: https://www.econdb.com/
 # Combine EconDB + Economic Calendar
 indicators = get_indicator('CPI', countries=['USA'])
 events = get_events(country='US', event_type='inflation')
-```
-
-### Technical Analysis
-```python
-# Full technical analysis suite
-from compute_technicals import full_analysis
-analysis = full_analysis(ticker='AAPL', period='6m')
-# Returns: RSI, MACD, Bollinger Bands, SMA, EMA, Volume analysis
 ```
 
 ### Valuation Research
@@ -192,4 +177,4 @@ historical_pe = get_pe_ratio(index='sp500')
 
 ---
 
-**Total Sources**: 7 (4 data + 3 tools) | **Free Access**: 6 sources | **Unique Features**: Technicals, Reports, Financial math | **Last Updated**: 2025-12-28
+**Total Sources**: 6 (4 data + 2 tools) | **Free Access**: 5 sources | **Unique Features**: Reports, Financial math | **Last Updated**: 2025-12-28

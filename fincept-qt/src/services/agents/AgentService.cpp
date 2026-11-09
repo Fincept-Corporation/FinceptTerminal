@@ -6,9 +6,8 @@
 // (ensure_registered_with_hub / publish_agent_*). Higher-level entry points
 // live in:
 //   - AgentService_Discovery.cpp    — agent/tool/model discovery + configs
-//   - AgentService_Execution.cpp    — run_agent, run_team, routing, multi
-//   - AgentService_Workflows.cpp    — plans, portfolio analytics, etc.
-//   - AgentService_Repositories.cpp — memory, sessions, paper trading
+//   - AgentService_Execution.cpp    — run_agent, run_team, routing, agentic tasks
+//   - AgentService_Workflows.cpp    — workflows, plans, portfolio analysis
 #include "services/agents/AgentService.h"
 
 #include "auth/AuthManager.h"
@@ -22,6 +21,7 @@
 #include "mcp/TerminalMcpBridge.h"
 #include "mcp/server/CallApproval.h"
 #include "python/PythonRunner.h"
+#include "python/PythonSetupManager.h"
 #include "services/llm/LlmService.h"
 #include "storage/cache/CacheManager.h"
 #include "storage/repositories/AgentConfigRepository.h"
@@ -56,15 +56,14 @@ namespace {
 // detection before giving up and failing the call.
 constexpr int kPythonReadyGraceMs = 30000;
 
-// Default excludes applied to every agent: UI-driving tools (navigation /
-// system / settings), the recursive chat tools (ai-chat), and the meta tools.
-// Non-negotiable — per-agent config may only ADD to them. TerminalMcpBridge
-// enforces the same set at dispatch (an Essentials run is exempted from "meta"
-// for tool_list / tool_describe / tool_invoke only — its route to everything
-// else).
+// Default excludes applied to every agent: the tools that DRIVE the terminal —
+// operating screens ("ui-control": ui_act, ui_invoke) and opening or arranging
+// them ("navigation": ui_open, ui_workspace). Agents run in the background, so
+// they may look at the terminal (ui-read) and run analytics (python) but never
+// move the user's UI. Non-negotiable — per-agent config may only ADD to them.
+// TerminalMcpBridge enforces the same set at dispatch.
 const QStringList& default_tool_excludes() {
-    static const QStringList kCats = {QStringLiteral("navigation"), QStringLiteral("system"),
-                                      QStringLiteral("settings"), QStringLiteral("ai-chat"), QStringLiteral("meta")};
+    static const QStringList kCats = {QStringLiteral("navigation"), QStringLiteral("ui-control")};
     return kCats;
 }
 
@@ -122,11 +121,9 @@ mcp::ToolFilter resolve_tool_filter(const QJsonObject& config) {
     return filter;
 }
 
-/// Which catalogue an agent gets. An agent that names categories or name
-/// patterns gets exactly those tools; one that does not gets the curated
-/// essentials set plus tool_list / tool_describe / tool_invoke, through which it
-/// can reach every other tool its policy allows. (It used to get a silent
-/// 50-tool alphabetical slice of the whole catalogue instead.)
+/// Which catalogue an agent gets. Both kinds now hold every tool the agent's
+/// policy allows (the internal catalogue is the ten core tools); the
+/// distinction only records whether the config named categories / patterns.
 mcp::AgentToolCatalog agent_svc_catalog_for(const mcp::ToolFilter& filter) {
     return filter.categories.isEmpty() && filter.name_patterns.isEmpty() ? mcp::AgentToolCatalog::Essentials
                                                                          : mcp::AgentToolCatalog::Filtered;
@@ -293,7 +290,7 @@ AgentService::AgentService(QObject* parent) : QObject(parent) {
     // ScopedApprovedCall::active() is true for exactly that one call and can
     // never leak into another (thread-local, RAII-scoped — mcp/server/
     // CallApproval.h). Every other path — the chat tool loop, the agent
-    // bridge, workflows, tool_invoke without an approval — still fails closed:
+    // bridge, workflows — still fails closed without an approval:
     // "ask the user" cannot be honoured where nobody was asked. Do NOT relax
     // this to `> Verified` or drop the ExplicitConfirm level.
     mcp::McpProvider::instance().set_auth_checker([](mcp::AuthLevel required, bool is_destructive) -> bool {
@@ -815,6 +812,16 @@ void AgentService::run_python_stdin(const QString& action, const QJsonObject& pa
                                                   .arg(elapsed)
                                                   .arg(stderr_str.left(200)));
                     QString err = stderr_str.isEmpty() ? "Agent execution failed" : stderr_str.left(500);
+                    // Agents need the optional full library set (agno & co.): make a
+                    // missing module actionable and offer the install. The traceback's
+                    // last line names it, so match the whole stderr, not the 500-char
+                    // head. Not for the startup discovery warm-up — nobody asked for it.
+                    if (action != QLatin1String("discover_agents")) {
+                        const QString explained = python::PythonSetupManager::instance().explain_missing_module(
+                            stderr_str, QStringLiteral("agents"));
+                        if (explained != stderr_str)
+                            err = explained;
+                    }
                     on_result(false, QJsonObject{{"error", err}});
                     return;
                 }

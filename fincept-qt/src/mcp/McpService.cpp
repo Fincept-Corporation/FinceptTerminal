@@ -8,7 +8,6 @@
 #include "mcp/McpManager.h"
 #include "mcp/McpProvider.h"
 #include "mcp/TerminalMcpBridge.h"
-#include "mcp/ToolRetriever.h"
 #include "storage/repositories/SettingsRepository.h"
 
 #include <QCoreApplication>
@@ -54,13 +53,6 @@ void McpService::initialize() {
     QObject::connect(&McpManager::instance(), &McpManager::servers_changed, [this]() {
         QMutexLocker lock(&mutex_);
         cache_time_ = QDateTime(); // force refresh on next get_all_tools()
-        // The Tool RAG index covers external tools too (ToolRetriever builds
-        // over get_all_tools()), so it must follow this cache. Queued, never
-        // inline: servers_changed can fire while McpManager's mutex is held
-        // (error paths), and the retriever rebuild takes ToolRetriever →
-        // McpService → McpManager locks — invalidating inline here would
-        // invert that order.
-        QMetaObject::invokeMethod(qApp, []() { ToolRetriever::instance().invalidate(); }, Qt::QueuedConnection);
         LOG_INFO(TAG, "Tool cache invalidated — external servers changed");
     });
 
@@ -216,11 +208,10 @@ QByteArray McpService::filter_signature(const ToolFilter& f) {
 }
 
 // Production safety cap: when a caller leaves max_tools at 0 (= unlimited),
-// we still refuse to dump the full catalogue at the LLM. Tool-pick accuracy
-// degrades sharply past ~40 tools; ~150 KB of schema also costs prompt
-// tokens. Tool RAG / Tier-0 mode renders this mostly historical — kept as a
-// defence-in-depth backstop for callers that bypass Tier-0 by passing a
-// non-default ToolFilter.
+// the LLM still never gets more than this many declarations. The internal
+// catalogue is ten tools and always sorts first, so the cap only ever trims a
+// user's external MCP servers — tool-pick accuracy degrades past ~40 tools and
+// every schema byte rides on every request of a turn.
 static constexpr int kHardMaxTools = 50;
 
 // How a filtered selection is ordered and capped. The two consumers differ on
@@ -306,6 +297,10 @@ static std::vector<UnifiedTool> apply_tool_filter(std::vector<UnifiedTool> tools
 
     std::stable_sort(kept.begin(), kept.end(),
                      [&cat_rank, sentinel, read_only_first](const UnifiedTool& a, const UnifiedTool& b) {
+                         // The terminal's own (core) tools always lead, so a cap
+                         // can only ever cut external servers' tools.
+                         if (a.is_internal != b.is_internal)
+                             return a.is_internal;
                          if (read_only_first && a.is_destructive != b.is_destructive)
                              return !a.is_destructive;
                          const int ra = cat_rank.value(a.category, sentinel);
@@ -362,130 +357,25 @@ std::vector<UnifiedTool> McpService::get_agent_tools(const ToolFilter& filter) {
     return selected;
 }
 
-// Tool RAG Tier-0 — the always-loaded set when mcp_use_tool_rag is on.
-//
-// Rationale: when Tool RAG is active we send only this 6-tool prefix to the
-// LLM each turn (~3 KB of schema vs ~25 KB previously). Everything else is
-// discoverable via tool_list. Anthropic's recommended band is 3-5 always-on
-// tools — we go to 6 to keep navigation working without a search round-trip.
-//
-// Picked because they're (1) high-frequency, (2) safe (no destructive ops),
-// (3) needed before a search would even make sense:
-//   tool_list           — entry point to discover everything else
-//   tool_describe       — fetch full schema for a discovered tool
-//   navigate_to_tab     — UI navigation is the LLM's primary side-effect
-//   list_tabs           — what tabs exist?
-//   get_current_tab     — where is the user?
-//   get_auth_status     — guest vs signed-in changes valid actions
-static const QSet<QString>& tier_0_tool_names() {
-    static const QSet<QString> kTier0 = {
-        "tool_list",
-        "tool_describe",
-        // Generic dispatcher: calls any tool found via tool_list by name. The
-        // activation path re-declares discovered tools, but it is capped
-        // (kMaxActivatedTools) and some models will not call a function that
-        // only appeared mid-turn; tool_invoke is the always-available route.
-        "tool_invoke",
-        "navigate_to_tab",
-        "list_tabs",
-        "get_current_tab",
-        "get_auth_status",
-        // Always-visible so the model checks chat→report linkage before any
-        // report-builder work — prevents new chats from accidentally appending
-        // to the previous chat's report.
-        "report_session_context",
-        // Redemption tools for the two deferral protocols. A model that has
-        // been handed a `{job_id, status:"running"}` receipt, or a truncated
-        // result envelope carrying a `result_id`, must be able to act on it
-        // immediately — forcing a tool_list round-trip first would cost more
-        // tokens than these five small schemas do.
-        "job_status",
-        "job_result",
-        "job_cancel",
-        "job_list",
-        "result_fetch",
-    };
-    return kTier0;
-}
-
-// Whether the user has Tool RAG mode enabled. Flag persists in QSettings via
-// AppConfig.
-//
-// Default = TRUE.
-//
-// Rationale: Tool RAG (BM25 retrieval over the catalog via tool_list) lifts
-// tool-pick accuracy from ~49 → ~74% on Opus 4-class models per Anthropic's
-// published numbers, and from ~80 → ~88% on 4.5-class. Sending only ~6
-// Tier-0 tools per turn (vs. previously ~50) reduces prompt tokens by ~85%.
-// The kill switch is one settings flip away if a specific
-// provider/model combo regresses.
-static bool tool_rag_enabled() {
-    return fincept::AppConfig::instance().get("mcp/use_tool_rag", QVariant(true)).toBool();
-}
-
-QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
-    return format_tools_for_openai(filter, QSet<QString>{});
-}
-
-std::vector<UnifiedTool> McpService::select_tools_for_llm_locked(const ToolFilter& filter,
-                                                                 const QSet<QString>& extra_tool_names,
-                                                                 QByteArray* out_key, bool* out_used_rag) {
+std::vector<UnifiedTool> McpService::select_tools_for_llm_locked(const ToolFilter& filter, QByteArray* out_key) {
     cached_tools_locked();
-
-    // ── Tool RAG Tier-0 mode ──
-    // Engaged only when (a) the setting is on AND (b) the caller passed a
-    // default-constructed ToolFilter (i.e. didn't ask for a specific scope).
-    // Per-agent / per-screen explicit filters bypass Tier-0 — those callers
-    // know what they want and shouldn't be silently overridden.
-    const bool default_filter = filter.categories.isEmpty() && filter.exclude_categories.isEmpty() &&
-                                filter.name_patterns.isEmpty() && filter.exclude_name_patterns.isEmpty() &&
-                                filter.max_tools == 0;
-    const bool use_rag = default_filter && tool_rag_enabled();
-
-    QByteArray key;
-    if (use_rag) {
-        key = QByteArrayLiteral("__tier0__");
-        // Activated tools widen the Tier-0 set, so they must vary the cache key
-        // — otherwise round 2 would be served round 1's cached 7-tool array and
-        // the model would never see the tool it just discovered.
-        if (!extra_tool_names.isEmpty()) {
-            QStringList sorted(extra_tool_names.constBegin(), extra_tool_names.constEnd());
-            sorted.sort();
-            key += '|';
-            key += sorted.join(QLatin1Char(',')).toUtf8();
-        }
-    } else {
-        key = filter_signature(filter);
-    }
-
-    std::vector<UnifiedTool> tools;
-    if (use_rag) {
-        const auto& tier0 = tier_0_tool_names();
-        for (const auto& t : cached_tools_) {
-            if (tier0.contains(t.name) || extra_tool_names.contains(t.name))
-                tools.push_back(t);
-        }
-    } else {
-        tools = apply_tool_filter(cached_tools_, filter);
-    }
-
+    // The internal catalogue is ten core tools (~3 KB of schema), so there is no
+    // retrieval tier any more: a default filter sends all of them, followed by
+    // the user's external MCP servers' tools up to the safety cap. Explicit
+    // filters (per agent / per screen) still narrow it.
     if (out_key)
-        *out_key = key;
-    if (out_used_rag)
-        *out_used_rag = use_rag;
-    return tools;
+        *out_key = filter_signature(filter);
+    return apply_tool_filter(cached_tools_, filter);
 }
 
-// Bound any provider's tool array. In a Tier-0 turn this never binds (12-ish
-// declarations); it only matters when Tool RAG is switched off, where the raw
-// catalogue is ~900 tools — past every provider's declaration ceiling and
-// enough prompt to crowd out the conversation. Dropping silently would read as
-// "the model can't see my tool", so overflow is always logged.
+// Bound any provider's tool array to the dialect's hard declaration limit.
+// Overflow is always logged: dropping silently reads as "the model cannot see
+// my tool".
 static std::vector<UnifiedTool> cap_tool_list(std::vector<UnifiedTool> tools, int cap, const char* dialect) {
     if (cap <= 0 || static_cast<int>(tools.size()) <= cap)
         return tools;
     LOG_WARN(TAG, QString("%1: %2 tools selected but the dialect accepts at most %3 — sending the first %3. "
-                          "Enable Tool RAG (mcp/use_tool_rag) or pass a narrower ToolFilter.")
+                          "Pass a narrower ToolFilter.")
                       .arg(QString::fromUtf8(dialect))
                       .arg(tools.size())
                       .arg(cap));
@@ -493,30 +383,23 @@ static std::vector<UnifiedTool> cap_tool_list(std::vector<UnifiedTool> tools, in
     return tools;
 }
 
-QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
+QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter) {
     QMutexLocker lock(&mutex_);
 
     QByteArray key;
-    bool use_rag = false;
-    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, extra_tool_names, &key, &use_rag);
+    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, &key);
 
     auto cached = openai_format_cache_.constFind(key);
-    if (cached != openai_format_cache_.constEnd()) {
-        LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (cached, %2)")
-                          .arg(cached.value().size())
-                          .arg(use_rag ? "tier-0" : "filtered"));
+    if (cached != openai_format_cache_.constEnd())
         return cached.value();
-    }
 
-    const int total_seen = static_cast<int>(cached_tools_.size());
     tools = cap_tool_list(std::move(tools), kMaxToolsPerRequest, "openai");
 
     QJsonArray result;
     for (const auto& tool : tools) {
-        // Encode tool name for the wire so dotted internal names like
-        // `tool.list` becomes `tool-dot-list` — Kimi / OpenAI / Groq reject
-        // dots in function names. parse_openai_function_name reverses this
-        // when the model invokes the tool.
+        // Encode the name for the wire: an external server's dotted name
+        // ("tool.list") becomes "tool-dot-list", since Kimi / OpenAI / Groq
+        // reject dots in function names. parse_openai_function_name reverses it.
         QString fn_name = tool.server_id + "__" + McpProvider::encode_tool_name_for_wire(tool.name);
 
         QJsonObject schema = tool.input_schema;
@@ -536,39 +419,18 @@ QJsonArray McpService::format_tools_for_openai(const ToolFilter& filter, const Q
         result.append(entry);
     }
 
-    // Bound the cache. In Tool RAG mode the key encodes the activated-tool set,
-    // which is different on almost every round of every turn — left unbounded
-    // this map grows for the life of the process, each entry holding a full
-    // serialised tool array. It's a memo, not a store: dropping it wholesale
-    // when it gets big costs one rebuild.
-    if (openai_format_cache_.size() >= kMaxFormatCacheEntries) {
-        LOG_DEBUG(TAG, QString("openai_format_cache_ hit %1 entries — clearing").arg(openai_format_cache_.size()));
+    if (openai_format_cache_.size() >= kMaxFormatCacheEntries)
         openai_format_cache_.clear();
-    }
     openai_format_cache_.insert(key, result);
-
-    if (use_rag) {
-        LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM "
-                              "(tier-0 + %3 activated / Tool RAG mode, fresh)")
-                          .arg(result.size())
-                          .arg(total_seen)
-                          .arg(extra_tool_names.size()));
-    } else if (total_seen != result.size()) {
-        LOG_INFO(TAG, QString("format_tools_for_openai: %1/%2 tools sent to LLM (filtered, fresh)")
-                          .arg(result.size())
-                          .arg(total_seen));
-    } else {
-        LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM (fresh)").arg(result.size()));
-    }
+    LOG_INFO(TAG, QString("format_tools_for_openai: %1 tools sent to LLM").arg(result.size()));
     return result;
 }
 
-QJsonArray McpService::format_tools_for_anthropic(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
+QJsonArray McpService::format_tools_for_anthropic(const ToolFilter& filter) {
     QMutexLocker lock(&mutex_);
 
     QByteArray key;
-    bool use_rag = false;
-    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, extra_tool_names, &key, &use_rag);
+    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, &key);
 
     auto cached = anthropic_format_cache_.constFind(key);
     if (cached != anthropic_format_cache_.constEnd())
@@ -599,18 +461,15 @@ QJsonArray McpService::format_tools_for_anthropic(const ToolFilter& filter, cons
         anthropic_format_cache_.clear();
     anthropic_format_cache_.insert(key, result);
 
-    LOG_INFO(TAG, QString("format_tools_for_anthropic: %1 tools sent to LLM (%2)")
-                      .arg(result.size())
-                      .arg(use_rag ? "tier-0" : "filtered"));
+    LOG_INFO(TAG, QString("format_tools_for_anthropic: %1 tools sent to LLM").arg(result.size()));
     return result;
 }
 
-QJsonArray McpService::format_tools_for_gemini(const ToolFilter& filter, const QSet<QString>& extra_tool_names) {
+QJsonArray McpService::format_tools_for_gemini(const ToolFilter& filter) {
     QMutexLocker lock(&mutex_);
 
     QByteArray key;
-    bool use_rag = false;
-    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, extra_tool_names, &key, &use_rag);
+    std::vector<UnifiedTool> tools = select_tools_for_llm_locked(filter, &key);
 
     auto cached = gemini_format_cache_.constFind(key);
     if (cached != gemini_format_cache_.constEnd())
@@ -651,9 +510,8 @@ QJsonArray McpService::format_tools_for_gemini(const ToolFilter& filter, const Q
         gemini_format_cache_.clear();
     gemini_format_cache_.insert(key, result);
 
-    LOG_INFO(TAG, QString("format_tools_for_gemini: %1 function declarations sent to LLM (%2%3)")
+    LOG_INFO(TAG, QString("format_tools_for_gemini: %1 function declarations sent to LLM%2")
                       .arg(fn_decls.size())
-                      .arg(use_rag ? "tier-0" : "filtered")
                       .arg(dropped_names > 0 ? QString(", %1 dropped on name").arg(dropped_names) : QString()));
     return result;
 }
@@ -700,7 +558,7 @@ McpService::ToolTarget McpService::resolve_tool_target(const QString& name, cons
             return t;
         }
         if (!sid.isEmpty()) {
-            t.error = QStringLiteral("No built-in tool named '%1'. Use tool_list to search for tools.").arg(bare);
+            t.error = QStringLiteral("No built-in tool named '%1'.").arg(bare);
             return t;
         }
     }
@@ -714,7 +572,7 @@ McpService::ToolTarget McpService::resolve_tool_target(const QString& name, cons
         servers << u.server_id;
     }
     if (servers.isEmpty()) {
-        t.error = QStringLiteral("No tool named '%1'%2. Use tool_list to search for tools.")
+        t.error = QStringLiteral("No tool named '%1'%2.")
                       .arg(bare, sid.isEmpty() ? QString() : QStringLiteral(" on server '%1'").arg(sid));
         return t;
     }
@@ -728,20 +586,10 @@ McpService::ToolTarget McpService::resolve_tool_target(const QString& name, cons
     return t;
 }
 
-ToolResult McpService::execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args,
-                                    bool allow_defer) {
+ToolResult McpService::execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args) {
     // Route to internal provider
-    if (server_id == INTERNAL_SERVER_ID) {
-        if (!allow_defer)
-            return McpProvider::instance().call_tool(tool_name, args);
-        // How long a supports_async tool may run inline before it backgrounds
-        // itself. Clamped: below ~250 ms almost everything would background
-        // (costing an extra round-trip for nothing), above ~30 s the deferral
-        // stops buying anything over just blocking.
-        const int grace_ms =
-            std::clamp(AppConfig::instance().get("mcp/job_grace_ms", QVariant(kMcpJobGraceMs)).toInt(), 250, 30000);
-        return McpProvider::instance().call_tool_or_defer(tool_name, args, grace_ms);
-    }
+    if (server_id == INTERNAL_SERVER_ID)
+        return McpProvider::instance().call_tool(tool_name, args);
 
     // Route to external server — through the same Phase 6.3 auth/destructive
     // gate internal tools get inside call_tool_async (previously this path
@@ -795,8 +643,7 @@ ToolResult McpService::execute_tool(const QString& server_id, const QString& too
     return ToolResult::ok(text);
 }
 
-ToolResult McpService::execute_openai_function(const QString& function_name, const QJsonObject& args,
-                                               bool allow_defer) {
+ToolResult McpService::execute_openai_function(const QString& function_name, const QJsonObject& args) {
     auto [server_id, tool_name] = McpProvider::parse_openai_function_name(function_name);
 
     if (server_id.isEmpty() || tool_name.isEmpty()) {
@@ -807,12 +654,11 @@ ToolResult McpService::execute_openai_function(const QString& function_name, con
         // API repeatedly instead of concluding the tools weren't there.
         LOG_WARN(TAG, "No such tool: " + function_name);
         return ToolResult::fail("No tool named '" + function_name +
-                                "' exists. Do not retry this name. Call tool_list with a description of what you "
-                                "want to do to find the tools that actually exist.");
+                                "' exists. Do not retry this name; use only the tools you were given.");
     }
 
     LOG_INFO(TAG, QString("Dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
-    auto result = execute_tool(server_id, tool_name, args, allow_defer);
+    auto result = execute_tool(server_id, tool_name, args);
     LOG_INFO(TAG, QString("Dispatch result: %1 success=%2").arg(tool_name, result.success ? "true" : "false"));
     return result;
 }
@@ -831,8 +677,7 @@ QFuture<ToolResult> McpService::execute_openai_function_async(const QString& fun
     if (server_id.isEmpty() || tool_name.isEmpty()) {
         LOG_WARN(TAG, "No such tool: " + function_name);
         return fail_now("No tool named '" + function_name +
-                        "' exists. Do not retry this name. Call tool_list with a description of what you want to "
-                        "do to find the tools that actually exist.");
+                        "' exists. Do not retry this name; use only the tools you were given.");
     }
 
     LOG_INFO(TAG, QString("Async dispatch: %1 -> server=%2 tool=%3").arg(function_name, server_id, tool_name));
@@ -895,8 +740,8 @@ void McpService::refresh_cache() {
         // External tools default category="" (their server doesn't tag) and
         // is_destructive=true — the MCP spec carries no destructiveness
         // signal on the wire, so treat external tools as destructive-by-
-        // default. Keeps tool_list / Tool RAG surfacing honest and matches
-        // execute_tool(), which gates them like destructive internal tools.
+        // default. Matches execute_tool(), which gates them like destructive
+        // internal tools.
         cached_tools_.push_back(
             {ext.server_id, ext.server_name, ext.name, ext.description, ext.input_schema, false, QString{}, true});
     }

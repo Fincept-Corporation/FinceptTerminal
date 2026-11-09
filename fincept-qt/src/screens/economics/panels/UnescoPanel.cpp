@@ -7,9 +7,9 @@
 //               "metadata": {"indicator": "GER.1", "indicator_name": "Gross Enrolment...",
 //                            "country": "USA", "source": "UNESCO UIS"} }
 //
-// list_indicators command:
-//   Response: { "success": true, "data": { "records": [{"id": "GER.1", "name": "...",
-//               "theme": "EDUCATION"}] } }
+// list_indicators command (the UIS /definitions/indicators body, passed through):
+//   Response: { "success": true, "data": [{"indicatorCode": "GER.1", "name": "...",
+//               "theme": "EDUCATION" | "SCIENCE_TECHNOLOGY_INNOVATION" | "CULTURE" | ..., ...}] }
 //
 // education_overview [country_codes...]:
 //   Response: { "success": true, "data": { ... complex nested object ... } }
@@ -194,7 +194,7 @@ bool UnescoPanel::populate_indicators_from_records(int theme_index, const QStrin
         const auto obj = v.toObject();
         if (!obj["theme"].toString().contains(theme_key, Qt::CaseInsensitive))
             continue;
-        const QString id = obj["id"].toString();
+        const QString id = obj["indicatorCode"].toString();
         if (id.isEmpty())
             continue;
         found.append({obj["name"].toString(id), id});
@@ -301,10 +301,10 @@ void UnescoPanel::on_result(const QString& request_id, const services::Economics
 
     // Handle live indicator list load
     if (request_id == "unesco_list_indicators") {
-        // data: { "records": [{"id": "GER.1", "name": "...", "theme": "EDUCATION"}] }
+        // data: [{"indicatorCode": "GER.1", "name": "...", "theme": "EDUCATION"}, ...]
         if (!result.success)
             return; // keep the curated preset list as the fallback
-        const QJsonArray records = result.data["data"].toObject()["records"].toArray();
+        const QJsonArray records = result.data["data"].toArray();
         if (records.isEmpty())
             return;
 

@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 namespace fincept::screens {
 
@@ -354,6 +355,13 @@ QWidget* AnalyticsSectorsView::build_correlation_tab() {
     corr_note_->setStyleSheet(
         QString("color:%1; font-size:%2px;").arg(ui::colors::TEXT_TERTIARY()).arg(ui::fonts::font_px(-3)));
     lay->addWidget(corr_note_);
+
+    corr_summary_ = new QLabel(corr_panel_);
+    corr_summary_->setWordWrap(true);
+    corr_summary_->setTextFormat(Qt::RichText);
+    corr_summary_->setStyleSheet(
+        QString("color:%1; font-size:%2px;").arg(ui::colors::TEXT_SECONDARY()).arg(ui::fonts::font_px(-2)));
+    lay->addWidget(corr_summary_);
 
     auto* card = new QWidget(corr_panel_);
     card->setStyleSheet(
@@ -817,6 +825,9 @@ void AnalyticsSectorsView::update_correlation() {
         }
     }
 
+    if (corr_summary_)
+        corr_summary_->clear();
+
     if (summary_.holdings.size() < 2) {
         auto* msg = new QLabel(tr("Need 2+ holdings for correlation analysis"), corr_panel_);
         msg->setAlignment(Qt::AlignCenter);
@@ -843,6 +854,55 @@ void AnalyticsSectorsView::update_correlation() {
     auto sorted = summary_.holdings;
     std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.weight > b.weight; });
     int n = static_cast<int>(std::min(qsizetype{10}, sorted.size()));
+
+    // ── Summary over ALL holdings (not only the top 10 drawn) ────────────────────
+    // Weight-weighted average pairwise correlation — the number that says how much
+    // the book's diversification is real — plus the most and least correlated pairs.
+    if (corr_summary_) {
+        auto pair_corr = [this](const QString& a, const QString& b) -> std::optional<double> {
+            const auto it = correlation_matrix_.constFind(a + "|" + b);
+            if (it != correlation_matrix_.constEnd())
+                return *it;
+            const auto rit = correlation_matrix_.constFind(b + "|" + a);
+            if (rit != correlation_matrix_.constEnd())
+                return *rit;
+            return std::nullopt;
+        };
+        double wsum = 0.0, wcorr = 0.0;
+        double hi = -2.0, lo = 2.0;
+        QString hi_pair, lo_pair;
+        const auto& all = summary_.holdings;
+        for (int i = 0; i < all.size(); ++i) {
+            for (int j = i + 1; j < all.size(); ++j) {
+                const auto c = pair_corr(all[i].symbol, all[j].symbol);
+                if (!c)
+                    continue;
+                const double w = all[i].weight * all[j].weight;
+                wsum += w;
+                wcorr += w * *c;
+                const QString label = all[i].symbol + QStringLiteral(" / ") + all[j].symbol;
+                if (*c > hi) {
+                    hi = *c;
+                    hi_pair = label;
+                }
+                if (*c < lo) {
+                    lo = *c;
+                    lo_pair = label;
+                }
+            }
+        }
+        if (wsum > 0.0) {
+            const double avg = wcorr / wsum;
+            const QString verdict = avg >= 0.6   ? tr("high — holdings largely move together")
+                                    : avg >= 0.3 ? tr("moderate")
+                                                 : tr("low — genuine diversification");
+            corr_summary_->setText(tr("Weighted average correlation <b>%1</b> (%2). Most correlated: <b>%3</b> "
+                                      "(%4). Best diversifier pair: <b>%5</b> (%6).")
+                                       .arg(QString::number(avg, 'f', 2), verdict, hi_pair.toHtmlEscaped(),
+                                            QString::number(hi, 'f', 2), lo_pair.toHtmlEscaped(),
+                                            QString::number(lo, 'f', 2)));
+        }
+    }
 
     auto make_header = [](const QString& s, bool rotate) {
         auto* lbl = new QLabel(s);

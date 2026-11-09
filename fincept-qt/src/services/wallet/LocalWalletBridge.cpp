@@ -2,6 +2,7 @@
 
 #include "auth/ConstantTime.h"
 #include "auth/LoopbackGuard.h"
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 
 #include <QByteArray>
@@ -30,9 +31,10 @@ QByteArray random_token_hex(int n_bytes) {
 }
 
 QByteArray load_connect_html() {
-    // Resources are copied beside the executable at build time:
-    //   $<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/connect.html
-    const QString path = QCoreApplication::applicationDirPath() + QStringLiteral("/resources/wallet/connect.html");
+    // Resources are copied beside the executable at build time
+    // ($<TARGET_FILE_DIR:FinceptTerminal>/resources/wallet/connect.html), but the
+    // shipped macOS bundle and Linux .deb/.rpm keep them elsewhere — resolve.
+    const QString path = fincept::AppPaths::bundled_resource(QStringLiteral("wallet/connect.html"));
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
         LOG_WARN("WalletBridge", "connect.html not found at " + path);

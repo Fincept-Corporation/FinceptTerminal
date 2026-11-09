@@ -1,11 +1,12 @@
 // src/screens/economics/panels/EconomicCalendarPanel.cpp
-// Forex Factory economic calendar scraper — no API key required.
+// Forex Factory economic calendar — Forex Factory's public weekly JSON export, no browser or API key.
+// It covers the current week only and has forecast / previous values but no actuals.
 //
-// Script: economic_calendar.py <mmmDD.YYYY>  (e.g. "mar28.2026")
-// Response: { date, url, events_count, events: [
-//   { time, currency, impact:int(1-3), event, actual, forecast, previous }
+// Script: economic_calendar.py <mmmDD.YYYY>  (e.g. "mar28.2026"); day and times in local time
+// Response: { date, url, events_count, week_start, week_end, timezone, events: [
+//   { time, currency, impact:int(0-3), impact_label, event, forecast, previous, datetime }
 // ]}
-// Impact levels: 1=low, 2=medium, 3=high
+// Impact levels: 1=low, 2=medium, 3=high, 0=holiday / non-economic
 #include "screens/economics/panels/EconomicCalendarPanel.h"
 
 #include "core/logging/Logger.h"
@@ -44,8 +45,8 @@ void EconomicCalendarPanel::activate() {
     if (date_edit_) {
         date_edit_->setDate(QDate::currentDate());
     }
-    show_empty(tr("Select a date and click FETCH to load economic events\n"
-                  "Source: Forex Factory — global economic calendar (no API key required)"));
+    show_empty(tr("Select a date in the current week and click FETCH to load economic events\n"
+                  "Source: Forex Factory weekly calendar (no API key required)"));
 }
 
 void EconomicCalendarPanel::build_controls(QHBoxLayout* thl) {
@@ -126,12 +127,13 @@ void EconomicCalendarPanel::on_result(const QString& request_id, const services:
     const QString title = tr("Economic Calendar — %1  (%2 events)").arg(date_str).arg(total);
 
     SeriesMeta meta;
-    meta.note = tr("Times as shown on forexfactory.com for an anonymous session (its default time zone)");
+    meta.note = tr("Times in %1 · Forex Factory weekly export: forecast and previous, no actuals")
+                    .arg(result.data["timezone"].toString(tr("local time")));
     set_series_meta(meta);
     set_stats_visible(false); // a list of events, not a series
-    display(events, title, {QStringLiteral("time"), QStringLiteral("currency"), QStringLiteral("impact"),
-                            QStringLiteral("event"), QStringLiteral("actual"), QStringLiteral("forecast"),
-                            QStringLiteral("previous")},
+    display(events, title,
+            {QStringLiteral("time"), QStringLiteral("currency"), QStringLiteral("impact_label"),
+             QStringLiteral("event"), QStringLiteral("forecast"), QStringLiteral("previous"), QStringLiteral("impact")},
             /*keep_row_order=*/true);
     LOG_INFO("EconomicCalendarPanel", QString("Displayed %1 events for %2").arg(events.size()).arg(date_str));
 }

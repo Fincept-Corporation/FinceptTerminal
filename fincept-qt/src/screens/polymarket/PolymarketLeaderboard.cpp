@@ -124,7 +124,7 @@ void PolymarketLeaderboard::set_entries(const QVector<LeaderboardEntry>& entries
         vol_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 3, vol_item);
 
-        // /v1/leaderboard has no trade count — show a dash, not a column of fake zeros.
+        // The Data API leaderboard has no trade count — show a dash, not a column of fake zeros.
         auto* trades_item = new QTableWidgetItem(e.num_trades > 0 ? QString::number(e.num_trades) : QStringLiteral("—"));
         trades_item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         table_->setItem(i, 4, trades_item);

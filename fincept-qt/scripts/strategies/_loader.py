@@ -2,15 +2,11 @@
 """
 Fincept Terminal - Shared Strategy Loading Helpers
 
-Two places read a path out of the strategy registry and exec() the file it
-points at:
-
-  - Analytics/backtesting/base/fincept_strategy_runner.py  (backtest)
-  - strategies/live_runner.py                              (paper/live deploy)
-
-They each implemented path resolution independently and drifted apart - one had
-a containment check and the other did not (issue #369). The check lives here now
-so both loaders share one contract and cannot diverge again.
+Analytics/backtesting/base/fincept_strategy_runner.py reads a path out of the
+strategy registry and exec()s the file it points at. The containment check that
+guards that exec() lives here (issue #369: a second loader, the former
+strategies/live_runner.py, once drifted from it; live deployment is now the C++
+algo engine), so any future loader must use this one contract.
 """
 
 from pathlib import Path

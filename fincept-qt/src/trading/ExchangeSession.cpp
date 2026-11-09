@@ -72,6 +72,9 @@ ExchangeSession::ExchangeSession(const QString& exchange_id, SessionPublisher pu
 }
 
 ExchangeSession::~ExchangeSession() {
+    // No ws_state_changed during teardown: the manager deletes sessions while
+    // holding its mutex, and a listener re-reading the manager would deadlock.
+    blockSignals(true);
     stop_ws();
 }
 
@@ -302,6 +305,7 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
         LOG_ERROR(kSessionTag,
                   QString("[%1] WS process errorOccurred: %2").arg(exchange_id_).arg(static_cast<int>(err)));
         ws_connected_ = false;
+        emit ws_state_changed(exchange_id_);
     });
     // A clean subprocess exit emits no python "status" line, so ws_connected_
     // would otherwise stay stale (badge stuck on LIVE). Detect the death here,
@@ -316,6 +320,7 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
     ws_hub_owned_ = hub_owned;
     ws_uptime_.restart();
     LOG_INFO(kSessionTag, QString("WS stream start requested for %1/%2").arg(exchange_id_, primary_symbol));
+    emit ws_state_changed(exchange_id_);
     return true;
 }
 
@@ -338,6 +343,7 @@ void ExchangeSession::stop_ws() {
         if (proc->state() != QProcess::NotRunning)
             proc->kill();
     });
+    emit ws_state_changed(exchange_id_);
 }
 
 void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus status) {
@@ -353,6 +359,7 @@ void ExchangeSession::handle_ws_finished(int exit_code, QProcess::ExitStatus sta
         ws_process_->deleteLater();
         ws_process_ = nullptr;
     }
+    emit ws_state_changed(exchange_id_);
 
     if (!ws_should_run_)
         return; // not supposed to be running — leave it down
@@ -462,6 +469,7 @@ void ExchangeSession::handle_ws_line(const QString& line) {
         if (connected != prev) {
             LOG_INFO(kSessionTag,
                      QString("[%1] WS status: %2").arg(exchange_id_, connected ? "CONNECTED" : "DISCONNECTED"));
+            emit ws_state_changed(exchange_id_);
         }
         if (!connected) {
             QMutexLocker lock(&mutex_);

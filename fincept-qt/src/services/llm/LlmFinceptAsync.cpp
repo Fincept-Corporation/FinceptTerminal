@@ -7,11 +7,8 @@
 // ── Why this is a loop ────────────────────────────────────────────────────
 // Tool calling on this path is MULTI-ROUND. It used to be single-shot: execute
 // whatever tool the first reply named, then ask for a summary with tool calls
-// forbidden. With Tool RAG on (the default) the model only ever sees the Tier-0
-// tools, so round one is ALWAYS a discovery call — tool_list. The turn then
-// ended there and the user got the raw tool_list JSON presented as the answer.
-// A discovery chain needs three rounds (tool_list → tool_describe → the real
-// call) before there is anything worth summarising, so the loop is the fix.
+// forbidden. Operating the terminal takes several rounds (look → open → act →
+// read) before there is anything worth summarising, so the loop is the fix.
 //
 // Each round appends the assistant turn plus its tool results to the prompt
 // transcript and re-submits. Follow-ups stay on /research/llm/async: the old
@@ -83,10 +80,10 @@ constexpr const char* kLlmFinceptTag = "LlmService";
 
 // Runaway backstop, NOT a budget.
 //
-// There is deliberately no round budget on this path. Tool RAG costs ~3 rounds
-// per action before any real work happens, so every ceiling tried here (10, then
-// 20) was hit during discovery — the model spent the turn learning what tools
-// exist and ran out before writing anything, then apologised. Work is bounded by
+// There is deliberately no round budget on this path. Operating the terminal
+// takes several rounds per action (look, act, wait, read), and with the old
+// tool-discovery catalogue every ceiling tried here (10, then 20) was hit before
+// any real work — the model ran out of rounds and apologised. Work is bounded by
 // whether the model is still making progress (see kMaxNoProgressRounds), not by
 // a count. This number only exists so a pathological loop can't run forever; it
 // matches the [1,200] clamp on max_tool_rounds used by the structured providers.
@@ -149,82 +146,29 @@ void fincept_add_usage(LlmResponse& total, const LlmResponse& round) {
 } // namespace
 
 // Build a compact tool catalog string for injection into the system prompt.
-// This allows models that don't support structured tool_calls to still emit
-// text-based tool invocations that extract_text_tool_calls can detect.
-//
-// Two modes:
-//   • Tool RAG ON + default filter: emit only the Tier-0 tools + explicit
-//     instructions to use tool_list for everything else. Same disclosure
-//     model as structured providers — keeps the catalog small and forces
-//     deliberate discovery.
-//   • Tool RAG OFF or explicit filter: legacy behaviour — list up to 60
-//     filtered tools inline.
+// This lets models that don't support structured tool_calls still emit
+// text-based tool invocations that extract_text_tool_calls can detect. The
+// internal catalogue is ten core tools, so every tool is listed inline with its
+// parameters (external servers' tools follow, capped).
 static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
     auto all_tools = mcp::McpService::instance().get_all_tools(filter);
     if (all_tools.empty())
         return {};
-
-    const bool default_filter = filter.categories.isEmpty() && filter.exclude_categories.isEmpty() &&
-                                filter.name_patterns.isEmpty() && filter.exclude_name_patterns.isEmpty() &&
-                                filter.max_tools == 0;
-    const bool use_rag =
-        default_filter && fincept::AppConfig::instance().get("mcp/use_tool_rag", QVariant(true)).toBool();
 
     QString catalog;
     catalog += "You have access to tools. To use one, emit a <tool_call> block:\n";
     catalog += "<tool_call>{\"name\": \"TOOL_NAME\", \"arguments\": {\"param\": \"value\"}}</tool_call>\n";
     catalog += "Emit the block ALONE, with no commentary around it — you will be called again with the "
                "result and can then continue. Only call a tool when the request needs live data or an "
-               "action in the terminal; answer greetings and general questions directly in plain text.\n\n";
-
-    if (use_rag) {
-        // Mirror McpService::tier_0_tool_names() (kept in sync manually — small
-        // list, low churn).
-        static const QSet<QString> kTier0 = {
-            "tool_list", "tool_describe", "navigate_to_tab", "list_tabs", "get_current_tab", "get_auth_status",
-        };
-        catalog += "Always-available tools:\n";
-        for (const auto& tool : all_tools) {
-            if (!kTier0.contains(tool.name))
-                continue;
-            QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-            catalog += "- " + fn_name + ": " + tool.description + "\n";
-        }
-        // The three-step loop is spelled out with a worked example on purpose.
-        // The previous wording ended with "then invoke the tool", which never
-        // said HOW — and a model that has just discovered a tool has no reason
-        // to assume the mechanism is the same <tool_call> block it used for
-        // discovery. One observed turn burned 17 rounds searching for an
-        // execute/invoke/run tool (tool_list "call execute ma_sec_dcf_inputs
-        // ticker AAPL") while never once calling ma_sec_dcf_inputs itself.
-        catalog += QStringLiteral(
-            "\nThe two tools above are the only ones listed here, but they are NOT the only ones you can call.\n"
-            "You can call ANY tool name that tool_list returns, immediately, using the same <tool_call> block.\n"
-            "There is no separate execute/invoke/run step and no registration step — emitting the block IS "
-            "calling the tool.\n"
-            "\n"
-            "Worked example — the full three steps:\n"
-            "  1. <tool_call>{\"name\": \"tool_list\", \"arguments\": {\"query\": \"SEC DCF inputs for a "
-            "company\"}}</tool_call>\n"
-            "     -> returns e.g. a tool named \"ma_sec_dcf_inputs\"\n"
-            "  2. <tool_call>{\"name\": \"tool_describe\", \"arguments\": {\"name\": "
-            "\"ma_sec_dcf_inputs\"}}</tool_call>\n"
-            "     -> returns its input schema, e.g. {\"ticker\": \"string\"}\n"
-            "  3. <tool_call>{\"name\": \"ma_sec_dcf_inputs\", \"arguments\": {\"ticker\": \"AAPL\"}}</tool_call>\n"
-            "     -> THIS is the call that returns the data. Step 3 is the point of steps 1 and 2.\n"
-            "\n"
-            "Do not call tool_list again looking for a way to run a tool you have already found — you already "
-            "have it; go straight to step 3. The server prefix (fincept-terminal__) is optional; a bare tool "
-            "name works. For requests with several intents, run the loop once per intent.\n");
-        return catalog;
-    }
-
-    // ── Legacy mode ──
+               "action in the terminal; answer greetings and general questions directly in plain text.\n"
+               "You operate Fincept Terminal like a person: ui_overview shows what is open, ui_open opens a "
+               "screen (optionally on a symbol), ui_snapshot lists a panel's controls with refs, ui_act works "
+               "them, ui_read reads tables and texts in full, ui_wait waits for data to load. The server "
+               "prefix (fincept-terminal__) is optional.\n\n";
     catalog += "Available tools:\n";
     int count = 0;
     for (const auto& tool : all_tools) {
-        QString fn_name = tool.server_id + "__" + mcp::McpProvider::encode_tool_name_for_wire(tool.name);
-        catalog += "- " + fn_name + ": " + tool.description;
+        catalog += "- " + mcp::McpProvider::encode_tool_name_for_wire(tool.name) + ": " + tool.description;
         QJsonObject props = tool.input_schema["properties"].toObject();
         if (!props.isEmpty()) {
             QStringList params;
@@ -234,8 +178,8 @@ static QString build_tool_catalog_for_prompt(const mcp::ToolFilter& filter) {
         }
         catalog += "\n";
         ++count;
-        if (count >= 60) {
-            catalog += "... and " + QString::number(all_tools.size() - 60) + " more tools available.\n";
+        if (count >= 40) {
+            catalog += "... and " + QString::number(all_tools.size() - 40) + " more tools available.\n";
             break;
         }
     }
@@ -664,16 +608,11 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         return out;
     };
 
-    // No ActivationTracker here, unlike the structured providers: nothing is
-    // re-declared to the backend because nothing is declared to begin with.
-    // tool_describe's schema lands in the transcript as text, which is what the
-    // model reads before emitting the real call.
-    //
     // Results are memoised per (tool, args) for the turn. A flat prompt gives the
     // model no structural cue that a call already happened, and it will re-issue
     // the identical call indefinitely — one observed turn spent 4 of its 10 rounds
-    // on the same tool_describe{"name":"set_excel_sheet_data"} and ran out of
-    // budget before writing anything. Re-serving the cached result with an
+    // re-issuing one identical call and ran out of budget before doing anything
+    // else. Re-serving the cached result with an
     // explicit "you already called this" note breaks the cycle without wasting
     // a round.
     QHash<QString, QString> call_cache;
@@ -699,14 +638,8 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
     // hit). This is the stop condition — not a round count.
     int no_progress_rounds = 0;
 
-    // Tools the model has fetched a schema for, and how many consecutive rounds
-    // it has spent searching/describing without calling any of them.
-    QStringList described_tools;
-    int discovery_only_rounds = 0;
-
-    // Outcome tally across the turn, excluding the discovery meta-tools. Used to
-    // catch the worst failure mode there is: every real call rejected, and the
-    // model reporting the task as done anyway.
+    // Outcome tally across the turn. Used to catch the worst failure mode there
+    // is: every call rejected, and the model reporting the task as done anyway.
     int real_calls = 0;
     int real_failures = 0;
     bool challenged_fabrication = false;
@@ -854,7 +787,6 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
         // ── Execute and splice the results back into the transcript ──
         QString block = "\n\nAssistant: " + resp.content.trimmed() + "\n\nTool results:\n";
         int fresh_calls = 0;
-        bool only_discovery = true; // this round did nothing but search/describe
         for (const auto& tc : calls) {
             const int sep = tc.name.indexOf(QStringLiteral("__"));
             QString display = (sep >= 0) ? tc.name.mid(sep + 2) : tc.name;
@@ -866,7 +798,13 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
 
             detail::emit_tool_progress(display, tc.args);
 
-            const auto cached = call_cache.constFind(cache_key);
+            // Only pure lookups are memoised. The terminal's tools observe and
+            // operate live screens: a second ui_snapshot after a click must see
+            // the new state, never the cached old one.
+            const QString action = tc.args.value(QStringLiteral("action")).toString();
+            const bool cacheable = display == QLatin1String("python") &&
+                                   (action == QLatin1String("search") || action == QLatin1String("info"));
+            const auto cached = cacheable ? call_cache.constFind(cache_key) : call_cache.constEnd();
             if (cached != call_cache.constEnd()) {
                 LOG_WARN(kLlmFinceptTag, QString("Fincept tool round %1: %2 repeated verbatim — serving cached result")
                                              .arg(round)
@@ -889,8 +827,6 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                                          .arg(round)
                                          .arg(display, args_json.left(200)));
 
-            // allow_defer stays false: this path has no job_* protocol wired in,
-            // so a receipt would be mistaken for the result (see §M5).
             QElapsedTimer call_clock;
             call_clock.start();
             auto tr = mcp::McpService::instance().execute_openai_function(tc.name, tc.args);
@@ -899,44 +835,15 @@ LlmResponse LlmService::fincept_async_request(const QString& user_message,
                                          .arg(round)
                                          .arg(display, tr.success ? "OK" : "FAIL", tr.error.left(120)));
             const QString rendered = fincept_render_tool_result(tr);
-            call_cache.insert(cache_key, rendered);
-            call_cache_ok.insert(cache_key, tr.success);
+            if (cacheable) {
+                call_cache.insert(cache_key, rendered);
+                call_cache_ok.insert(cache_key, tr.success);
+            }
             block += "- " + display + " -> " + rendered + "\n";
 
-            // Remember which real tools the model has already looked up, and
-            // whether it ever got past looking things up this round.
-            if (display == QLatin1String("tool_describe")) {
-                const QString looked_up = tc.args.value(QStringLiteral("name")).toString();
-                if (tr.success && !looked_up.isEmpty() && !described_tools.contains(looked_up))
-                    described_tools.append(looked_up);
-            } else if (display != QLatin1String("tool_list")) {
-                only_discovery = false;
-                ++real_calls;
-                if (!tr.success)
-                    ++real_failures;
-            }
-        }
-
-        // Break the search-forever loop. tool_list with a fresh query always
-        // returns something, so the no-progress check never fires — a turn can
-        // spend every round hunting for a way to "execute" a tool it already
-        // holds the schema for. Name the tools it already has and tell it to
-        // call one.
-        if (only_discovery && !described_tools.isEmpty()) {
-            if (++discovery_only_rounds >= 2) {
-                block += "\nSystem: STOP SEARCHING. You already have the schema for: " +
-                         described_tools.join(QStringLiteral(", ")) +
-                         ". There is no separate execute/invoke/run tool — emitting a <tool_call> block IS how you "
-                         "call it. Your next message must be exactly one <tool_call> block naming one of those "
-                         "tools, e.g. <tool_call>{\"name\": \"" +
-                         described_tools.last() +
-                         "\", \"arguments\": {...}}</tool_call>, with the arguments its schema requires.\n";
-                LOG_WARN(kLlmFinceptTag, QString("Fincept: %1 discovery-only rounds — nudging the model to call %2")
-                                             .arg(discovery_only_rounds)
-                                             .arg(described_tools.last()));
-            }
-        } else {
-            discovery_only_rounds = 0;
+            ++real_calls;
+            if (!tr.success)
+                ++real_failures;
         }
 
         round_blocks.append(block);

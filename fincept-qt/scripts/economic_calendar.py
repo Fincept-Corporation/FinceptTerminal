@@ -1,161 +1,154 @@
-import requests
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+"""Forex Factory economic calendar for one day of the current week.
+
+Source: Forex Factory's public weekly calendar export
+(https://nfs.faireconomy.media/ff_calendar_thisweek.json) - a plain JSON file, so no browser, driver
+or API key is needed. The export covers the current week only and publishes forecast and previous
+values, not actuals.
+
+Usage:
+    python economic_calendar.py [date]
+        date: Forex Factory day format ("nov9.2026") or ISO ("2026-11-09"); default: today.
+        The day and the times are this computer's local time zone.
+
+Output (JSON on stdout; {"error": ...} on failure):
+    {"date", "url", "events_count",
+     "events": [{"time", "currency", "impact", "impact_label", "event", "forecast", "previous",
+                 "datetime"}],
+     "week_start", "week_end", "timezone", "source", "note"}
+    impact: 3 = High, 2 = Medium, 1 = Low, 0 = Holiday / non-economic
+"""
+
 import json
-from datetime import datetime
+import os
+import re
+import sys
+import tempfile
 import time
+from datetime import date, datetime
 
-def scrape_forex_calendar(date_str="oct15.2026"):
-    """
-    Scrapes Forex Factory calendar for given date
-    Args:
-        date_str: Date in format like 'oct15.2026'
-    Returns:
-        JSON with structured data
-    """
-    url = f"https://www.forexfactory.com/calendar?day={date_str}"
+import requests
 
-    # Setup headless Chrome
-    options = Options()
-    options.add_argument('--headless')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+FEED_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+CALENDAR_URL = "https://www.forexfactory.com/calendar"
+IMPACT_LEVELS = {"high": 3, "medium": 2, "low": 1}
+MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
 
-    driver = webdriver.Chrome(options=options)
-    events = []
+# The export is one file for the whole week, refreshed about hourly, and it answers repeated
+# downloads with HTTP 429 - so every day of the week is served from one cached copy.
+CACHE_PATH = os.path.join(tempfile.gettempdir(), "fincept_ff_calendar_thisweek.json")
+CACHE_FRESH_SECONDS = 15 * 60
+CACHE_FALLBACK_SECONDS = 6 * 60 * 60  # rate-limited / offline: a few hours old is still this week
 
+
+def _read_cache(max_age: float):
     try:
-        driver.get(url)
+        age = time.time() - os.path.getmtime(CACHE_PATH)
+        if age <= max_age:
+            with open(CACHE_PATH, encoding="utf-8") as f:
+                return json.load(f), age
+    except (OSError, ValueError):
+        pass
+    return None, None
 
-        # Wait for calendar table to load
-        wait = WebDriverWait(driver, 10)
-        wait.until(EC.presence_of_element_located((By.CLASS_NAME, "calendar__table")))
 
-        time.sleep(2)  # Allow dynamic content to load
+def load_feed():
+    """-> (feed list, age of the copy in seconds)."""
+    feed, age = _read_cache(CACHE_FRESH_SECONDS)
+    if feed is not None:
+        return feed, age
+    try:
+        resp = requests.get(FEED_URL, timeout=20, headers={"User-Agent": "Fincept-Terminal/1.0"})
+        resp.raise_for_status()
+        feed = resp.json()
+    except requests.exceptions.RequestException:
+        feed, age = _read_cache(CACHE_FALLBACK_SECONDS)
+        if feed is not None:
+            return feed, age
+        raise
+    try:
+        tmp = CACHE_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(feed, f)
+        os.replace(tmp, CACHE_PATH)
+    except OSError:
+        pass  # caching is an optimisation only
+    return feed, 0.0
 
-        # Find all calendar rows
-        rows = driver.find_elements(By.CSS_SELECTOR, "tr.calendar__row")
 
-        for row in rows:
-            try:
-                event = {}
+def parse_day(text: str) -> date:
+    """'nov9.2026' (Forex Factory day format) or '2026-11-09' -> date."""
+    t = text.strip().lower()
+    m = re.fullmatch(r"([a-z]{3})(\d{1,2})\.(\d{4})", t)
+    if m and m.group(1) in MONTHS:
+        return date(int(m.group(3)), MONTHS.index(m.group(1)) + 1, int(m.group(2)))
+    try:
+        return date.fromisoformat(t)
+    except ValueError:
+        raise ValueError(f"Unrecognised date '{text}': use e.g. nov9.2026 or 2026-11-09") from None
 
-                # Time
-                time_elem = row.find_elements(By.CLASS_NAME, "calendar__time")
-                event['time'] = time_elem[0].text if time_elem else ""
 
-                # Currency
-                currency_elem = row.find_elements(By.CLASS_NAME, "calendar__currency")
-                event['currency'] = currency_elem[0].text if currency_elem else ""
+def utc_offset_label(dt: datetime) -> str:
+    off = dt.utcoffset()
+    minutes = int(off.total_seconds() // 60) if off is not None else 0
+    sign = "+" if minutes >= 0 else "-"
+    return f"UTC{sign}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
 
-                # Impact
-                impact_elem = row.find_elements(By.CLASS_NAME, "calendar__impact")
-                if impact_elem:
-                    impact_spans = impact_elem[0].find_elements(By.TAG_NAME, "span")
-                    event['impact'] = len([s for s in impact_spans if 'icon--ff-impact-red' in s.get_attribute('class') or 'icon--ff-impact-ora' in s.get_attribute('class') or 'icon--ff-impact-yel' in s.get_attribute('class')])
-                else:
-                    event['impact'] = 0
 
-                # Event name
-                event_elem = row.find_elements(By.CLASS_NAME, "calendar__event")
-                event['event'] = event_elem[0].text.strip() if event_elem else ""
+def calendar_for_day(day: date) -> dict:
+    feed, feed_age = load_feed()
+    if not isinstance(feed, list):
+        raise ValueError("Unexpected Forex Factory feed format")
 
-                # Actual value
-                actual_elem = row.find_elements(By.CLASS_NAME, "calendar__actual")
-                event['actual'] = actual_elem[0].text if actual_elem else ""
-
-                # Forecast value
-                forecast_elem = row.find_elements(By.CLASS_NAME, "calendar__forecast")
-                event['forecast'] = forecast_elem[0].text if forecast_elem else ""
-
-                # Previous value
-                previous_elem = row.find_elements(By.CLASS_NAME, "calendar__previous")
-                event['previous'] = previous_elem[0].text if previous_elem else ""
-
-                # Only add if event has meaningful data
-                if event['event'] and event['event'] not in ['', 'All Day']:
-                    events.append(event)
-
-            except Exception as e:
-                continue
-
-    finally:
-        driver.quit()
-
+    events, local_days = [], []
+    for item in feed:
+        if not isinstance(item, dict) or not item.get("date"):
+            continue
+        # e.g. "2026-11-09T08:30:00-05:00" (US Eastern) -> this computer's local time
+        local = datetime.fromisoformat(item["date"]).astimezone()
+        local_days.append(local.date())
+        if local.date() != day:
+            continue
+        label = str(item.get("impact") or "")
+        events.append({
+            "time": local.strftime("%H:%M"),
+            "currency": item.get("country", ""),
+            "impact": IMPACT_LEVELS.get(label.lower(), 0),
+            "impact_label": label,
+            "event": item.get("title", ""),
+            "forecast": item.get("forecast", ""),
+            "previous": item.get("previous", ""),
+            "datetime": local.isoformat(timespec="minutes"),
+        })
+    if not local_days:
+        raise ValueError("The Forex Factory weekly feed is empty")
+    week_start, week_end = min(local_days), max(local_days)
+    if not week_start <= day <= week_end:
+        raise ValueError(f"Forex Factory's public calendar feed covers this week only "
+                         f"({week_start.isoformat()} to {week_end.isoformat()})")
+    events.sort(key=lambda e: e["datetime"])
     return {
-        "date": date_str,
-        "url": url,
+        "date": day.isoformat(),
+        "url": f"{CALENDAR_URL}?day={MONTHS[day.month - 1]}{day.day}.{day.year}",
         "events_count": len(events),
-        "events": events
+        "events": events,
+        "week_start": week_start.isoformat(),
+        "week_end": week_end.isoformat(),
+        "timezone": utc_offset_label(datetime.now().astimezone()),
+        "source": FEED_URL,
+        "feed_age_seconds": int(feed_age),
+        "note": "Forex Factory weekly export: current week only; forecast and previous, no actuals",
     }
 
-# Alternative using requests-html for dynamic content
-def scrape_forex_calendar_alt(date_str="oct15.2026"):
-    """Alternative method using requests-html"""
-    from requests_html import HTMLSession
 
-    url = f"https://www.forexfactory.com/calendar?day={date_str}"
-    session = HTMLSession()
-
+def main(argv) -> dict:
     try:
-        r = session.get(url)
-        r.html.render(timeout=20)
+        day = parse_day(argv[1]) if len(argv) > 1 else date.today()
+        return calendar_for_day(day)
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Forex Factory calendar feed unavailable: {str(e)[:300]}"}
+    except (ValueError, KeyError, TypeError) as e:
+        return {"error": str(e)[:300]}
 
-        events = []
-
-        # Parse calendar rows
-        rows = r.html.find('tr.calendar__row')
-
-        for row in rows:
-            event = {}
-
-            event['time'] = row.find('.calendar__time', first=True).text if row.find('.calendar__time') else ""
-            event['currency'] = row.find('.calendar__currency', first=True).text if row.find('.calendar__currency') else ""
-
-            impact = row.find('.calendar__impact', first=True)
-            if impact:
-                event['impact'] = len(impact.find('.icon--ff-impact-red, .icon--ff-impact-ora, .icon--ff-impact-yel'))
-            else:
-                event['impact'] = 0
-
-            event['event'] = row.find('.calendar__event', first=True).text if row.find('.calendar__event') else ""
-            event['actual'] = row.find('.calendar__actual', first=True).text if row.find('.calendar__actual') else ""
-            event['forecast'] = row.find('.calendar__forecast', first=True).text if row.find('.calendar__forecast') else ""
-            event['previous'] = row.find('.calendar__previous', first=True).text if row.find('.calendar__previous') else ""
-
-            if event['event'] and event['event'] not in ['', 'All Day']:
-                events.append(event)
-
-    except Exception as e:
-        print(f"Error: {e}")
-        return {"error": str(e)}
-
-    return {
-        "date": date_str,
-        "url": url,
-        "events_count": len(events),
-        "events": events
-    }
 
 if __name__ == "__main__":
-    import sys
-
-    # Usage: economic_calendar.py [date]   e.g. oct16.2026 (Forex Factory day format).
-    # The Economics panel passes the date as the first argument - it used to be ignored and
-    # the script always scraped "oct16.2026" (and dropped a forex_calendar.json into the cwd).
-    months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
-    today = datetime.now()
-    date_arg = sys.argv[1] if len(sys.argv) > 1 else f"{months[today.month - 1]}{today.day}.{today.year}"
-
-    # Use Selenium method (more reliable)
-    try:
-        data = scrape_forex_calendar(date_arg)
-    except Exception as e:
-        data = {"error": f"Calendar scrape failed: {str(e)[:300]}"}
-
-    print(json.dumps(data, indent=2))
+    print(json.dumps(main(sys.argv), indent=2))

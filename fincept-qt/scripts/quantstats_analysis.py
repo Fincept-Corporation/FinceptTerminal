@@ -6,7 +6,13 @@ Input (stdin JSON):
     {"symbols": ["AAPL","MSFT"], "weights": [0.5, 0.5],
      "risk_free_rate": 0.042,          # optional annual fraction, default 0.04
      "benchmark": "SPY"}               # optional; same stats computed for it
-Output (stdout JSON): {performance, risk, ratios, distribution, benchmark?, meta}
+Output (stdout JSON): {performance, risk, ratios, distribution, benchmark?, meta,
+    series   {dates, cumulative, drawdown, benchmark_cumulative?}   (<= 300 points),
+    rolling? {window, dates, volatility, sharpe, beta?}             (63-observation window),
+    monthly  {"YYYY-MM": return},
+    drawdowns [{start, trough, end|null, depth, days}]              (worst 5),
+    relative? {beta, alpha, correlation, r_squared, tracking_error, information_ratio,
+               up_capture, down_capture, observations}}
 All returns/ratios are FRACTIONS (the C++ view multiplies by 100). Non-finite
 values are emitted as null, never as fake zeros.
 """
@@ -24,6 +30,151 @@ except ImportError:
     import fincept_json
 
 DEFAULT_RF = 0.04
+ROLLING_WINDOW = 63      # ~3 months of trading days
+MAX_SERIES_POINTS = 300  # charts never need more; keeps the JSON small
+TOP_DRAWDOWNS = 5
+
+
+def _fin(x):
+    """float or None (JSON null) — never NaN/inf."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _downsample_idx(n, limit=MAX_SERIES_POINTS):
+    """Indices that thin a series to <= limit points, always keeping the last one."""
+    if n <= limit:
+        return list(range(n))
+    step = n / float(limit)
+    idx = sorted({int(i * step) for i in range(limit)} | {n - 1})
+    return idx
+
+
+def _series_block(port, bench_r):
+    """Cumulative return, drawdown and (when given) the benchmark's cumulative return
+    on the portfolio's dates, thinned for charting."""
+    cum = (1 + port).cumprod()
+    dd = cum / cum.cummax() - 1.0
+    out = {"dates": [], "cumulative": [], "drawdown": []}
+    bench_cum = None
+    if bench_r is not None:
+        b = bench_r.reindex(port.index).fillna(0.0)
+        bench_cum = (1 + b).cumprod() - 1.0
+        out["benchmark_cumulative"] = []
+    for i in _downsample_idx(len(port)):
+        out["dates"].append(port.index[i].strftime("%Y-%m-%d"))
+        out["cumulative"].append(_fin(cum.iloc[i] - 1.0))
+        out["drawdown"].append(_fin(dd.iloc[i]))
+        if bench_cum is not None:
+            out["benchmark_cumulative"].append(_fin(bench_cum.iloc[i]))
+    return out
+
+
+def _rolling_block(port, bench_r, rf_annual, ppy):
+    """Rolling annualised volatility, Sharpe and beta over ROLLING_WINDOW observations."""
+    if len(port) < ROLLING_WINDOW + 5:
+        return None
+    rf_p = (1.0 + rf_annual) ** (1.0 / ppy) - 1.0
+    roll_mean = port.rolling(ROLLING_WINDOW).mean()
+    roll_std = port.rolling(ROLLING_WINDOW).std(ddof=1)
+    vol = roll_std * math.sqrt(ppy)
+    sharpe = (roll_mean - rf_p) / roll_std * math.sqrt(ppy)
+    beta = None
+    if bench_r is not None:
+        b = bench_r.reindex(port.index)
+        cov = port.rolling(ROLLING_WINDOW).cov(b)
+        var = b.rolling(ROLLING_WINDOW).var()
+        beta = cov / var
+    valid = vol.dropna().index
+    if len(valid) == 0:
+        return None
+    vol, sharpe = vol.loc[valid], sharpe.loc[valid]
+    if beta is not None:
+        beta = beta.reindex(valid)
+    out = {"window": ROLLING_WINDOW, "dates": [], "volatility": [], "sharpe": []}
+    if beta is not None:
+        out["beta"] = []
+    for i in _downsample_idx(len(valid)):
+        out["dates"].append(valid[i].strftime("%Y-%m-%d"))
+        out["volatility"].append(_fin(vol.iloc[i]))
+        out["sharpe"].append(_fin(sharpe.iloc[i]))
+        if beta is not None:
+            out["beta"].append(_fin(beta.iloc[i]))
+    return out
+
+
+def _monthly_returns(port):
+    """Compounded return per calendar month: {"YYYY-MM": fraction}."""
+    out = {}
+    for period, grp in port.groupby([port.index.year, port.index.month]):
+        out["%04d-%02d" % (period[0], period[1])] = _fin((1 + grp).prod() - 1.0)
+    return out
+
+
+def _drawdown_periods(port, top=TOP_DRAWDOWNS):
+    """The worst peak-to-trough episodes: peak date, trough date, recovery date (None if
+    still under water), depth and length in calendar days."""
+    cum = (1 + port).cumprod()
+    peak = cum.cummax()
+    dd = cum / peak - 1.0
+    episodes = []
+    in_dd = False
+    start = trough = None
+    trough_val = 0.0
+    for ts, val in dd.items():
+        if val < 0 and not in_dd:
+            in_dd, start, trough, trough_val = True, ts, ts, val
+        elif val < 0 and in_dd:
+            if val < trough_val:
+                trough, trough_val = ts, val
+        elif val >= 0 and in_dd:
+            episodes.append((start, trough, ts, trough_val))
+            in_dd = False
+    if in_dd:
+        episodes.append((start, trough, None, trough_val))
+    episodes.sort(key=lambda e: e[3])
+    out = []
+    for s, t, e, depth in episodes[:top]:
+        # The episode starts at the peak just before the first negative day.
+        pos = cum.index.get_loc(s)
+        peak_date = cum.index[pos - 1] if pos > 0 else s
+        end_or_now = e if e is not None else cum.index[-1]
+        out.append({
+            "start": peak_date.strftime("%Y-%m-%d"),
+            "trough": t.strftime("%Y-%m-%d"),
+            "end": e.strftime("%Y-%m-%d") if e is not None else None,
+            "depth": _fin(depth),
+            "days": int((end_or_now - peak_date).days),
+        })
+    return out
+
+
+def _relative_block(port, bench_r, rf_annual, ppy):
+    """Benchmark-relative statistics on the shared dates."""
+    import pandas as pd
+
+    j = pd.concat([port.rename("p"), bench_r.rename("b")], axis=1, join="inner").dropna()
+    if len(j) < 20 or float(j["b"].var(ddof=1)) <= 0:
+        return None
+    rf_p = (1.0 + rf_annual) ** (1.0 / ppy) - 1.0
+    beta = float(j["p"].cov(j["b"]) / j["b"].var(ddof=1))
+    alpha = ((j["p"].mean() - rf_p) - beta * (j["b"].mean() - rf_p)) * ppy
+    corr = float(j["p"].corr(j["b"]))
+    active = j["p"] - j["b"]
+    te = float(active.std(ddof=1)) * math.sqrt(ppy)
+    ir = float(active.mean()) * ppy / te if te > 0 else None
+    up = j[j["b"] > 0]
+    down = j[j["b"] < 0]
+    up_cap = float(up["p"].mean() / up["b"].mean()) if len(up) and up["b"].mean() != 0 else None
+    down_cap = float(down["p"].mean() / down["b"].mean()) if len(down) and down["b"].mean() != 0 else None
+    return {
+        "beta": _fin(beta), "alpha": _fin(alpha), "correlation": _fin(corr), "r_squared": _fin(corr * corr),
+        "tracking_error": _fin(te), "information_ratio": _fin(ir),
+        "up_capture": _fin(up_cap), "down_capture": _fin(down_cap), "observations": int(len(j)),
+    }
 
 
 def _close_frame(data, symbols):
@@ -152,12 +303,29 @@ def compute_stats(symbols, weights, rf_annual, benchmark, period="1y"):
         return {"error": "Insufficient price history"}
     out["meta"]["symbols_used"] = held
     out["meta"]["symbols_missing"] = [s for s in symbols if s not in held]
+    bench_r = None
     if benchmark and benchmark in close.columns:
         b = close[benchmark].dropna().pct_change(fill_method=None)
         bs = series_stats(b, rf_annual)
         if bs is not None:
             bs["symbol"] = benchmark
             out["benchmark"] = bs
+            bench_r = b.dropna()
+
+    # Time series for the DRAWDOWN / ROLLING / RETURNS tabs (they used to repeat the
+    # summary table) and the benchmark-relative statistics.
+    ppy = out["meta"]["periods_per_year"]
+    port_clean = port.dropna()
+    out["series"] = _series_block(port_clean, bench_r)
+    rolling = _rolling_block(port_clean, bench_r, rf_annual, ppy)
+    if rolling is not None:
+        out["rolling"] = rolling
+    out["monthly"] = _monthly_returns(port_clean)
+    out["drawdowns"] = _drawdown_periods(port_clean)
+    if bench_r is not None:
+        rel = _relative_block(port_clean, bench_r, rf_annual, ppy)
+        if rel is not None:
+            out["relative"] = rel
     return out
 
 

@@ -145,13 +145,30 @@ def run_simulation(symbols, weights, num_simulations=1000):
         cum_ret_pct = [(float(price_paths[i, t]) - 1.0) * 100.0 for t in range(n_steps)]
         paths_for_chart.append(cum_ret_pct)
 
+    # Percentile bands over ALL simulations at every step — the fan chart. The chart
+    # used to derive its "median" from the 50 drawn paths only.
+    percentile_paths = {}
+    for p in (5, 25, 50, 75, 95):
+        band = (np.percentile(price_paths, p, axis=0) - 1.0) * 100.0
+        percentile_paths["p%d" % p] = [float(v) for v in band]
+
+    # Worst 5% of outcomes, averaged (expected shortfall of the one-year return).
+    tail = np.sort(terminal_returns)[: max(1, int(0.05 * num_simulations))]
+    cvar_5 = float(np.mean(tail)) * 100.0
+
     return {
         "median_return": median_return,
         "percentile_5": percentile_5,
         "percentile_95": percentile_95,
         "prob_loss": prob_loss,
         "expected_max_dd": expected_max_dd,
+        "cvar_5": cvar_5,
+        "annual_drift": float(mu_daily * 252.0) * 100.0,
+        "annual_volatility": float(sigma_daily * np.sqrt(252.0)) * 100.0,
+        "horizon_days": n_steps,
+        "num_simulations": num_simulations,
         "paths": paths_for_chart,
+        "percentile_paths": percentile_paths,
         "num_paths_shown": n_paths_shown,
     }
 

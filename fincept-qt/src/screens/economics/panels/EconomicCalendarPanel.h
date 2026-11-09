@@ -1,7 +1,7 @@
 // src/screens/economics/panels/EconomicCalendarPanel.h
-// Forex Factory economic calendar scraper — no API key required.
+// Forex Factory economic calendar (its public weekly JSON export) — no browser or API key required.
 // Script: economic_calendar.py <mmmDD.YYYY>
-// Returns: {date, url, events_count, events:[{time,currency,impact,event,actual,forecast,previous}]}
+// Returns: {date, url, events_count, timezone, events:[{time,currency,impact,impact_label,event,forecast,previous}]}
 #pragma once
 
 #include "screens/economics/panels/EconPanelBase.h"

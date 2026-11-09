@@ -64,7 +64,7 @@ Topic names follow a consistent shape: `<family>:<sub>:<id>[:<qualifier>]`. Comm
 - `polymarket:<channel>`
 - `geopolitics:event:<type>`, `geopolitics:country:<name>`, `hdx:<dataset_id>`, `trade:<kind>`
 - `maritime:vessel:<imo>`, `maritime:history:<imo>`
-- `ma:<context>` (DCF, merger_model, LBO, etc.)
+- `ma:<context>` (DCF, accretion_dilution, LBO, etc.)
 - `agent:output:<run_id>`, `agent:stream:<run_id>`, `agent:status:<run_id>`
 - `llm:session:<session_id>:stream`
 

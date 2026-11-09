@@ -59,6 +59,12 @@ class ExchangeSessionManager : public QObject, public fincept::datahub::Producer
     ExchangeSessionManager(const ExchangeSessionManager&) = delete;
     ExchangeSessionManager& operator=(const ExchangeSessionManager&) = delete;
 
+  signals:
+    /// Relay of ExchangeSession::ws_state_changed for every session this
+    /// manager owns, so a status consumer can follow WS state without knowing
+    /// which sessions exist. Re-read active_exchange_ids() / the session.
+    void ws_state_changed(const QString& exchange_id);
+
   private:
     ExchangeSessionManager();
     ~ExchangeSessionManager() override;

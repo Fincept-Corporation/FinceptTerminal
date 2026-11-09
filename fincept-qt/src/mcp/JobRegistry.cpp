@@ -50,7 +50,7 @@ JobRegistry& JobRegistry::instance() {
     return s;
 }
 
-QString JobRegistry::create(const QString& tool, int timeout_ms) {
+QString JobRegistry::create(const QString& tool, int timeout_ms, const QString& owner) {
     QMutexLocker lock(&mutex_);
     sweep_locked();
 
@@ -61,11 +61,12 @@ QString JobRegistry::create(const QString& tool, int timeout_ms) {
     Job job;
     job.snap.id = id;
     job.snap.tool = tool;
+    job.snap.owner = owner;
     job.snap.state = JobState::Running;
     job.snap.started_ms = now_ms();
     job.snap.timeout_ms = timeout_ms;
     job.cancel_flag = std::make_shared<std::atomic<bool>>(false);
-    jobs_.insert(id, std::move(job));
+    jobs_.emplace(id, std::move(job)); // QHash::insert only copies
 
     LOG_INFO(kJobRegistryTag, QString("Job %1 started for tool '%2'").arg(id, tool));
     return id;

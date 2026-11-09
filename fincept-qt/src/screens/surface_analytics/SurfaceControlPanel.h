@@ -79,8 +79,13 @@ class SurfaceControlPanel : public QWidget {
     // dataset; subsequent calls are cheap.
     void apply_dataset_range(const QDate& available_start, const QDate& available_end);
 
-    // Update the provider status pill (header). dataset is shown alongside
-    // the dot. State is one of "connected", "disconnected", "not configured".
+    // Replace the dataset picker's seed list with Databento's dataset listing
+    // (SurfaceAnalyticsScreen::load_dataset_list). The current selection is kept;
+    // an empty list leaves the seed list in place.
+    void set_datasets(const QStringList& datasets);
+
+    // Update the provider status pill (header): the dot, a state of "configured"
+    // (API key set) or "not configured", and a detail line.
     void set_provider_status(const QString& provider_name, const QString& state, const QString& detail = QString());
 
   protected:

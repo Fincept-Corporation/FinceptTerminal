@@ -1,5 +1,6 @@
 #include "ui/charts/KLineChartWidget.h"
 
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 
 #ifdef HAS_QT_WEBENGINE
@@ -59,25 +60,65 @@ class ChartWebView : public QWebEngineView {
 // Chromium bootstrap calls abort() the instant a QWebEngineView is constructed,
 // taking the whole app down — and it cannot be caught in C++. So we must detect
 // a broken/absent runtime BEFORE creating any view and degrade to the Qt-Charts
-// fallback. Probe the locations Qt searches for the helper: the Qt
-// libexec dir, the app dir, and an app/bin subdir.
+// fallback. Probe the locations Qt searches for the helper: the
+// QTWEBENGINEPROCESS_PATH override, the Qt libexec dir, the app dir, an app/bin
+// subdir and, on macOS, the Helpers/ app inside QtWebEngineCore.framework.
+// Presence is necessary but not sufficient — see g_kline_renderer_broken.
 bool webengine_runtime_available() {
 #    ifdef Q_OS_WIN
     const QString proc = QStringLiteral("QtWebEngineProcess.exe");
 #    else
     const QString proc = QStringLiteral("QtWebEngineProcess");
 #    endif
+    // When this override is set Qt searches ONLY it (and aborts if it's wrong),
+    // so the probe must not fall through to the default locations.
+    const QString override_path = qEnvironmentVariable("QTWEBENGINEPROCESS_PATH");
+    if (!override_path.isEmpty())
+        return QFileInfo::exists(override_path);
+
     const QString app = QCoreApplication::applicationDirPath();
-    const QStringList candidates = {
+    QStringList candidates = {
         QLibraryInfo::path(QLibraryInfo::LibraryExecutablesPath) + QStringLiteral("/") + proc,
         app + QStringLiteral("/") + proc,
         app + QStringLiteral("/bin/") + proc,
     };
+#    ifdef Q_OS_MACOS
+    // A framework build never puts the helper in libexec/, so without these the
+    // probe failed on every Mac and KLineChart was silently never used there.
+    for (const QString& helpers : {QStringLiteral("/QtWebEngineCore.framework/Helpers/"),
+                                   QStringLiteral("/QtWebEngineCore.framework/Versions/A/Helpers/")}) {
+        const QString rel = helpers + proc + QStringLiteral(".app/Contents/MacOS/") + proc;
+        candidates << app + QStringLiteral("/../Frameworks") + rel           // deployed .app
+                   << QLibraryInfo::path(QLibraryInfo::LibrariesPath) + rel; // dev build vs. Qt install
+    }
+#    endif
     for (const QString& c : candidates) {
         if (QFileInfo::exists(c))
             return true;
     }
     return false;
+}
+
+// The helper being present does not mean it can run (#411): with
+// resources/v8_context_snapshot.bin missing from the deployment, every renderer
+// hits a Chromium FATAL (exit 0x80000003) during startup — the view stays blank
+// and loadFinished(true) never arrives. Once any chart sees its renderer die
+// before the page came up, later charts skip WebEngine for the rest of the
+// session instead of each spawning (and losing) another renderer. GUI-thread only.
+bool g_kline_renderer_broken = false;
+
+QString kline_termination_status_name(QWebEnginePage::RenderProcessTerminationStatus status) {
+    switch (status) {
+        case QWebEnginePage::NormalTerminationStatus:
+            return QStringLiteral("normal");
+        case QWebEnginePage::AbnormalTerminationStatus:
+            return QStringLiteral("abnormal");
+        case QWebEnginePage::CrashedTerminationStatus:
+            return QStringLiteral("crashed");
+        case QWebEnginePage::KilledTerminationStatus:
+            return QStringLiteral("killed");
+    }
+    return QStringLiteral("unknown");
 }
 } // namespace
 #endif
@@ -101,14 +142,14 @@ KLineChartWidget::KLineChartWidget(QWidget* parent) : QWidget(parent) {
 bool KLineChartWidget::is_available() const {
 #ifdef HAS_QT_WEBENGINE
     // Computed once: the runtime layout can't change while the app is running.
-    static const bool ok = []() {
-        const bool present = webengine_runtime_available();
-        if (!present)
+    static const bool present = []() {
+        const bool found = webengine_runtime_available();
+        if (!found)
             LOG_WARN("KLineChart", "Qt WebEngine runtime not found (QtWebEngineProcess missing from "
                                    "deployment) — falling back to the Qt-Charts chart");
-        return present;
+        return found;
     }();
-    return ok;
+    return present && !g_kline_renderer_broken;
 #else
     return false;
 #endif
@@ -125,9 +166,10 @@ void KLineChartWidget::ensure_web_view() {
     if (initialized_)
         return;
     // Defense-in-depth: never create a QWebEngineView when the runtime helper is
-    // absent — doing so aborts the process. Callers normally gate on
-    // is_available(), but guard here too so any direct user is crash-safe.
-    if (!webengine_runtime_available())
+    // absent — doing so aborts the process — or once a renderer has already
+    // failed to start this session. Callers normally gate on is_available(), but
+    // guard here too so any direct user is crash-safe.
+    if (!is_available())
         return;
     initialized_ = true;
 
@@ -144,9 +186,21 @@ void KLineChartWidget::ensure_web_view() {
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
 
     connect(web_view_, &QWebEngineView::loadFinished, this, &KLineChartWidget::on_load_finished);
+    // A dead renderer never reports loadFinished(true); without this the page
+    // stays blank forever and every set_candles() sits in pending_js_ (#411).
+    connect(web_view_->page(), &QWebEnginePage::renderProcessTerminated, this,
+            [this](QWebEnginePage::RenderProcessTerminationStatus status, int exit_code) {
+                if (status == QWebEnginePage::NormalTerminationStatus)
+                    return;
+                fail_runtime(QStringLiteral("renderer process %1 (exit code 0x%2)")
+                                 .arg(kline_termination_status_name(status))
+                                 .arg(static_cast<quint32>(exit_code), 8, 16, QLatin1Char('0')));
+            });
 
-    const QString html_path =
-        QCoreApplication::applicationDirPath() + QStringLiteral("/resources/charts/klinechart.html");
+    // Resolved across every shipped layout — on the macOS bundle the page lives
+    // in Contents/Resources/, not beside the binary, and a missing page meant a
+    // permanently blank chart there.
+    const QString html_path = AppPaths::bundled_resource(QStringLiteral("charts/klinechart.html"));
     QUrl url = QUrl::fromLocalFile(html_path);
     url.setQuery(QStringLiteral("v=%1").arg(QDateTime::currentMSecsSinceEpoch())); // cache-bust
     web_view_->load(url);
@@ -156,16 +210,60 @@ void KLineChartWidget::ensure_web_view() {
 }
 
 void KLineChartWidget::on_load_finished(bool ok) {
-    if (!ok)
+    if (failed_)
         return;
+    if (!ok) {
+        // We load exactly one local page, so a failed load means the chart can
+        // never come up (missing klinechart.html or a renderer that died while
+        // loading). A late failure on an already-working page is left alone.
+        if (!page_ready_)
+            fail_runtime(QStringLiteral("chart page failed to load"));
+        return;
+    }
     page_ready_ = true;
     flush_pending();
     install_chart_event_filter(); // render widget exists by now
     emit chart_ready();
 }
 
+void KLineChartWidget::fail_runtime(const QString& reason) {
+    if (failed_)
+        return;
+    failed_ = true;
+    const bool was_ready = page_ready_;
+    page_ready_ = false;
+    pending_js_.clear();
+
+#ifdef HAS_QT_WEBENGINE
+    // A renderer that dies before the page ever loaded is a broken runtime, not
+    // a one-off crash — stop later charts from trying WebEngine at all.
+    if (!was_ready)
+        g_kline_renderer_broken = true;
+    if (web_view_) {
+        // We may be inside one of the view's own signals — never delete it here.
+        web_view_->hide();
+        web_view_->deleteLater();
+        web_view_ = nullptr;
+    }
+#endif
+
+    LOG_ERROR("KLineChart", QStringLiteral("Qt WebEngine chart failed: %1 (%2) — falling back to the native chart")
+                                .arg(reason, was_ready ? QStringLiteral("after the page loaded")
+                                                       : QStringLiteral("before the page loaded")));
+
+    // Queued: hosts typically deleteLater() this widget in response, and we may
+    // still be on the Chromium callback stack.
+    QPointer<KLineChartWidget> self = this;
+    QTimer::singleShot(0, this, [self] {
+        if (self)
+            emit self->runtime_failed();
+    });
+}
+
 void KLineChartWidget::run_js(const QString& js) {
 #ifdef HAS_QT_WEBENGINE
+    if (failed_)
+        return; // the view is gone; the host is switching to its native chart
     if (!page_ready_) {
         // The page may never become ready (load failed / runtime missing) while
         // callers keep pushing candles; bound the backlog instead of growing

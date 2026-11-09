@@ -1,7 +1,7 @@
 // src/screens/ai_quant_lab/QuantModulePanel_AdvancedDisplays_Models.cpp
 //
 // ADVANCED-category renderers for the model-training family: advanced_models
-// (list/create/train/predict/info), feature_engineering (per-indicator,
+// (train_model), feature_engineering (per-indicator,
 // select_features_by_ic, evaluate_expression), and portfolio_opt (BL, HRP,
 // MinVar, MaxSharpe, EF).
 //
@@ -26,7 +26,6 @@
 #include <QLabel>
 #include <QList>
 #include <QPair>
-#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QTableWidget>
@@ -56,81 +55,6 @@ void QuantModulePanel::display_advanced_models_result(const QString& command, co
     QString header_text = command.toUpper();
     header_text.replace('_', ' ');
     results_layout_->addWidget(gs_section_header(header_text, accent));
-
-    if (command == "list_available") {
-        const auto models = payload.value("models").toArray();
-        const bool torch = payload.value("torch_available").toBool();
-        const bool qlib = payload.value("qlib_available").toBool();
-        QSet<QString> categories;
-        for (const auto& m : models)
-            categories.insert(m.toObject().value("category").toString());
-        QList<QWidget*> top = {
-            gs_make_card(tr("MODELS"), QString::number(models.size()), this, ui::colors::POSITIVE()),
-            gs_make_card(tr("PYTORCH"), torch ? tr("AVAILABLE") : tr("MISSING"), this,
-                         torch ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("QLIB"), qlib ? tr("AVAILABLE") : tr("MISSING"), this,
-                         qlib ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("CATEGORIES"), QString::number(categories.size()), this),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-
-        if (!models.isEmpty()) {
-            auto* table = new QTableWidget(models.size(), 4, this);
-            table->setHorizontalHeaderLabels({tr("ID"), tr("Name"), tr("Category"), tr("Available")});
-            table->verticalHeader()->setVisible(false);
-            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-            table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(models.size() * 26 + 32, 360));
-            for (int i = 0; i < models.size(); ++i) {
-                const auto m = models[i].toObject();
-                table->setItem(i, 0, new QTableWidgetItem(m.value("id").toString().toUpper()));
-                table->setItem(i, 1, new QTableWidgetItem(m.value("name").toString()));
-                table->setItem(i, 2, new QTableWidgetItem(m.value("category").toString()));
-                const bool avail = m.value("available").toBool();
-                auto* a = new QTableWidgetItem(avail ? tr("YES") : tr("NO"));
-                a->setForeground(QColor(avail ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()));
-                a->setTextAlignment(Qt::AlignCenter);
-                table->setItem(i, 3, a);
-                table->setRowHeight(i, 26);
-            }
-            results_layout_->addWidget(table);
-        }
-        status_label_->setText(tr("%1 advanced model(s) available").arg(models.size()));
-        return;
-    }
-
-    if (command == "create_model") {
-        const auto cfg = payload.value("config").toObject();
-        QList<QWidget*> top = {
-            gs_make_card(tr("MODEL ID"), payload.value("model_id").toString(), this, ui::colors::POSITIVE()),
-            gs_make_card(tr("TYPE"), payload.value("model_type").toString().toUpper(), this),
-            gs_make_card(tr("CONFIG KEYS"), QString::number(cfg.size()), this),
-            gs_make_card(tr("STATUS"), tr("CREATED"), this, ui::colors::POSITIVE()),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-
-        if (!cfg.isEmpty()) {
-            auto* table = new QTableWidget(cfg.size(), 2, this);
-            table->setHorizontalHeaderLabels({tr("Hyperparameter"), tr("Value")});
-            table->verticalHeader()->setVisible(false);
-            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-            table->setStyleSheet(table_ss());
-            table->setMaximumHeight(qMin(cfg.size() * 24 + 32, 240));
-            int r = 0;
-            for (auto it = cfg.begin(); it != cfg.end(); ++it, ++r) {
-                table->setItem(r, 0, new QTableWidgetItem(it.key().toUpper()));
-                auto* vi = new QTableWidgetItem(format_val(it.value()));
-                vi->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                table->setItem(r, 1, vi);
-                table->setRowHeight(r, 24);
-            }
-            results_layout_->addWidget(table);
-        }
-        status_label_->setText(payload.value("message").toString(tr("Model created")));
-        return;
-    }
 
     if (command == "train_model") {
         const double final_loss = payload.value("final_loss").toDouble();
@@ -178,99 +102,6 @@ void QuantModulePanel::display_advanced_models_result(const QString& command, co
         return;
     }
 
-    if (command == "predict") {
-        const auto preds = payload.value("predictions").toArray();
-        double mean = 0.0, mn = std::numeric_limits<double>::infinity(), mx = -std::numeric_limits<double>::infinity();
-        for (const auto& v : preds) {
-            const double d = v.toDouble();
-            mean += d;
-            mn = std::min(mn, d);
-            mx = std::max(mx, d);
-        }
-        if (!preds.isEmpty())
-            mean /= preds.size();
-        QList<QWidget*> top = {
-            gs_make_card(tr("MODEL ID"), payload.value("model_id").toString(), this),
-            gs_make_card(tr("PREDICTIONS"), QString::number(preds.size()), this, ui::colors::POSITIVE()),
-            gs_make_card(tr("MEAN"), QString::number(mean, 'f', 6), this, gs_pos_neg_color(mean)),
-            gs_make_card(tr("RANGE"), preds.isEmpty() ? "—" : QString("[%1, %2]").arg(mn, 0, 'f', 4).arg(mx, 0, 'f', 4),
-                         this),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-
-        // Show first/middle/last 12 predictions
-        if (!preds.isEmpty()) {
-            const int rows = std::min<int>(12, preds.size());
-            const int step = std::max<int>(1, preds.size() / rows);
-            auto* table = new QTableWidget(rows, 2, this);
-            table->setHorizontalHeaderLabels({tr("Index"), tr("Prediction")});
-            table->verticalHeader()->setVisible(false);
-            table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-            table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-            table->setStyleSheet(table_ss());
-            table->setMaximumHeight(rows * 22 + 32);
-            for (int i = 0, r = 0; i < preds.size() && r < rows; i += step, ++r) {
-                table->setItem(r, 0, new QTableWidgetItem(QString::number(i)));
-                const double v = preds[i].toDouble();
-                auto* it = new QTableWidgetItem(QString::number(v, 'f', 6));
-                it->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                it->setForeground(QColor(gs_pos_neg_color(v)));
-                table->setItem(r, 1, it);
-                table->setRowHeight(r, 22);
-            }
-            results_layout_->addWidget(table);
-        }
-        status_label_->setText(tr("%1 predictions").arg(preds.size()));
-        return;
-    }
-
-    if (command == "info" || command == "list_models") {
-        // info: single model; list_models: array of summaries
-        if (command == "info") {
-            QList<QWidget*> top = {
-                gs_make_card(tr("MODEL ID"), payload.value("model_id").toString(), this),
-                gs_make_card(tr("TYPE"), payload.value("model_type").toString().toUpper(), this),
-                gs_make_card(tr("TRAINED"), payload.value("trained").toBool() ? tr("YES") : tr("NO"), this,
-                             payload.value("trained").toBool() ? ui::colors::POSITIVE() : ui::colors::WARNING()),
-                gs_make_card(tr("EPOCHS"), fmt_int_safe(payload.value("epochs_trained")), this),
-            };
-            results_layout_->addWidget(gs_card_row(top, this));
-            status_label_->setText(tr("Model info loaded"));
-        } else {
-            const auto models = payload.value("models").toArray();
-            QList<QWidget*> top = {
-                gs_make_card(tr("REGISTERED"), QString::number(models.size()), this, ui::colors::POSITIVE()),
-            };
-            results_layout_->addWidget(gs_card_row(top, this));
-            if (!models.isEmpty()) {
-                auto* table = new QTableWidget(models.size(), 5, this);
-                table->setHorizontalHeaderLabels(
-                    {tr("Model ID"), tr("Type"), tr("Trained"), tr("Epochs"), tr("Created")});
-                table->verticalHeader()->setVisible(false);
-                table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-                table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-                table->setStyleSheet(table_ss());
-                table->setMaximumHeight(qMin(models.size() * 26 + 32, 360));
-                for (int i = 0; i < models.size(); ++i) {
-                    const auto m = models[i].toObject();
-                    table->setItem(i, 0, new QTableWidgetItem(m.value("model_id").toString()));
-                    table->setItem(i, 1, new QTableWidgetItem(m.value("type").toString().toUpper()));
-                    const bool is_tr = m.value("trained").toBool();
-                    auto* t = new QTableWidgetItem(is_tr ? tr("YES") : tr("NO"));
-                    t->setForeground(QColor(is_tr ? ui::colors::POSITIVE() : ui::colors::WARNING()));
-                    t->setTextAlignment(Qt::AlignCenter);
-                    table->setItem(i, 2, t);
-                    table->setItem(i, 3, new QTableWidgetItem(QString::number(m.value("epochs_trained").toInt())));
-                    table->setItem(i, 4, new QTableWidgetItem(m.value("created_at").toString()));
-                    table->setRowHeight(i, 26);
-                }
-                results_layout_->addWidget(table);
-            }
-            status_label_->setText(tr("%1 trained model(s)").arg(models.size()));
-        }
-        return;
-    }
-
     display_result(payload);
 }
 
@@ -286,31 +117,6 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
     QString header_text = command.toUpper();
     header_text.replace('_', ' ');
     results_layout_->addWidget(gs_section_header(header_text, accent));
-
-    // ── check_status ─────────────────────────────────────────────────────────
-    if (command == "check_status") {
-        const bool pd = payload.value("pandas_available").toBool();
-        const auto inds = payload.value("indicators_available").toArray();
-        QList<QWidget*> top = {
-            gs_make_card(tr("PANDAS"), pd ? tr("AVAILABLE") : tr("MISSING"), this,
-                         pd ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("INDICATORS"), QString::number(inds.size()), this, ui::colors::POSITIVE()),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-        if (!inds.isEmpty()) {
-            QStringList lst;
-            for (const auto& v : inds)
-                lst << v.toString();
-            auto* lbl = new QLabel(tr("Available: %1").arg(lst.join(", ")));
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(QString("color:%1; font-family:'Courier New'; font-size:10px;"
-                                       "padding:6px 10px; background:%2; border-left:3px solid %3;")
-                                   .arg(ui::colors::TEXT_PRIMARY(), ui::colors::BG_SURFACE(), accent));
-            results_layout_->addWidget(lbl);
-        }
-        status_label_->setText(tr("Feature engineering ready"));
-        return;
-    }
 
     // ── select_features_by_ic ────────────────────────────────────────────────
     if (command == "select_features_by_ic") {
@@ -347,7 +153,7 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
         return;
     }
 
-    // ── Multi-series indicators (MACD, Bollinger, Stochastic) ────────────────
+    // ── Multi-series indicators (MACD, Bollinger) ────────────────────────────
     auto render_multi_series = [this](const QStringList& keys, const QJsonObject& payload) {
         QList<QWidget*> stats;
         QHash<QString, QJsonArray> series;
@@ -412,11 +218,6 @@ void QuantModulePanel::display_feature_engineering_result(const QString& command
     if (command == "bollinger_bands") {
         render_multi_series({"upper", "middle", "lower"}, payload);
         status_label_->setText(tr("Bollinger bands computed"));
-        return;
-    }
-    if (command == "stochastic_oscillator") {
-        render_multi_series({"k", "d"}, payload);
-        status_label_->setText(tr("Stochastic oscillator computed"));
         return;
     }
 
@@ -485,19 +286,6 @@ void QuantModulePanel::display_portfolio_opt_result(const QString& command, cons
     QString header_text = (method.isEmpty() ? command : method).toUpper();
     header_text.replace('_', ' ');
     results_layout_->addWidget(gs_section_header(header_text, accent));
-
-    if (command == "check_status") {
-        const bool sp = payload.value("scipy_available").toBool();
-        const auto methods = payload.value("methods_available").toArray();
-        QList<QWidget*> top = {
-            gs_make_card(tr("SCIPY"), sp ? tr("AVAILABLE") : tr("MISSING"), this,
-                         sp ? ui::colors::POSITIVE() : ui::colors::NEGATIVE()),
-            gs_make_card(tr("METHODS"), QString::number(methods.size()), this, ui::colors::POSITIVE()),
-        };
-        results_layout_->addWidget(gs_card_row(top, this));
-        status_label_->setText(tr("Portfolio optimization ready"));
-        return;
-    }
 
     // Efficient frontier — special case: array of {return, volatility, sharpe, weights}
     if (command == "efficient_frontier") {

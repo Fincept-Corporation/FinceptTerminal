@@ -125,14 +125,6 @@ void AIQuantLabService::run_python_cached(const QString& script, const QStringLi
 
 // ── Generic module execution ─────────────────────────────────────────────────
 void AIQuantLabService::run_module(const QString& module_id, const QString& command, const QJsonObject& params) {
-    // "deep_agent" spans two implementations (LangGraph deep agent + RD-Agent),
-    // neither of which is "<script> <command> <json>": route explicitly. The
-    // generic path below sent execute_task to rdagents/cli.py, which has no such
-    // command, so quant_deep_agent_execute could never work.
-    if (module_id == QLatin1String("deep_agent")) {
-        run_deep_agent_command(command, params);
-        return;
-    }
     auto it = script_map_.find(module_id);
     if (it == script_map_.end()) {
         emit error_occurred(module_id, "Unknown module: " + module_id);
@@ -142,57 +134,12 @@ void AIQuantLabService::run_module(const QString& module_id, const QString& comm
     run_python(*it, {command, json}, module_id, command);
 }
 
-void AIQuantLabService::run_deep_agent_command(const QString& command, const QJsonObject& params) {
-    const QString task_id = params.value(QStringLiteral("task_id")).toString();
-    if (command == QLatin1String("execute_task"))
-        run_deep_agent(params);
-    else if (command == QLatin1String("check_status"))
-        rd_agent_check_status();
-    else if (command == QLatin1String("start_factor_mining"))
-        rd_agent_start_factor_mining(params);
-    else if (command == QLatin1String("start_model_optimization"))
-        rd_agent_start_model_optimization(params);
-    else if (command == QLatin1String("start_quant_research"))
-        rd_agent_start_quant_research(params);
-    else if (command == QLatin1String("get_task_status"))
-        rd_agent_get_task_status(task_id);
-    else if (command == QLatin1String("get_discovered_factors"))
-        rd_agent_get_discovered_factors(task_id);
-    else if (command == QLatin1String("get_optimized_model"))
-        rd_agent_get_optimized_model(task_id);
-    else if (command == QLatin1String("list_tasks"))
-        rd_agent_list_tasks(params.value(QStringLiteral("status")).toString());
-    else if (command == QLatin1String("stop_task"))
-        rd_agent_stop_task(task_id);
-    else if (command == QLatin1String("resume_task"))
-        rd_agent_resume_task(task_id, params.value(QStringLiteral("config")).toObject());
-    else if (command == QLatin1String("start_ui"))
-        rd_agent_start_ui();
-    else if (command == QLatin1String("start_mcp_server"))
-        rd_agent_start_mcp_server(params.value(QStringLiteral("port")).toInt(18765));
-    else if (command == QLatin1String("mcp_status"))
-        rd_agent_mcp_status();
-    else {
-        // Queued like every other result so a caller that connects after
-        // calling still hears it.
-        QPointer<AIQuantLabService> self = this;
-        QMetaObject::invokeMethod(
-            this,
-            [self, command]() {
-                if (self)
-                    emit self->error_occurred(QStringLiteral("deep_agent"),
-                                              QStringLiteral("Unknown deep_agent command: ") + command);
-            },
-            Qt::QueuedConnection);
-    }
-}
-
 QJsonObject AIQuantLabService::agent_llm_config(const QJsonObject& params) const {
     const QJsonObject given = params.value(QStringLiteral("config")).toObject();
     if (!given.value(QStringLiteral("llm_provider")).toString().isEmpty())
         return given;
-    // MCP / LLM-originated calls carry no credentials (and must not): use the
-    // profile assigned to AI Quant Lab, same keys QuantModulePanel builds.
+    // No provider in the caller's block: use the profile assigned to AI Quant
+    // Lab, same keys QuantModulePanel builds.
     const ResolvedLlmProfile p = LlmProfileRepository::instance().resolve_for_context(QStringLiteral("ai_quant_lab"));
     if (p.provider.isEmpty())
         return {};
@@ -203,25 +150,8 @@ QJsonObject AIQuantLabService::agent_llm_config(const QJsonObject& params) const
 }
 
 // ── Qlib core ────────────────────────────────────────────────────────────────
-void AIQuantLabService::list_models() {
-    run_python_cached("ai_quant_lab/qlib_service.py", {"list_models"}, "model_library", "list_models", kListTtlSec);
-}
-
-void AIQuantLabService::get_factor_library() {
-    run_python_cached("ai_quant_lab/qlib_service.py", {"get_factor_library"}, "factor_discovery", "get_factor_library",
-                      kListTtlSec);
-}
-
-void AIQuantLabService::train_model(const QJsonObject& params) {
-    run_module("model_library", "train_model", params);
-}
-
 void AIQuantLabService::run_backtest(const QJsonObject& params) {
     run_module("backtesting", "run_backtest", params);
-}
-
-void AIQuantLabService::optimize_portfolio(const QJsonObject& params) {
-    run_module("backtesting", "optimize_portfolio", params);
 }
 
 // ── RL Trading ───────────────────────────────────────────────────────────────
@@ -309,10 +239,6 @@ void AIQuantLabService::train_rl_agent(const QJsonObject& params) {
     python::PythonRunner::instance().run("ai_quant_lab/qlib_rl.py", {"train", json}, on_finished, on_line);
 }
 
-void AIQuantLabService::evaluate_rl_agent(const QJsonObject& params) {
-    run_module("rl_trading", "evaluate", params);
-}
-
 // ── GS Quant ─────────────────────────────────────────────────────────────────
 void AIQuantLabService::gs_risk_metrics(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
@@ -355,10 +281,6 @@ namespace {
 constexpr const char* kFunctimeScript = "Analytics/functime_wrapper/functime_service.py";
 } // namespace
 
-void AIQuantLabService::functime_check_status() {
-    run_python(kFunctimeScript, {"check_status", "{}"}, "functime", "check_status");
-}
-
 void AIQuantLabService::functime_forecast(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     run_python(kFunctimeScript, {"forecast", json}, "functime", "forecast");
@@ -393,10 +315,6 @@ void AIQuantLabService::functime_stationarity(const QJsonObject& params) {
 namespace {
 constexpr const char* kStatsmodelsScript = "Analytics/statsmodels_wrapper/statsmodels_service.py";
 } // namespace
-
-void AIQuantLabService::sm_check_status() {
-    run_python(kStatsmodelsScript, {"check_status", "{}"}, "statsmodels", "check_status");
-}
 
 void AIQuantLabService::sm_ols(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
@@ -433,10 +351,6 @@ namespace {
 constexpr const char* kFortitudoScript = "Analytics/fortitudo_tech_wrapper/fortitudo_service.py";
 } // namespace
 
-void AIQuantLabService::fort_check_status() {
-    run_python(kFortitudoScript, {"check_status", "{}"}, "fortitudo", "check_status");
-}
-
 void AIQuantLabService::fort_portfolio_metrics(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     run_python(kFortitudoScript, {"portfolio_metrics", json}, "fortitudo", "portfolio_metrics");
@@ -472,10 +386,6 @@ namespace {
 constexpr const char* kGluonTsScript = "Analytics/gluonts_wrapper/gluonts_service.py";
 } // namespace
 
-void AIQuantLabService::gluon_check_status() {
-    run_python(kGluonTsScript, {"check_status", "{}"}, "gluonts", "check_status");
-}
-
 void AIQuantLabService::gluon_probabilistic_forecast(const QJsonObject& params) {
     auto json = QJsonDocument(params).toJson(QJsonDocument::Compact);
     run_python(kGluonTsScript, {"probabilistic_forecast", json}, "gluonts", "probabilistic_forecast");
@@ -501,45 +411,7 @@ void AIQuantLabService::gluon_seasonal_naive(const QJsonObject& params) {
     run_python(kGluonTsScript, {"seasonal_naive", json}, "gluonts", "seasonal_naive");
 }
 
-// ── CFA Quant ────────────────────────────────────────────────────────────────
-void AIQuantLabService::cfa_trend_analysis(const QJsonObject& params) {
-    run_module("cfa_quant", "trend_analysis", params);
-}
-
-void AIQuantLabService::cfa_stationarity_test(const QJsonObject& params) {
-    run_module("cfa_quant", "stationarity_test", params);
-}
-
-void AIQuantLabService::cfa_arima(const QJsonObject& params) {
-    run_module("cfa_quant", "arima_model", params);
-}
-
-void AIQuantLabService::cfa_ml_prediction(const QJsonObject& params) {
-    run_module("cfa_quant", "supervised_learning", params);
-}
-
-void AIQuantLabService::cfa_pattern_discovery(const QJsonObject& params) {
-    run_module("cfa_quant", "unsupervised_learning", params);
-}
-
-void AIQuantLabService::cfa_bootstrap(const QJsonObject& params) {
-    run_module("cfa_quant", "resampling_methods", params);
-}
-
-void AIQuantLabService::cfa_data_quality(const QJsonObject& params) {
-    run_module("cfa_quant", "validate_data", params);
-}
-
 // ── Advanced Models ──────────────────────────────────────────────────────────
-void AIQuantLabService::list_advanced_models() {
-    run_python_cached("ai_quant_lab/qlib_advanced_models.py", {"list_models"}, "advanced_models", "list_models",
-                      kListTtlSec);
-}
-
-void AIQuantLabService::create_advanced_model(const QJsonObject& params) {
-    run_module("advanced_models", "create_model", params);
-}
-
 void AIQuantLabService::train_advanced_model(const QJsonObject& params) {
     run_module("advanced_models", "train_model", params);
 }
@@ -720,7 +592,7 @@ void AIQuantLabService::run_deep_agent(const QJsonObject& params) {
     if (params.contains("thread_id"))
         payload["thread_id"] = params["thread_id"];
     // deepagents/cli.py hands `config` to create_model(); an empty block means
-    // "no provider" — resolve it here for callers that have none (MCP tools).
+    // "no provider" — resolve it here for a caller that sent none.
     payload["config"] = agent_llm_config(params);
 
     // SECURITY: the payload carries the LLM API key. It used to be an argv JSON
@@ -1204,15 +1076,6 @@ void AIQuantLabService::strategy_portfolio_metrics(const QJsonObject& params) {
     run_module("strategy_builder", "portfolio_metrics", params);
 }
 
-void AIQuantLabService::strategy_list() {
-    auto it = script_map_.find("strategy_builder");
-    if (it == script_map_.end()) {
-        emit error_occurred("strategy_builder", "Unknown module");
-        return;
-    }
-    run_python_cached(*it, {"list_strategies", "{}"}, "strategy_builder", "list_strategies", kListTtlSec);
-}
-
 // ── Data Processors ───────────────────────────────────────────────────────────
 void AIQuantLabService::dataproc_list_processors() {
     auto it = script_map_.find("data_processors");
@@ -1232,10 +1095,6 @@ void AIQuantLabService::dataproc_process_data(const QJsonObject& params) {
 }
 
 // ── Quant Reporting ───────────────────────────────────────────────────────────
-void AIQuantLabService::reporting_check_status() {
-    run_module("quant_reporting", "check_status", {});
-}
-
 void AIQuantLabService::reporting_ic_analysis(const QJsonObject& params) {
     run_module("quant_reporting", "ic_analysis", params);
 }

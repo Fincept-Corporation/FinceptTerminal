@@ -1996,14 +1996,6 @@ Mercati, azioni, portafoglio, approfondimenti macro.</translation>
         <translation>L'uso in rete è considerato distribuzione</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>LICENZA COMMERCIALE</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Necessaria per la distribuzione commerciale</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>Nessuna condivisione del codice sorgente richiesta</translation>
     </message>
@@ -2050,18 +2042,6 @@ Mercati, azioni, portafoglio, approfondimenti macro.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Licenza (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Licenza commerciale</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Politica sui marchi</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>CLA del contributore</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32211,10 +32191,6 @@ Crea un ticket reale e il nostro team risponderà entro 24 ore.</translation>
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Copyright 2024-2026 Fincept Corporation. Tutti i diritti riservati.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Questo software è concesso in licenza con AGPL-3.0-or-later per l'uso open source, con una licenza commerciale separata disponibile per il deployment aziendale.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

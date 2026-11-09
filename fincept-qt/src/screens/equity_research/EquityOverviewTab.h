@@ -100,6 +100,9 @@ class EquityOverviewTab : public QWidget {
     QWidget* build_financial_health_panel();
 
     void rebuild_chart(const QVector<services::equity::Candle>& candles);
+    /// KLineChart's WebEngine renderer died (#411) — replace it in place with the
+    /// QPainter canvas and replay the cached candles.
+    void swap_kline_for_native_chart();
     void switch_period(QPushButton* btn, const QString& period);
 
     static QString fmt_pct(double v);

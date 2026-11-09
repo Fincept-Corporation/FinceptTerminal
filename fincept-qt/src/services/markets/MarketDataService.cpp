@@ -45,9 +45,8 @@ int MarketDataService::max_requests_per_sec() const {
 void MarketDataService::refresh(const QStringList& topics) {
     // Hub guarantees `topics` all match one of our patterns. We bundle ALL
     // three families into a single `yfinance_data.py batch_all` invocation so
-    // one refresh tick spawns one Python process instead of three. Individual
-    // fetch_quotes/fetch_sparklines/fetch_history callback APIs remain untouched
-    // — they're still used by report builder and other one-shot paths.
+    // one refresh tick spawns one Python process instead of three. History and
+    // sparklines are hub-only; fetch_quotes keeps a callback API for one-shot reads.
     static const QString kQuote = QStringLiteral("market:quote:");
     static const QString kSpark = QStringLiteral("market:sparkline:");
     static const QString kHist = QStringLiteral("market:history:");
@@ -500,28 +499,6 @@ void MarketDataService::flush_batch() {
         });
 }
 
-// ── News fetch (unchanged) ──────────────────────────────────────────────────
-
-void MarketDataService::fetch_news(const QString& symbol, int count, NewsCallback cb) {
-    QStringList args;
-    args << "news" << symbol << QString::number(count);
-
-    python::PythonRunner::instance().run("yfinance_data.py", args, [cb](python::PythonResult result) {
-        if (!result.success) {
-            LOG_WARN("MarketData", "News fetch failed: " + result.error);
-            cb(false, {});
-            return;
-        }
-
-        auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-        if (doc.isObject() && doc.object().contains("articles")) {
-            cb(true, doc.object()["articles"].toArray());
-        } else {
-            cb(false, {});
-        }
-    });
-}
-
 // ── Info fetch (company fundamentals) ───────────────────────────────────────
 
 void MarketDataService::fetch_info(const QString& symbol, InfoCallback cb) {
@@ -615,45 +592,6 @@ void MarketDataService::fetch_info(const QString& symbol, InfoCallback cb) {
                                              shared->ratios_ok = true;
                                              try_complete();
                                          });
-}
-
-// ── History fetch (OHLCV) ────────────────────────────────────────────────────
-
-void MarketDataService::fetch_history(const QString& symbol, const QString& period, const QString& interval,
-                                      HistoryCallback cb) {
-    QStringList args;
-    args << "historical_period" << symbol << period << interval;
-
-    python::PythonRunner::instance().run("yfinance_data.py", args, [cb, symbol](python::PythonResult result) {
-        if (!result.success) {
-            LOG_WARN("MarketData", "History fetch failed for " + symbol + ": " + result.error);
-            cb(false, {});
-            return;
-        }
-
-        auto doc = QJsonDocument::fromJson(result.output.toUtf8());
-        if (!doc.isArray()) {
-            LOG_WARN("MarketData", "History parse error for " + symbol);
-            cb(false, {});
-            return;
-        }
-
-        QVector<HistoryPoint> history;
-        for (const auto& v : doc.array()) {
-            QJsonObject o = v.toObject();
-            HistoryPoint pt;
-            pt.timestamp = static_cast<qint64>(o["timestamp"].toDouble());
-            pt.open = o["open"].toDouble();
-            pt.high = o["high"].toDouble();
-            pt.low = o["low"].toDouble();
-            pt.close = o["close"].toDouble();
-            pt.volume = static_cast<qint64>(o["volume"].toDouble());
-            history.append(pt);
-        }
-
-        LOG_INFO("MarketData", QString("Fetched %1 history points for %2").arg(history.size()).arg(symbol));
-        cb(true, history);
-    });
 }
 
 // ── Static symbol lists ─────────────────────────────────────────────────────
@@ -750,40 +688,6 @@ QVector<RegionalMarket> MarketDataService::default_regional_markets() {
              {"MA", "Mastercard Inc"},
          }},
     };
-}
-
-void MarketDataService::fetch_sparklines(const QStringList& symbols, SparklineCallback cb) {
-    if (symbols.isEmpty()) {
-        cb(false, {});
-        return;
-    }
-
-    // Use existing yfinance_data.py — batch_sparklines command takes symbols as args
-    QStringList args;
-    args << "batch_sparklines" << symbols;
-
-    python::PythonRunner::instance().run("yfinance_data.py", args, [cb](python::PythonResult result) {
-        if (!result.success || result.output.trimmed().isEmpty()) {
-            LOG_WARN("MarketData", "Sparklines failed: " + result.error.left(200));
-            cb(false, {});
-            return;
-        }
-        auto doc = QJsonDocument::fromJson(result.output.trimmed().toUtf8());
-        if (!doc.isObject()) {
-            cb(false, {});
-            return;
-        }
-        QHash<QString, QVector<double>> out;
-        const auto obj = doc.object();
-        for (auto it = obj.begin(); it != obj.end(); ++it) {
-            QVector<double> prices;
-            for (const auto& v : it.value().toArray())
-                prices.append(v.toDouble());
-            if (!prices.isEmpty())
-                out[it.key()] = prices;
-        }
-        cb(true, out);
-    });
 }
 
 // ── Display-name resolution ─────────────────────────────────────────────────

@@ -78,6 +78,10 @@ class EquityChartPanel : public QWidget {
 
   private:
     void build_kline_ui();
+    void build_fallback_ui();
+    // KLineChart's WebEngine renderer died (#411) — tear it down and switch to
+    // the Qt-Charts fallback for the rest of this panel's life.
+    void swap_kline_for_fallback();
     void build_position_card();
     void refresh_position_card();
     void layout_position_card();
@@ -87,6 +91,7 @@ class EquityChartPanel : public QWidget {
 
     // ── KLine backend (WebEngine available) ──────────────────────────────────
     fincept::ui::KLineChartWidget* kline_ = nullptr;
+    QWidget* tf_bar_ = nullptr; // timeframe button row (KLine backend only)
     QPushButton* tf_buttons_[6] = {};
     int active_tf_ = 2; // "15m" — matches EquityChart's default
 

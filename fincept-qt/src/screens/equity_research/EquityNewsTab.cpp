@@ -1,7 +1,9 @@
 // src/screens/equity_research/EquityNewsTab.cpp
 #include "screens/equity_research/EquityNewsTab.h"
 
+#include "core/events/EventBus.h"
 #include "services/equity/EquityResearchService.h"
+#include "services/news/NewsService.h"
 #include "ui/theme/Theme.h"
 
 #include <QDesktopServices>
@@ -98,18 +100,26 @@ void EquityNewsTab::build_ui() {
     setObjectName(QStringLiteral("equityNewsTab"));
     // QWidget{} keeps the original all-children background; the named rules style the article cards that
     // populate() builds — they used to get six setStyleSheet() calls each, per refresh.
-    setStyleSheet(QString("QWidget { background:%1; }"
-                          "QFrame#newsCard { background:%2; border:1px solid %3; }"
-                          "QFrame#newsCard:hover { border-color:%4; background:%5; }"
-                          "QLabel#newsTitle { color:%6; font-size:12px; font-weight:700; background:transparent; border:0; }"
-                          "QLabel#newsPublisher { color:%7; font-size:10px; font-weight:700; background:transparent; border:0; }"
-                          "QLabel#newsDate { color:%8; font-size:10px; background:transparent; border:0; }"
-                          "QLabel#newsDesc { color:%9; font-size:10px; background:transparent; border:0; }"
-                          "QLabel#newsRead { color:%4; font-size:10px; font-weight:700; letter-spacing:1px;"
-                          " background:transparent; border:0; }")
-                      .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
-                           ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::CYAN(),
-                           ui::colors::TEXT_TERTIARY(), ui::colors::TEXT_SECONDARY()));
+    setStyleSheet(
+        QString("QWidget { background:%1; }"
+                "QFrame#newsCard { background:%2; border:1px solid %3; }"
+                "QFrame#newsCard:hover { border-color:%4; background:%5; }"
+                "QLabel#newsTitle { color:%6; font-size:12px; font-weight:700; background:transparent; border:0; }"
+                "QLabel#newsPublisher { color:%7; font-size:10px; font-weight:700; background:transparent; border:0; }"
+                "QLabel#newsDate { color:%8; font-size:10px; background:transparent; border:0; }"
+                "QLabel#newsDesc { color:%9; font-size:10px; background:transparent; border:0; }"
+                "QLabel#newsRead { color:%4; font-size:10px; font-weight:700; letter-spacing:1px;"
+                " background:transparent; border:0; }"
+                "QLabel#newsTone { font-size:10px; font-weight:700; padding:1px 6px; border:1px solid %8;"
+                " color:%8; background:transparent; }"
+                "QLabel#newsTone[tone=\"bull\"] { color:%10; border-color:%10; }"
+                "QLabel#newsTone[tone=\"bear\"] { color:%11; border-color:%11; }"
+                "QLabel#newsToneSummary { font-size:10px; font-weight:700; color:%9; background:transparent;"
+                " border:0; }")
+            .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
+                 ui::colors::BG_RAISED(), ui::colors::TEXT_PRIMARY(), ui::colors::CYAN(), ui::colors::TEXT_TERTIARY(),
+                 ui::colors::TEXT_SECONDARY())
+            .arg(ui::colors::POSITIVE(), ui::colors::NEGATIVE()));
     loading_overlay_ = new ui::LoadingOverlay(this);
     auto* vl = new QVBoxLayout(this);
     vl->setContentsMargins(0, 0, 0, 0);
@@ -139,7 +149,30 @@ void EquityNewsTab::build_ui() {
         QString("color:%1; font-size:10px; background:transparent; border:0;").arg("#22d3ee"));
     hl->addWidget(company_label_);
 
+    // Aggregate tone of the headlines on screen (same model as the Sentiment tab).
+    tone_label_ = new QLabel;
+    tone_label_->setObjectName(QStringLiteral("newsToneSummary"));
+    hl->addWidget(tone_label_);
+
     hl->addStretch();
+
+    // The research tab shows one provider's company-news search; the News screen
+    // aggregates every RSS feed — hand the symbol over for the wider view.
+    open_news_btn_ = new QPushButton(tr("OPEN IN NEWS ↗"));
+    open_news_btn_->setCursor(Qt::PointingHandCursor);
+    open_news_btn_->setToolTip(tr("Filter the News screen (all feeds) by this symbol"));
+    open_news_btn_->setStyleSheet(
+        QString("QPushButton { background:transparent; color:%1; border:1px solid %2; "
+                "padding:4px 10px; font-size:10px; font-weight:700; }"
+                "QPushButton:hover { border-color:%3; color:%3; }")
+            .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BORDER_DIM(), ui::colors::AMBER()));
+    connect(open_news_btn_, &QPushButton::clicked, this, [this]() {
+        if (current_symbol_.isEmpty())
+            return;
+        EventBus::instance().publish("nav.open_symbol",
+                                     {{"screen_id", QStringLiteral("news")}, {"symbol", current_symbol_}});
+    });
+    hl->addWidget(open_news_btn_);
 
     // ── Provider switch ─────────────────────────────────────────────────────────
     // "NewsAPI" stays disabled until a key is configured in the Data Sources tab.
@@ -211,6 +244,31 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
     status_label_->hide();
     count_label_->setText(tr("%1 articles").arg(articles.size()));
 
+    // Aggregate tone: counts and the mean score of the headlines on screen.
+    if (tone_label_) {
+        int bull = 0, bear = 0, flat = 0;
+        double sum = 0.0;
+        for (const auto& a : articles) {
+            sum += a.sentiment_score;
+            if (a.sentiment == QLatin1String("BULLISH"))
+                ++bull;
+            else if (a.sentiment == QLatin1String("BEARISH"))
+                ++bear;
+            else
+                ++flat;
+        }
+        const double mean = articles.isEmpty() ? 0.0 : sum / articles.size();
+        tone_label_->setText(articles.isEmpty() ? QString()
+                                                : tr("TONE %1%2   ▲%3  ▼%4  •%5")
+                                                      .arg(mean >= 0 ? "+" : "")
+                                                      .arg(QString::number(mean, 'f', 2))
+                                                      .arg(bull)
+                                                      .arg(bear)
+                                                      .arg(flat));
+        tone_label_->setToolTip(tr("Mean finance-tuned VADER score of the headlines below (-1 bearish … +1 bullish). "
+                                   "The Sentiment tab blends this with price momentum, weighting recent news more."));
+    }
+
     if (articles.isEmpty()) {
         status_label_->setText(tr("No news found for %1").arg(current_symbol_));
         status_label_->show();
@@ -243,11 +301,29 @@ void EquityNewsTab::populate(const QVector<services::equity::NewsArticle>& artic
         meta_hl->setSpacing(10);
         auto* pub_lbl = new QLabel(art.publisher.isEmpty() ? tr("Unknown Source") : art.publisher);
         pub_lbl->setObjectName(QStringLiteral("newsPublisher"));
-        auto* date_lbl = new QLabel(art.published_date.left(10));
+        // "2026-11-08 · 5h ago": the age matters more to a trader than the date.
+        const qint64 ts = services::equity::news_timestamp(art.published_date);
+        auto* date_lbl =
+            new QLabel(ts > 0 ? QStringLiteral("%1 · %2").arg(art.published_date.left(10), services::relative_time(ts))
+                              : art.published_date.left(10));
         date_lbl->setObjectName(QStringLiteral("newsDate"));
         meta_hl->addWidget(pub_lbl);
         meta_hl->addWidget(date_lbl);
         meta_hl->addStretch();
+        if (!art.sentiment.isEmpty()) {
+            auto* tone = new QLabel(QStringLiteral("%1 %2%3")
+                                        .arg(art.sentiment == QLatin1String("BULLISH")   ? tr("BULLISH")
+                                             : art.sentiment == QLatin1String("BEARISH") ? tr("BEARISH")
+                                                                                         : tr("NEUTRAL"))
+                                        .arg(art.sentiment_score >= 0 ? "+" : "")
+                                        .arg(QString::number(art.sentiment_score, 'f', 2)));
+            tone->setObjectName(QStringLiteral("newsTone"));
+            tone->setProperty("tone", art.sentiment == QLatin1String("BULLISH")   ? QStringLiteral("bull")
+                                      : art.sentiment == QLatin1String("BEARISH") ? QStringLiteral("bear")
+                                                                                  : QStringLiteral("flat"));
+            tone->setToolTip(tr("Headline tone (finance-tuned VADER), -1 bearish … +1 bullish"));
+            meta_hl->addWidget(tone);
+        }
         text_col->addLayout(meta_hl);
 
         top_hl->addLayout(text_col, 1);
@@ -330,6 +406,10 @@ void EquityNewsTab::retranslateUi() {
         title_lbl_->setText(tr("LATEST NEWS"));
     if (refresh_btn_)
         refresh_btn_->setText(tr("REFRESH"));
+    if (open_news_btn_) {
+        open_news_btn_->setText(tr("OPEN IN NEWS ↗"));
+        open_news_btn_->setToolTip(tr("Filter the News screen (all feeds) by this symbol"));
+    }
     if (provider_combo_) {
         provider_combo_->setItemText(0, tr("Auto (GNews → Yahoo)"));
         provider_combo_->setToolTip(tr("News source"));

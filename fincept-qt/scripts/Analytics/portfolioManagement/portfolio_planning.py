@@ -25,6 +25,10 @@ PARAMETERS:
   - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
   - max_weight: Maximum single asset weight (default: 0.10)
   - benchmark: Portfolio benchmark index (default: 'market_index')
+
+CLI: python portfolio_planning.py <command> <json>   retirement_planning {current_age, retirement_age,
+  current_savings, annual_contribution}; asset_allocation {age, risk_tolerance, time_horizon} (currently
+  fails: AssetAllocationFramework lacks _estimate_correlation_structure).
 """
 
 

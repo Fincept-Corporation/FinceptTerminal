@@ -134,7 +134,7 @@ QByteArray eip712_digest(const QByteArray& domain_separator, const QByteArray& s
 struct EcdsaSig {
     QByteArray r;           // 32 bytes
     QByteArray s;           // 32 bytes
-    uint8_t v;              // 27 or 28
+    uint8_t v = 0;          // 27 or 28 (0 = not signed)
     QString signer_address; // 0x<20-byte hex>
 };
 

@@ -251,23 +251,6 @@ void DatabentoService::run_script(const QStringList& args, std::function<void(bo
     });
 }
 
-// ── Test connection ─────────────────────────────────────────────────────────
-void DatabentoService::test_connection() {
-    emit fetch_started("Testing Databento connection...");
-    QPointer<DatabentoService> self = this;
-    run_script({"test_connection"}, [self](bool ok, const QJsonObject& j) {
-        if (!self)
-            return;
-        if (!ok) {
-            emit self->connection_tested(false, j["error"].toString());
-            return;
-        }
-        bool err = j["error"].toBool(false);
-        QString msg = j["message"].toString("Connected");
-        emit self->connection_tested(!err, msg);
-    });
-}
-
 // ── OHLCV fetch (correlation, PCA, drawdown, beta surfaces) ─────────────────
 void DatabentoService::fetch_ohlcv(const QStringList& symbols, int days) {
     emit fetch_started("Fetching OHLCV data for " + QString::number(symbols.size()) + " symbols...");
@@ -1046,58 +1029,6 @@ void DatabentoService::list_datasets(std::function<void(QStringList)> cb) {
                     out << id;
             }
             self->cached_datasets_ = out;
-        }
-        cb(out);
-    });
-}
-
-// ── Metadata: list schemas for a dataset ───────────────────────────────────
-void DatabentoService::list_schemas(const QString& dataset, std::function<void(QStringList)> cb) {
-    if (cached_schemas_.contains(dataset)) {
-        cb(cached_schemas_.value(dataset));
-        return;
-    }
-    QPointer<DatabentoService> self = this;
-    QString ds = dataset;
-    run_script({"list_schemas", "dataset", dataset}, [self, ds, cb](bool ok, const QJsonObject& j) {
-        QStringList out;
-        if (self && ok && !j["error"].toBool(false)) {
-            for (const auto& v : j["schemas"].toArray()) {
-                QString id = v.toObject()["id"].toString();
-                if (!id.isEmpty())
-                    out << id;
-            }
-            self->cached_schemas_[ds] = out;
-        }
-        cb(out);
-    });
-}
-
-// ── Metadata: list publishers (optionally filtered to one dataset) ─────────
-void DatabentoService::list_publishers(const QString& dataset, std::function<void(QList<DbPublisher>)> cb) {
-    QString cache_key = dataset.isEmpty() ? "*" : dataset;
-    if (cached_publishers_.contains(cache_key)) {
-        cb(cached_publishers_.value(cache_key));
-        return;
-    }
-    QPointer<DatabentoService> self = this;
-    QStringList args = {"list_publishers"};
-    if (!dataset.isEmpty()) {
-        args << "dataset" << dataset;
-    }
-    run_script(args, [self, cache_key, cb](bool ok, const QJsonObject& j) {
-        QList<DbPublisher> out;
-        if (self && ok && !j["error"].toBool(false)) {
-            for (const auto& v : j["publishers"].toArray()) {
-                QJsonObject o = v.toObject();
-                DbPublisher p;
-                p.publisher_id = o["publisher_id"].toInt();
-                p.dataset = o["dataset"].toString();
-                p.venue = o["venue"].toString();
-                p.description = o["description"].toString();
-                out.push_back(p);
-            }
-            self->cached_publishers_[cache_key] = out;
         }
         cb(out);
     });

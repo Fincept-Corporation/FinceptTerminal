@@ -71,6 +71,7 @@ SparklineStripWidget::SparklineStripWidget(const QJsonObject& cfg, QWidget* pare
     auto* vl = content_layout();
     vl->setContentsMargins(10, 8, 10, 8);
     vl->setSpacing(4);
+    enable_symbol_link(/*follows=*/false); // clicking a row feeds the link group
 
     // Title-bar refresh was not wired (a dead button under the watchdog's
     // "click refresh to retry"). Force past min_interval; rate limits apply.

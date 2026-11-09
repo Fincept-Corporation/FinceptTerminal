@@ -504,38 +504,6 @@ void GeopoliticsService::analyze_barrier_removal(const QJsonObject& params) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GEOLOCATION — Python
-// ═══════════════════════════════════════════════════════════════════════════════
-
-void GeopoliticsService::extract_geolocations(const QStringList& headlines) {
-    // news_geolocation.py reads article OBJECTS (article.get("headline")). A bare array of
-    // strings made every call fail with an AttributeError inside the script, so the
-    // geolocation tool never produced a result. "id" is the headline's index so the
-    // caller can map each geolocated_articles entry back to its headline.
-    QJsonArray articles;
-    for (int i = 0; i < headlines.size(); ++i) {
-        QJsonObject article;
-        article["id"] = QString::number(i);
-        article["headline"] = headlines[i];
-        article["summary"] = QString();
-        articles.append(article);
-    }
-    auto json = QJsonDocument(articles).toJson(QJsonDocument::Compact);
-    run_python("news_geolocation.py", {"extract_and_geocode", json}, "geolocation",
-               [this](bool ok, const QString& out) {
-                   if (!ok) {
-                       emit error_occurred("geolocation", out);
-                       return;
-                   }
-                   auto doc = QJsonDocument::fromJson(python::extract_json(out).toUtf8());
-                   const auto obj = doc.object();
-                   emit geolocation_ready(obj);
-                   if (hub_registered_)
-                       publish_to_hub(QStringLiteral("geopolitics:geolocation"), QVariant(obj));
-               });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // DATAHUB PRODUCER — geopolitics:*
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -551,7 +519,7 @@ QStringList GeopoliticsService::topic_patterns() const {
 
 void GeopoliticsService::refresh(const QStringList& topics) {
     // Hub-driven refresh for the lightweight reference endpoints. Anything
-    // parameterised (events:<filters>, hdx:*, trade:*, geolocation) is
+    // parameterised (events:<filters>, hdx:*, trade:*) is
     // user-invoked and not driven through the hub scheduler.
     for (const auto& topic : topics) {
         if (topic == QStringLiteral("geopolitics:events")) {
@@ -599,13 +567,12 @@ void GeopoliticsService::ensure_registered_with_hub() {
     hdx_policy.min_interval_ms = 60 * 1000;
     hub.set_policy_pattern(QStringLiteral("geopolitics:hdx:*"), hdx_policy);
 
-    // Trade analysis + geolocation — user-invoked, treat as push-only so the
-    // hub caches the most recent result without scheduling a refresh.
+    // Trade analysis — user-invoked, treat as push-only so the hub caches the
+    // most recent result without scheduling a refresh.
     fincept::datahub::TopicPolicy push_policy;
     push_policy.push_only = true;
     push_policy.ttl_ms = 15 * 60 * 1000;
     hub.set_policy_pattern(QStringLiteral("geopolitics:trade:*"), push_policy);
-    hub.set_policy_pattern(QStringLiteral("geopolitics:geolocation"), push_policy);
 
     hub_registered_ = true;
     LOG_INFO("GeopoliticsService", "Registered with DataHub (geopolitics:*)");

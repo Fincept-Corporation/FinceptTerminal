@@ -96,6 +96,8 @@ constexpr int kPsmVenvTimeoutMs = 5 * 60 * 1000;
 constexpr int kPsmFreezeTimeoutMs = 2 * 60 * 1000;
 constexpr int kPsmCompileTimeoutMs = 30 * 60 * 1000;
 constexpr int kPsmInstallTimeoutMs = 3 * 60 * 60 * 1000;
+constexpr int kPsmEssentialsTimeoutMs = 30 * 60 * 1000;
+constexpr int kPsmBytecodeTimeoutMs = 15 * 60 * 1000;
 constexpr int kPsmDownloadIdleTimeoutMs = 60 * 1000;
 constexpr int kPsmProxyProbeTimeoutMs = 8 * 1000;
 constexpr int kPsmProgressCoalesceMs = 150;
@@ -108,8 +110,13 @@ constexpr const char* kPsmReqCore = "requirements-numpy2-core.txt";
 constexpr const char* kPsmVenvTrading = "venv-numpy1";
 constexpr const char* kPsmVenvAnalytics = "venv-numpy2";
 
-/// Overall-progress weight per stage: Runtime, Trading, AnalyticsCore, AnalyticsFull.
-constexpr std::array<double, kSetupStageCount> kPsmStageWeights{10.0, 25.0, 15.0, 50.0};
+std::array<double, kSetupStageCount> psm_weights(SetupScope scope) {
+    const auto& w = scope == SetupScope::Full ? kSetupWeightsFull : kSetupWeightsEssentials;
+    std::array<double, kSetupStageCount> out{};
+    for (std::size_t i = 0; i < out.size(); ++i)
+        out[i] = static_cast<double>(w[i]);
+    return out;
+}
 
 constexpr std::size_t psm_idx(SetupStage s) {
     return static_cast<std::size_t>(s);
@@ -175,12 +182,26 @@ QString psm_marker_path(const QString& root, const QString& venv) {
 QString psm_core_marker_path(const QString& root) {
     return root + QLatin1Char('/') + QLatin1String(kPsmVenvAnalytics) + QStringLiteral("/.core_installed");
 }
+/// Written when the user opts into the full library set. Lives outside the
+/// venvs, so recreating a venv never forgets the choice.
+QString psm_full_flag_path(const QString& root) {
+    return root + QStringLiteral("/.full_libraries_requested");
+}
+
+/// Top-level module of an ImportError line ("No module named 'agno.agent'" → "agno").
+QString psm_missing_module_name(const QString& text) {
+    static const QRegularExpression kNoModule(QStringLiteral(R"(No module named ['"]?([A-Za-z0-9_.]+))"));
+    const QRegularExpressionMatch m = kNoModule.match(text);
+    if (!m.hasMatch())
+        return {};
+    return m.captured(1).section(QLatin1Char('.'), 0, 0);
+}
 
 QString psm_read_trimmed(const QString& path) {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly))
         return {};
-    return QString::fromUtf8(f.read(64 * 1024)).trimmed();
+    return QString::fromUtf8(f.read(qint64{64} * 1024)).trimmed();
 }
 
 bool psm_write_atomic(const QString& path, const QByteArray& content) {
@@ -599,6 +620,7 @@ struct PythonSetupManager::Run {
 
     quint64 generation = 0;
     qint64 started_ms = 0;
+    SetupScope scope = SetupScope::Essentials;
     bool cancelled = false;
     bool finished = false;
     bool did_work = false;
@@ -698,6 +720,16 @@ QString PythonSetupManager::lock_path(const QString& venv_name) const {
     return install_dir() + "/" + venv_name + "/requirements.lock";
 }
 
+QString PythonSetupManager::site_packages_path(const QString& venv_name) const {
+#ifdef _WIN32
+    return install_dir() + "/" + venv_name + "/Lib/site-packages";
+#else
+    // "3.11.9" → lib/python3.11/site-packages
+    const QString minor = QString::fromLatin1(kPythonVersion).section(QLatin1Char('.'), 0, 1);
+    return install_dir() + "/" + venv_name + "/lib/python" + minor + "/site-packages";
+#endif
+}
+
 bool PythonSetupManager::venv_valid(const QString& venv_name) const {
     if (!QFileInfo::exists(python_path(venv_name)))
         return false;
@@ -741,6 +773,10 @@ QString PythonSetupManager::requirement_name(const QString& spec) {
     static const QRegularExpression kName(QStringLiteral(R"(^\s*([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?))"));
     const QRegularExpressionMatch m = kName.match(spec);
     return m.hasMatch() ? m.captured(1) : QString();
+}
+
+QString PythonSetupManager::missing_module_name(const QString& error_text) {
+    return psm_missing_module_name(error_text);
 }
 
 QStringList PythonSetupManager::read_requirement_lines(const QString& path) {
@@ -940,17 +976,96 @@ SetupStatus PythonSetupManager::check_status() const {
     const bool legacy_marker = !marker2.isEmpty() && psm_parse_marker(marker2).isEmpty();
     st.core_ready = st.venv_numpy2_created && st.python_installed &&
                     (st.venv_numpy2_ready || same_python(marker2) || same_python(marker_core) || legacy_marker);
-    st.needs_setup = !st.core_ready;
-    st.needs_package_sync = st.core_ready && !(st.venv_numpy1_ready && st.venv_numpy2_ready);
 
-    LOG_INFO(kPsmTag, QString("check_status: uv=%1 python=%2 venv1=%3/%4 venv2=%5/%6 core=%7 legacy=%8 -> "
-                              "needs_setup=%9 needs_sync=%10")
-                          .arg(psm_yn(st.uv_installed), psm_yn(st.python_installed), psm_yn(st.venv_numpy1_created),
-                               psm_yn(st.venv_numpy1_ready), psm_yn(st.venv_numpy2_created),
-                               psm_yn(st.venv_numpy2_ready), psm_yn(st.core_ready), psm_yn(legacy_marker),
-                               psm_yn(st.needs_setup))
-                          .arg(psm_yn(st.needs_package_sync)));
+    // Current core: venv-numpy2 holds exactly this build's core set — or the
+    // whole current analytics set, which contains every core line.
+    const QString expected_core = expected_marker(QString::fromLatin1(kPsmReqCore));
+    st.core_current =
+        st.core_ready &&
+        (st.venv_numpy2_ready || (!marker_core.isEmpty() && (expected_core.isEmpty() || marker_core == expected_core)));
+    st.full_requested = is_full_requested();
+    st.full_ready = st.venv_numpy1_ready && st.venv_numpy2_ready;
+    st.needs_setup = !st.core_ready;
+    // Essentials-only installs keep just the core in sync; once the full set was
+    // requested (or an older full install exists) both environments stay complete.
+    st.needs_package_sync = st.core_ready && (st.full_requested ? !st.full_ready : !st.core_current);
+
+    core_ready_.store(st.core_ready);
+    full_installed_.store(st.full_ready);
+
+    LOG_INFO(kPsmTag,
+             QString("check_status: uv=%1 python=%2 venv1=%3/%4 venv2=%5/%6 core=%7/%8 legacy=%9 "
+                     "full_requested=%10 -> needs_setup=%11 needs_sync=%12")
+                 .arg(psm_yn(st.uv_installed), psm_yn(st.python_installed), psm_yn(st.venv_numpy1_created),
+                      psm_yn(st.venv_numpy1_ready), psm_yn(st.venv_numpy2_created), psm_yn(st.venv_numpy2_ready),
+                      psm_yn(st.core_ready), psm_yn(st.core_current), psm_yn(legacy_marker))
+                 .arg(psm_yn(st.full_requested), psm_yn(st.needs_setup), psm_yn(st.needs_package_sync)));
     return st;
+}
+
+bool PythonSetupManager::is_full_requested() const {
+    if (full_requested_session_.load())
+        return true;
+    const QString root = install_dir();
+    return QFileInfo::exists(psm_full_flag_path(root)) ||
+           // An install made before the essentials-first setup built the trading
+           // environment and/or completed the analytics set: keep syncing both.
+           QFileInfo::exists(root + QLatin1Char('/') + QLatin1String(kPsmVenvTrading) +
+                             QStringLiteral("/pyvenv.cfg")) ||
+           QFileInfo::exists(psm_marker_path(root, QString::fromLatin1(kPsmVenvAnalytics)));
+}
+
+void PythonSetupManager::request_full_install() {
+    if (QThread::currentThread() != thread()) {
+        QMetaObject::invokeMethod(this, [this]() { request_full_install(); }, Qt::QueuedConnection);
+        return;
+    }
+    const QString root = install_dir();
+    const QString flag = psm_full_flag_path(root);
+    if (!QFileInfo::exists(flag) && !(QDir().mkpath(root) && psm_write_atomic(flag, QByteArrayLiteral("requested\n"))))
+        LOG_WARN(kPsmTag, "Could not write the full-install flag — the request applies to this session only");
+    full_requested_session_.store(true);
+    LOG_INFO(kPsmTag, "Full library set requested — installing in the background");
+    set_background_mode();
+    run_setup(SetupScope::Full);
+}
+
+void PythonSetupManager::note_missing_module(const QString& module, const QString& script) {
+    if (module.isEmpty())
+        return;
+    {
+        QMutexLocker lock(&mutex_);
+        last_missing_module_ = module;
+        if (reported_modules_.contains(module))
+            return;
+        reported_modules_.insert(module);
+    }
+    LOG_INFO(
+        kPsmTag,
+        QString("Module '%1' (needed by %2) is not installed — offering the full library set").arg(module, script));
+    // Emitted from this object's thread so receivers' widgets are only touched there.
+    QMetaObject::invokeMethod(
+        this, [this, module, script]() { emit libraries_missing(module, script); }, Qt::QueuedConnection);
+}
+
+QString PythonSetupManager::last_missing_module() const {
+    QMutexLocker lock(&mutex_);
+    return last_missing_module_;
+}
+
+QString PythonSetupManager::explain_missing_module(const QString& error_text, const QString& feature) {
+    const QString module = psm_missing_module_name(error_text);
+    if (module.isEmpty() || full_installed_.load())
+        return error_text; // not a missing module, or a real error in a complete environment
+    // A run that will bring it is still going: the full set, or the essentials themselves.
+    if (running_.load() && (run_scope_.load() == static_cast<int>(SetupScope::Full) || !core_ready_.load()))
+        return tr("Analytics libraries are still installing (%1%). This feature will work when setup finishes.")
+            .arg(overall_percent_.load());
+    note_missing_module(module, feature);
+    return tr("This feature needs the Python library \"%1\", part of the optional full library set. Install it "
+              "from Settings → Python Env → INSTALL ALL LIBRARIES (or PYTHON LIBS in the status bar) — it installs "
+              "in the background while you keep working.")
+        .arg(module);
 }
 
 SetupSnapshot PythonSetupManager::snapshot() const {
@@ -992,10 +1107,10 @@ void PythonSetupManager::set_stage_fraction(SetupStage s, double fraction) {
     double sum = 0.0;
     double weights = 0.0;
     for (std::size_t i = 0; i < stage_fraction_.size(); ++i) {
-        sum += kPsmStageWeights[i] * stage_fraction_[i];
-        weights += kPsmStageWeights[i];
+        sum += stage_weights_[i] * stage_fraction_[i];
+        weights += stage_weights_[i];
     }
-    const int pct = static_cast<int>(std::floor(sum / weights * 100.0 + 1e-6));
+    const int pct = weights > 0.0 ? static_cast<int>(std::floor(sum / weights * 100.0 + 1e-6)) : 0;
     snapshot_.overall_percent = std::clamp(pct, 0, 100);
     overall_percent_.store(snapshot_.overall_percent);
 }
@@ -1319,42 +1434,57 @@ void PythonSetupManager::when_network_ready(std::function<void()> fn) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void PythonSetupManager::run_setup() {
+    run_setup(is_full_requested() ? SetupScope::Full : SetupScope::Essentials);
+}
+
+void PythonSetupManager::run_setup(SetupScope scope) {
     if (QThread::currentThread() != thread()) {
-        QMetaObject::invokeMethod(this, [this]() { run_setup(); }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, [this, scope]() { run_setup(scope); }, Qt::QueuedConnection);
         return;
     }
     if (running_.load()) {
-        LOG_INFO(kPsmTag, "run_setup ignored — a run is already in progress");
+        if (scope == SetupScope::Full && run_ && run_->scope != SetupScope::Full) {
+            pending_full_ = true;
+            LOG_INFO(kPsmTag, "Full install queued — it starts as soon as the running essentials setup ends");
+        } else {
+            LOG_INFO(kPsmTag, "run_setup ignored — a run is already in progress");
+        }
         return;
     }
+    pending_full_ = false;
+    const bool full = scope == SetupScope::Full;
 
     const SetupStatus st = check_status();
 
     run_ = std::make_unique<Run>();
     run_->generation = ++generation_;
     run_->started_ms = psm_now_ms();
+    run_->scope = scope;
     auto& trading = run_->lanes[0];
     trading.index = 0;
     trading.venv = QString::fromLatin1(kPsmVenvTrading);
     trading.req_file = QString::fromLatin1(kPsmReqTrading);
-    trading.active = !st.venv_numpy1_ready;
+    trading.active = full && !st.venv_numpy1_ready;
     auto& analytics = run_->lanes[1];
     analytics.index = 1;
     analytics.venv = QString::fromLatin1(kPsmVenvAnalytics);
     analytics.req_file = QString::fromLatin1(kPsmReqAnalytics);
     analytics.core_file = QString::fromLatin1(kPsmReqCore);
-    analytics.active = !st.venv_numpy2_ready;
+    analytics.active = full ? !st.venv_numpy2_ready : !st.core_current;
     run_->trading_gate_open = !analytics.active;
 
     core_ready_.store(st.core_ready);
+    run_scope_.store(static_cast<int>(scope));
     running_.store(true);
     {
         QMutexLocker lock(&mutex_);
         snapshot_ = SetupSnapshot{};
         snapshot_.running = true;
+        snapshot_.scope = scope;
         snapshot_.started_ms = run_->started_ms;
         snapshot_.background = background_mode_.load();
         stage_fraction_.fill(0.0);
+        stage_weights_ = psm_weights(scope);
         const auto init = [this](SetupStage s, bool needed, const QString& detail) {
             SetupStageInfo& info = snapshot_.stages[psm_idx(s)];
             info.state = needed ? SetupStageState::Waiting : SetupStageState::Skipped;
@@ -1363,20 +1493,38 @@ void PythonSetupManager::run_setup() {
             if (!needed)
                 stage_fraction_[psm_idx(s)] = 1.0;
         };
+        // Outside an Essentials run: shown as optional unless it is already there.
+        const auto defer = [this](SetupStage s, bool installed, const QString& detail) {
+            SetupStageInfo& info = snapshot_.stages[psm_idx(s)];
+            info.state = installed ? SetupStageState::Skipped : SetupStageState::Deferred;
+            info.percent = installed ? 100 : 0;
+            info.detail = installed ? tr("Already installed") : detail;
+            stage_fraction_[psm_idx(s)] = installed ? 1.0 : 0.0;
+        };
         init(SetupStage::Runtime, true, tr("Checking uv…"));
-        init(SetupStage::Trading, trading.active, tr("Waiting for the Python runtime"));
-        const bool core_needed = analytics.active && !st.core_ready;
-        init(SetupStage::AnalyticsCore, analytics.active, tr("Waiting for the Python runtime"));
-        if (analytics.active && !core_needed)
-            snapshot_.stages[psm_idx(SetupStage::AnalyticsCore)].detail = tr("Verifying installed core libraries");
-        init(SetupStage::AnalyticsFull, analytics.active, tr("Starts after the analytics core"));
+        if (full) {
+            init(SetupStage::Trading, trading.active, tr("Waiting for the Python runtime"));
+            const bool core_needed = analytics.active && !st.core_ready;
+            init(SetupStage::AnalyticsCore, analytics.active, tr("Waiting for the Python runtime"));
+            if (analytics.active && !core_needed)
+                snapshot_.stages[psm_idx(SetupStage::AnalyticsCore)].detail = tr("Verifying installed core libraries");
+            init(SetupStage::AnalyticsFull, analytics.active, tr("Starts after the analytics core"));
+        } else {
+            defer(SetupStage::Trading, st.venv_numpy1_ready, tr("Installed together with the full libraries"));
+            init(SetupStage::AnalyticsCore, analytics.active, tr("Waiting for the Python runtime"));
+            if (analytics.active && st.core_ready)
+                snapshot_.stages[psm_idx(SetupStage::AnalyticsCore)].detail = tr("Updating the essential libraries");
+            defer(SetupStage::AnalyticsFull, st.venv_numpy2_ready,
+                  tr("Install any time from Settings → Python Env — it runs in the background"));
+        }
     }
     overall_percent_.store(0);
     set_stage_fraction(SetupStage::Runtime, 0.0); // recompute overall from the skipped stages
     dirty_stages_.fill(true);
 
-    LOG_INFO(kPsmTag, QString("=== run_setup #%1: trading lane=%2 analytics lane=%3 (core on disk=%4) ===")
+    LOG_INFO(kPsmTag, QString("=== run_setup #%1 (%2): trading lane=%3 analytics lane=%4 (core on disk=%5) ===")
                           .arg(run_->generation)
+                          .arg(full ? QStringLiteral("full") : QStringLiteral("essentials"))
                           .arg(psm_yn(trading.active), psm_yn(analytics.active), psm_yn(st.core_ready)));
     emit running_changed(true);
     flush_progress();
@@ -1421,10 +1569,17 @@ void PythonSetupManager::finish_run(bool success, const QString& error) {
     run_->finished = true;
     const bool cancelled = run_->cancelled;
     const bool did_work = run_->did_work;
+    const bool full = run_->scope == SetupScope::Full;
+    // A Full request that arrived during this (Essentials) run starts right after it.
+    const bool start_full_next = pending_full_ && !full && !cancelled;
+    pending_full_ = false;
 
     if (success) {
-        if (!psm_write_atomic(psm_sentinel_path(install_dir()), QByteArrayLiteral("ok\n")))
-            LOG_WARN(kPsmTag, "Could not write the .setup_complete sentinel");
+        if (full) {
+            if (!psm_write_atomic(psm_sentinel_path(install_dir()), QByteArrayLiteral("ok\n")))
+                LOG_WARN(kPsmTag, "Could not write the .setup_complete sentinel");
+            full_installed_.store(true);
+        }
         set_stage_fraction(SetupStage::Runtime, 1.0);
     }
     {
@@ -1442,7 +1597,8 @@ void PythonSetupManager::finish_run(bool success, const QString& error) {
         SetupProgress done;
         done.step = QStringLiteral("complete");
         done.progress = 100;
-        done.message = tr("Setup complete — all Python environments are ready.");
+        done.message = full ? tr("Setup complete — all Python environments are ready.")
+                            : tr("Setup complete — the essential Python libraries are ready.");
         done.state = SetupStageState::Done;
         done.overall = overall_percent_.load();
         emit progress_changed(done);
@@ -1460,17 +1616,23 @@ void PythonSetupManager::finish_run(bool success, const QString& error) {
     emit running_changed(false);
 
     // One notification when the user is no longer looking at the setup screen.
-    if (background_mode_.load() && did_work && !cancelled && QCoreApplication::instance() &&
+    // An essentials run that succeeds stays silent — the terminal simply works.
+    if (background_mode_.load() && did_work && !cancelled && !start_full_next && QCoreApplication::instance() &&
         !QCoreApplication::closingDown()) {
-        if (success)
+        if (success && full)
             fincept::ui::ToastService::instance().post(
                 fincept::ui::ToastService::Severity::Success,
                 tr("Python environment ready — all analytics libraries are installed."), QStringLiteral("python-setup"));
-        else
+        else if (!success)
             fincept::ui::ToastService::instance().post(
                 fincept::ui::ToastService::Severity::Warning,
                 tr("Installing Python libraries failed. Click PYTHON ENV in the status bar to see why and retry."),
                 QStringLiteral("python-setup"));
+    }
+
+    if (start_full_next) {
+        LOG_INFO(kPsmTag, "Starting the queued full library install");
+        QTimer::singleShot(0, this, [this]() { run_setup(SetupScope::Full); });
     }
 }
 
@@ -1951,16 +2113,25 @@ void PythonSetupManager::lane_start(int lane) {
         s.started_ms = psm_now_ms();
         s.percent = -1;
     });
-    if (find_requirements_file(L.req_file).isEmpty()) {
-        lane_failed(lane, tr("Setup file missing: %1 — reinstall Fincept Terminal.").arg(L.req_file));
+    // Essentials installs the core file (the full file only adds constraints).
+    const QString needed = run_->scope == SetupScope::Essentials && lane == 1 ? L.core_file : L.req_file;
+    if (find_requirements_file(needed).isEmpty()) {
+        lane_failed(lane, tr("Setup file missing: %1 — reinstall Fincept Terminal.").arg(needed));
         return;
     }
     if (venv_valid(L.venv)) {
         L.fresh_venv = false;
-        lane_seed_preferences(lane);
+        lane_venv_ready(lane);
     } else {
         lane_create_venv(lane);
     }
+}
+
+void PythonSetupManager::lane_venv_ready(int lane) {
+    if (run_->scope == SetupScope::Essentials && lane == 1)
+        lane_install_essentials(lane);
+    else
+        lane_seed_preferences(lane);
 }
 
 void PythonSetupManager::lane_create_venv(int lane) {
@@ -1995,7 +2166,7 @@ void PythonSetupManager::lane_create_venv(int lane) {
             }
             lane_ref.fresh_venv = true;
             set_stage_fraction(lane == 0 ? SetupStage::Trading : SetupStage::AnalyticsCore, lane == 0 ? 0.05 : 0.1);
-            lane_seed_preferences(lane);
+            lane_venv_ready(lane);
         });
     };
 
@@ -2230,6 +2401,151 @@ void PythonSetupManager::lane_install_core(int lane) {
         });
 }
 
+void PythonSetupManager::lane_install_essentials(int lane) {
+    Run::Lane& L = run_->lanes[static_cast<std::size_t>(lane)];
+    const quint64 gen = run_->generation;
+    run_->did_work = true;
+    L.progress = PsmUvProgress{};
+    update_stage(SetupStage::AnalyticsCore, [](SetupStageInfo& s) {
+        s.percent = -1;
+        s.detail = tr("Installing essential libraries…");
+    });
+
+    StepOptions opts;
+    opts.env = uv_environment();
+    opts.timeout_ms = kPsmEssentialsTimeoutMs;
+    // No lock compile — resolving the whole analytics set first is what kept new
+    // users waiting — and no --compile-bytecode: this is the launch-critical path
+    // (lane_compile_bytecode() runs after the hand-off). The full set's own
+    // requirements file goes in as CONSTRAINTS, so every version chosen here is
+    // one the full set pins too: a later full install, seeded with what is
+    // installed, then has nothing to replace underneath a running terminal.
+    QStringList args = {QStringLiteral("pip"), QStringLiteral("install"), QStringLiteral("--python"),
+                        python_path(L.venv),   QStringLiteral("-r"),      find_requirements_file(L.core_file)};
+    const QString constraints = find_requirements_file(L.req_file);
+    if (!constraints.isEmpty()) {
+        // uv splits -c values on spaces (#416), and the bundled resources folder
+        // can sit under "Program Files": run from it and pass the bare file name.
+        const QFileInfo info(constraints);
+        opts.working_dir = info.absolutePath();
+        args << QStringLiteral("-c") << info.fileName();
+    } else {
+        LOG_WARN(kPsmTag, "requirements-numpy2.txt not bundled — installing the essentials unconstrained");
+    }
+    args << QStringLiteral("-v");
+
+    start_step(
+        uv_path(), args, opts,
+        [this, gen, lane](const QString& line, bool is_stderr) {
+            if (!is_stderr || !alive(gen))
+                return;
+            Run::Lane& lr = run_->lanes[static_cast<std::size_t>(lane)];
+            if (!lr.progress.feed(line))
+                return;
+            const PsmUvProgress& p = lr.progress;
+            const int pct = p.prepare_percent();
+            if (pct >= 0)
+                set_stage_fraction(SetupStage::AnalyticsCore, 0.1 + 0.75 * pct / 100.0);
+            QString text;
+            switch (p.phase) {
+                case PsmUvProgress::Phase::Starting:
+                case PsmUvProgress::Phase::Resolving:
+                    text = tr("Resolving — %1 packages").arg(p.selected);
+                    break;
+                case PsmUvProgress::Phase::Preparing:
+                    text = p.uncached.isEmpty()
+                               ? tr("Checking %1 packages…").arg(p.resolved)
+                               : tr("Downloading %1 / %2 packages").arg(p.prepared.size()).arg(p.uncached.size());
+                    break;
+                case PsmUvProgress::Phase::Installing:
+                case PsmUvProgress::Phase::Compiling:
+                    text = tr("Installing %1 packages…")
+                               .arg(p.uncached.isEmpty() ? p.resolved : static_cast<int>(p.uncached.size()));
+                    break;
+                case PsmUvProgress::Phase::Finished:
+                    text = p.headline;
+                    break;
+            }
+            const QString headline = p.headline;
+            const bool show_headline =
+                p.phase == PsmUvProgress::Phase::Preparing &&
+                (headline.startsWith(QLatin1String("Downloading ")) ||
+                 headline.startsWith(QLatin1String("Building ")) || headline.startsWith(QLatin1String("Waiting ")));
+            update_stage(SetupStage::AnalyticsCore, [pct, text, headline, show_headline](SetupStageInfo& s) {
+                s.percent = pct;
+                s.detail = show_headline ? text + QStringLiteral(" · ") + headline : text;
+            });
+        },
+        [this, gen, lane](const StepResult& r) {
+            if (!alive(gen))
+                return;
+            Run::Lane& lr = run_->lanes[static_cast<std::size_t>(lane)];
+            if (!r.ok()) {
+                if (!lr.tls_retried && retry_with_native_tls(r)) {
+                    lr.tls_retried = true;
+                    lane_install_essentials(lane);
+                    return;
+                }
+                lane_failed(lane, describe_failure(tr("Installing the essential libraries"), r));
+                return;
+            }
+            const QString marker = expected_marker(lr.core_file);
+            if (!marker.isEmpty() && !psm_write_atomic(psm_core_marker_path(install_dir()), (marker + "\n").toUtf8()))
+                LOG_WARN(kPsmTag, "Could not write the core marker");
+            lr.core_done = true;
+            set_stage_fraction(SetupStage::AnalyticsCore, 0.9);
+            const int resolved = lr.progress.resolved;
+            update_stage(
+                SetupStage::AnalyticsCore,
+                [resolved](SetupStageInfo& s) {
+                    s.percent = 90;
+                    s.detail = resolved > 0 ? tr("%1 packages installed — optimizing for faster startup…").arg(resolved)
+                                            : tr("Installed — optimizing for faster startup…");
+                },
+                true);
+            core_ready_.store(true);
+            {
+                QMutexLocker lock(&mutex_);
+                snapshot_.core_ready = true;
+            }
+            LOG_INFO(kPsmTag, "Essential libraries ready — the terminal can launch");
+            emit core_ready();
+            if (alive(gen))
+                lane_compile_bytecode(lane);
+        });
+}
+
+void PythonSetupManager::lane_compile_bytecode(int lane) {
+    Run::Lane& L = run_->lanes[static_cast<std::size_t>(lane)];
+    const quint64 gen = run_->generation;
+    const QString site = site_packages_path(L.venv);
+    if (!QFileInfo(site).isDir()) {
+        LOG_WARN(kPsmTag, "site-packages not found at " + site + " — skipping bytecode precompilation");
+        lane_succeeded(lane);
+        return;
+    }
+    // PythonRunner sets PYTHONDONTWRITEBYTECODE=1, so .pyc files are never written
+    // at runtime: without this every script run would recompile pandas & co. from
+    // source (~0.6 s per process). The full install gets the same from uv's
+    // --compile-bytecode; here it runs after the hand-off, at low priority.
+    // compileall skips files whose .pyc is current, so a re-run is cheap. Best
+    // effort: a file that does not compile only loses its own cache.
+    StepOptions opts;
+    opts.env = uv_environment();
+    opts.timeout_ms = kPsmBytecodeTimeoutMs;
+    opts.background = true;
+    opts.local8bit = true; // Python writes piped output in the locale code page
+    const QStringList args = {QStringLiteral("-m"), QStringLiteral("compileall"), QStringLiteral("-q"),
+                              QStringLiteral("-j"), QStringLiteral("0"),          QDir::toNativeSeparators(site)};
+    start_step(python_path(L.venv), args, opts, {}, [this, gen, lane](const StepResult& r) {
+        if (!alive(gen))
+            return;
+        if (!r.ok())
+            LOG_WARN(kPsmTag, "Bytecode precompilation incomplete (non-fatal) — scripts run, some just start slower");
+        lane_succeeded(lane);
+    });
+}
+
 void PythonSetupManager::lane_install_full(int lane) {
     Run::Lane& L = run_->lanes[static_cast<std::size_t>(lane)];
     const quint64 gen = run_->generation;
@@ -2374,7 +2690,10 @@ void PythonSetupManager::lane_install_full(int lane) {
 void PythonSetupManager::lane_succeeded(int lane) {
     Run::Lane& L = run_->lanes[static_cast<std::size_t>(lane)];
     L.succeeded = true;
-    const SetupStage stage = lane == 0 ? SetupStage::Trading : SetupStage::AnalyticsFull;
+    // An essentials run ends the analytics lane at the core; the full row stays optional.
+    const SetupStage stage = lane == 0                               ? SetupStage::Trading
+                             : run_->scope == SetupScope::Essentials ? SetupStage::AnalyticsCore
+                                                                     : SetupStage::AnalyticsFull;
     set_stage_fraction(stage, 1.0);
     const int resolved = L.progress.resolved;
     update_stage(
@@ -2396,12 +2715,17 @@ void PythonSetupManager::lane_failed(int lane, const QString& error) {
         return;
     L.failed = true;
     L.waiting_gate = false;
-    const QString label = lane == 0 ? tr("Trading libraries") : (L.core_done ? tr("Analytics libraries") : tr("Analytics core"));
+    const bool essentials = run_->scope == SetupScope::Essentials;
+    const QString label = lane == 0     ? tr("Trading libraries")
+                          : essentials  ? tr("Essential libraries")
+                          : L.core_done ? tr("Analytics libraries")
+                                        : tr("Analytics core");
     L.error = label + QStringLiteral(": ") + error;
     LOG_ERROR(kPsmTag, QString("[%1] %2").arg(L.venv, error));
 
-    const SetupStage failed_stage =
-        lane == 0 ? SetupStage::Trading : (L.core_done ? SetupStage::AnalyticsFull : SetupStage::AnalyticsCore);
+    const SetupStage failed_stage = lane == 0                      ? SetupStage::Trading
+                                    : (essentials || !L.core_done) ? SetupStage::AnalyticsCore
+                                                                   : SetupStage::AnalyticsFull;
     update_stage(
         failed_stage,
         [&error](SetupStageInfo& s) {
@@ -2411,7 +2735,7 @@ void PythonSetupManager::lane_failed(int lane, const QString& error) {
             s.finished_ms = psm_now_ms();
         },
         true);
-    if (lane == 1 && !L.core_done) {
+    if (lane == 1 && !L.core_done && !essentials) { // an essentials run leaves the full row optional
         const bool combined = L.fallback; // the full row was running the combined install
         update_stage(SetupStage::AnalyticsFull, [&error, combined](SetupStageInfo& s) {
             if (combined) {

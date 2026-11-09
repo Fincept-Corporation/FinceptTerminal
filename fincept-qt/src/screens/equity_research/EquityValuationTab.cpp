@@ -1,17 +1,25 @@
 // src/screens/equity_research/EquityValuationTab.cpp
 #include "screens/equity_research/EquityValuationTab.h"
 
+#include "datahub/DataHub.h"
+#include "datahub/DataHubMetaTypes.h"
 #include "screens/equity_research/EquityResearchFormat.h"
 #include "services/equity/EquityResearchService.h"
 #include "services/equity/EquityValuationModels.h"
+#include "services/markets/MarketDataService.h"
 #include "ui/theme/Theme.h"
 
+#include <QCheckBox>
+#include <QDate>
+#include <QDateTime>
 #include <QEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QScrollArea>
 #include <QStyle>
+#include <QTableWidget>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -24,10 +32,24 @@ namespace valuation_tab_detail {
 namespace fmt = equity_fmt;
 
 // CAPM pre-fill: risk-free + beta × equity risk premium, floored — a near-zero beta would
-// otherwise discount at ~4.5%, barely above terminal growth, and explode the terminal value.
-constexpr double kRiskFree = 0.045;
+// otherwise discount at about the risk-free rate, barely above terminal growth, and explode
+// the terminal value.
+//
+// Risk-free = the US 10-year Treasury yield from the market quote feed (^TNX, quoted in
+// percent: 4.28 = 4.28%). The fallback stands in only until that quote arrives, or when it
+// cannot be fetched.
+constexpr double kRiskFreeFallback = 0.045;
 constexpr double kEquityPremium = 0.055;
 constexpr double kDiscountFloor = 0.06;
+// A ^TNX print outside 0–20% is a bad tick, not a yield.
+constexpr double kTreasuryYieldMaxPct = 20.0;
+// The market rate in the input is replaced by a newer print only once it is this old;
+// otherwise every 30-second quote tick would move the discount rate under the reader.
+constexpr qint64 kRiskFreeRefreshMs = 15LL * 60 * 1000;
+
+QString treasury_topic() {
+    return QStringLiteral("market:quote:^TNX");
+}
 // Growth pre-fill comes from ONE quarter's YoY revenue growth; held for 10 years it must
 // be capped or a cyclical rebound quarter becomes a decade of hyper-growth.
 constexpr double kGrowthCapLow = -0.05;
@@ -82,7 +104,12 @@ void EquityValuationTab::build_ui() {
             "QLabel#valBadge { padding:2px 10px; font-size:10px; font-weight:700; color:%1; background:%13; }"
             "QLabel#valBadge[tone=\"good\"] { background:%7; } QLabel#valBadge[tone=\"bad\"] { background:%8; }"
             "QLabel#valBadge[tone=\"warn\"] { background:%4; }"
-            "QLabel#valBadge[tone=\"none\"] { background:transparent; color:%9; border:1px solid %3; }")
+            "QLabel#valBadge[tone=\"none\"] { background:transparent; color:%9; border:1px solid %3; }"
+            "QCheckBox#valFade { color:%5; font-size:11px; }"
+            "QTableWidget#valSens { background:%2; color:%6; gridline-color:%3; border:1px solid %3; font-size:11px; }"
+            "QTableWidget#valSens QHeaderView::section { background:%11; color:%5; border:0; border-bottom:1px solid "
+            "%3;"
+            " padding:3px 6px; font-size:10px; font-weight:700; }")
             .arg(ui::colors::BG_BASE(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM(), ui::colors::AMBER(),
                  ui::colors::TEXT_SECONDARY(), ui::colors::TEXT_PRIMARY(), ui::colors::POSITIVE(),
                  ui::colors::NEGATIVE(), ui::colors::TEXT_TERTIARY())
@@ -164,9 +191,27 @@ QWidget* EquityValuationTab::build_dcf_section() {
     fcf_input_ = make_spin(QT_TR_NOOP("BASE FREE CASH FLOW"), -9999999.0, 9999999.0, 0.0, tr(" M"), 1);
     growth_input_ = make_spin(QT_TR_NOOP("GROWTH (PROJECTION)"), -50.0, 100.0, 8.0, QStringLiteral(" %"), 2);
     terminal_input_ = make_spin(QT_TR_NOOP("TERMINAL GROWTH"), -2.0, 10.0, 2.5, QStringLiteral(" %"), 2);
+    rf_input_ =
+        make_spin(QT_TR_NOOP("RISK-FREE (10Y GOVT)"), -2.0, 30.0, kRiskFreeFallback * 100.0, QStringLiteral(" %"), 2);
+    rf_input_->setToolTip(rf_tooltip());
+    rf_shown_pct_ = rf_input_->value();
     discount_input_ = make_spin(QT_TR_NOOP("DISCOUNT RATE"), 1.0, 40.0, 10.0, QStringLiteral(" %"), 2);
     years_input_ = make_spin(QT_TR_NOOP("PROJECTION YEARS"), 1.0, 30.0, 10.0, tr(" yrs"), 0);
     shares_input_ = make_spin(QT_TR_NOOP("SHARES OUTSTANDING"), 0.01, 99999999.0, 1.0, tr(" M"), 2);
+
+    // Fade on by default: holding year-1 growth flat for the whole projection and then
+    // dropping straight to the terminal rate is what made pre-filled DCFs look rich.
+    fade_check_ = new QCheckBox(tr("Fade growth to terminal rate"), inputs);
+    fade_check_->setObjectName(QStringLiteral("valFade"));
+    fade_check_->setChecked(true);
+    fade_check_->setToolTip(tr("Growth steps down linearly from the projection rate in year 1 to the terminal rate in "
+                               "the final year (two-stage convergence). Untick for flat growth."));
+    connect(fade_check_, &QCheckBox::toggled, this, [this]() {
+        if (!current_symbol_.isEmpty())
+            on_calculate_clicked();
+    });
+    grid->addWidget(fade_check_, r, 0, 1, 2);
+    ++r;
 
     calc_btn_ = new QPushButton(tr("CALCULATE"), inputs);
     calc_btn_->setObjectName(QStringLiteral("valCalc"));
@@ -179,6 +224,17 @@ QWidget* EquityValuationTab::build_dcf_section() {
             if (!current_symbol_.isEmpty())
                 on_calculate_clicked();
         });
+    // A typed risk-free rate (e.g. the local 10-year yield of a non-US company) rebuilds the
+    // discount by CAPM. editingFinished also fires on a plain focus-out, so compare first.
+    connect(rf_input_, &QDoubleSpinBox::editingFinished, this, [this]() {
+        if (std::fabs(rf_input_->value() - rf_shown_pct_) < 1e-9)
+            return;
+        rf_shown_pct_ = rf_input_->value();
+        rf_source_ = RfSource::User;
+        apply_capm_discount();
+        if (!current_symbol_.isEmpty())
+            on_calculate_clicked();
+    });
     grid->addWidget(calc_btn_, r, 1, Qt::AlignRight);
     row->addWidget(inputs);
 
@@ -202,6 +258,9 @@ QWidget* EquityValuationTab::build_dcf_section() {
     current_price_val_ = make_result(QT_TR_NOOP("CURRENT PRICE"));
     margin_val_ = make_result(QT_TR_NOOP("UPSIDE TO INTRINSIC"));
     terminal_share_val_ = make_result(QT_TR_NOOP("TERMINAL VALUE SHARE"));
+    implied_growth_val_ = make_result(QT_TR_NOOP("MARKET-IMPLIED GROWTH"));
+    implied_growth_val_->setToolTip(tr("Reverse DCF: the projection growth rate at which the model's value equals "
+                                       "today's price, every other input unchanged — what the market is pricing in."));
     verdict_badge_ = new QLabel(results);
     verdict_badge_->setObjectName(QStringLiteral("valBadge"));
     verdict_badge_->setAlignment(Qt::AlignCenter);
@@ -216,6 +275,23 @@ QWidget* EquityValuationTab::build_dcf_section() {
     dcf_note_->setWordWrap(true);
     dcf_note_->setVisible(false);
     body->addWidget(dcf_note_);
+
+    // Sensitivity: a DCF is only as good as two inputs nobody knows — show the range.
+    sens_title_ = new QLabel(tr("SENSITIVITY — VALUE PER SHARE (rows: discount rate, columns: terminal growth)"), box);
+    sens_title_->setObjectName(QStringLiteral("valKey"));
+    body->addWidget(sens_title_);
+    sens_table_ = new QTableWidget(5, 5, box);
+    sens_table_->setObjectName(QStringLiteral("valSens"));
+    sens_table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    sens_table_->setSelectionMode(QAbstractItemView::NoSelection);
+    sens_table_->setFocusPolicy(Qt::NoFocus);
+    sens_table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    sens_table_->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    sens_table_->verticalHeader()->setDefaultSectionSize(24);
+    sens_table_->setFixedHeight(24 * 6 + 6);
+    sens_table_->setToolTip(tr("Green: at least 10% above today's price · red: at least 10% below · "
+                               "the centre cell is the current inputs."));
+    body->addWidget(sens_table_);
 
     assumptions_lbl_ = new QLabel(tr("Open a symbol to pre-fill the model from its trailing free cash flow, beta and "
                                      "share count."),
@@ -249,6 +325,7 @@ QWidget* EquityValuationTab::build_scoring_section() {
         ++r;
     };
     make_score(QT_TR_NOOP("ALTMAN Z-SCORE"), altman_val_, altman_badge_);
+    make_score(QT_TR_NOOP("ALTMAN Z″ (NON-MANUFACTURER)"), altman2_val_, altman2_badge_);
     make_score(QT_TR_NOOP("PIOTROSKI F-SCORE"), piotroski_val_, piotroski_badge_);
     make_score(QT_TR_NOOP("BENEISH M-SCORE"), beneish_val_, beneish_badge_);
     grid->setColumnStretch(3, 1);
@@ -299,6 +376,12 @@ void EquityValuationTab::set_symbol(const QString& symbol) {
         return;
     current_symbol_ = symbol;
     prefilled_for_.clear();
+    prefill_notes_.clear();
+    // Until the pre-fill runs, the previous symbol's notes would describe the wrong company.
+    if (assumptions_lbl_)
+        assumptions_lbl_->setText(tr("The model pre-fills from %1's trailing free cash flow, beta and share count "
+                                     "once its profile loads.")
+                                      .arg(symbol));
     clear_results();
     // set_stock_info()/set_financials() are fed whenever data lands — even while another tab
     // is showing — so what is held may already be this symbol's (keep it) or the previous
@@ -353,37 +436,174 @@ void EquityValuationTab::pre_fill_dcf_inputs() {
         return;
     prefilled_for_ = current_symbol_;
     const auto& s = last_info_;
-    QStringList notes;
+    prefill_notes_.clear();
     if (s.free_cashflow != 0.0) {
         fcf_input_->setValue(s.free_cashflow / 1e6);
-        notes << tr("FCF = trailing-12-month levered free cash flow (Yahoo)");
+        prefill_notes_ << tr("FCF = trailing-12-month levered free cash flow (Yahoo)");
     }
     const double g = s.revenue_growth != 0.0 ? s.revenue_growth : s.earnings_growth;
     if (g != 0.0) {
         const double capped = std::clamp(g, kGrowthCapLow, kGrowthCapHigh);
         growth_input_->setValue(capped * 100.0);
-        notes << tr("growth = latest-quarter YoY %1 growth (%2), capped to %3…%4 for a multi-year horizon")
-                     .arg(s.revenue_growth != 0.0 ? tr("revenue") : tr("earnings"), fmt::pct(g, 1),
-                          fmt::pct(kGrowthCapLow, 0), fmt::pct(kGrowthCapHigh, 0));
-    }
-    if (s.beta > 0.0) {
-        const double r = std::max(kDiscountFloor, kRiskFree + s.beta * kEquityPremium);
-        discount_input_->setValue(r * 100.0);
-        notes << tr("discount = %1 risk-free + β %2 × %3 equity premium (floor %4)")
-                     .arg(fmt::pct(kRiskFree, 1), QString::number(s.beta, 'f', 2), fmt::pct(kEquityPremium, 1),
-                          fmt::pct(kDiscountFloor, 0));
-    } else {
-        notes << tr("discount left at %1 — no beta reported").arg(fmt::pct(discount_input_->value() / 100.0, 1));
+        prefill_notes_ << tr("growth = latest-quarter YoY %1 growth (%2), capped to %3…%4 for a multi-year horizon")
+                              .arg(s.revenue_growth != 0.0 ? tr("revenue") : tr("earnings"), fmt::pct(g, 1),
+                                   fmt::pct(kGrowthCapLow, 0), fmt::pct(kGrowthCapHigh, 0));
     }
     if (s.shares_outstanding > 0.0)
         shares_input_->setValue(s.shares_outstanding / 1e6);
-    assumptions_lbl_->setText(tr("Pre-filled assumptions (edit and press CALCULATE): %1.").arg(notes.join(QStringLiteral(" · "))));
-    on_calculate_clicked();
+
+    // Risk-free: the newest US 10Y print — ours, or one the hub holds for another screen
+    // (the dashboard's market pulse reads ^TNX too) — else the fallback until one arrives.
+    auto& hub = datahub::DataHub::instance();
+    const qint64 hub_ms = hub.last_publish_ms(treasury_topic());
+    if (hub_ms > live_rf_ms_) {
+        const QVariant v = hub.peek_raw(treasury_topic());
+        if (v.canConvert<services::QuoteData>())
+            record_treasury_yield(v.value<services::QuoteData>().price, hub_ms);
+    }
+    if (live_rf_pct_ > 0.0) {
+        rf_source_ = RfSource::Market;
+        rf_fetched_ms_ = live_rf_ms_;
+        set_rf_value(live_rf_pct_);
+    } else {
+        rf_source_ = RfSource::Fallback;
+        rf_fetched_ms_ = 0;
+        set_rf_value(kRiskFreeFallback * 100.0);
+    }
+    apply_capm_discount();  // no-op without a beta: the discount input is left as it is
+    on_calculate_clicked(); // also writes the assumptions note
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Risk-free rate (US 10-year Treasury) → CAPM discount
+// ─────────────────────────────────────────────────────────────────────────────
+
+void EquityValuationTab::showEvent(QShowEvent* e) {
+    QWidget::showEvent(e);
+    if (hub_active_)
+        return;
+    hub_active_ = true;
+    // Answers at once from the hub's cache when it holds a fresh print, and keeps the
+    // quote refreshing while this tab is on screen.
+    datahub::DataHub::instance().subscribe(this, treasury_topic(), [this](const QVariant& v) {
+        if (v.canConvert<services::QuoteData>())
+            on_treasury_yield(v.value<services::QuoteData>().price,
+                              datahub::DataHub::instance().last_publish_ms(treasury_topic()));
+    });
+}
+
+void EquityValuationTab::hideEvent(QHideEvent* e) {
+    QWidget::hideEvent(e);
+    if (!hub_active_)
+        return;
+    datahub::DataHub::instance().unsubscribe(this, treasury_topic());
+    hub_active_ = false;
+}
+
+bool EquityValuationTab::record_treasury_yield(double yield_pct, qint64 fetched_ms) {
+    if (!(yield_pct > 0.0 && yield_pct < kTreasuryYieldMaxPct))
+        return false;
+    live_rf_pct_ = yield_pct;
+    live_rf_ms_ = fetched_ms;
+    return true;
+}
+
+void EquityValuationTab::on_treasury_yield(double yield_pct, qint64 fetched_ms) {
+    if (!record_treasury_yield(yield_pct, fetched_ms))
+        return;
+    if (rf_source_ == RfSource::User ||
+        (rf_source_ == RfSource::Market && fetched_ms - rf_fetched_ms_ < kRiskFreeRefreshMs))
+        return;
+    // Carry the new rate into the discount only while it is still the CAPM figure — a
+    // discount the analyst typed stays (the note then shows what CAPM would give).
+    const bool discount_was_capm = discount_matches_capm();
+    rf_source_ = RfSource::Market;
+    rf_fetched_ms_ = fetched_ms;
+    set_rf_value(yield_pct);
+    if (discount_was_capm)
+        apply_capm_discount();
+    if (!current_symbol_.isEmpty() && prefilled_for_ == current_symbol_)
+        on_calculate_clicked();
+}
+
+void EquityValuationTab::set_rf_value(double pct) {
+    rf_input_->setValue(pct);
+    rf_shown_pct_ = rf_input_->value(); // as rounded by the spin box
+}
+
+double EquityValuationTab::capm_discount_pct() const {
+    // last_info_ may hold another symbol's profile (it is kept until that symbol is shown).
+    if (!rf_input_ || !discount_input_ || last_info_.symbol != current_symbol_ || !(last_info_.beta > 0.0))
+        return std::nan("");
+    const double r = std::max(kDiscountFloor, rf_input_->value() / 100.0 + last_info_.beta * kEquityPremium);
+    return std::min(std::round(r * 1e4) / 1e2, discount_input_->maximum());
+}
+
+bool EquityValuationTab::discount_matches_capm() const {
+    const double capm = capm_discount_pct();
+    // The spin box keeps 2 decimals; any real edit moves it by at least 0.01.
+    return std::isfinite(capm) && std::fabs(discount_input_->value() - capm) < 0.004;
+}
+
+void EquityValuationTab::apply_capm_discount() {
+    const double capm = capm_discount_pct();
+    if (std::isfinite(capm))
+        discount_input_->setValue(capm);
+}
+
+void EquityValuationTab::update_assumptions_note() {
+    if (!assumptions_lbl_ || current_symbol_.isEmpty() || prefilled_for_ != current_symbol_)
+        return;
+    QStringList notes = prefill_notes_;
+    const double rf = rf_input_->value() / 100.0;
+    QString source;
+    switch (rf_source_) {
+        case RfSource::Market: {
+            const QDateTime at = QDateTime::fromMSecsSinceEpoch(rf_fetched_ms_);
+            const QString when = at.date() == QDate::currentDate() ? at.toString(QStringLiteral("HH:mm"))
+                                                                   : at.toString(QStringLiteral("MMM d HH:mm"));
+            source = rf_fetched_ms_ > 0 ? tr("US 10Y Treasury, fetched %1").arg(when) : tr("US 10Y Treasury");
+            break;
+        }
+        case RfSource::User:
+            source = tr("your input");
+            break;
+        case RfSource::Fallback:
+            source = tr("fallback — the US 10Y quote has not loaded");
+            break;
+    }
+    const double capm = capm_discount_pct();
+    if (std::isfinite(capm)) {
+        notes << tr("discount = %1 risk-free (%2) + β %3 × %4 equity premium (floor %5)")
+                     .arg(fmt::pct(rf, 2), source, QString::number(last_info_.beta, 'f', 2),
+                          fmt::pct(kEquityPremium, 1), fmt::pct(kDiscountFloor, 0));
+        if (!discount_matches_capm())
+            notes << tr("discount overridden to %1 (CAPM gives %2)")
+                         .arg(fmt::pct(discount_input_->value() / 100.0, 2), fmt::pct(capm / 100.0, 2));
+    } else {
+        notes << tr("discount left at %1 — no beta reported, so the risk-free rate (%2, %3) is not applied")
+                     .arg(fmt::pct(discount_input_->value() / 100.0, 2), fmt::pct(rf, 2), source);
+    }
+    // A US Treasury yield prices US-dollar cash flows; other currencies carry their own
+    // government yield (and inflation) in the discount rate.
+    const QString ccy = statements_currency();
+    if (rf_source_ != RfSource::User && !ccy.isEmpty() && ccy.compare(QLatin1String("USD"), Qt::CaseInsensitive) != 0)
+        notes << tr("cash flows are in %1: replace the US yield with the %1 government 10-year yield").arg(ccy);
+    assumptions_lbl_->setText(
+        tr("Pre-filled assumptions (edit and press CALCULATE): %1.").arg(notes.join(QStringLiteral(" · "))));
+}
+
+QString EquityValuationTab::rf_tooltip() const {
+    return tr("Long-term government bond yield in the currency of the cash flows. Pre-filled with the live US "
+              "10-year Treasury yield (^TNX). Type your own — e.g. the local 10-year yield for a non-US company — "
+              "and the discount rate is rebuilt by CAPM: risk-free + β × %1 equity premium.")
+        .arg(fmt::pct(kEquityPremium, 1));
 }
 
 void EquityValuationTab::on_calculate_clicked() {
     if (current_symbol_.isEmpty())
         return;
+    update_assumptions_note(); // keeps the discount explanation in step with the inputs
     services::equity::valuation::DcfInputs in;
     in.fcf = fcf_input_->value() * 1e6;
     in.growth = growth_input_->value() / 100.0;
@@ -391,7 +611,22 @@ void EquityValuationTab::on_calculate_clicked() {
     in.discount = discount_input_->value() / 100.0;
     in.years = static_cast<int>(years_input_->value());
     in.shares = shares_input_->value() * 1e6;
+    in.fade = fade_check_ && fade_check_->isChecked();
     const auto res = services::equity::valuation::dcf(in);
+    // Reverse DCF / sensitivity colouring only against a price in the statements' currency.
+    const double comparable_price =
+        (!currency_mismatch() && last_info_.current_price > 0.0) ? last_info_.current_price : 0.0;
+    update_sensitivity(in, comparable_price);
+    if (implied_growth_val_) {
+        const double g =
+            comparable_price > 0.0 ? services::equity::valuation::implied_growth(in, comparable_price) : std::nan("");
+        implied_growth_val_->setText(std::isfinite(g) ? fmt::pct(g, 1, true) : fmt::dash());
+        // Compared with the assumption the analyst typed in.
+        const char* tone =
+            !std::isfinite(g) ? "" : (g > in.growth + 0.02 ? "bad" : (g < in.growth - 0.02 ? "good" : "warn"));
+        implied_growth_val_->setProperty("tone", QString::fromLatin1(tone));
+        repolish(implied_growth_val_);
+    }
 
     const QString stmt_ccy = statements_currency();
     const QString px_ccy = last_info_.currency;
@@ -415,7 +650,7 @@ void EquityValuationTab::on_calculate_clicked() {
     QStringList warnings;
     if (res.terminal_fraction > 0.75)
         warnings << tr("%1 of the value sits in the terminal year — the result is very sensitive to terminal "
-                       "growth and the discount rate.")
+                       "growth and the discount rate (see the grid below).")
                         .arg(fmt::pct(res.terminal_fraction, 0));
     if (currency_mismatch()) {
         margin_val_->setText(tr("n/c"));
@@ -443,6 +678,49 @@ void EquityValuationTab::on_calculate_clicked() {
     }
 }
 
+void EquityValuationTab::update_sensitivity(const services::equity::valuation::DcfInputs& base, double price) {
+    if (!sens_table_)
+        return;
+    static constexpr double kDiscountSteps[] = {-0.02, -0.01, 0.0, 0.01, 0.02};
+    static constexpr double kTerminalSteps[] = {-0.01, -0.005, 0.0, 0.005, 0.01};
+    QStringList col_labels, row_labels;
+    for (double dt : kTerminalSteps)
+        col_labels << fmt::pct(base.terminal_growth + dt, 1);
+    for (double dd : kDiscountSteps)
+        row_labels << fmt::pct(base.discount + dd, 1);
+    sens_table_->setHorizontalHeaderLabels(col_labels);
+    sens_table_->setVerticalHeaderLabels(row_labels);
+    const QString ccy = statements_currency();
+    for (int r = 0; r < 5; ++r) {
+        for (int c = 0; c < 5; ++c) {
+            services::equity::valuation::DcfInputs probe = base;
+            probe.discount = base.discount + kDiscountSteps[r];
+            probe.terminal_growth = base.terminal_growth + kTerminalSteps[c];
+            const auto res = services::equity::valuation::dcf(probe);
+            auto* item = new QTableWidgetItem(res.ok ? fmt_money(res.per_share, ccy) : fmt::dash());
+            item->setTextAlignment(Qt::AlignCenter);
+            QColor fg(ui::colors::TEXT_PRIMARY());
+            if (res.ok && price > 0.0) {
+                if (res.per_share >= price * 1.10)
+                    fg = QColor(ui::colors::POSITIVE());
+                else if (res.per_share <= price * 0.90)
+                    fg = QColor(ui::colors::NEGATIVE());
+                else
+                    fg = QColor(ui::colors::AMBER());
+            } else if (!res.ok) {
+                fg = QColor(ui::colors::TEXT_TERTIARY());
+            }
+            item->setForeground(fg);
+            if (r == 2 && c == 2) {
+                QFont f = item->font();
+                f.setBold(true);
+                item->setFont(f);
+            }
+            sens_table_->setItem(r, c, item);
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Scores
 // ─────────────────────────────────────────────────────────────────────────────
@@ -461,9 +739,10 @@ void EquityValuationTab::update_statements_note() {
 void EquityValuationTab::run_scoring_models() {
     namespace v = services::equity::valuation;
     altman_badge_->setVisible(false);
+    altman2_badge_->setVisible(false);
     piotroski_badge_->setVisible(false);
     beneish_badge_->setVisible(false);
-    for (QLabel* l : {altman_val_, piotroski_val_, beneish_val_}) {
+    for (QLabel* l : {altman_val_, altman2_val_, piotroski_val_, beneish_val_}) {
         l->setText(fmt::dash());
         l->setToolTip(QString());
     }
@@ -489,6 +768,36 @@ void EquityValuationTab::run_scoring_models() {
     if (last_info_.sector.contains(QLatin1String("Financial"), Qt::CaseInsensitive))
         notes << tr("Altman Z and Beneish M were built for industrial companies; read them with caution for banks "
                     "and insurers.");
+
+    // ── Altman Z'' (no market value, no sales term) — valid even on a currency mismatch ──
+    {
+        const auto a2 = v::altman_z(cur, std::nan(""));
+        if (!a2.z2_ok) {
+            set_badge(altman2_badge_, tr("NO DATA — %1").arg(a2.missing), "none");
+        } else {
+            altman2_val_->setText(QString::number(a2.z2, 'f', 2));
+            altman2_val_->setToolTip(tr("6.56·X1 working capital/assets %1 + 3.26·X2 retained earnings/assets %2 + "
+                                        "6.72·X3 EBIT/assets %3 + 1.05·X4 book equity/liabilities %4")
+                                         .arg(a2.x1, 0, 'f', 3)
+                                         .arg(a2.x2, 0, 'f', 3)
+                                         .arg(a2.x3, 0, 'f', 3)
+                                         .arg(a2.x4_book, 0, 'f', 3));
+            if (a2.z2 > v::kAltmanZ2Safe)
+                set_badge(altman2_badge_, tr("SAFE ZONE (> 2.60)"), "good");
+            else if (a2.z2 >= v::kAltmanZ2Distress)
+                set_badge(altman2_badge_, tr("GREY ZONE (1.10–2.60)"), "warn");
+            else
+                set_badge(altman2_badge_, tr("DISTRESS ZONE (< 1.10)"), "bad");
+        }
+        // Which of the two fits: the 1968 Z was fitted on manufacturers; asset-light
+        // and service firms score "distressed" on its sales/assets and market-value terms.
+        static const QStringList kManufacturing = {"Industrials", "Basic Materials", "Energy", "Consumer Cyclical"};
+        const bool manufacturer = kManufacturing.contains(last_info_.sector, Qt::CaseInsensitive);
+        if (!last_info_.sector.isEmpty())
+            notes << (manufacturer
+                          ? tr("%1: the original Altman Z applies.").arg(last_info_.sector)
+                          : tr("%1 is not a manufacturing sector — read Altman Z″, not Z.").arg(last_info_.sector));
+    }
 
     // ── Altman Z ──
     if (currency_mismatch()) {
@@ -611,7 +920,7 @@ bool EquityValuationTab::currency_mismatch() const {
 }
 
 void EquityValuationTab::clear_results() {
-    for (QLabel* l : {intrinsic_val_, current_price_val_, margin_val_, terminal_share_val_, altman_val_,
+    for (QLabel* l : {intrinsic_val_, current_price_val_, margin_val_, terminal_share_val_, altman_val_, altman2_val_,
                       piotroski_val_, beneish_val_, ev_ebitda_val_, ev_revenue_val_, price_sales_val_, fcf_yield_val_,
                       graham_val_}) {
         if (l) {
@@ -619,7 +928,11 @@ void EquityValuationTab::clear_results() {
             l->setToolTip(QString());
         }
     }
-    for (QLabel* b : {verdict_badge_, altman_badge_, piotroski_badge_, beneish_badge_})
+    if (implied_growth_val_)
+        implied_growth_val_->setText(fmt::dash()); // keeps its explanatory tooltip
+    if (sens_table_)
+        sens_table_->clearContents();
+    for (QLabel* b : {verdict_badge_, altman_badge_, altman2_badge_, piotroski_badge_, beneish_badge_})
         if (b)
             b->setVisible(false);
     if (dcf_note_)
@@ -655,6 +968,12 @@ void EquityValuationTab::changeEvent(QEvent* e) {
             it.key()->setText(tr(it.value()));
         if (calc_btn_)
             calc_btn_->setText(tr("CALCULATE"));
+        if (fade_check_)
+            fade_check_->setText(tr("Fade growth to terminal rate"));
+        if (rf_input_)
+            rf_input_->setToolTip(rf_tooltip());
+        if (sens_title_)
+            sens_title_->setText(tr("SENSITIVITY — VALUE PER SHARE (rows: discount rate, columns: terminal growth)"));
         if (!current_symbol_.isEmpty()) {
             run_multiples();
             if (financials_loaded_)

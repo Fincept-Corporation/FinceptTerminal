@@ -1,4 +1,6 @@
 #pragma once
+#include "core/symbol/SymbolGroup.h"
+#include "core/symbol/SymbolRef.h"
 #include "ui/theme/ThemeTokens.h"
 
 #include <QDialog>
@@ -15,6 +17,10 @@
 #include <functional>
 
 class QTableWidget;
+
+namespace fincept::ui {
+class GroupBadge;
+}
 
 namespace fincept::screens::widgets {
 
@@ -73,11 +79,34 @@ class BaseWidget : public QFrame {
     /// by the canvas when the user edits a config. Default: no-op.
     virtual void apply_config(const QJsonObject& /*cfg*/) {}
 
+    // ── Symbol link group (SymbolContext) ────────────────────────────────────
+    // A linked tile shares its symbol with every panel in the same group —
+    // dashboard tiles and IGroupLinked screens alike. Publishers (rows/cells
+    // registered with link_symbol() / install_symbol_menu()) push the clicked
+    // symbol; followers (enable_symbol_link(true)) switch to the group's symbol.
+    // The group is stored in the tile's persisted config under kLinkGroupKey,
+    // which DashboardCanvas merges into every config it saves.
+
+    static constexpr const char* kLinkGroupKey = "link_group";
+
+    SymbolGroup link_group() const { return link_group_; }
+    bool is_symbol_link_enabled() const { return link_enabled_; }
+    /// Change the group (updates the badge, emits link_group_changed). Ignored
+    /// unless linking is enabled.
+    void set_link_group(SymbolGroup g);
+    /// Restore the group from a persisted config. A config without the key
+    /// gets the widget's default group. Safe to call before linking is enabled.
+    void restore_link_group(const QJsonObject& cfg);
+    /// Write the group into `cfg` (no-op for tiles that never linked).
+    void store_link_group(QJsonObject& cfg) const;
+
   signals:
     void close_requested();
     void refresh_requested();
     /// Emitted after the user edits config; canvas listens and persists.
     void config_changed(QJsonObject new_config);
+    /// The user (or set_link_group) moved the tile to another link group.
+    void link_group_changed(fincept::SymbolGroup group);
 
   protected:
     /// Override in subclasses to re-apply styles when theme/font changes.
@@ -176,12 +205,34 @@ class BaseWidget : public QFrame {
     /// Subclasses that override this must chain to BaseWidget::eventFilter().
     bool eventFilter(QObject* obj, QEvent* event) override;
 
+    /// Opt into symbol linking and show the group badge in the title bar.
+    /// `follows`: the tile switches to the group's symbol (override
+    /// on_linked_symbol / linked_symbol). `joins_default_group`: a tile with no
+    /// saved group starts in group A; pass false for tiles that must stay
+    /// unlinked until the user links them (order entry). link_symbol() and
+    /// install_symbol_menu() call this with (false, true) on their own.
+    void enable_symbol_link(bool follows, bool joins_default_group = true);
+    /// Follower hook: the group's symbol changed. Never called for this tile's
+    /// own publishes.
+    virtual void on_linked_symbol(const SymbolRef& /*ref*/) {}
+    /// Follower hook: this tile's symbol, used to seed a group that has none
+    /// yet when the user links the tile.
+    virtual SymbolRef linked_symbol() const { return {}; }
+    /// Push `symbol` to this tile's link group (no-op when unlinked).
+    void publish_symbol(const QString& symbol, const QString& exchange = {});
+    /// Publish the symbol in column `col` (`role`) of a clicked row.
+    void install_symbol_publish(QTableWidget* table, int col = 0, int role = Qt::DisplayRole);
+    /// Index levels, FX/futures and Yahoo crypto pairs are not broker-tradable equities.
+    static bool is_tradable_equity(const QString& symbol);
+
   private:
     void refresh_base_theme();
     void on_config_clicked();
     void arm_watchdog();
     void disarm_watchdog();
     void on_watchdog_fired();
+    void on_badge_group_requested(SymbolGroup g);
+    SymbolGroup default_link_group() const;
 
   private:
     QWidget* title_bar_ = nullptr;
@@ -202,6 +253,15 @@ class BaseWidget : public QFrame {
     // Render coalescing — see schedule_render().
     std::function<void()> pending_render_;
     bool render_scheduled_ = false;
+
+    // Symbol linking — see enable_symbol_link().
+    ui::GroupBadge* group_badge_ = nullptr;
+    SymbolGroup link_group_ = SymbolGroup::None;
+    bool link_enabled_ = false;
+    bool link_follows_ = false;
+    bool link_joins_default_ = true;
+    bool link_has_saved_ = false; ///< the restored config carried a group
+    SymbolGroup link_saved_ = SymbolGroup::None;
 };
 
 } // namespace fincept::screens::widgets

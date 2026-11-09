@@ -173,6 +173,7 @@ void McpServersScreen::on_install_server(int index) {
                 // sample shows the expected shape as a placeholder (never as a value
                 // that could be saved unedited).
                 field->setEchoMode(QLineEdit::Password);
+                field->setProperty("fincept_secret", true); // stays unreadable to agents after "SHOW"
                 field->setPlaceholderText(ki < e.env_placeholders.size() ? e.env_placeholders[ki]
                                                                          : tr("Enter %1").arg(key));
             } else if (ki < e.env_placeholders.size()) {
@@ -367,6 +368,7 @@ void McpServersScreen::on_add_server() {
     // "KEY=value" is shell-syntax sample — keep ASCII so user knows the literal format.
     env_edit->setPlaceholderText(tr("KEY=value KEY2=value2"));
     env_edit->setEchoMode(QLineEdit::Password); // this field routinely holds API keys
+    env_edit->setProperty("fincept_secret", true); // stays unreadable to agents after "Show env values"
     env_edit->setAccessibleName(tr("Environment variables"));
     form->addRow(tr("Env Vars"), env_edit);
 

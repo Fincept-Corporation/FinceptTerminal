@@ -14,6 +14,16 @@
 
 namespace fincept::screens {
 
+/// How often one ticker is mentioned in the current feed, and in what tone.
+struct NewsTickerMention {
+    QString symbol;             ///< ticker as shown (holding symbol for the holdings list)
+    int count = 0;              ///< articles that mention it
+    int bullish = 0;            ///< of which tagged bullish
+    int bearish = 0;            ///< of which tagged bearish
+    double net_sentiment = 0.0; ///< mean finance-VADER score of those articles, -1..1
+    int64_t latest_ts = 0;      ///< newest mention, unix seconds
+};
+
 /// Intelligence drawer — slides in from the left over the feed panel.
 /// Contains all advanced intelligence sections: monitors, top stories,
 /// categories, entities, places, signals, prediction markets, bookmarks.
@@ -33,6 +43,10 @@ class NewsSidePanel : public QWidget {
     void update_signals(const QVector<services::CorrelationSignal>& sigs);
     void update_predictions(const QVector<services::PredictionMarket>& predictions);
     void update_saved(const QVector<services::NewsArticle>& saved);
+    /// Most-mentioned tickers in the current feed with their net tone.
+    void update_trending(const QVector<NewsTickerMention>& trending);
+    /// The user's portfolio holdings that appear in the current feed.
+    void update_holdings_mentions(const QVector<NewsTickerMention>& mentions);
 
     /// Show / hide the drawer (the screen keeps the INTEL button in sync).
     void set_drawer_open(bool open);
@@ -47,11 +61,15 @@ class NewsSidePanel : public QWidget {
     void monitor_added(const QString& label, const QStringList& keywords);
     void monitor_toggled(const QString& id);
     void monitor_deleted(const QString& id);
+    /// A trending ticker / holding row was clicked — filter the feed by it.
+    void ticker_clicked(const QString& symbol);
     /// The drawer's own close button was clicked (the screen closes it).
     void close_requested();
 
   private:
     void build_top_stories_section(QVBoxLayout* parent);
+    /// One "N mentions · tone" row per ticker into `layout` (shared by both lists).
+    void fill_mentions(QVBoxLayout* layout, QWidget* section, const QVector<NewsTickerMention>& rows);
     void build_categories_section(QVBoxLayout* parent);
     void build_monitors_section(QVBoxLayout* parent);
     void build_deviations_section(QVBoxLayout* parent);
@@ -76,6 +94,14 @@ class NewsSidePanel : public QWidget {
 
     // Top stories
     QVBoxLayout* top_stories_layout_ = nullptr;
+
+    // Trending tickers / holdings in the news
+    QWidget* trending_section_ = nullptr;
+    QVBoxLayout* trending_layout_ = nullptr;
+    QLabel* trending_title_ = nullptr;
+    QWidget* holdings_section_ = nullptr;
+    QVBoxLayout* holdings_layout_ = nullptr;
+    QLabel* holdings_title_ = nullptr;
 
     // Categories
     QVBoxLayout* categories_layout_ = nullptr;

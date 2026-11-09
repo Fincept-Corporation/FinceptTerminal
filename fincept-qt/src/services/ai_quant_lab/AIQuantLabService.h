@@ -24,15 +24,10 @@ class AIQuantLabService : public QObject {
     void run_module(const QString& module_id, const QString& command, const QJsonObject& params);
 
     // ── Qlib core ───────────────────────────────────────────────────────────
-    void list_models();
-    void get_factor_library();
-    void train_model(const QJsonObject& params);
     void run_backtest(const QJsonObject& params);
-    void optimize_portfolio(const QJsonObject& params);
 
     // ── RL Trading ──────────────────────────────────────────────────────────
     void train_rl_agent(const QJsonObject& params);
-    void evaluate_rl_agent(const QJsonObject& params);
 
     // ── GS Quant ────────────────────────────────────────────────────────────
     void gs_risk_metrics(const QJsonObject& params);
@@ -44,7 +39,6 @@ class AIQuantLabService : public QObject {
     void gs_statistics(const QJsonObject& params);
 
     // ── Functime ────────────────────────────────────────────────────────────
-    void functime_check_status();
     void functime_forecast(const QJsonObject& params);
     void functime_anomaly_detection(const QJsonObject& params);
     void functime_seasonality(const QJsonObject& params);
@@ -53,7 +47,6 @@ class AIQuantLabService : public QObject {
     void functime_stationarity(const QJsonObject& params);
 
     // ── Statsmodels ─────────────────────────────────────────────────────────
-    void sm_check_status();
     void sm_ols(const QJsonObject& params);
     void sm_arima(const QJsonObject& params);
     void sm_stationarity_tests(const QJsonObject& params);
@@ -62,7 +55,6 @@ class AIQuantLabService : public QObject {
     void sm_descriptive(const QJsonObject& params);
 
     // ── Fortitudo ───────────────────────────────────────────────────────────
-    void fort_check_status();
     void fort_portfolio_metrics(const QJsonObject& params);
     void fort_covariance_matrix(const QJsonObject& params);
     void fort_mean_variance_optimize(const QJsonObject& params);
@@ -71,26 +63,16 @@ class AIQuantLabService : public QObject {
     void fort_exp_decay_probabilities(const QJsonObject& params);
 
     // ── GluonTS ─────────────────────────────────────────────────────────────
-    void gluon_check_status();
     void gluon_probabilistic_forecast(const QJsonObject& params);
     void gluon_quantile_forecast(const QJsonObject& params);
     void gluon_distribution_fit(const QJsonObject& params);
     void gluon_evaluate_forecast(const QJsonObject& params);
     void gluon_seasonal_naive(const QJsonObject& params);
 
-    // ── CFA Quant ───────────────────────────────────────────────────────────
-    void cfa_trend_analysis(const QJsonObject& params);
-    void cfa_stationarity_test(const QJsonObject& params);
-    void cfa_arima(const QJsonObject& params);
-    void cfa_ml_prediction(const QJsonObject& params);
-    void cfa_pattern_discovery(const QJsonObject& params);
-    void cfa_bootstrap(const QJsonObject& params);
-    void cfa_data_quality(const QJsonObject& params);
-
     // ── Deep Agent (LangGraph multi-agent) ──────────────────────────────────
     /// `params`: task, agent_type, thread_id, config (LLM block). The payload —
     /// LLM key included — goes to Python on stdin, never argv. Without a
-    /// `config` (MCP / LLM-originated calls) the ai_quant_lab LLM profile is used.
+    /// `config` that names a provider the ai_quant_lab LLM profile is used.
     void run_deep_agent(const QJsonObject& params);
 
     // ── RD-Agent (autonomous factor/model research) ──────────────────────────
@@ -112,8 +94,6 @@ class AIQuantLabService : public QObject {
     void rd_agent_mcp_status();
 
     // ── Advanced ────────────────────────────────────────────────────────────
-    void list_advanced_models();
-    void create_advanced_model(const QJsonObject& params);
     void train_advanced_model(const QJsonObject& params);
 
     // ── Factor Discovery ────────────────────────────────────────────────────
@@ -177,7 +157,6 @@ class AIQuantLabService : public QObject {
     // ── Strategy Builder ────────────────────────────────────────────────────
     void strategy_create(const QString& type, const QJsonObject& params);
     void strategy_portfolio_metrics(const QJsonObject& params);
-    void strategy_list();
 
     // ── Data Processors ─────────────────────────────────────────────────────
     void dataproc_list_processors();
@@ -185,7 +164,6 @@ class AIQuantLabService : public QObject {
     void dataproc_process_data(const QJsonObject& params);
 
     // ── Quant Reporting ─────────────────────────────────────────────────────
-    void reporting_check_status();
     void reporting_ic_analysis(const QJsonObject& params);
     void reporting_model_performance(const QJsonObject& params);
     void reporting_cumulative_returns(const QJsonObject& params);
@@ -207,10 +185,6 @@ class AIQuantLabService : public QObject {
                     const python::PythonRunner::RunOptions& opts = {});
     void run_python_cached(const QString& script, const QStringList& args, const QString& module_id,
                            const QString& command, int ttl_sec);
-
-    /// run_module() for module "deep_agent": the LangGraph deep agent
-    /// (execute_task) and every RD-Agent command, each to its implementation.
-    void run_deep_agent_command(const QString& command, const QJsonObject& params);
 
     /// The LLM block for an agent run: the caller's `config` when it carries a
     /// provider, else the ai_quant_lab profile resolved from LlmProfileRepository.

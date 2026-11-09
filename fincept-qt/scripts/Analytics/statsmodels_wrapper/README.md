@@ -4,7 +4,7 @@ Comprehensive Python wrapper for the statsmodels library, providing access to ad
 
 ## Overview
 
-This wrapper provides **100% coverage** of the statsmodels library with **200+ functions** organized into logical modules:
+This wrapper exposes most of the statsmodels library through these modules:
 
 - **Regression Models**: OLS, WLS, GLS, GLSAR, Recursive LS, Rolling OLS, Rolling WLS (9 functions)
 - **Time Series Models**: ARIMA, SARIMAX, VARMAX, AutoReg, ARDL, Exponential Smoothing, Holt, Simple ES, Markov Autoregression, STL Forecast (16 functions)
@@ -13,10 +13,7 @@ This wrapper provides **100% coverage** of the statsmodels library with **200+ f
 - **Statistical Tests**: t-tests, ANOVA, Chi-square, Diagnostic tests (20 functions)
 - **Power Analysis**: Sample size and power calculations (8 functions)
 - **Multivariate Analysis**: PCA, Factor Analysis, MANOVA, Canonical Correlation (4 functions)
-- **Robust Regression**: RLM, MAD, Huber scale (4 functions)
-- **Survival Analysis**: Cox PH, Kaplan-Meier, Log-rank test (3 functions)
 - **Nonparametric Methods**: KDE, Kernel Regression, LOWESS (4 functions)
-- **GAM**: Generalized Additive Models (2 functions)
 - **Extended Stats**: 100+ additional statistical functions in `stats_extended` module covering all of `statsmodels.stats.api`
 
 ## Installation
@@ -39,10 +36,7 @@ statsmodels_wrapper/
 ├── stats_tests.py           # Statistical tests (20 functions)
 ├── power_analysis.py        # Power and sample size (8 functions)
 ├── multivariate.py          # Multivariate analysis (4 functions)
-├── robust.py                # Robust regression (4 functions)
-├── survival.py              # Survival analysis (3 functions)
 ├── nonparametric.py         # Nonparametric methods (4 functions)
-├── gam.py                   # Generalized additive models (2 functions)
 ├── stats_extended.py        # Extended stats module (100+ functions)
 └── README.md                # This file
 ```
@@ -206,22 +200,6 @@ print(f"Required n: {sample_size['nobs']:.0f}")
 | `perform_manova` | Multivariate ANOVA |
 | `canonical_correlation` | Canonical Correlation Analysis |
 
-### Robust (robust.py)
-
-| Function | Description |
-|----------|-------------|
-| `fit_rlm` | Robust Linear Model |
-| `mad` | Median Absolute Deviation |
-| `huber_scale` | Huber scale estimator |
-
-### Survival (survival.py)
-
-| Function | Description |
-|----------|-------------|
-| `fit_cox_ph` | Cox Proportional Hazards model |
-| `survdiff` | Log-rank test |
-| `kaplan_meier` | Kaplan-Meier survival function |
-
 ### Nonparametric (nonparametric.py)
 
 | Function | Description |
@@ -230,13 +208,6 @@ print(f"Required n: {sample_size['nobs']:.0f}")
 | `kernel_regression` | Kernel Regression |
 | `lowess_smoothing` | LOWESS smoothing |
 | `multivariate_kde` | Multivariate KDE |
-
-### GAM (gam.py)
-
-| Function | Description |
-|----------|-------------|
-| `fit_glm_gam` | Generalized Additive Model |
-| `fit_gam_formula` | GAM with formula interface |
 
 ### Extended Stats (stats_extended.py)
 
@@ -286,12 +257,10 @@ python stats_extended.py  # Test extended stats module
 
 ## Version
 
-- **Statsmodels**: 0.14.4
-- **Wrapper Version**: 2.0.0 (Complete Coverage)
-- **Total Functions**: 200+
-- **Coverage**: 100% of statsmodels API
-- **Last Updated**: 2026-01-23
+- **Statsmodels**: as pinned in `resources/requirements-numpy2.txt`
+- The AI Quant Lab › Statsmodels panel runs `statsmodels_service.py`; the modules above are
+  used by `Analytics/statsmodels_cli.py`.
 
 ## License
 
-MIT License - Same as Fincept Terminal
+AGPL-3.0-or-later, as for the whole repository.

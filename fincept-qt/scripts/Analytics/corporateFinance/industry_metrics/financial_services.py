@@ -1,4 +1,9 @@
-"""Financial Services Industry M&A Metrics"""
+"""Financial Services Industry M&A Metrics (banking / insurance / asset management / fintech)
+
+CLI: python financial_services.py calculate <json>  keys sector (banking|insurance|asset_management), total_assets,
+     deposits, roe, nim, efficiency_ratio, cet1_ratio, npl_ratio (ratios as fractions).
+     Native form: financial <sector> <data_json> (ratios in percent).
+"""
 from typing import Dict, Any, List, Optional
 
 class FinancialServicesMetrics:
@@ -18,7 +23,9 @@ class FinancialServicesMetrics:
 
         tangible_book_multiple = self._bank_price_to_tangible_book(roe, efficiency_ratio, npa_ratio)
 
-        asset_quality_score = 100 - (npa_ratio * 1000)
+        # npa_ratio is a percent here (the thresholds below and the benchmarks use 1.0 = 1 %): each point of
+        # NPA costs 10 points of score, so 0.8 % -> 92 and 10 % -> 0.
+        asset_quality_score = 100 - (npa_ratio * 10)
 
         profitability_score = 0
         if roe >= 15:

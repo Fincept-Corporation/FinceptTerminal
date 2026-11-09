@@ -1,4 +1,9 @@
-"""Cost Synergy Analysis"""
+"""Cost Synergy Analysis
+
+CLI: python cost_synergies.py calculate <json>   keys synergy_type (procurement | headcount | facilities,
+  inferred when absent), combined_opex, synergy_pct, duplicate_roles, facilities_to_close, ramp_years.
+  Native form: cost <synergy_type> <json>.
+"""
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum

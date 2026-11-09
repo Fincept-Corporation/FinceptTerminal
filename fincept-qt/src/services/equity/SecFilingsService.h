@@ -12,7 +12,7 @@
 namespace fincept::services::equity {
 
 /// One section of the Equity Research FILINGS tab — each is one
-/// `mcp/edgar/main.py research_*` command (the script tree the MCP EDGAR tools use).
+/// `fincept_mcp/edgar/main.py research_*` command.
 enum class SecSection { Filings, Financials, Insiders, Holders };
 
 /// A loaded section. `data` is the script's "data" object, untouched.
@@ -24,9 +24,9 @@ struct SecSectionData {
     bool stale = false;       ///< last-known-good copy, replayed while a refresh is in flight
 };
 
-/// SEC EDGAR data for the Equity Research FILINGS tab and the MCP EDGAR tools.
+/// SEC EDGAR data for the Equity Research FILINGS tab.
 ///
-/// Everything runs `mcp/edgar/main.py` through PythonRunner (async, never on the GUI
+/// Everything runs `fincept_mcp/edgar/main.py` through PythonRunner (async, never on the GUI
 /// thread's critical path), is cached in CacheManager, and identical requests that
 /// arrive while one is running share its result instead of spawning another process.
 /// One-shot per symbol (filings change a few times a quarter), so — like
@@ -48,11 +48,6 @@ class SecFilingsService : public QObject {
     /// Emits section_loaded / section_failed.
     void fetch(const QString& symbol, SecSection section, bool force = false);
 
-    /// Generic cached runner for `mcp/edgar/main.py <argv…>` (MCP EDGAR tools). `done`
-    /// runs on this object's thread with the script's full JSON object on success.
-    using CommandCallback = std::function<void(bool ok, const QJsonObject& payload, const QString& error)>;
-    void run_command(const QStringList& argv, int ttl_sec, CommandCallback done);
-
   signals:
     void section_loaded(fincept::services::equity::SecSectionData data);
     void section_failed(QString symbol, fincept::services::equity::SecSection section, QString error);
@@ -60,6 +55,9 @@ class SecFilingsService : public QObject {
   private:
     explicit SecFilingsService(QObject* parent = nullptr);
     Q_DISABLE_COPY(SecFilingsService)
+
+    /// Runs on this object's thread with the script's full JSON object on success.
+    using CommandCallback = std::function<void(bool ok, const QJsonObject& payload, const QString& error)>;
 
     /// Start (or join) the process for `key`; every waiter gets the same result.
     void run_shared(const QString& key, const QStringList& argv, CommandCallback done);

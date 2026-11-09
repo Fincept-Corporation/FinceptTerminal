@@ -49,8 +49,10 @@ class EquityNewsTab : public QWidget {
     QLabel* count_label_ = nullptr;
     QLabel* company_label_ = nullptr;
     QLabel* title_lbl_ = nullptr;
+    QLabel* tone_label_ = nullptr; ///< aggregate tone of the loaded headlines
     QComboBox* provider_combo_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
+    QPushButton* open_news_btn_ = nullptr; ///< hand the symbol to the News screen (all RSS feeds)
 
     QVector<services::equity::NewsArticle> cached_articles_;
     bool news_loaded_ = false;

@@ -4,11 +4,17 @@ Databento FNO Chain Provider
 Fetches option chain data from Databento for the FNO tab.
 Produces OptionChain-compatible JSON for C++ consumption.
 
-Commands:
-    list_expiries  {"api_key": "...", "symbol": "SPY"}
-    get_chain      {"api_key": "...", "symbol": "SPY", "expiry": "2026-06-20"}
+Commands (JSON args on argv, or `--stdin` to read them from standard input):
+    list_expiries  {"symbol": "SPY"}
+    get_chain      {"symbol": "SPY", "expiry": "2026-06-20"}
 
-Called via PythonRunner from OptionChainService.
+The Databento API key is taken from args["api_key"] when present, else from the
+DATABENTO_API_KEY environment variable (PythonRunner injects it from the
+terminal's secure storage). Never pass the key on argv: any process running as
+the same user can read another process's command line.
+
+Called via PythonRunner from OptionChainService (args on stdin):
+    python databento_fno_chain.py get_chain --stdin  <<< '{"symbol": "SPY", "expiry": "2026-06-20"}'
 """
 
 import sys
@@ -57,8 +63,13 @@ def _parse_expiration(exp_str: str) -> Optional[datetime]:
     return None
 
 
+def _api_key(args: Dict[str, Any]) -> str:
+    """args["api_key"] if given, else the DATABENTO_API_KEY environment variable."""
+    return str(args.get("api_key") or "").strip() or os.environ.get("DATABENTO_API_KEY", "").strip()
+
+
 def list_expiries(args: Dict[str, Any]) -> Dict[str, Any]:
-    api_key = args.get("api_key", "")
+    api_key = _api_key(args)
     symbol = args.get("symbol", "SPY")
     date = args.get("date")
 
@@ -96,7 +107,7 @@ def list_expiries(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_chain(args: Dict[str, Any]) -> Dict[str, Any]:
-    api_key = args.get("api_key", "")
+    api_key = _api_key(args)
     symbol = args.get("symbol", "SPY")
     expiry = args.get("expiry", "")
     date = args.get("date")
@@ -308,7 +319,7 @@ def _fetch_option_quotes(
 
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps(_fail("Usage: databento_fno_chain.py <command> <json_args>",
+        print(json.dumps(_fail("Usage: databento_fno_chain.py <command> [<json_args> | --stdin]",
                                commands=["list_expiries", "get_chain"],
                                databento_available=DATABENTO_AVAILABLE)), flush=True)
         sys.exit(1)
@@ -321,8 +332,9 @@ def main():
 
     args = {}
     if len(sys.argv) > 2:
+        raw = sys.stdin.read() if sys.argv[2] == "--stdin" else sys.argv[2]
         try:
-            args = json.loads(sys.argv[2])
+            args = json.loads(raw) if raw.strip() else {}
         except json.JSONDecodeError as e:
             print(json.dumps(_fail(f"Invalid JSON args: {e}")), flush=True)
             sys.exit(1)

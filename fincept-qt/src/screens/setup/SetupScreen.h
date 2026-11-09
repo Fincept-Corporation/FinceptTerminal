@@ -2,11 +2,15 @@
 // First-run setup window — shown when no usable Python environment exists.
 //
 // Pure view over PythonSetupManager (which owns the pipeline): four stage rows
-// (runtime, trading libraries, analytics core, analytics full) with real
-// progress, live per-stage detail and elapsed time, the machine download rate,
-// and the Enterprise showcase in the right column. LAUNCH TERMINAL becomes
-// available as soon as the analytics core is installed; the remaining
-// libraries keep installing in the background after the hand-off.
+// (runtime, essential libraries, full analytics libraries, trading libraries)
+// with real progress, live per-stage detail and elapsed time, the machine
+// download rate, and the Enterprise showcase in the right column.
+//
+// First run installs only the ESSENTIALS (runtime + yfinance/pandas/NumPy,
+// about a minute) and opens the terminal automatically the moment they are in.
+// The full and trading rows are shown as OPTIONAL — installed later from
+// Settings → Python Env, or on demand. The user can also skip setup entirely,
+// or move on while it finishes in the background.
 //
 // Internationalised: every string flows through tr(); retranslateUi() rebuilds
 // the static texts and render() the state-dependent ones.
@@ -44,9 +48,10 @@ class SetupScreen : public QWidget {
     explicit SetupScreen(QWidget* parent = nullptr);
 
   signals:
-    /// Hand off to the main window. Emitted by LAUNCH TERMINAL (available from
-    /// "core ready"), by "Continue without Python", and automatically shortly
-    /// after a complete success. Fires at most once.
+    /// Hand off to the main window. Emitted automatically shortly after the
+    /// essentials are installed ("core ready"), by LAUNCH TERMINAL, by "Skip for
+    /// now" / "Continue without Python", and by "finish in the background".
+    /// Fires at most once.
     void launch_requested();
 
   protected:
@@ -66,7 +71,7 @@ class SetupScreen : public QWidget {
         QLabel* detail = nullptr; // elided live line; full text in the tooltip
     };
     enum class PrimaryAction { Begin, Wait, Launch, Retry };
-    enum class LinkAction { None, RetryFailed, ContinueLimited };
+    enum class LinkAction { None, RetryFailed, ContinueLimited, SkipSetup, ContinueInBackground };
 
     void build_ui();
     QWidget* build_stage_row(QWidget* parent, int index);
@@ -74,7 +79,10 @@ class SetupScreen : public QWidget {
     void retranslateUi();
     /// Re-render every state-dependent widget from PythonSetupManager.
     void render();
-    void render_buttons(bool has_run, bool running, bool succeeded, bool core_ready, const QString& error);
+    void render_buttons(bool has_run, bool running, bool succeeded, bool core_ready, bool full_scope,
+                        const QString& error);
+    /// Launch shortly after the essentials are in (or after a full success). Once.
+    void schedule_auto_launch();
     /// Tick timer + network meter run only while a setup run is active and the window is visible.
     void sync_activity();
     void on_primary_clicked();
@@ -85,8 +93,10 @@ class SetupScreen : public QWidget {
     void launch();
 
     std::array<StageRow, 4> rows_{};
-    std::array<bool, 4> prefill_done_{}; // what the cheap status check found already installed
+    std::array<bool, 4> prefill_done_{};     // what the cheap status check found already installed
+    std::array<bool, 4> prefill_optional_{}; // outside the scope a run would install (shown OPTIONAL)
     bool anything_installed_ = false;
+    bool full_requested_ = false; // the full set was opted into earlier → a run installs everything
 
     QLabel* title_lbl_ = nullptr;
     QLabel* subtitle_lbl_ = nullptr;

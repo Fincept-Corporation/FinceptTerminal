@@ -1,4 +1,8 @@
-"""Football Field Valuation Chart - Data Generation for Frontend Rendering"""
+"""Football Field Valuation Chart - Data Generation for Frontend Rendering
+
+CLI: python football_field.py generate <json>   keys <method>_low / <method>_high pairs (dcf, comps,
+  precedent, ...), current_price, offer_price; or methods [...] and format_type.
+"""
 import sys
 import json
 from typing import Dict, Any, List, Optional

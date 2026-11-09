@@ -1,14 +1,18 @@
 #pragma once
 // ToolSelfTest.h — headless self-test for the MCP tool system.
 //
-// Runs WITHOUT a GUI, an LLM, or any network/API key. Exercises the two
-// deterministic halves of agentic reliability:
+// Runs WITHOUT a GUI, an LLM, or any network/API key. Checks the deterministic
+// properties the core tool catalogue depends on:
 //
-//   1. Retrieval — can ToolRetriever (the BM25 index behind tool_list) surface
-//      the right tool for a realistic natural-language intent? This is the #1
-//      cause of "the model couldn't find/call the tool" failures.
-//   2. Registry integrity — does every registered tool have a handler, a valid
-//      schema, and a usable description?
+//   1. Registry integrity — exactly the ten core tools are registered, each
+//      with a handler, a valid schema, a usable description and a known
+//      category.
+//   2. Token budget — the whole catalogue stays small enough to ride on every
+//      request of every turn (no discovery tier exists to fall back on).
+//   3. Job lifecycle — JobRegistry, which the `python` tool runs on.
+//   4. Batch planning — UI-changing tools are barriers in a tool round.
+//   5. Python script policy — path normalisation refuses anything outside the
+//      scripts tree; risky scripts / commands are classified for approval.
 //
 // Invoked from main() via `--selftest-tools` / `--dump-tools`, after
 // initialize_all_tools() registers the real catalog but before any window or
@@ -16,13 +20,12 @@
 
 namespace fincept::mcp {
 
-/// Run the retrieval eval + registry audit. Prints a scored report to stdout.
-/// Returns a process exit code: 0 = passed, non-zero = failures (no-handler
-/// tools, schema errors, or retrieval recall below threshold).
+/// Run the audit. Prints a report to stdout. Returns a process exit code:
+/// 0 = passed, non-zero = failures.
 int run_tool_selftest();
 
 /// Print every registered tool as JSON (name, category, description, flags) to
-/// stdout. Returns 0. Used to ground the eval corpus in the real catalog.
+/// stdout. Returns 0.
 int dump_tools_json();
 
 } // namespace fincept::mcp

@@ -531,6 +531,10 @@ QWidget* EquityOverviewTab::build_chart_panel() {
     kline_chart_ = new fincept::ui::KLineChartWidget;
     if (kline_chart_->is_available()) {
         vl->addWidget(kline_chart_, 1);
+        // The runtime can be deployed yet unable to render (#411) — degrade to
+        // the canvas instead of leaving a permanently blank chart.
+        connect(kline_chart_, &fincept::ui::KLineChartWidget::runtime_failed, this,
+                &EquityOverviewTab::swap_kline_for_native_chart);
     } else {
         delete kline_chart_;
         kline_chart_ = nullptr;
@@ -855,6 +859,24 @@ void EquityOverviewTab::rebuild_chart(const QVector<services::equity::Candle>& c
 #endif
     const QString cs = currency_symbol(current_currency_.isEmpty() ? "USD" : current_currency_);
     candle_canvas_->set_candles(candles, cs);
+}
+
+void EquityOverviewTab::swap_kline_for_native_chart() {
+#ifdef HAS_QT_WEBENGINE
+    if (!kline_chart_)
+        return;
+    auto* dead = kline_chart_;
+    kline_chart_ = nullptr;
+    QWidget* host = dead->parentWidget();
+    candle_canvas_ = new ResearchCandleCanvas(host);
+    // replaceWidget keeps the layout slot (and its stretch factor).
+    if (host && host->layout())
+        delete host->layout()->replaceWidget(dead, candle_canvas_);
+    dead->hide();
+    dead->deleteLater();
+    if (historical_loaded_)
+        rebuild_chart(cached_candles_);
+#endif
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────

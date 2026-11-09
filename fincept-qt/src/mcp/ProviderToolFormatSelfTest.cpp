@@ -102,11 +102,11 @@ void ptf_check_gemini_schema(const QJsonObject& schema, const QString& path, QSt
     }
 }
 
-// ── Per-declaration checks, shared by the Tier-0 sections and the
+// ── Per-declaration checks, shared by the default-turn sections and the
 // catalogue-wide sweep ──────────────────────────────────────────────────────
 //
-// Factored out rather than written twice on purpose. The Tier-0 sections and
-// the sweep have to agree on what "valid" means: if they drift, the sweep stops
+// Factored out rather than written twice on purpose. The default-turn sections
+// and the sweep have to agree on what "valid" means: if they drift, the sweep stops
 // being a superset and the coverage it exists to provide is imaginary.
 
 // One OpenAI `tools[]` entry: {"type":"function","function":{name,description,parameters}}.
@@ -234,14 +234,12 @@ int run_provider_tool_format_selftest() {
     auto& svc = McpService::instance();
     const ToolFilter default_filter;
 
-    // Every dialect is exercised twice: once as the opening turn (no activated
-    // tools) and once mid-turn with a discovered tool fed back, because the
-    // activation path has its own cache key and its own history of drift.
-    const QSet<QString> activated = {QStringLiteral("create_portfolio"), QStringLiteral("get_quote")};
+    // The default filter is what every chat turn sends: the whole internal
+    // catalogue (the ten core tools) plus any external servers' tools.
 
     // ── OpenAI ──────────────────────────────────────────────────────────
     {
-        const QJsonArray tools = svc.format_tools_for_openai(default_filter, activated);
+        const QJsonArray tools = svc.format_tools_for_openai(default_filter);
         ptf_out(QStringLiteral("\n[1] OPENAI — %1 function declarations").arg(tools.size()));
 
         QStringList errs;
@@ -255,7 +253,7 @@ int run_provider_tool_format_selftest() {
 
     // ── Anthropic ───────────────────────────────────────────────────────
     {
-        const QJsonArray tools = svc.format_tools_for_anthropic(default_filter, activated);
+        const QJsonArray tools = svc.format_tools_for_anthropic(default_filter);
         ptf_out(QStringLiteral("\n[2] ANTHROPIC — %1 tools").arg(tools.size()));
 
         QStringList errs;
@@ -268,7 +266,7 @@ int run_provider_tool_format_selftest() {
 
         // The whole point of routing Anthropic through the shared selector: it
         // must see the same tools the OpenAI path does, not a different slice.
-        const QJsonArray oai = svc.format_tools_for_openai(default_filter, activated);
+        const QJsonArray oai = svc.format_tools_for_openai(default_filter);
         QStringList parity;
         if (tools.size() != oai.size()) {
             parity << QStringLiteral("anthropic advertises %1 tools, openai %2 — the two dialects "
@@ -281,7 +279,7 @@ int run_provider_tool_format_selftest() {
 
     // ── Gemini ──────────────────────────────────────────────────────────
     {
-        const QJsonArray tools = svc.format_tools_for_gemini(default_filter, activated);
+        const QJsonArray tools = svc.format_tools_for_gemini(default_filter);
         const QJsonArray decls =
             tools.isEmpty() ? QJsonArray{}
                             : tools[0].toObject().value(QStringLiteral("functionDeclarations")).toArray();
@@ -387,18 +385,16 @@ int run_provider_tool_format_selftest() {
 
     // -- Catalogue-wide sweep, all three dialects ------------------------
     //
-    // Sections [1]-[3] only ever see Tier-0 plus a couple of activated tools --
-    // ~14 of a ~926 tool catalogue. But Tool RAG hands the model ANY tool it
-    // discovers, and that tool's declaration then rides in the next round's
-    // payload, so a declaration only reachable after tool_list is exactly as
-    // fatal as a Tier-0 one. It was never checked, and that is how 149 tools
-    // came to lose parameters on Gemini while this suite stayed green.
+    // Sections [1]-[3] see what a default chat turn sends. The sweep also runs
+    // every registered tool through each dialect under explicit name filters,
+    // so a declaration that only an agent's filtered catalogue would carry is
+    // checked as well (a Gemini parameter that does not survive translation
+    // makes the tool inert there without any error).
     //
     // The sweep drives the REAL formatters rather than re-deriving what they
     // ought to emit -- a test that reimplements the thing it checks agrees with
     // its own bugs. Each dialect caps its array (Gemini at 128, the others at
-    // 256), so the catalogue goes through in chunks: an anchored alternation of
-    // exact names makes the filter non-default, which also bypasses Tier-0.
+    // 256), so the catalogue goes through in chunks of anchored name filters.
     {
         const std::vector<UnifiedTool> all = svc.get_all_tools();
         ptf_out(QStringLiteral("\n[5] CATALOGUE SWEEP, ALL DIALECTS - %1 tools").arg(all.size()));

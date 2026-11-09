@@ -12,6 +12,8 @@ import pandas as pd
 import asyncio
 import aiohttp
 
+import fincept_json  # scripts/fincept_json.py: NaN / Infinity -> null at the output boundary
+
 # Windows DNS fix: aiohttp's default resolver (aiodns/pycares) cannot read the
 # system DNS configuration on Windows and fails every request with
 # "Timeout while contacting DNS servers". Use the threaded getaddrinfo resolver
@@ -24,6 +26,9 @@ if sys.platform == "win32":
 # BLS API Configuration
 BLS_API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 BLS_FTP_BASE = "https://download.bls.gov/pub/time.series/"
+# download.bls.gov refuses anonymous user agents; BLS asks for a contact address in it.
+BLS_FILE_HEADERS = {"User-Agent": "Fincept-Terminal (support@fincept.in)"}
+SEARCH_RESULT_LIMIT = 500
 
 # Survey Categories (from OpenBB constants)
 SURVEY_CATEGORIES = {
@@ -58,20 +63,86 @@ SURVEY_CATEGORY_NAMES = {
     "tu": "Time Use",
 }
 
-# Popular Series IDs for quick access
+# Popular Series IDs for quick access. These must be BLS series ids: FRED mnemonics (UNRATE,
+# PAYEMS, CPIAUCSL, CIVPART, ...) are not BLS series and the BLS API answers them with
+# "Invalid Series".
 POPULAR_SERIES = {
-    "CPIAUCSL": "Consumer Price Index for All Urban Consumers: All Items",
-    "UNRATE": "Unemployment Rate",
-    "PAYEMS": "All Employees: Total Nonfarm Payrolls",
-    "CPIAUCNS": "Consumer Price Index for All Urban Consumers: All Items (NSA)",
-    "USPRIV": "All Employees: Private",
-    "CES0000000001": "All Employees: Total Nonfarm",
-    "LNS14000000": "Unemployment Rate",
-    "LNS13000000": "Labor Force Participation Rate",
-    "LNS11300000": "Employment-Population Ratio",
-    "CIVPART": "Labor Force Participation Rate",
-    "EMRATIO": "Employment-Population Ratio"
+    "CUSR0000SA0": "CPI-U: All items, U.S. city average (SA)",
+    "CUUR0000SA0": "CPI-U: All items, U.S. city average (NSA)",
+    "CES0000000001": "All employees: Total nonfarm (SA, thousands)",
+    "CES0500000001": "All employees: Total private (SA, thousands)",
+    "LNS14000000": "Unemployment rate (SA)",
+    "LNS13000000": "Unemployment level (SA, thousands)",
+    "LNS11300000": "Labor force participation rate (SA)",
+    "LNS12300000": "Employment-population ratio (SA)",
 }
+
+# Series behind the overview commands, by the key each group is returned under.
+LABOR_OVERVIEW_SERIES = {
+    "unemployment_rate": ["LNS14000000"],            # Unemployment rate, SA, percent
+    "nonfarm_payrolls": ["CES0000000001"],           # All employees, total nonfarm, SA, thousands
+    "labor_force_participation": ["LNS11300000"],    # Labor force participation rate, SA, percent
+    "employment_population_ratio": ["LNS12300000"],  # Employment-population ratio, SA, percent
+}
+
+INFLATION_OVERVIEW_SERIES = {  # CPI-U, U.S. city average, index 1982-84=100
+    "cpi_all_items": ["CUSR0000SA0", "CUUR0000SA0"],  # All items, SA and NSA
+    "core_cpi": ["CUSR0000SA0L1E"],                   # All items less food and energy, SA
+    "energy_inflation": ["CUSR0000SA0E"],             # Energy, SA
+    "food_inflation": ["CUSR0000SAF1"],               # Food, SA
+    "core_goods": ["CUSR0000SACL1E"],                 # Commodities less food and energy commodities, SA
+    "core_services": ["CUSR0000SASLE"],               # Services less energy services, SA
+}
+
+# Employment Cost Index, 12-month percent change, not seasonally adjusted (BLS publishes the
+# seasonally adjusted ECI only as 3-month changes).
+ECI_SERIES = [
+    "CIU2010000000000A",  # Total compensation, private industry
+    "CIU2020000000000A",  # Wages and salaries, private industry
+    "CIU2030000000000A",  # Total benefits, private industry
+    "CIU3010000000000A",  # Total compensation, state and local government
+    "CIU3020000000000A",  # Wages and salaries, state and local government
+    "CIU3030000000000A",  # Total benefits, state and local government
+]
+
+PRODUCTIVITY_SERIES = {  # SA, percent change from previous quarter at annual rate
+    "labor_productivity": ["PRS85006092", "PRS30006092"],  # Nonfarm business, manufacturing
+    "unit_labor_costs": ["PRS85006112", "PRS30006112"],    # Nonfarm business, manufacturing
+    "compensation": ["PRS85006102", "PRS85006152"],        # Nonfarm business: hourly, real hourly
+}
+
+
+def _bls_period_date(year: str, period: str):
+    """BLS period code -> (ISO date of the period's first day, is_annual_average).
+
+    M01-M12 monthly (M13 = annual average), Q01-Q04 quarterly (Q05 = annual average),
+    S01-S02 semiannual (S03 = annual average), A01 annual.
+    """
+    code = period[:1]
+    try:
+        num = int(period[1:])
+    except ValueError:
+        return f"{year}-01-01", False
+    if (code, num) in (("M", 13), ("Q", 5), ("S", 3)):
+        return f"{year}-12-31", True
+    if code == "M":
+        return f"{year}-{num:02d}-01", False
+    if code == "Q":
+        return f"{year}-{(num - 1) * 3 + 1:02d}-01", False
+    if code == "S":
+        return f"{year}-{(num - 1) * 6 + 1:02d}-01", False
+    return f"{year}-01-01", False
+
+
+def _group_series_rows(series_data: List[Dict[str, Any]], groups: Dict[str, List[str]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Split processed rows into the named groups by exact series id."""
+    by_id = {sid: name for name, ids in groups.items() for sid in ids}
+    grouped: Dict[str, List[Dict[str, Any]]] = {name: [] for name in groups}
+    for record in series_data:
+        name = by_id.get(record.get("symbol"))
+        if name:
+            grouped[name].append(record)
+    return grouped
 
 
 class BLSError:
@@ -273,25 +344,9 @@ class BLSDataAPI:
             # Process data points
             data_points = series.get("data", [])
             for point in data_points:
-                year = point.get("year", "")
-                period = point.get("period", "").replace("M", "")
-
-                # Parse date
-                if period.startswith("A") or period in ("S01", "Q01"):
-                    date_str = f"{year}-01-01"
-                elif period == "S02":
-                    date_str = f"{year}-07-01"
-                elif period in ("S03", "Q05"):
-                    date_str = f"{year}-12-31"
-                    period = "13"
-                elif period == "Q02":
-                    date_str = f"{year}-04-01"
-                elif period == "Q03":
-                    date_str = f"{year}-07-01"
-                elif period == "Q04":
-                    date_str = f"{year}-10-01"
-                else:
-                    date_str = f"{year}-{period.zfill(2)}-01"
+                year = str(point.get("year", ""))
+                period = str(point.get("period", ""))
+                date_str, annual_average_row = _bls_period_date(year, period)
 
                 # Parse value
                 value = point.get("value")
@@ -303,18 +358,23 @@ class BLSDataAPI:
                 else:
                     numeric_value = None
 
-                # Create data record
+                # Create data record. year + period are BLS's own period keys (M01..M13,
+                # Q01..Q05, S01..S03, A01); date is the first day of that period.
                 record = {
                     "symbol": series_id,
                     "date": date_str,
+                    "year": year,
+                    "period": period,
                     "value": numeric_value,
                     "latest": point.get("latest") == "true"
                 }
+                if annual_average_row:
+                    record["annual_average"] = True
 
                 # Add title if available
                 if catalog_info and "series_title" in catalog_info:
                     title = catalog_info["series_title"]
-                    if period == "13":
+                    if annual_average_row:
                         title += " (Annual Average)"
                     record["title"] = title
 
@@ -410,7 +470,9 @@ class BLSDataAPI:
             if results_df.empty:
                 return BLSError("bls_search", f"No results found for query: '{query}' in category '{category}'").to_dict()
 
-            # Format results
+            # Format results (empty catalogue cells are NaN here; fincept_json writes them as null)
+            total_matches = len(results_df)
+            results_df = results_df.head(SEARCH_RESULT_LIMIT)
             if include_extras:
                 # Return all columns
                 results = results_df.to_dict("records")
@@ -430,6 +492,8 @@ class BLSDataAPI:
                 "data": {
                     "query": query,
                     "category": category,
+                    "total_matches": total_matches,
+                    "truncated": total_matches > len(results),
                     "results": results,
                     "metadata": metadata if metadata else None
                 }
@@ -439,25 +503,29 @@ class BLSDataAPI:
             return BLSError("bls_search", str(e)).to_dict()
 
     def _get_local_category_data(self, category: str) -> Optional[pd.DataFrame]:
-        """Get category series data from local cache (simplified version)"""
-        # In a real implementation, this would read from local cached files
-        # For now, return some sample data for popular categories
-        if category == "cpi":
-            data = [
-                {"series_id": "CPIAUCSL", "series_title": "Consumer Price Index for All Urban Consumers: All Items", "survey_name": "Consumer Price Index - All Urban Consumers"},
-                {"series_id": "CPIAUCNS", "series_title": "Consumer Price Index for All Urban Consumers: All Items (NSA)", "survey_name": "Consumer Price Index - All Urban Consumers"},
-                {"series_id": "CUSR0000SA0", "series_title": "Consumer Price Index for All Urban Consumers: All Items (Seasonally Adjusted)", "survey_name": "Consumer Price Index - All Urban Consumers"}
-            ]
-        elif category == "employment":
-            data = [
-                {"series_id": "UNRATE", "series_title": "Unemployment Rate", "survey_name": "Current Population Survey"},
-                {"series_id": "PAYEMS", "series_title": "All Employees: Total Nonfarm Payrolls", "survey_name": "Current Employment Statistics survey (National)"},
-                {"series_id": "LNS14000000", "series_title": "Unemployment Rate", "survey_name": "Labor Force Statistics from the Current Population Survey"}
-            ]
-        else:
-            return None
+        """Series catalogue of a category: BLS's own <survey>.series files (one per survey code).
 
-        return pd.DataFrame(data)
+        Used to return three hard-coded "sample" rows, two of them FRED ids (CPIAUCSL, CPIAUCNS)
+        that the BLS API rejects.
+        """
+        frames = []
+        for survey in SURVEY_CATEGORIES.get(category, []):
+            url = f"{BLS_FTP_BASE}{survey}/{survey}.series"
+            try:
+                resp = self.session.get(url, headers=BLS_FILE_HEADERS, timeout=120)
+            except requests.exceptions.RequestException:
+                continue
+            if resp.status_code != 200:
+                continue
+            df = self._parse_ftp_data(resp.text)
+            if "series_id" not in df.columns:
+                continue
+            df["survey_name"] = SURVEY_CATEGORY_NAMES.get(category, category)
+            df["survey_code"] = survey
+            frames.append(df)
+        if not frames:
+            return None
+        return pd.concat(frames, ignore_index=True)
 
     def _get_local_code_map(self, category: str) -> Dict:
         """Get code map for category (simplified version)"""
@@ -542,19 +610,8 @@ class BLSDataAPI:
     async def get_labor_market_overview(self) -> Dict[str, Any]:
         """Get comprehensive labor market overview"""
         try:
-            # Key labor market series
-            labor_series = [
-                "UNRATE",      # Unemployment Rate
-                "PAYEMS",      # Nonfarm Payrolls
-                "LNS14000000", # Unemployment Rate (CPS)
-                "LNS13000000", # Labor Force Participation Rate
-                "CIVPART",     # Labor Force Participation Rate (alternative)
-                "EMRATIO",     # Employment-Population Ratio
-                "LNS11300000"  # Employment-Population Ratio (alternative)
-            ]
-
             result = await self.get_bls_timeseries(
-                series_ids=labor_series,
+                series_ids=[sid for ids in LABOR_OVERVIEW_SERIES.values() for sid in ids],
                 start_year=datetime.now().year - 3,  # 3 years of data
                 calculations=True,
                 catalog=True
@@ -563,22 +620,13 @@ class BLSDataAPI:
             if "error" in result:
                 return result
 
-            # Categorize data
             data = result.get("data", {})
             series_data = data.get("series_data", [])
-
-            unemployment_data = [s for s in series_data if "UNRATE" in s.get("symbol", "")]
-            payrolls_data = [s for s in series_data if "PAYEMS" in s.get("symbol", "")]
-            participation_data = [s for s in series_data if any(pid in s.get("symbol", "") for pid in ["LNS13000000", "CIVPART"])]
-            employment_ratio_data = [s for s in series_data if any(eid in s.get("symbol", "") for eid in ["LNS11300000", "EMRATIO"])]
 
             return {
                 "success": True,
                 "data": {
-                    "unemployment_rate": unemployment_data,
-                    "nonfarm_payrolls": payrolls_data,
-                    "labor_force_participation": participation_data,
-                    "employment_population_ratio": employment_ratio_data,
+                    **_group_series_rows(series_data, LABOR_OVERVIEW_SERIES),
                     "summary": {
                         "total_data_points": len(series_data),
                         "date_range": {
@@ -595,20 +643,8 @@ class BLSDataAPI:
     async def get_inflation_overview(self) -> Dict[str, Any]:
         """Get comprehensive inflation overview"""
         try:
-            # Key inflation series
-            inflation_series = [
-                "CPIAUCSL",    # Consumer Price Index All Items
-                "CPIAUCNS",    # CPI All Items (NSA)
-                "CUSR0000SA0", # CPI All Items (Seasonally Adjusted)
-                "CUSR0000SA0L1E", # CPI All Items Less Food & Energy
-                "CUSR0000SA0E",   # CPI Energy
-                "CUSR0000SA0F",   # CPI Food
-                "CUSR0000SAM3",   # CPI Commodities Less Food & Energy Commodities
-                "CUSR0000SAD"     # CPI Services Less Energy Services
-            ]
-
             result = await self.get_bls_timeseries(
-                series_ids=inflation_series,
+                series_ids=[sid for ids in INFLATION_OVERVIEW_SERIES.values() for sid in ids],
                 start_year=datetime.now().year - 3,  # 3 years of data
                 calculations=True,
                 catalog=True
@@ -617,22 +653,13 @@ class BLSDataAPI:
             if "error" in result:
                 return result
 
-            # Categorize data
             data = result.get("data", {})
             series_data = data.get("series_data", [])
-
-            cpi_all_data = [s for s in series_data if s.get("symbol") in ["CPIAUCSL", "CPIAUCNS", "CUSR0000SA0"]]
-            cpi_core_data = [s for s in series_data if "L1E" in s.get("symbol", "")]
-            cpi_energy_data = [s for s in series_data if "E" in s.get("symbol", "") and "L1E" not in s.get("symbol", "")]
-            cpi_food_data = [s for s in series_data if "F" in s.get("symbol", "") and "E" not in s.get("symbol", "")]
 
             return {
                 "success": True,
                 "data": {
-                    "cpi_all_items": cpi_all_data,
-                    "core_cpi": cpi_core_data,
-                    "energy_inflation": cpi_energy_data,
-                    "food_inflation": cpi_food_data,
+                    **_group_series_rows(series_data, INFLATION_OVERVIEW_SERIES),
                     "summary": {
                         "total_data_points": len(series_data),
                         "date_range": {
@@ -649,18 +676,8 @@ class BLSDataAPI:
     async def get_employment_cost_index(self) -> Dict[str, Any]:
         """Get Employment Cost Index data"""
         try:
-            # ECI series
-            eci_series = [
-                "CIU1010000000000A",  # Employment Cost Index: Total Compensation, Private
-                "CIU2020000000000A",  # Employment Cost Index: Wages and Salaries, Private
-                "CIU3010000000000A",  # Employment Cost Index: Benefits, Private
-                "CIS1010000000000A",  # Employment Cost Index: Total Compensation, State & Local
-                "CIS2020000000000A",  # Employment Cost Index: Wages and Salaries, State & Local
-                "CIS3010000000000A"   # Employment Cost Index: Benefits, State & Local
-            ]
-
             result = await self.get_bls_timeseries(
-                series_ids=eci_series,
+                series_ids=ECI_SERIES,
                 start_year=datetime.now().year - 5,  # 5 years of data
                 calculations=True,
                 catalog=True
@@ -683,18 +700,8 @@ class BLSDataAPI:
     async def get_productivity_costs(self) -> Dict[str, Any]:
         """Get Productivity and Costs data"""
         try:
-            # Productivity series
-            productivity_series = [
-                "OPHNFB",      # Nonfarm Business Sector: Labor Productivity
-                "OPHPBS",      # Nonfarm Business Sector: Unit Labor Costs
-                "OPHMFB",      # Manufacturing Sector: Labor Productivity
-                "OPHMBS",      # Manufacturing Sector: Unit Labor Costs
-                "OPHNFB",      # Nonfarm Business: Output per Hour
-                "COMPNFB"      # Nonfarm Business: Compensation per Hour
-            ]
-
             result = await self.get_bls_timeseries(
-                series_ids=productivity_series,
+                series_ids=[sid for ids in PRODUCTIVITY_SERIES.values() for sid in ids],
                 start_year=datetime.now().year - 5,  # 5 years of data
                 calculations=True,
                 catalog=True
@@ -703,20 +710,13 @@ class BLSDataAPI:
             if "error" in result:
                 return result
 
-            # Categorize data
             data = result.get("data", {})
             series_data = data.get("series_data", [])
-
-            productivity_data = [s for s in series_data if any(p in s.get("symbol", "") for p in ["OPHNFB", "OPHMFB", "OPHNFB"])]
-            unit_costs_data = [s for s in series_data if any(c in s.get("symbol", "") for c in ["OPHPBS", "OPHMBS"])]
-            compensation_data = [s for s in series_data if "COMP" in s.get("symbol", "")]
 
             return {
                 "success": True,
                 "data": {
-                    "labor_productivity": productivity_data,
-                    "unit_labor_costs": unit_costs_data,
-                    "compensation": compensation_data,
+                    **_group_series_rows(series_data, PRODUCTIVITY_SERIES),
                     "description": "Productivity and Costs measures business sector efficiency"
                 }
             }
@@ -805,7 +805,7 @@ def main(args=None):
 
     # Run the async command
     result = asyncio.run(run_command())
-    print(json.dumps(result, indent=2, default=str))
+    fincept_json.emit(result)
 
 
 if __name__ == "__main__":

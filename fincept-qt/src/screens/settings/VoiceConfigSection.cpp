@@ -230,6 +230,7 @@ void VoiceConfigSection::build_ui() {
     key_lbl_->setStyleSheet(label_ss());
     api_key_edit_ = new QLineEdit;
     api_key_edit_->setEchoMode(QLineEdit::Password);
+    api_key_edit_->setProperty("fincept_secret", true); // stays unreadable to agents after "Show"
     api_key_edit_->setPlaceholderText(tr("Paste your Deepgram API key"));
     api_key_edit_->setStyleSheet(input_ss());
     api_key_edit_->setMinimumWidth(320);

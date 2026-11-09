@@ -9,6 +9,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <cmath>
 
 namespace fincept::services::equity {
 
@@ -26,6 +27,9 @@ constexpr double kConfidenceFloor = 0.15;
 
 constexpr int kTimeoutMs = 15000;
 constexpr int kMaxArticles = 40;
+// Recency weighting of the news leg: an article's weight halves every N days (undated
+// articles count as one half-life old).
+constexpr double kNewsHalfLifeDays = 3.0;
 
 QString sentiment_label(double score) {
     if (score >= kLabelThreshold)
@@ -111,7 +115,7 @@ void EquitySentimentService::on_news_loaded(const QString& symbol, const QVector
         return;
     }
 
-    // news_nlp.py reads headline/summary; equity articles use title/description.
+    // NewsNlpService reads headline/summary; equity articles use title/description.
     // Map across, tagging a stable id so we can rejoin scores for display.
     QVector<fincept::services::NewsArticle> mapped;
     mapped.reserve(articles.size());
@@ -161,7 +165,24 @@ void EquitySentimentService::on_news_loaded(const QString& symbol, const QVector
 
             const int scored = result.bullish + result.bearish + result.neutral;
             const int non_neutral = result.bullish + result.bearish;
-            news_.score = result.overall_score;
+            // Recency-weighted tone: a headline's weight halves every kNewsHalfLifeDays, so
+            // this week's news is not outvoted by a fortnight-old story. The plain mean
+            // (overall_score) weighted a 14-day-old headline the same as today's.
+            {
+                const qint64 now = QDateTime::currentSecsSinceEpoch();
+                double wsum = 0.0, acc = 0.0;
+                for (int i = 0; i < source_articles.size(); ++i) {
+                    const auto it = by_id.constFind(QString::number(i));
+                    if (it == by_id.constEnd())
+                        continue;
+                    const qint64 ts = news_timestamp(source_articles[i].published_date);
+                    const double age_days = ts > 0 ? std::max<qint64>(0, now - ts) / 86400.0 : kNewsHalfLifeDays;
+                    const double w = std::pow(0.5, age_days / kNewsHalfLifeDays);
+                    wsum += w;
+                    acc += w * it->score;
+                }
+                news_.score = wsum > 0.0 ? acc / wsum : result.overall_score;
+            }
             news_.confidence = scored > 0 ? static_cast<double>(non_neutral) / scored : 0.0;
             news_.available = scored > 0;
             news_.done = true;

@@ -631,6 +631,16 @@ void NewsCommandBar::update_sentiment(int bullish, int bearish, int neutral) {
 
     double score = total > 0 ? static_cast<double>(bullish - bearish) / total : 0.0;
     sentiment_score_->setText(QString("%1%2").arg(score >= 0 ? "+" : "").arg(score, 0, 'f', 2));
+    // The bar alone gave no counts and no hint of how the tone is measured.
+    const QString tip = tr("Feed tone: %1 bullish · %2 bearish · %3 neutral.\n"
+                           "Score = (bullish − bearish) / all articles in the current filter.\n"
+                           "Each headline is scored by a finance-tuned VADER model.")
+                            .arg(bullish)
+                            .arg(bearish)
+                            .arg(neutral);
+    sentiment_score_->setToolTip(tip);
+    if (auto* bar = sentiment_bull_->parentWidget())
+        bar->setToolTip(tip);
 }
 
 void NewsCommandBar::update_deviations(const QVector<QPair<QString, double>>& deviations) {

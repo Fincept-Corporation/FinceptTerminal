@@ -1,4 +1,9 @@
-"""Revenue Synergy Analysis"""
+"""Revenue Synergy Analysis
+
+CLI: python revenue_synergies.py calculate <json>   keys synergy_type (cross_sell | market_expansion |
+  pricing_power, inferred from the keys when absent), combined_revenue, synergy_pct, ramp_years, discount_rate.
+  Native form: revenue <synergy_type> <json>.
+"""
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum

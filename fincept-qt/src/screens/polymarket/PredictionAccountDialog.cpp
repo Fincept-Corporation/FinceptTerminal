@@ -107,17 +107,18 @@ void PredictionAccountDialog::retranslateUi() {
     if (pm_intro_)
         pm_intro_->setText(tr("<b>Polymarket (Polygon)</b><br>"
                               "Trading requires a Polygon-compatible private key. The key is signed locally "
-                              "via <code>py_clob_client</code> and never leaves your machine in plaintext — "
+                              "via <code>py_clob_client_v2</code> and never leaves your machine in plaintext — "
                               "it is stored encrypted in your OS credential manager.<br><br>"
                               "<b>⚠ Security:</b> use a dedicated funding wallet, not your primary wallet."));
     if (pm_private_key_)
         pm_private_key_->setPlaceholderText(tr("0x… (64 hex chars)"));
     if (pm_funder_)
-        pm_funder_->setPlaceholderText(tr("0x… (optional — derived via CREATE2 for proxy)"));
-    if (pm_signature_type_ && pm_signature_type_->count() >= 3) {
-        pm_signature_type_->setItemText(0, tr("Polymarket Proxy Wallet (default)"));
-        pm_signature_type_->setItemText(1, tr("Externally Owned Account (EOA)"));
-        pm_signature_type_->setItemText(2, tr("Polymarket Gnosis Safe"));
+        pm_funder_->setPlaceholderText(tr("0x… Polymarket wallet address (profile menu) — required unless EOA"));
+    if (pm_signature_type_ && pm_signature_type_->count() >= 4) {
+        pm_signature_type_->setItemText(0, tr("Polymarket Deposit Wallet (accounts since May 2026)"));
+        pm_signature_type_->setItemText(1, tr("Polymarket Proxy Wallet (older email / Google accounts)"));
+        pm_signature_type_->setItemText(2, tr("Polymarket Safe Wallet (older MetaMask / Rabby accounts)"));
+        pm_signature_type_->setItemText(3, tr("Externally Owned Account (EOA)"));
     }
     set_label(pm_form_, pm_private_key_, tr("Private Key:"));
     set_label(pm_form_, pm_funder_, tr("Funder Address:"));
@@ -163,7 +164,7 @@ void PredictionAccountDialog::build_polymarket_tab() {
 
     pm_intro_ = new QLabel(tr("<b>Polymarket (Polygon)</b><br>"
                               "Trading requires a Polygon-compatible private key. The key is signed locally "
-                              "via <code>py_clob_client</code> and never leaves your machine in plaintext — "
+                              "via <code>py_clob_client_v2</code> and never leaves your machine in plaintext — "
                               "it is stored encrypted in your OS credential manager.<br><br>"
                               "<b>⚠ Security:</b> use a dedicated funding wallet, not your primary wallet."),
                            page);
@@ -179,13 +180,17 @@ void PredictionAccountDialog::build_polymarket_tab() {
     form->addRow(tr("Private Key:"), pm_private_key_);
 
     pm_funder_ = new QLineEdit(page);
-    pm_funder_->setPlaceholderText(tr("0x… (optional — derived via CREATE2 for proxy)"));
+    pm_funder_->setPlaceholderText(tr("0x… Polymarket wallet address (profile menu) — required unless EOA"));
     form->addRow(tr("Funder Address:"), pm_funder_);
 
+    // Every Polymarket account wallet deployed on or after 2026-05-04 is a Deposit
+    // Wallet (signature type 3, EIP-1271), so it is the default. Proxy (Magic / Google
+    // login) and Safe (MetaMask / Rabby) are the legacy smart-wallet types.
     pm_signature_type_ = new QComboBox(page);
-    pm_signature_type_->addItem(tr("Polymarket Proxy Wallet (default)"), 1);
+    pm_signature_type_->addItem(tr("Polymarket Deposit Wallet (accounts since May 2026)"), 3);
+    pm_signature_type_->addItem(tr("Polymarket Proxy Wallet (older email / Google accounts)"), 1);
+    pm_signature_type_->addItem(tr("Polymarket Safe Wallet (older MetaMask / Rabby accounts)"), 2);
     pm_signature_type_->addItem(tr("Externally Owned Account (EOA)"), 0);
-    pm_signature_type_->addItem(tr("Polymarket Gnosis Safe"), 2);
     form->addRow(tr("Signature Type:"), pm_signature_type_);
 
     pm_derived_status_ = new QLabel(tr("L2 API credentials: not derived"), page);
@@ -319,6 +324,14 @@ void PredictionAccountDialog::on_save_polymarket() {
     }
 
     static const QRegularExpression kAddrRe(QStringLiteral("^0x[0-9a-fA-F]{40}$"));
+    // Smart wallets hold the funds and positions at the account wallet, not at the
+    // signing key: without it orders are signed for the wrong maker and rejected, and
+    // positions are read from an empty address.
+    if (c.signature_type != 0 && c.funder_address.isEmpty()) {
+        pm_status_->setText(tr("<span style='color:#dc2626'>Funder address is required for this wallet type — "
+                               "copy your wallet address from the polymarket.com profile menu.</span>"));
+        return;
+    }
     if (!c.funder_address.isEmpty() && !kAddrRe.match(c.funder_address).hasMatch()) {
         pm_status_->setText(tr("<span style='color:#dc2626'>Funder address should be 0x + 40 hex chars.</span>"));
         return;

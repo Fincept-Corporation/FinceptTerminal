@@ -80,7 +80,7 @@ MaritimeVesselsWidget::MaritimeVesselsWidget(const QJsonObject& cfg, QWidget* pa
 
     set_configurable(true);
     apply_styles();
-    apply_config(cfg);
+    MaritimeVesselsWidget::apply_config(cfg); // qualified: no dynamic dispatch inside a constructor
     set_loading(true);
 }
 

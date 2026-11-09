@@ -47,6 +47,17 @@ class AppPaths {
     /// Create all sub-directories if they don't exist.
     /// Call once before any path is used.
     static void ensure_all();
+
+    /// Locate a file shipped in the app's read-only resources/ tree, e.g.
+    /// bundled_resource("charts/klinechart.html"). Searches every layout we ship:
+    ///   <exe>/resources/                         Windows, AppImage, dev builds
+    ///   <exe>/../Resources/                      macOS .app (MacOS/resources/* is flattened here)
+    ///   <exe>/../Resources/resources/            macOS .app (copy of the source tree)
+    ///   <exe>/../share/fincept-terminal/resources/  Linux .deb/.rpm (FHS)
+    /// Returns the first existing path. When none exists, returns the
+    /// <exe>/resources/ candidate so a caller's "not found" log names the
+    /// conventional location.
+    static QString bundled_resource(const QString& relative_path);
 };
 
 } // namespace fincept

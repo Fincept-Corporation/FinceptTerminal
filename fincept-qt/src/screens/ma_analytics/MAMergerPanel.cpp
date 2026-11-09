@@ -172,11 +172,15 @@ QWidget* MAModulePanel::build_merger_panel() {
         QJsonObject params;
         params["years"] = int_inputs_["pf_years"]->value();
         params["revenue_growth"] = double_inputs_["pf_rev_growth"]->value() / 100.0;
-        // Re-use acquirer/target inputs from accretion tab
+        // Re-use the acquirer/target and deal-term inputs from the accretion tab; without them the script
+        // assumes its own price, cash mix and share count.
+        params["deal_value"] = double_inputs_["deal_value"]->value();
+        params["cash_pct"] = double_inputs_["cash_pct"]->value() / 100.0;
         QJsonObject acquirer;
         acquirer["revenue"] = double_inputs_["acq_revenue"]->value();
         acquirer["ebitda"] = double_inputs_["acq_ebitda"]->value();
         acquirer["net_income"] = double_inputs_["acq_net_income"]->value();
+        acquirer["shares"] = double_inputs_["acq_shares"]->value();
         params["acquirer"] = acquirer;
         QJsonObject target;
         target["revenue"] = double_inputs_["tgt_revenue"]->value();
@@ -234,7 +238,7 @@ QWidget* MAModulePanel::build_merger_panel() {
                                     .arg(ui::fonts::DATA_FAMILY));
     contrib_vl->addWidget(contrib_hint);
 
-    auto* contrib_own = make_double_spin(0, 100, 70, 1, "%", contrib);
+    auto* contrib_own = make_double_spin(1, 100, 70, 1, "%", contrib);
     double_inputs_["contrib_ownership"] = contrib_own;
     contrib_vl->addWidget(build_input_row(tr("Acquirer Ownership %"), contrib_own, contrib));
 
@@ -251,7 +255,8 @@ QWidget* MAModulePanel::build_merger_panel() {
         target["revenue"] = double_inputs_["tgt_revenue"]->value();
         target["net_income"] = double_inputs_["tgt_net_income"]->value();
         params["target"] = target;
-        params["ownership_split"] = double_inputs_["contrib_ownership"]->value() / 100.0;
+        // The script's ownership_split is the TARGET shareholders' share of the combined company.
+        params["ownership_split"] = 1.0 - double_inputs_["contrib_ownership"]->value() / 100.0;
         MAAnalyticsService::instance().analyze_contribution(params);
     });
     contrib_vl->addWidget(contrib_run);

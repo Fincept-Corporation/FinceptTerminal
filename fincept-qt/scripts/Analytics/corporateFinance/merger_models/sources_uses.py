@@ -1,7 +1,20 @@
-"""Sources & Uses of Funds Analysis"""
+"""Sources & Uses of Funds Analysis
+
+CLI: python sources_uses.py calculate <json>  keys deal_value, cash (cash on hand = available), new_debt,
+     stock_issuance; optional target_debt, fees. Fees default to 1.5 % of price + 2 % of new debt; only the cash
+     the deal needs is used, and a gap is reported as funding_shortfall. Pass acquirer_cash instead of cash for a
+     fixed cash contribution balanced with a cash plug. Native form: sources_uses <deal_json> <financing_json>.
+"""
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+import os
 import sys
+
+try:
+    import fincept_json
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+    import fincept_json
 
 @dataclass
 class SourcesUsesBuilder:
@@ -246,10 +259,14 @@ def _service_argv(argv):
     if fees is not None:
         deal["transaction_fees"] = fees
     financing = {
-        "acquirer_cash": _svc_num(p, "cash", "cash_on_hand", "acquirer_cash", "cash_offered", default=0.0),
         "new_debt": _svc_num(p, "new_debt", "debt_raised", default=0.0),
         "new_equity": _svc_num(p, "stock_issuance", "new_equity", default=0.0),
     }
+    explicit_cash = _svc_num(p, "acquirer_cash", "cash_offered")
+    if explicit_cash is not None:
+        financing["acquirer_cash"] = explicit_cash  # cash contribution as given (balanced with a cash plug)
+    else:
+        financing["cash_on_hand"] = _svc_num(p, "cash", "cash_on_hand", default=0.0)  # cash available
     if "equity_offered" in p and "deal_value" not in p and "purchase_price" not in p:
         # MCP shape: price = cash + equity consideration.
         deal["purchase_price"] = (_svc_num(p, "equity_offered", default=0.0) + _svc_num(p, "cash_offered", default=0.0))
@@ -277,11 +294,13 @@ def main():
             deal_structure = json.loads(sys.argv[2])
             financing_structure = json.loads(sys.argv[3])
 
-            # Handle frontend field name aliases
+            # `acquirer_cash` is a cash contribution as given (any gap is plugged with more cash, as before);
+            # `cash_on_hand` is cash AVAILABLE: only what the deal needs is used and a gap stays a shortfall.
+            cash_on_hand = None if 'acquirer_cash' in financing_structure else financing_structure.get('cash_on_hand')
             builder = SourcesUsesBuilder(
                 purchase_price=deal_structure.get('purchase_price', 0),
                 target_debt_refinanced=deal_structure.get('target_debt_refinanced', deal_structure.get('target_debt', 0)),
-                acquirer_cash=financing_structure.get('acquirer_cash', financing_structure.get('cash_on_hand', 0)),
+                acquirer_cash=financing_structure.get('acquirer_cash', 0),
                 new_debt=financing_structure.get('new_debt', 0),
                 new_equity=financing_structure.get('new_equity', financing_structure.get('stock_issuance', 0))
             )
@@ -298,7 +317,23 @@ def main():
             else:
                 builder.estimate_financing_fees(financing_structure.get('new_debt', 0))
 
-            table = builder.auto_balance()
+            cash_report = {}
+            if cash_on_hand is not None:
+                cash_on_hand = float(cash_on_hand)
+                needed = builder.calculate_uses()['total_uses'] - (
+                    builder.new_debt + builder.new_equity + builder.rollover_equity + builder.other_sources)
+                builder.acquirer_cash = min(max(needed, 0.0), cash_on_hand)
+                table = builder.build_sources_uses_table()
+                gap = table['imbalance']  # sources - uses
+                cash_report = {
+                    'cash_on_hand': cash_on_hand,
+                    'cash_used': builder.acquirer_cash,
+                    'cash_remaining': cash_on_hand - builder.acquirer_cash,
+                    'funding_shortfall': -gap if gap < 0 else 0.0,
+                    'excess_financing': gap if gap > 0 else 0.0,
+                }
+            else:
+                table = builder.auto_balance()
             financing_mix = builder.calculate_financing_mix()
 
             # Flatten output for frontend: {sources: {key: amount}, uses: {key: amount}, total_sources, total_uses, ...}
@@ -320,10 +355,11 @@ def main():
                 "total_uses": table.get('uses', {}).get('total_uses', 0),
                 "balanced": table.get('balanced', False),
                 "imbalance": table.get('imbalance', 0),
+                **cash_report,
                 "financing_mix": financing_mix,
                 "table": table,  # Keep raw table for detailed view
             }}
-            print(json.dumps(result))
+            print(fincept_json.dumps(result))  # debt_to_equity is inf when no equity is issued
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}. Available: sources_uses"}

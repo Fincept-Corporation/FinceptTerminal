@@ -11,6 +11,12 @@ from datetime import datetime, timedelta
 import traceback
 import os
 
+try:
+    import fincept_json
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_json
+
 
 class CFTCError:
     """Custom error class for CFTC API errors"""
@@ -526,7 +532,7 @@ class CFTCDataWrapper:
                 identifier=identifier,
                 report_type=report_type,
                 start_date=(datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
-                limit=5
+                limit=20
             )
 
             if not cot_result.get("success"):
@@ -536,39 +542,48 @@ class CFTCDataWrapper:
             if not cot_data:
                 return {"error": CFTCError("position_summary", f"No position data available: {identifier}").to_dict()}
 
-            # Get most recent data
-            latest = cot_data[0]
+            # Most recent report first: the query returns the oldest first, so cot_data[0] was the
+            # report of about a month ago. Socrata returns every number as a string and the column
+            # names differ per report type (this read legacy names only and divided an int by a
+            # string), so normalise to ints the way analyze_market_sentiment does.
+            cot_data.sort(key=lambda x: x.get("report_date_as_yyyy_mm_dd", ""), reverse=True)
+            latest_data = cot_data[0]
+            latest = self._normalise_positions(latest_data)
+            open_interest = latest["open_interest"]
+
+            def pct_of_oi(value: int) -> Optional[float]:
+                return (value / open_interest) * 100 if open_interest > 0 else None
 
             # Build position summary
             summary = {
-                "report_date": latest.get("report_date_as_yyyy_mm_dd"),
-                "market_name": latest.get("market_and_exchange_names", ""),
-                "open_interest": latest.get("open_interest_all", 0),
+                "report_date": latest_data.get("report_date_as_yyyy_mm_dd"),
+                "market_name": latest_data.get("market_and_exchange_names", ""),
+                "open_interest": open_interest,
                 "positions": {
                     "commercial": {
-                        "long": latest.get("comm_long_all", 0),
-                        "short": latest.get("comm_short_all", 0),
-                        "net": latest.get("comm_long_all", 0) - latest.get("comm_short_all", 0),
+                        "long": latest["comm_long"],
+                        "short": latest["comm_short"],
+                        "net": latest["comm_long"] - latest["comm_short"],
                         "pct_of_oi": {
-                            "long": (latest.get("comm_long_all", 0) / latest.get("open_interest_all", 1)) * 100,
-                            "short": (latest.get("comm_short_all", 0) / latest.get("open_interest_all", 1)) * 100
+                            "long": pct_of_oi(latest["comm_long"]),
+                            "short": pct_of_oi(latest["comm_short"])
                         }
                     },
                     "non_commercial": {
-                        "long": latest.get("noncomm_long_all", 0),
-                        "short": latest.get("noncomm_short_all", 0),
-                        "net": latest.get("noncomm_long_all", 0) - latest.get("noncomm_short_all", 0),
+                        "long": latest["noncomm_long"],
+                        "short": latest["noncomm_short"],
+                        "net": latest["noncomm_long"] - latest["noncomm_short"],
                         "pct_of_oi": {
-                            "long": (latest.get("noncomm_long_all", 0) / latest.get("open_interest_all", 1)) * 100,
-                            "short": (latest.get("noncomm_short_all", 0) / latest.get("open_interest_all", 1)) * 100
+                            "long": pct_of_oi(latest["noncomm_long"]),
+                            "short": pct_of_oi(latest["noncomm_short"])
                         }
                     },
                     "non_reportable": {
-                        "long": latest.get("nonreportable_long_all", 0),
-                        "short": latest.get("nonreportable_short_all", 0),
+                        "long": latest["nonrept_long"],
+                        "short": latest["nonrept_short"],
                         "pct_of_oi": {
-                            "long": (latest.get("nonreportable_long_all", 0) / latest.get("open_interest_all", 1)) * 100,
-                            "short": (latest.get("nonreportable_short_all", 0) / latest.get("open_interest_all", 1)) * 100
+                            "long": pct_of_oi(latest["nonrept_long"]),
+                            "short": pct_of_oi(latest["nonrept_short"])
                         }
                     }
                 }
@@ -649,18 +664,13 @@ class CFTCDataWrapper:
             # Process trend data
             trend_data = []
             for record in cot_data:
-                # Handle different field names across report types
-                # Legacy reports use: noncomm_positions_long_all, comm_positions_long_all
-                # Disaggregated reports may use different naming
-                open_interest = self._safe_int(record.get("open_interest_all", 0))
-
-                # Commercial positions
-                comm_long = self._safe_int(record.get("comm_positions_long_all") or record.get("comm_long_all", 0))
-                comm_short = self._safe_int(record.get("comm_positions_short_all") or record.get("comm_short_all", 0))
-
-                # Non-commercial positions
-                noncomm_long = self._safe_int(record.get("noncomm_positions_long_all") or record.get("noncomm_long_all", 0))
-                noncomm_short = self._safe_int(record.get("noncomm_positions_short_all") or record.get("noncomm_short_all", 0))
+                # Column names differ per report type. This read the legacy names only, so with
+                # the default disaggregated report every position came back 0; normalise the
+                # same way analyze_market_sentiment does.
+                positions = self._normalise_positions(record)
+                open_interest = positions["open_interest"]
+                comm_long, comm_short = positions["comm_long"], positions["comm_short"]
+                noncomm_long, noncomm_short = positions["noncomm_long"], positions["noncomm_short"]
 
                 trend_point = {
                     "date": record.get("report_date_as_yyyy_mm_dd"),
@@ -758,7 +768,9 @@ def main(args=None):
         else:
             result = {"error": CFTCError(command, f"Unknown command: {command}").to_dict()}
 
-        print(json.dumps(result, indent=2))
+        # fincept_json: a non-finite number prints null, never the bare NaN token that makes
+        # the terminal discard the whole payload.
+        print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
     except Exception as e:
         print(json.dumps({"error": CFTCError(command, str(e)).to_dict()}, indent=2))

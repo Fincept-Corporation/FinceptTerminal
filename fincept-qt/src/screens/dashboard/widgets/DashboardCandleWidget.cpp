@@ -215,6 +215,7 @@ DashboardCandleWidget::DashboardCandleWidget(const QJsonObject& cfg, QWidget* pa
 
     canvas_ = new CandleCanvas(this);
     vl->addWidget(canvas_, 1);
+    enable_symbol_link(/*follows=*/true);
     link_symbol(canvas_, symbol_); // double-click the chart -> Equity Research
 
     set_configurable(true);
@@ -245,6 +246,19 @@ void DashboardCandleWidget::apply_config(const QJsonObject& cfg) {
         set_loading(true);
         hub_resubscribe();
     }
+}
+
+void DashboardCandleWidget::on_linked_symbol(const SymbolRef& ref) {
+    if (normalize_symbol(ref.symbol) == symbol_)
+        return;
+    QJsonObject cfg;
+    cfg.insert("symbol", ref.symbol);
+    apply_config(cfg);
+    emit config_changed(config()); // the tile comes back on the linked symbol
+}
+
+SymbolRef DashboardCandleWidget::linked_symbol() const {
+    return SymbolRef::equity(symbol_);
 }
 
 QDialog* DashboardCandleWidget::make_config_dialog(QWidget* parent) {

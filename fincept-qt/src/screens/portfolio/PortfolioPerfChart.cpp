@@ -20,9 +20,11 @@
 
 #include <cmath>
 #include <limits>
+#include <optional>
 
 namespace {
-static const QStringList kPeriods = {"1D", "1W", "1M", "3M", "YTD", "1Y", "ALL"};
+// 5Y was handled everywhere below (cutoff, axis format, backfill) but had no button.
+static const QStringList kPeriods = {"1D", "1W", "1M", "3M", "YTD", "1Y", "5Y", "ALL"};
 } // namespace
 
 namespace fincept::screens {
@@ -294,8 +296,7 @@ void PortfolioPerfChart::set_benchmark_history(const QString& symbol, const QStr
     spy_closes_ = closes;
     if (benchmark_btn_)
         benchmark_btn_->setText(benchmark_symbol_);
-    if (show_benchmark_)
-        update_chart();
+    update_chart(); // the period line quotes the benchmark's return even with the overlay off
 }
 
 void PortfolioPerfChart::set_period(const QString& period) {
@@ -434,22 +435,44 @@ void PortfolioPerfChart::update_chart() {
     double period_pnl_pct = period_baseline > 0 ? (period_pnl / period_baseline) * 100.0 : 0.0;
     bool period_is_twr = false;
     QString twr_since; // set when the TWR series starts after the period cutoff
+    QString twr_base_date; // start of the TWR window actually measured
     {
+        // Base = the last point ON OR BEFORE the cutoff, so the period's first interval is
+        // counted (the first point after the cutoff dropped e.g. Friday→Monday from a 1W
+        // return); without one, the series' own first point.
         const QString cutoff_iso = cutoff.toString(Qt::ISODate);
         const portfolio::TwrPoint* base = nullptr;
         for (const auto& p : twr_series_) {
-            if (p.date >= cutoff_iso) {
+            if (p.date <= cutoff_iso)
                 base = &p;
+            else
                 break;
-            }
         }
-        if (base && !twr_series_.isEmpty() && &twr_series_.last() != base) {
+        if (!base && !twr_series_.isEmpty())
+            base = &twr_series_.first();
+        if (base && &twr_series_.last() != base) {
             period_pnl_pct = ((1.0 + twr_series_.last().cumulative) / (1.0 + base->cumulative) - 1.0) * 100.0;
             period_pnl = period_pnl_pct; // only the sign is used below
             period_is_twr = true;
+            twr_base_date = base->date;
             if (base == &twr_series_.first() && base->date > cutoff_iso)
                 twr_since = base->date; // e.g. ALL/5Y: the series only covers its own window
         }
+    }
+
+    // Benchmark over the same TWR window, so the period figure reads against the market.
+    std::optional<double> bench_period_pct;
+    if (period_is_twr && !spy_dates_.isEmpty() && spy_dates_.size() == spy_closes_.size()) {
+        double b0 = 0.0, b1 = 0.0;
+        for (int i = 0; i < spy_dates_.size(); ++i) {
+            if (spy_closes_[i] <= 0)
+                continue;
+            if (spy_dates_[i] <= twr_base_date)
+                b0 = spy_closes_[i];
+            b1 = spy_closes_[i]; // latest close
+        }
+        if (b0 > 0 && b1 > 0)
+            bench_period_pct = (b1 / b0 - 1.0) * 100.0;
     }
 
     // ── Convert series to display space (currency value vs. base-100 indexed) ─
@@ -646,13 +669,23 @@ void PortfolioPerfChart::update_chart() {
 
     // ── Info labels ───────────────────────────────────────────────────────────
     const char* pnl_color = period_pnl_pct >= 0 ? ui::colors::POSITIVE : ui::colors::NEGATIVE;
-    period_change_label_->setText(QString("%1  %2%3%  %4")
-                                      .arg(current_period_)
-                                      .arg(period_pnl_pct >= 0 ? "+" : "")
-                                      .arg(QString::number(period_pnl_pct, 'f', 2))
-                                      .arg(!period_is_twr        ? tr("NAV Δ")
-                                           : twr_since.isEmpty() ? tr("TWR")
-                                                                 : tr("TWR since %1").arg(twr_since)));
+    QString period_text = QString("%1  %2%3%  %4")
+                              .arg(current_period_)
+                              .arg(period_pnl_pct >= 0 ? "+" : "")
+                              .arg(QString::number(period_pnl_pct, 'f', 2))
+                              .arg(!period_is_twr        ? tr("NAV Δ")
+                                   : twr_since.isEmpty() ? tr("TWR")
+                                                         : tr("TWR since %1").arg(twr_since));
+    if (bench_period_pct) {
+        const double excess = period_pnl_pct - *bench_period_pct;
+        period_text += tr("   %1 %2%3%  (%4%5 pp)")
+                           .arg(benchmark_symbol_)
+                           .arg(*bench_period_pct >= 0 ? "+" : "")
+                           .arg(QString::number(*bench_period_pct, 'f', 2))
+                           .arg(excess >= 0 ? "+" : "")
+                           .arg(QString::number(excess, 'f', 2));
+    }
+    period_change_label_->setText(period_text);
     period_change_label_->setToolTip(period_is_twr ? tr("Time-weighted return over the period: buys and sells are "
                                                         "capital flows, not performance.")
                                                    : tr("Change in NAV over the period — includes money added or "

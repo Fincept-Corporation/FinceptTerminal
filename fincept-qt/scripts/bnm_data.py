@@ -217,15 +217,21 @@ class BNMWrapper:
         """Fetch a currency rate across all three daily sessions."""
         currency = currency.upper()
         results: Dict[str, Any] = {}
+        rows: List[Dict[str, Any]] = []  # one row per session that answered, like every other command's "data"
         for sess in SESSIONS:
             r = self.get_currency(currency, sess)
             if r.get("success"):
                 results[sess] = r.get("data", {})
+                rows.append({"session": sess, **results[sess]})
             else:
                 results[sess] = {"error": r.get("error", "failed")}
+        if not rows:
+            return BNMError(f"exchange-rate/{currency}",
+                            "; ".join(f"{s}: {results[s]['error']}" for s in SESSIONS)).to_dict()
         return {
             "success":   True,
             "currency":  currency,
+            "data":      rows,
             "sessions":  results,
             "note":      "MYR per 1 unit; sessions: 0900=morning fix, 1200=noon, 1130=closing",
             "source":    "Bank Negara Malaysia",

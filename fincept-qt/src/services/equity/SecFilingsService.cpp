@@ -7,17 +7,15 @@
 
 #include <QDateTime>
 #include <QJsonDocument>
-#include <QMetaObject>
 #include <QPointer>
 #include <QRegularExpression>
-#include <QThread>
 
 namespace fincept::services::equity {
 
 namespace {
 
 constexpr const char* kSecFilingsServiceTag = "SecFilingsService";
-constexpr const char* kSecSvcScript = "mcp/edgar/main.py";
+constexpr const char* kSecSvcScript = "fincept_mcp/edgar/main.py";
 constexpr int kSecSvcLkgTtlSec = 30 * 24 * 3600; // last-known-good copy shown while refreshing
 
 QString sec_svc_section_tag(SecSection s) {
@@ -187,32 +185,6 @@ void SecFilingsService::fetch(const QString& symbol, SecSection section, bool fo
                    d.fetched_at_ms = now;
                    emit section_loaded(d);
                });
-}
-
-void SecFilingsService::run_command(const QStringList& argv, int ttl_sec, CommandCallback done) {
-    if (QThread::currentThread() != thread()) {
-        QMetaObject::invokeMethod(
-            this, [this, argv, ttl_sec, done]() { run_command(argv, ttl_sec, done); }, Qt::QueuedConnection);
-        return;
-    }
-    if (!done)
-        return;
-    // Same key format the MCP EDGAR tools always used, so their existing cache entries still hit.
-    const QString key = QStringLiteral("edgar:") + argv.join(QLatin1Char(':'));
-    if (const auto hit = fincept::CacheManager::instance().try_get(key)) {
-        const QJsonDocument doc = QJsonDocument::fromJson(hit->toUtf8());
-        if (doc.isObject()) {
-            done(true, doc.object(), {});
-            return;
-        }
-    }
-    run_shared(key, argv, [key, ttl_sec, done](bool ok, const QJsonObject& payload, const QString& error) {
-        if (ok && ttl_sec > 0)
-            fincept::CacheManager::instance().put(
-                key, QVariant(QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact))), ttl_sec,
-                QStringLiteral("edgar"));
-        done(ok, payload, error);
-    });
 }
 
 void SecFilingsService::run_shared(const QString& key, const QStringList& argv, CommandCallback done) {

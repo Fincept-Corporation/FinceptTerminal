@@ -66,7 +66,6 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     void on_surface_received(const fincept::DatabentoSurfaceResult& r);
     void on_db_fetch_started(const QString& desc);
     void on_db_fetch_failed(const QString& err);
-    void on_db_connection_tested(bool ok, const QString& msg);
     void on_db_raw_response(const QString& cmd, const QString& raw_stdout);
 
   protected:
@@ -91,6 +90,9 @@ class SurfaceAnalyticsScreen : public QWidget, public fincept::screens::IStatefu
     void apply_view_mode_buttons();
     void update_line_view();
     void refresh_provider_status();
+    /// Fill the control panel's dataset picker from Databento's dataset listing
+    /// (needs the API key; one Python call per session, then served from the cache).
+    void load_dataset_list();
     void load_dataset_range_for_active_capability();
     /// Derive Correlation / PCA / VaR / Drawdown / Beta from an OHLCV response (see the
     /// definition) and mark exactly those surfaces as real data.

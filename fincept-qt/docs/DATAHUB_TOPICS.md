@@ -32,6 +32,12 @@ hub registrant for `ws:<exchange>:*`.
 | `prediction:kalshi:orderbook:<ticker>:<side>` | `KalshiWsClient` | push-only | Coalesced 100 ms (latest-wins). Kalshi REST returns yes+no bids only; asks synthesised client-side |
 | `prediction:kalshi:trade:<ticker>` | `KalshiWsClient` | — | Published per trade (`PredictionTrade`); no policy is registered, so it is never coalesced. Not in the producer's `topic_patterns()` |
 
+## Prediction markets — REST snapshots
+
+| Pattern | Producer | TTL | Min interval | push_only | Notes |
+|---|---|---|---|---|---|
+| `prediction:kalshi:market:<ticker>` | `KalshiMarketProducer` | 30 s | 10 s | no | Keyless (public Kalshi REST, no credentials). Each `refresh()` turns every due topic into ONE `GET /markets?tickers=A,B,…` (chunked at 100 tickers; 15 s transfer timeout, `refresh_timeout_ms` 20 s; producer paced at 2 req/s) via `KalshiRestClient::fetch_markets_by_tickers()`, a callback-only method, so none of it reaches the `KalshiAdapter` signals the Prediction Markets screen listens to. Payload: `PredictionMarket` (`outcomes[0].price` = YES bid) with extras `last_price_dollars`, `yes_ask_dollars`, `previous_price_dollars` / `previous_yes_bid_dollars` / `previous_yes_ask_dollars` (24 h ago), `status`, `result`, `yes_sub_title`. Errors are `publish_error` with a `[CODE] ` prefix: `[NOT_FOUND]` (Kalshi returned no market for the ticker — retrying cannot help), `[INVALID]` (empty ticker or one containing `,`), `[REQUEST_FAILED]` (network / HTTP / parse failure, sent to every ticker of the batch). A standalone singleton registered by `KalshiAdapter::ensure_registered_with_hub()` and on demand by consumers. Consumed by the dashboard `KalshiPricesWidget`. |
+
 ## News (Phase 5)
 
 | Pattern | Producer | TTL | Min interval | Notes |
@@ -89,7 +95,6 @@ plan's risk-mitigation cadence).
 | `geopolitics:cities` | `GeopoliticsService` | 6 h | 60 s | Cities with extracted coordinates |
 | `geopolitics:hdx:<context>` | `GeopoliticsService` | 1 h | 60 s | `<context>` = conflicts, humanitarian, country:<iso>, topic:<slug>, search:<q> |
 | `geopolitics:trade:<kind>` | `GeopoliticsService` | 15 min (push-only) | — | `<kind>` = benefits, restrictions, blocs, barrier |
-| `geopolitics:geolocation` | `GeopoliticsService` | 15 min (push-only) | — | Extracted coords from headline batch |
 | `geopolitics:relationship_graph:<ticker>` | `RelationshipMapService` | 10 min | 2 min | yfinance-backed corporate relationship snapshot |
 
 ### Maritime
@@ -106,7 +111,7 @@ plan's risk-mitigation cadence).
 
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
-| `ma:<context>` | `MAAnalyticsService` | 2 min (push-only) | — | `<context>` follows the service method (e.g. `ma:dcf`, `ma:merger_model`, `ma:lbo_returns`). All analytics take caller-supplied params — hub cannot re-run them, so topics are push-only. Callers must drive refresh through the existing method API. |
+| `ma:<context>` | `MAAnalyticsService` | 2 min (push-only) | — | `<context>` follows the service method (e.g. `ma:dcf`, `ma:accretion_dilution`, `ma:lbo_returns`). All analytics take caller-supplied params — hub cannot re-run them, so topics are push-only. Callers must drive refresh through the existing method API. |
 
 ## AI / Agents / LLM (Phase 9)
 
@@ -206,13 +211,13 @@ Reserved topic family for the `FinceptInternalAdapter` matching engine. Topics a
 
 ## F&O / Options (Phase 11 — Sensibull-style tab)
 
-The F&O screen owns its own producer family. `OptionChainService` is the sole hub registrant for `option:*` and the derived `fno:pcr:*` / `fno:max_pain:*` topics. Phase 1 shipped polled REST refresh; **Phase 3** added Greeks/IV via the `option_greeks_daemon.py` worker, ATM IV publishing, per-leg `option:tick:*` fan-out, and the `OISnapshotter` history producer. WebSocket OI push (broker-driven) is still pending and will replace the chain-derived `option:tick` source without changing subscribers.
+The F&O screen owns its own producer family. `OptionChainService` is the sole hub registrant for `option:*` and the derived `fno:pcr:*` / `fno:max_pain:*` topics. Phase 1 shipped polled REST refresh; **Phase 3** added Greeks/IV (computed in-process by `OptionChainService::enrich_with_greeks` → `services/options/OptionPricing`), ATM IV publishing, per-leg `option:tick:*` fan-out, and the `OISnapshotter` history producer. WebSocket OI push (broker-driven) is still pending and will replace the chain-derived `option:tick` source without changing subscribers.
 
 ### Chain & per-leg streams
 
 | Pattern | Producer | TTL | Min interval | Notes |
 |---|---|---|---|---|
-| `option:chain:<broker>:<underlying>:<expiry>` | `OptionChainService` | 5 s | 3 s | Coalesce 250 ms. `pause_when_inactive=true`. Payload: `OptionChain` (rows[] sorted by strike asc, spot, ATM, PCR, max_pain, total OI). Producer batches CE+PE+underlying quotes via `IBroker::get_quotes` then assembles. Chain refresh runs on a worker thread to avoid blocking the UI. After the initial publish, the producer kicks off a `option_greeks_batch` request via `OptionGreeksWorker` and republishes the chain with Greeks/IV populated; the hub coalesce window typically collapses the two publishes into one delivery. |
+| `option:chain:<broker>:<underlying>:<expiry>` | `OptionChainService` | 5 s | 3 s | Coalesce 250 ms. `pause_when_inactive=true`. Payload: `OptionChain` (rows[] sorted by strike asc, spot, ATM, PCR, max_pain, total OI). Producer batches CE+PE+underlying quotes via `IBroker::get_quotes` then assembles. Chain refresh runs on a worker thread to avoid blocking the UI. Right after the initial publish the producer solves IV + Greeks in-process (~0.4 ms for 600 legs) and republishes the chain with them populated; the hub coalesce window typically collapses the two publishes into one delivery. |
 | `option:tick:<broker>:<token>` | `OptionChainService` (chain-derived; broker-WS replacement planned) | push-only | — | Per-leg `BrokerQuote` snapshot. Coalesce 100 ms. Phase 3 fans out one publish per leg on every chain refresh — useful for strategy panels watching one or two legs without subscribing to the full chain. When broker WS lands the source switches to push without breaking subscribers. |
 | `option:atm_iv:<broker>:<underlying>` | `OptionChainService` | 5 s | 3 s | ATM implied volatility scalar (decimal, 0.142 = 14.2%). Push-only — recomputed and republished as a side effect of every chain Greeks enrichment. Value = avg(ATM CE IV, ATM PE IV) when both are present, else whichever side is. |
 
@@ -225,7 +230,7 @@ The F&O screen owns its own producer family. `OptionChainService` is the sole hu
 | `fno:fii_dii:daily` | `FiiDiiService` | 1 h | 30 min | Daily institutional flows fetched over HTTP by `FiiDiiService` itself (the old `scripts/fii_dii_scraper.py` was unused and has been removed). Refreshed at most once per 30 min — NSE only updates the source numbers once per trading day post 6 PM IST. Payload: `QVector<FiiDiiDay>` ascending by date — rolling last 30 days served from `fii_dii_daily` SQLite table. Empty payload before market close on a fresh DB. |
 | `oi:history:<broker>:<token>:<window>` | `OISnapshotter` | 60 s | 30 s | Intraday OI series for the OI Analytics sub-tab. `<window>` = `1d` / `5d` / `7d`. Snapshotter subscribes to `option:chain:*`, buffers the latest CE/PE quote per token, and flushes minute-aligned rows to SQLite (`oi_snapshots`, schema v025) every 60 s. Payload: `QVector<OISample>` ordered ascending by `ts_minute`. Retention 7 days rolling — older rows are pruned hourly. |
 
-> **Greeks worker:** `OptionGreeksWorker` is a sibling daemon to `PythonWorker`, running `scripts/option_greeks_daemon.py --daemon` against `venv-numpy2` (where `py_vollib` lives). Sole supported action: `option_greeks_batch`. Inputs are per-contract (`token, S, K, t, r, q, flag, market_price, model="bsm"`); outputs are per-contract IV (decimal) + Greeks. Scaling: vega and rho are returned per 1.00 σ / 1.00 r (multiply py_vollib's per-1% values by 100); theta is per calendar day. Risk-free rate `r` is read once per session from `settings.fno.risk_free_rate` (default 0.067, RBI 91-day T-bill ballpark). Per-strike Greeks recompute is throttled to 500 ms.
+> **Greeks:** computed in C++ per leg — IV from the mid (else LTP) via `pricing::bsm_implied_vol` (Black-Scholes-Merton, q = 0, t ≥ 1/365), then `pricing::bsm_greeks` at that IV. Vega per 1.00 σ, rho per 1.00 r, theta per calendar day (py_vollib's conventions; verified against py_vollib to ≤1e-12 IV error). A leg is invalid when price/S/K ≤ 0, the price is outside the no-arbitrage bounds, or IV ∉ (0, 5]. Risk-free rate `r` is read once per session from `settings.fno.risk_free_rate` (default 0.067, RBI 91-day T-bill ballpark; Databento chains use 0.043). Per-strike Greeks recompute is throttled to 500 ms.
 
 > **IV percentile pill (Phase 10 polish):** every ATM IV publish UPSERTs `(underlying, today)` into the `iv_history_daily` SQLite table (schema v028, `WITHOUT ROWID` keyed by `(underlying, date_iso)`). The FnoHeaderBar reads the trailing 90-day window and shows the current IV's percentile rank. No new hub topic — this is a repo-only feature. Pill displays "—" until ≥30 days of history accumulate.
 

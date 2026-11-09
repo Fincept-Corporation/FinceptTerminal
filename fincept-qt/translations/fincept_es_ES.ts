@@ -1996,14 +1996,6 @@ Mercados, renta variable, cartera, perspectivas macro.</translation>
         <translation>El uso en red cuenta como distribución</translation>
     </message>
     <message>
-        <source>COMMERCIAL LICENSE</source>
-        <translation>LICENCIA COMERCIAL</translation>
-    </message>
-    <message>
-        <source>Required for commercial deployment</source>
-        <translation>Necesaria para implementación comercial</translation>
-    </message>
-    <message>
         <source>No source sharing required</source>
         <translation>No se requiere compartir el código fuente</translation>
     </message>
@@ -2050,18 +2042,6 @@ Mercados, renta variable, cartera, perspectivas macro.</translation>
     <message>
         <source>License (AGPL-3.0)</source>
         <translation>Licencia (AGPL-3.0)</translation>
-    </message>
-    <message>
-        <source>Commercial License</source>
-        <translation>Licencia comercial</translation>
-    </message>
-    <message>
-        <source>Trademark Policy</source>
-        <translation>Política de marcas</translation>
-    </message>
-    <message>
-        <source>Contributor CLA</source>
-        <translation>CLA del colaborador</translation>
     </message>
     <message>
         <source>Official Website</source>
@@ -32211,10 +32191,6 @@ Crea un ticket real y nuestro equipo responderá en un plazo de 24 horas.</trans
     <message>
         <source>Copyright 2024-2026 Fincept Corporation. All rights reserved.</source>
         <translation>Copyright 2024-2026 Fincept Corporation. Todos los derechos reservados.</translation>
-    </message>
-    <message>
-        <source>This software is licensed under AGPL-3.0-or-later for open source use, with a separate commercial license available for enterprise deployment.</source>
-        <translation>Este software está licenciado bajo AGPL-3.0-or-later para uso de código abierto, con una licencia comercial separada disponible para despliegue empresarial.</translation>
     </message>
     <message>
         <source>DATA PROVIDER ACKNOWLEDGMENTS</source>

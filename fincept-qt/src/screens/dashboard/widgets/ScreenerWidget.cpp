@@ -34,6 +34,7 @@ ScreenerWidget::ScreenerWidget(QWidget* parent) : BaseWidget(tr("STOCK SCREENER"
     auto* vl = content_layout();
     vl->setContentsMargins(0, 0, 0, 0);
     vl->setSpacing(0);
+    enable_symbol_link(/*follows=*/false); // clicking a row feeds the link group
 
     // Filter bar
     filter_bar_ = new QWidget(this);
@@ -241,6 +242,8 @@ void ScreenerWidget::apply_filter() {
             break;
         case 4: // price asc
             std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.price < b.price; });
+            break;
+        default: // unknown filter index: keep the incoming order
             break;
     }
 

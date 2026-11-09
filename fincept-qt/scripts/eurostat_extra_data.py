@@ -51,15 +51,26 @@ def get_energy_balance(country: str = "DE", product: str = "TOTAL", freq: str = 
     return _make_request("nrg_bal_c", params)
 
 
+# DS-059341 is a Comext dataset: it is served by the Comext API, not the dissemination API above
+# (which answers 404 for it), and its flow codes are 1 = import, 2 = export.
+COMEXT_URL = "https://ec.europa.eu/eurostat/api/comext/dissemination/statistics/1.0/data"
+
+
 def get_trade_in_goods(country: str = "DE", partner: str = "US", product: str = "TOTAL", flow: str = "EXP") -> Any:
+    flow_code = {"EXP": "2", "EXPORT": "2", "IMP": "1", "IMPORT": "1"}.get(flow.upper(), flow)
     params = {
         "reporter": country.upper(),
         "partner": partner.upper(),
         "product": product,
-        "flow": flow,
-        "stat_procedure": "U",
+        "flow": flow_code,
+        "freq": "M",
+        "indicators": "VALUE_EUR",
     }
-    return _make_request("DS-059341", params)
+    result = _make_request(f"{COMEXT_URL}/DS-059341", params)
+    if isinstance(result, dict) and "error" not in result and result.get("label"):
+        direction = "exports to" if flow_code == "2" else "imports from"
+        result["label"] = f"{result['label']} - {direction} {partner.upper()}, value in EUR"
+    return result
 
 
 def get_construction_output(country: str = "DE", freq: str = "M") -> Any:

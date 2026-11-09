@@ -32,6 +32,7 @@ SectorHeatmapWidget::SectorHeatmapWidget(QWidget* parent) : BaseWidget(tr("SECTO
     grid_->setSpacing(3);
 
     content_layout()->addWidget(grid_container_);
+    enable_symbol_link(/*follows=*/false); // clicking a sector cell feeds the link group
 
     connect(this, &BaseWidget::refresh_requested, this, &SectorHeatmapWidget::refresh_data);
 

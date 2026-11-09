@@ -435,34 +435,6 @@ void QuantModulePanel::display_statsmodels_result(const QString& command, const 
         header_text += tr("  |  %1 OBS").arg(d.value("n_observations").toInt());
     results_layout_->addWidget(gs_section_header(header_text, accent));
 
-    // ── 1. CHECK STATUS ──────────────────────────────────────────────────────
-    if (command == "check_status") {
-        auto bool_card = [this](const QString& label, bool ok) {
-            return gs_make_card(label, ok ? tr("AVAILABLE") : tr("MISSING"), this,
-                                ok ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
-        };
-        QList<QWidget*> deps = {
-            bool_card(tr("STATSMODELS"), d.value("statsmodels").toBool()),
-            bool_card(tr("SCIPY"), d.value("scipy").toBool()),
-            gs_make_card(tr("BACKEND"), d.value("backend").toString().toUpper(), this),
-            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()), this,
-                         ui::colors::INFO()),
-        };
-        results_layout_->addWidget(gs_card_row(deps, this));
-        const auto ops = d.value("ops_available").toArray();
-        QStringList names;
-        for (const auto& v : ops)
-            names << v.toString();
-        auto* lbl = new QLabel(tr("Operations: %1").arg(names.join(", ")));
-        lbl->setWordWrap(true);
-        lbl->setStyleSheet(QString("color:%1; font-size:10px; font-family:'Courier New';"
-                                   "padding:8px 10px; background:%2; border:1px solid %3;")
-                               .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-        results_layout_->addWidget(lbl);
-        status_label_->setText(tr("Statsmodels backend ready"));
-        return;
-    }
-
     // ── 2. OLS ───────────────────────────────────────────────────────────────
     if (command == "ols") {
         const double r2 = d.value("r_squared").toDouble();

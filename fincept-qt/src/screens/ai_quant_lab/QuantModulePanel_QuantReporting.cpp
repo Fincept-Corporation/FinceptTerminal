@@ -418,24 +418,6 @@ void QuantModulePanel::display_quant_reporting_result(const QString& command, co
         header_text += tr("  |  %1 OBS").arg(d.value("n_observations").toInt());
     results_layout_->addWidget(gs_section_header(header_text, accent));
 
-    // ── 1. CHECK STATUS ──────────────────────────────────────────────────────
-    if (command == "check_status") {
-        auto bool_card = [this](const QString& label, bool ok) {
-            return gs_make_card(label, ok ? tr("AVAILABLE") : tr("MISSING"), this,
-                                ok ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
-        };
-        QList<QWidget*> deps = {
-            bool_card(tr("SCIPY"), d.value("scipy").toBool()),
-            bool_card(tr("PANDAS"), d.value("pandas").toBool()),
-            gs_make_card(tr("BACKEND"), d.value("backend").toString().toUpper(), this),
-            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()), this,
-                         ui::colors::INFO()),
-        };
-        results_layout_->addWidget(gs_card_row(deps, this));
-        status_label_->setText(tr("Quant Reporting backend ready"));
-        return;
-    }
-
     // ── 2. IC ANALYSIS ───────────────────────────────────────────────────────
     if (command == "ic_analysis") {
         const double pearson = d.value("overall_pearson_ic").toDouble();

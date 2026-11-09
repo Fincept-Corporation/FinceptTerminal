@@ -23,7 +23,7 @@ namespace fincept::screens {
 /// recent filings with document links, 10-K / 10-Q key XBRL metrics with YoY, 8-K events,
 /// Form 4 insider activity and 13F institutional holders. Loads only when shown; each
 /// panel has its own loading / error + RETRY state and shows a cached copy (labelled)
-/// while it refreshes. Data comes from SecFilingsService (mcp/edgar/main.py).
+/// while it refreshes. Data comes from SecFilingsService (fincept_mcp/edgar/main.py).
 class EquityFilingsTab : public QWidget {
     Q_OBJECT
   public:

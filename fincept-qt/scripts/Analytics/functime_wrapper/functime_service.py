@@ -2,8 +2,11 @@
 Functime Service (pandas/sklearn/statsmodels backend)
 ======================================================
 Self-contained time-series analytics service for the Fincept Terminal
-"Functime" sub-tab. Does not require the polars-based functime library
-(the original wrapper is preserved as functime_service_polars_legacy.py).
+"Functime" sub-tab. Does not require the polars-based functime library.
+
+CLI: python functime_service.py <operation> '<json params>'   (prints one JSON object)
+Operations: check_status, forecast, anomaly_detection, seasonality, metrics,
+            confidence_intervals, stationarity
 
 Response contract (all ops):
     success: bool

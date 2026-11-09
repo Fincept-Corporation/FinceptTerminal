@@ -40,15 +40,16 @@ QString build_agent_system_prompt(const SystemPromptContext& ctx) {
 
     if (ctx.tools_enabled) {
         p << QStringLiteral("TERMINAL DATA (MCP server `%1`)").arg(server);
-        p << QStringLiteral("- The `%1` MCP server is the user's own running terminal. Its tools return LIVE data from "
-                            "it: quotes and price history, fundamentals and financial statements, SEC filings, news, "
-                            "economic and macro series, portfolios, watchlists and more.")
+        p << QStringLiteral("- The `%1` MCP server is the user's own running terminal. You operate it like a person: "
+                            "ui_overview shows what is open, ui_open opens any screen (optionally on a symbol), "
+                            "ui_snapshot lists a panel's controls with refs, ui_act works them, ui_read returns "
+                            "tables, charts and texts in full, ui_wait waits for data to load.")
                  .arg(server);
-        p << QStringLiteral("- Discover tools first: call tool_list with a keyword (for example quote, history, filing, "
-                            "news, macro, portfolio) and tool_describe for a tool's parameters, then call the tool "
-                            "directly or through tool_invoke.");
-        p << QStringLiteral("- Slow tools return a job id instead of data: poll job_status, then collect the output with "
-                            "job_result. Very large results return a result_id: page through it with result_fetch.");
+        p << QStringLiteral("- Live data comes from the screens: quotes and history (markets, equity_research), "
+                            "fundamentals and filings, news, economics, portfolios, watchlists and more. "
+                            "python(action=\"search\") finds the bundled analytics scripts; a long run returns a "
+                            "job_id to wait on with python(action=\"status\").");
+        p << QStringLiteral("- Very large results end with a res_… id: page through it with ui_read(ref=…).");
         p << QStringLiteral("- Prefer terminal data over your own memory. Cite the source tool and the data timestamp for "
                             "every figure you use. If a tool fails or data is missing, say so plainly - never invent "
                             "numbers.");

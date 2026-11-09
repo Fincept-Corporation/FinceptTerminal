@@ -1,6 +1,10 @@
 """
 Momentum Indicators Calculator
 Calculates various momentum indicators for technical analysis
+
+CLI: python momentum_indicators.py <indicator> '{"symbol": "AAPL", ...params}'
+  indicator: rsi, macd, stochastic, cci, roc, williams_r, awesome_oscillator, tsi, ultimate_oscillator
+  native: python momentum_indicators.py <symbol> <indicator> [params_json]
 """
 
 import sys

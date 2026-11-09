@@ -1,6 +1,21 @@
-"""Monte Carlo Simulation for M&A Valuation"""
+"""Monte Carlo Simulation for M&A Valuation
+
+CLI: python monte_carlo_valuation.py run <json>   (Advanced Analytics tab) — keys base_valuation, rev_growth_mean,
+rev_growth_std, margin_mean, margin_std, discount_rate (fractions), simulations; returns the simulated DCF value
+distribution (mean, median, std, p5..p95, probability_positive). Native form: monte_carlo <json>.
+"""
+import os
+import sys
 from typing import Dict, Any, List, Optional, Callable
 import numpy as np
+
+try:
+    import fincept_json
+    from fincept_irr import irr as _irr
+except ImportError:  # run by hand without PYTHONPATH=scripts
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
+    import fincept_json
+    from fincept_irr import irr as _irr
 
 class MonteCarloValuation:
     """Monte Carlo simulation for deal valuation under uncertainty"""
@@ -102,6 +117,7 @@ class MonteCarloValuation:
         valuations = np.array(valuations)
 
         return {
+            'probability_positive': float(np.sum(valuations > 0) / len(valuations) * 100),
             'valuation_statistics': {
                 'mean': float(np.mean(valuations)),
                 'median': float(np.median(valuations)),
@@ -158,15 +174,12 @@ class MonteCarloValuation:
             npv = sum(cf / ((1 + discount_rate) ** i) for i, cf in enumerate(cash_flows))
             npvs.append(npv)
 
-            try:
-                irr = np.irr(cash_flows)
-                if not np.isnan(irr) and -1 < irr < 2:
-                    irrs.append(irr)
-            except:
-                pass
+            irr = _irr(cash_flows)
+            if irr is not None and -1 < irr < 2:
+                irrs.append(irr)
 
         npvs = np.array(npvs)
-        irrs = np.array(irrs) if irrs else np.array([0])
+        irrs = np.array(irrs)
 
         probability_positive_npv = float(np.sum(npvs > 0) / self.num_simulations * 100)
 
@@ -183,7 +196,9 @@ class MonteCarloValuation:
             'irr_statistics': {
                 'mean': float(np.mean(irrs)) * 100 if len(irrs) > 0 else None,
                 'median': float(np.median(irrs)) * 100 if len(irrs) > 0 else None,
-                'std': float(np.std(irrs)) * 100 if len(irrs) > 0 else None
+                'std': float(np.std(irrs)) * 100 if len(irrs) > 0 else None,
+                # simulations with an IRR in (-100 %, 200 %); the rest (no IRR, total loss, outliers) are excluded
+                'num_samples': int(len(irrs))
             },
             'probability_positive_npv': probability_positive_npv,
             'probability_negative_npv': 100 - probability_positive_npv,
@@ -369,7 +384,8 @@ def main():
                 'p25': vs.get('percentile_25', 0),
                 'p75': vs.get('percentile_75', 0),
                 'p95': vs.get('percentile_95', 0),
-                'probability_positive': 100.0,  # DCF values are positive
+                # share of simulated values above zero (negative when a draw has WACC below terminal growth)
+                'probability_positive': analysis_dcf.get('probability_positive'),
                 'num_simulations': simulations,
                 'input_assumptions': analysis_dcf.get('input_assumptions', {}),
                 'base_valuation': base_valuation,
@@ -377,7 +393,7 @@ def main():
             }
 
             result = {"success": True, "data": analysis}
-            print(json.dumps(result))
+            print(fincept_json.dumps(result))
 
         else:
             result = {"success": False, "error": f"Unknown command: {command}"}

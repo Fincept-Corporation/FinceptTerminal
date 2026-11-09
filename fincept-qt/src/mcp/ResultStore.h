@@ -24,7 +24,7 @@
 //
 //   2. `ResultStore` — the trimmed-away remainder isn't lost. The full payload
 //      is parked here under a short id and the envelope tells the model it can
-//      page through it with `result_fetch(result_id, offset, limit)`. Nothing
+//      page through it with `ui_read(ref=result_id, offset)`. Nothing
 //      is silently dropped; the model pays for detail only when it asks.
 //
 // Retention is deliberately short and bounded (see kTtlMs / kMaxEntries /
@@ -37,6 +37,8 @@
 #include <QJsonValue>
 #include <QMutex>
 #include <QString>
+
+#include <optional>
 
 namespace fincept::mcp {
 
@@ -66,7 +68,7 @@ class ResultStore {
     static ResultStore& instance();
 
     /// Park a full payload. Returns a short id ("res_0001a3") for the model to
-    /// quote back to `result_fetch`.
+    /// quote back to `ui_read`.
     QString put(const QString& tool, const QJsonValue& payload);
 
     struct Page {
@@ -83,6 +85,11 @@ class ResultStore {
     /// than re-walking the structure keeps paging O(limit) and lets the model
     /// resume exactly where it stopped.
     Page page(const QString& id, int offset, int limit) const;
+
+    /// The whole stored payload as compact JSON, or nullopt when unknown/expired.
+    /// Lets a reader decode a parked JSON string (e.g. a long script output)
+    /// instead of paging its escaped form.
+    std::optional<QByteArray> raw(const QString& id) const;
 
     void clear();
 

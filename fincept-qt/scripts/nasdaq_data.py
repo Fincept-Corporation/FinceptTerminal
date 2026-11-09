@@ -14,6 +14,12 @@ import aiohttp
 import re
 import html
 
+try:
+    import fincept_json
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_json
+
 # aiohttp defaults to aiodns when it is installed, and aiodns times out on many
 # Windows setups ("Timeout while contacting DNS servers"). The threaded resolver
 # uses the OS resolver instead (same fix as bis_data.py).
@@ -154,6 +160,18 @@ class NASDAQDataAPI:
         except Exception as e:
             return NASDAQError(url, f"Unexpected error: {str(e)}").to_dict()
 
+    @staticmethod
+    def _api_payload(result: Dict[str, Any]) -> Dict[str, Any]:
+        """The payload of an api.nasdaq.com answer.
+
+        The API answers {"data": <payload>, "message": ..., "status": ...} and the request helpers
+        keep that whole body under "data" again. The calendar readers took result["data"] as the
+        payload, found no rows and reported "No ... data found" for every date.
+        """
+        body = result.get("data")
+        payload = body.get("data") if isinstance(body, dict) else None
+        return payload if isinstance(payload, dict) else {}
+
     def _parse_equity_directory(self, content: str) -> pd.DataFrame:
         """Parse NASDAQ equity directory data"""
         try:
@@ -208,15 +226,20 @@ class NASDAQDataAPI:
             Dict containing search results
         """
         try:
-            # Get equity directory
-            result = self._make_request(NASDAQ_EQUITY_DIR_URL,
-                                       headers={'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'})
-
-            if "error" in result:
-                return result
+            # Get equity directory. nasdaqtrader.com serves a pipe-delimited text file: going
+            # through _make_request sent the API session's "Host: api.nasdaq.com" header (HTTP 503)
+            # and then parsed the body as JSON, so this command could not return anything.
+            try:
+                response = requests.get(NASDAQ_EQUITY_DIR_URL, timeout=30,
+                                        headers={'User-Agent': self._get_random_user_agent(),
+                                                 'Accept': 'text/plain,*/*;q=0.8'})
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                return NASDAQError(NASDAQ_EQUITY_DIR_URL, f"Network error: {str(e)}",
+                                   getattr(e.response, 'status_code', None)).to_dict()
 
             # Parse directory data
-            df = self._parse_equity_directory(result["data"])
+            df = self._parse_equity_directory(response.text)
 
             if df.empty:
                 return NASDAQError("equity_search", "No equity data found").to_dict()
@@ -233,11 +256,12 @@ class NASDAQDataAPI:
                 if 'NASDAQ Symbol' in df.columns:
                     search_columns.append('NASDAQ Symbol')
 
-                # Create mask for search
-                mask = pd.Series([False] * len(df))
+                # Create mask for search (aligned to df's index — the test-issue filter above leaves
+                # gaps — and matching the query as literal text, not a regular expression)
+                mask = pd.Series(False, index=df.index)
                 for col in search_columns:
                     if col in df.columns:
-                        mask |= df[col].str.contains(query, case=False, na=False)
+                        mask |= df[col].fillna("").astype(str).str.contains(query, case=False, regex=False)
 
                 df = df[mask]
 
@@ -325,32 +349,30 @@ class NASDAQDataAPI:
             if not rows:
                 return NASDAQError("equity_screener", "No screener results found").to_dict()
 
-            # Sort by percentage change (descending)
-            sorted_rows = sorted(rows, key=lambda x: float(x.get("pctchange", 0)), reverse=True)
-
-            # Clean numeric fields
+            # Clean numeric fields first. NASDAQ sends display text ("-1.247%", "$1,234.56", "UNCH"),
+            # and sorting on float() of the raw text raised on the first "%" sign, so the command
+            # always failed. pctchange stays in percent points, like the text it comes from.
             cleaned_results = []
-            for row in sorted_rows:
+            for row in rows:
                 cleaned_row = {}
                 for key, value in row.items():
-                    if key in ["lastsale", "netchange", "pctchange", "marketCap"]:
-                        # Clean numeric values
-                        if isinstance(value, str):
-                            cleaned_value = value.replace("%", "").replace("$", "").replace(",", "")
-                            cleaned_value = cleaned_value.replace("UNCH", "").replace("--", "").replace("NA", "")
-                            try:
-                                if key == "pctchange":
-                                    cleaned_row[key] = float(cleaned_value) / 100 if cleaned_value else None
-                                else:
-                                    cleaned_row[key] = float(cleaned_value) if cleaned_value else None
-                            except ValueError:
-                                cleaned_row[key] = None
-                        else:
-                            cleaned_row[key] = value
+                    if key in ["lastsale", "netchange", "pctchange", "marketCap"] and isinstance(value, str):
+                        cleaned_value = value.replace("%", "").replace("$", "").replace(",", "").strip()
+                        if cleaned_value == "UNCH":
+                            cleaned_value = "0"  # unchanged
+                        try:
+                            cleaned_row[key] = (float(cleaned_value)
+                                                if cleaned_value not in ("", "--", "NA", "N/A") else None)
+                        except ValueError:
+                            cleaned_row[key] = None
                     else:
                         cleaned_row[key] = value
 
                 cleaned_results.append(cleaned_row)
+
+            # Sort by percentage change (descending); rows without one go last
+            cleaned_results.sort(key=lambda r: r["pctchange"] if isinstance(r.get("pctchange"), float) else float("-inf"),
+                                 reverse=True)
 
             return {
                 "success": True,
@@ -409,8 +431,8 @@ class NASDAQDataAPI:
                 result = await self._make_async_request(url, headers)
 
                 if "error" not in result:
-                    data = result.get("data", {})
-                    calendar_data = data.get("calendar", {}).get("rows", [])
+                    data = self._api_payload(result)
+                    calendar_data = (data.get("calendar") or {}).get("rows") or []
                     return calendar_data
                 return []
 
@@ -500,8 +522,8 @@ class NASDAQDataAPI:
                 result = await self._make_async_request(url, headers)
 
                 if "error" not in result:
-                    data = result.get("data", {})
-                    rows = data.get("rows", [])
+                    data = self._api_payload(result)
+                    rows = data.get("rows") or []
 
                     # Add report date to each earnings
                     if rows and data.get("asOf"):
@@ -578,10 +600,11 @@ class NASDAQDataAPI:
             if status not in IPO_STATUS_CHOICES:
                 return NASDAQError("ipo_calendar", f"Invalid status. Choose from: {', '.join(IPO_STATUS_CHOICES)}").to_dict()
 
-            # Set default dates
-            now = datetime.now()
-            start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else now - timedelta(days=300)
-            end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else now.date()
+            # Set default dates (both as dates: a datetime default start compared against a date
+            # end raised "can't compare datetime.datetime to datetime.date" on every default call)
+            today = datetime.now().date()
+            start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else today - timedelta(days=300)
+            end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else today
 
             # Generate month range for IPO calendar
             months = set()
@@ -610,12 +633,12 @@ class NASDAQDataAPI:
                 result = await self._make_async_request(url_base, headers)
 
                 if "error" not in result:
-                    data = result.get("data", {})
-                    if status in data:
+                    data = self._api_payload(result)
+                    if isinstance(data.get(status), dict):
                         if status == "upcoming":
-                            return data["upcoming"]["upcomingTable"]["rows"]
+                            return (data["upcoming"].get("upcomingTable") or {}).get("rows") or []
                         else:
-                            return data[status]["rows"]
+                            return data[status].get("rows") or []
                 return []
 
             # Fetch all months concurrently
@@ -632,13 +655,13 @@ class NASDAQDataAPI:
             # Sort by date based on status
             if status == "priced":
                 sorted_ipos = sorted(all_ipos,
-                                   key=lambda x: self._parse_date(x.get("pricedDate", "")))
+                                   key=lambda x: self._parse_date(x.get("pricedDate", "")) or "")
             elif status == "withdrawn":
                 sorted_ipos = sorted(all_ipos,
-                                   key=lambda x: self._parse_date(x.get("withdrawDate", "")))
+                                   key=lambda x: self._parse_date(x.get("withdrawDate", "")) or "")
             elif status == "filed":
                 sorted_ipos = sorted(all_ipos,
-                                   key=lambda x: self._parse_date(x.get("filedDate", "")))
+                                   key=lambda x: self._parse_date(x.get("filedDate", "")) or "")
             else:  # upcoming
                 sorted_ipos = all_ipos
 
@@ -721,8 +744,8 @@ class NASDAQDataAPI:
                 result = await self._make_async_request(url, headers)
 
                 if "error" not in result:
-                    data = result.get("data", {})
-                    rows = data.get("rows", [])
+                    data = self._api_payload(result)
+                    rows = data.get("rows") or []
 
                     # Process each event
                     processed_events = []
@@ -1029,9 +1052,10 @@ def main(args=None):
         else:
             return NASDAQError("cli", f"Unknown command: {command}").to_dict()
 
-    # Run the async command
+    # Run the async command. fincept_json: empty directory cells (pandas NaN) print null instead
+    # of the bare NaN token, which is not JSON and makes the terminal discard the whole payload.
     result = asyncio.run(run_command())
-    print(json.dumps(result, indent=2, default=str))
+    print(fincept_json.dumps(result, indent=2, default=str, ensure_ascii=True))
 
 
 if __name__ == "__main__":

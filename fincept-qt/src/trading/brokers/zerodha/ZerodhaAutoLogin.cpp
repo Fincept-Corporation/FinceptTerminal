@@ -1,7 +1,7 @@
 #include "trading/brokers/zerodha/ZerodhaAutoLogin.h"
 
+#include "core/crypto/Totp.h"
 #include "core/logging/Logger.h"
-#include "trading/brokers/zerodha/Totp.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -109,7 +109,7 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password, 
         form.addQueryItem("password", password);
         const auto body = form.toString(QUrl::FullyEncoded).toUtf8();
 
-        HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow=*/false);
+        HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow_redirects=*/false);
         if (r.status != 200) {
             out.token.error =
                 extract_error(r.body, r.network_error.isEmpty() ? QStringLiteral("Invalid Kite user ID or password")
@@ -127,7 +127,7 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password, 
     // Step 2: /api/twofa
     report("Submitting 2FA...");
     {
-        const QString totp = generate_totp(totp_secret, QDateTime::currentSecsSinceEpoch());
+        const QString totp = fincept::crypto::generate_totp(totp_secret, QDateTime::currentSecsSinceEpoch()).code;
         if (totp.isEmpty()) {
             out.token.error = "TOTP secret is not valid Base32";
             return out;
@@ -143,7 +143,7 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password, 
         form.addQueryItem("skip_session", "");
         const auto body = form.toString(QUrl::FullyEncoded).toUtf8();
 
-        HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow=*/false);
+        HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow_redirects=*/false);
         if (r.status != 200) {
             QString msg = extract_error(r.body, "Invalid TOTP");
             if (msg.contains("TwoFAException", Qt::CaseInsensitive) || msg.contains("TOTP", Qt::CaseInsensitive))
@@ -167,7 +167,7 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password, 
         url.setQuery(q);
         QNetworkRequest req(url);
 
-        HttpResult r = do_request(nam, req, {}, /*is_post=*/false, /*follow=*/true);
+        HttpResult r = do_request(nam, req, {}, /*is_post=*/false, /*follow_redirects=*/true);
 
         // Parse request_token from final URL query (set during redirect).
         const QUrlQuery final_q(r.final_url);
@@ -205,7 +205,7 @@ AutoLoginResult run_auto_login(const QString& user_id, const QString& password, 
         form.addQueryItem("checksum", QString::fromLatin1(checksum));
         const auto body = form.toString(QUrl::FullyEncoded).toUtf8();
 
-        HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow=*/false);
+        HttpResult r = do_request(nam, req, body, /*is_post=*/true, /*follow_redirects=*/false);
         if (r.status != 200) {
             QString msg = extract_error(r.body, "Token exchange failed");
             if (msg.contains("TokenException", Qt::CaseInsensitive))

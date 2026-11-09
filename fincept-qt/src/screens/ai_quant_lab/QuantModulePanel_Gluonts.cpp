@@ -468,35 +468,6 @@ void QuantModulePanel::display_gluonts_result(const QString& command, const QJso
         header_text += tr("  |  %1 OBS").arg(d.value("n_observations").toInt());
     results_layout_->addWidget(gs_section_header(header_text, accent));
 
-    // ── 1. CHECK STATUS ──────────────────────────────────────────────────────
-    if (command == "check_status") {
-        auto bool_card = [this](const QString& label, bool ok) {
-            return gs_make_card(label, ok ? tr("AVAILABLE") : tr("MISSING"), this,
-                                ok ? ui::colors::POSITIVE() : ui::colors::NEGATIVE());
-        };
-        QList<QWidget*> deps = {
-            bool_card(tr("SCIPY"), d.value("scipy").toBool()),
-            bool_card(tr("SKLEARN"), d.value("sklearn").toBool()),
-            gs_make_card(tr("BACKEND"), d.value("backend").toString().toUpper(), this),
-            gs_make_card(tr("OPS"), QString::number(d.value("ops_available").toArray().size()), this,
-                         ui::colors::INFO()),
-        };
-        results_layout_->addWidget(gs_card_row(deps, this));
-
-        const auto note = d.value("note").toString();
-        if (!note.isEmpty()) {
-            auto* lbl = new QLabel(note);
-            lbl->setWordWrap(true);
-            lbl->setStyleSheet(
-                QString("color:%1; font-size:10px; font-family:'Courier New';"
-                        "padding:8px 10px; background:%2; border:1px solid %3;")
-                    .arg(ui::colors::TEXT_SECONDARY(), ui::colors::BG_SURFACE(), ui::colors::BORDER_DIM()));
-            results_layout_->addWidget(lbl);
-        }
-        status_label_->setText(tr("GluonTS backend ready"));
-        return;
-    }
-
     // ── 2. PROBABILISTIC FORECAST ───────────────────────────────────────────
     if (command == "probabilistic_forecast") {
         const int horizon = d.value("horizon").toInt();

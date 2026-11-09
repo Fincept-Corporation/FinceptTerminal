@@ -7,18 +7,23 @@ Invocation:
 Commands:
     derive_api_creds  — POST /auth/api-key via L1 EIP-712 headers; returns {apiKey, secret, passphrase}
     balance           — get available USDC + total value
-    positions         — user's open positions
+    positions         — user's open positions (Data API v2, all pages)
     open_orders       — user's live orders
     activity          — trade / split / merge / redeem / reward history
+                        (raw Data API v2 rows, snake_case keys)
     place_order       — sign + submit a limit/market order
     cancel_order      — cancel a single order by id
     cancel_market     — cancel all user orders in a (market, asset_id) pair
 
+Signing uses py_clob_client_v2. Polymarket's CLOB V2 went live 2026-04-28 with
+no V1 compatibility: orders signed by the legacy `py_clob_client` are rejected.
+
 Payload shape for `place_order`:
     {
         "private_key":    "0x…",          // Polygon signer
-        "funder":          "0x…",          // optional — auto-derived for Proxy
-        "signature_type":  0 | 1 | 2,      // 0=EOA 1=POLY_PROXY 2=POLY_GNOSIS_SAFE
+        "funder":          "0x…",          // the Polymarket account wallet; required unless EOA
+        "signature_type":  0 | 1 | 2 | 3,  // 0=EOA 1=POLY_PROXY 2=POLY_GNOSIS_SAFE
+                                           // 3=POLY_1271 (Deposit Wallet: every account since 2026-05-04)
         "api_key":         "…",             // L2 creds (from derive_api_creds)
         "api_secret":      "…",
         "api_passphrase":  "…",
@@ -28,7 +33,7 @@ Payload shape for `place_order`:
         "side":            "BUY" | "SELL",
         "order_type":      "GTC" | "FOK" | "GTD" | "FAK",
         "tick_size":       "0.01",          // hint only — the market tick is read from the API
-        "neg_risk":        false,
+        "neg_risk":        false,           // hint only — read from the API as well
         "expiration":      0                // 0=GTC; unix seconds for GTD
     }
 
@@ -59,19 +64,19 @@ def _fail(msg: str, **extra) -> None:
 
 def _require_pyclob():
     try:
-        from py_clob_client.client import ClobClient  # noqa: F401
+        from py_clob_client_v2 import ClobClient  # noqa: F401
         return True
     except Exception as exc:
         _fail(
-            "py_clob_client is not installed. Run: pip install py-clob-client eth-account",
+            "py_clob_client_v2 is not installed. Re-run the terminal's Python setup, "
+            "or run: pip install py-clob-client-v2 eth-account",
             detail=str(exc),
         )
         return False
 
 
 def _build_client(payload: dict):
-    from py_clob_client.client import ClobClient
-    from py_clob_client.clob_types import ApiCreds
+    from py_clob_client_v2 import ApiCreds, ClobClient
 
     host = payload.get("host") or "https://clob.polymarket.com"
     chain_id = int(payload.get("chain_id") or 137)
@@ -89,18 +94,19 @@ def _build_client(payload: dict):
             api_passphrase=payload["api_passphrase"],
         )
 
-    # Signature type 0 (EOA) does not need a funder; 1/2 do.
+    # Always pass signature_type: the client sends it on balance reads and signs
+    # with it. Smart wallets (1/2/3) hold the funds at `funder`; without it the
+    # SDK falls back to the signer address and orders are rejected.
     kwargs = {
         "host": host,
         "chain_id": chain_id,
         "key": private_key,
+        "signature_type": sig_type,
     }
     if creds is not None:
         kwargs["creds"] = creds
-    if sig_type != 0:
-        kwargs["signature_type"] = sig_type
-        if funder:
-            kwargs["funder"] = funder
+    if sig_type != 0 and funder:
+        kwargs["funder"] = funder
     return ClobClient(**kwargs)
 
 
@@ -110,10 +116,10 @@ def _build_client(payload: dict):
 def cmd_derive_api_creds(payload: dict) -> None:
     """Derive L2 API credentials from L1 (EIP-712) signature.
 
-    py_clob_client's `create_or_derive_api_creds()` handles both paths.
+    py_clob_client_v2's `create_or_derive_api_key()` handles both paths.
     """
     client = _build_client(payload)
-    creds = client.create_or_derive_api_creds()
+    creds = client.create_or_derive_api_key()
     _emit({
         "ok": True,
         "api_key": creds.api_key,
@@ -124,11 +130,12 @@ def cmd_derive_api_creds(payload: dict) -> None:
 
 def cmd_balance(payload: dict) -> None:
     client = _build_client(payload)
-    # get_balance_allowance returns {balance, allowance} for USDC collateral.
-    from py_clob_client.clob_types import BalanceAllowanceParams, AssetType
+    # get_balance_allowance returns {balance, allowances} for the collateral token
+    # (pUSD since CLOB V2, a USDC-backed 6-decimal ERC-20).
+    from py_clob_client_v2 import AssetType, BalanceAllowanceParams
     params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
     ba = client.get_balance_allowance(params)
-    # Polymarket balances are in 6-decimal USDC units (microUSDC).
+    # Balances are in 6-decimal base units.
     available = float(ba.get("balance", "0")) / 1_000_000.0
     _emit({
         "ok": True,
@@ -138,39 +145,82 @@ def cmd_balance(payload: dict) -> None:
     })
 
 
-def cmd_positions(payload: dict) -> None:
-    import requests
+# Data API v1 was retired on 2026-11-02 (every v1 route now answers 410 Gone).
+# v2 wraps each payload as {"data": ..., "pagination": {"next_cursor", ...}},
+# uses snake_case fields, pages by opaque cursor only, and rejects `offset` /
+# `market` with HTTP 400.
+_DATA_API = "https://data-api.polymarket.com/v2"
+_MAX_PAGES = 50  # 50 x 1000 rows: a loop guard, not an expected size
 
+
+def _resolve_user(payload: dict) -> str:
+    """The wallet that holds the positions.
+
+    Smart wallets (proxy / safe / deposit, signature_type 1-3) hold positions at the
+    funder address, not at the signer — querying the signer showed an empty book.
+    Only a plain EOA (0) holds them at the key's own address.
+    """
     user = payload.get("user") or ""
+    if not user and int(payload.get("signature_type", 1)) != 0:
+        user = payload.get("funder") or ""
     if not user:
-        # If user address is not given, derive from private_key via eth_account.
         from eth_account import Account
         user = Account.from_key(payload["private_key"]).address
-    r = requests.get(
-        "https://data-api.polymarket.com/positions",
-        params={"user": user, "sizeThreshold": 0.0001, "limit": 500},
-        timeout=30,
-    )
+    return user
+
+
+def _data_api_get(path: str, params: dict):
+    """GET one Data API v2 page. Returns (rows, next_cursor or None)."""
+    import requests
+
+    r = requests.get(_DATA_API + path, params=params, timeout=30)
     r.raise_for_status()
-    items = r.json() or []
+    body = r.json() or {}
+    # A documented miss is `data: null` or `[]`, never an error.
+    rows = body.get("data") or []
+    cursor = (body.get("pagination") or {}).get("next_cursor")
+    return rows, cursor
+
+
+def _num(v) -> float:
+    # v2 may send null for economics a position does not have.
+    return float(v or 0)
+
+
+def cmd_positions(payload: dict) -> None:
+    user = _resolve_user(payload)
+    # status defaults to OPEN, which v2 defines as the superset that still holds
+    # settled-but-unredeemed winners — what v1 /positions returned. filter_amount
+    # replaces v1's sizeThreshold; v2's default floor would hide holdings < 0.1 share.
+    params = {"user": user, "limit": 1000, "filter_type": "TOKENS", "filter_amount": 0.0001}
+    items = []
+    for _ in range(_MAX_PAGES):
+        rows, cursor = _data_api_get("/positions", params)
+        items.extend(rows)
+        if not cursor:
+            break
+        # Resend the same anchor/filters with the cursor (v2's resume contract).
+        params = {**params, "cursor": cursor}
+    else:
+        sys.stderr.write(f"prediction_polymarket: positions truncated after {_MAX_PAGES} pages\n")
     positions = []
     for p in items:
         positions.append({
-            "asset_id": p.get("asset"),
-            "market_id": p.get("conditionId"),
-            "outcome": p.get("outcome", ""),
-            "size": float(p.get("size", 0)),
-            "avg_price": float(p.get("avgPrice", 0)),
-            "realized_pnl": float(p.get("realizedPnl", 0)),
-            "unrealized_pnl": float(p.get("cashPnl", 0)),
-            "current_value": float(p.get("currentValue", 0)),
+            "asset_id": p.get("token_id"),
+            "market_id": p.get("condition_id"),
+            "outcome": p.get("outcome") or "",
+            "size": _num(p.get("current_size")),
+            "avg_price": _num(p.get("avg_price")),
+            "realized_pnl": _num(p.get("realized_pnl")),
+            "unrealized_pnl": _num(p.get("unrealized_pnl")),
+            "current_value": _num(p.get("current_value")),
         })
     _emit({"ok": True, "positions": positions})
 
 
 def cmd_open_orders(payload: dict) -> None:
     client = _build_client(payload)
-    orders = client.get_orders() or []
+    orders = client.get_open_orders() or []  # walks every cursor page
     normalized = []
     for o in orders:
         normalized.append({
@@ -179,34 +229,47 @@ def cmd_open_orders(payload: dict) -> None:
             "market_id": o.get("market"),
             "outcome": o.get("outcome"),
             "side": o.get("side"),
-            "order_type": o.get("order_type", "GTC"),
-            "price": float(o.get("price", 0)),
-            "size": float(o.get("original_size", 0)),
-            "filled": float(o.get("size_matched", 0)),
-            "status": o.get("status", ""),
-            "created_ms": int(o.get("created_at", 0)) * 1000,
+            "order_type": o.get("order_type") or "GTC",
+            "price": _num(o.get("price")),
+            "size": _num(o.get("original_size")),
+            "filled": _num(o.get("size_matched")),
+            "status": o.get("status") or "",
+            "created_ms": int(o.get("created_at") or 0) * 1000,
             "expires_ms": int(o.get("expiration") or 0) * 1000,
         })
     _emit({"ok": True, "orders": normalized})
 
 
 def cmd_activity(payload: dict) -> None:
-    import requests
-    from eth_account import Account
-
-    user = payload.get("user") or Account.from_key(payload["private_key"]).address
+    user = _resolve_user(payload)
     limit = int(payload.get("limit", 100))
-    r = requests.get(
-        "https://data-api.polymarket.com/activity",
-        params={"user": user, "limit": min(max(limit, 1), 500)},
-        timeout=30,
-    )
-    r.raise_for_status()
-    _emit({"ok": True, "activities": r.json() or []})
+    # v2 caps a page at 1000 and rejects anything larger.
+    rows, _ = _data_api_get("/activity", {"user": user, "limit": min(max(limit, 1), 1000)})
+    _emit({"ok": True, "activities": rows})
 
 
-# Tick sizes the CLOB order builder supports (py_clob_client ROUNDING_CONFIG keys).
-_SUPPORTED_TICKS = ("0.1", "0.01", "0.001", "0.0001")
+# Tick sizes the CLOB order builder supports — py_clob_client_v2's ROUNDING_CONFIG
+# keys. 0.005 / 0.0025 are real (World Cup markets moved to 0.0025 on 2026-07-02).
+_SUPPORTED_TICKS = ("0.1", "0.01", "0.005", "0.0025", "0.001", "0.0001")
+
+
+def _is_protocol_v2_asset(asset_id: str):
+    """True for a Polymarket Protocol V2 position id, False for a CTF token id,
+    None when the Data API cannot say.
+
+    V2 outcomes must be ordered by `position_id` (ExchangeV3, signing domain "3");
+    CTF tokens by `token_id`. /v2/tokens reports `module`: `v1_ctf` is a CTF market,
+    every other value a Protocol V2 module.
+    """
+    try:
+        rows, _ = _data_api_get("/tokens", {"token_id": asset_id})
+    except Exception as exc:
+        sys.stderr.write(f"prediction_polymarket: token lookup failed ({exc}); assuming a CTF token\n")
+        return None
+    for row in rows:
+        if str(row.get("token_id")) == asset_id:
+            return row.get("module") not in (None, "", "v1_ctf")
+    return None
 
 
 def _normalize_tick(raw) -> str:
@@ -254,14 +317,18 @@ def _normalize_price(price, tick: str) -> float:
 
 
 def cmd_place_order(payload: dict) -> None:
-    from py_clob_client.clob_types import OrderArgs, OrderType, PartialCreateOrderOptions
-
-    client = _build_client(payload)
+    from py_clob_client_v2 import OrderArgs, OrderType, PartialCreateOrderOptions
 
     token_id = str(payload.get("token_id") or "").strip()
     if not token_id:
         _fail("token_id is required")
         return
+    if int(payload.get("signature_type", 1)) != 0 and not payload.get("funder"):
+        _fail("funder is required for proxy / safe / deposit wallets — enter your Polymarket "
+              "wallet address (shown in the polymarket.com profile menu) in the account settings")
+        return
+
+    client = _build_client(payload)
     try:
         size = float(payload["size"])
     except (KeyError, TypeError, ValueError):
@@ -303,24 +370,28 @@ def cmd_place_order(payload: dict) -> None:
     if side not in ("BUY", "SELL"):
         _fail(f"side must be BUY or SELL (got {payload.get('side')!r})")
         return
-    args = OrderArgs(
-        token_id=token_id,
-        price=price,
-        size=size,
-        side=side,
-    )
-    if payload.get("expiration"):
-        args.expiration = int(payload["expiration"])
+    protocol_v2 = _is_protocol_v2_asset(token_id) is True
+    expiration = int(payload.get("expiration") or 0)
+    if protocol_v2:
+        # position_id selects ExchangeV3 signing; neg_risk does not apply.
+        args = OrderArgs(position_id=token_id, price=price, size=size, side=side, expiration=expiration)
+        options = PartialCreateOrderOptions(tick_size=market_tick)
+    else:
+        # neg_risk picks the exchange contract the order is signed for; a wrong value is
+        # rejected. Like the tick, the market's own flag is authoritative.
+        try:
+            neg_risk = bool(client.get_neg_risk(token_id))
+        except Exception as exc:
+            _fail(f"could not read the market's neg-risk flag: {exc}")
+            return
+        hint_nr = payload.get("neg_risk")
+        if hint_nr is not None and bool(hint_nr) != neg_risk:
+            sys.stderr.write(f"prediction_polymarket: caller neg_risk {hint_nr!r} ignored; market says {neg_risk}\n")
+        args = OrderArgs(token_id=token_id, price=price, size=size, side=side, expiration=expiration)
+        options = PartialCreateOrderOptions(tick_size=market_tick, neg_risk=neg_risk)
 
-    # py_clob_client expects a PartialCreateOrderOptions (attribute access), not a
-    # plain dict, and create_and_post_order() accepts no order_type kwarg (it always
-    # posts GTC). Sign with create_order(), then publish with post_order() so the
-    # caller's FOK/FAK/GTD/GTC time-in-force is actually honored.
-    options = PartialCreateOrderOptions(
-        tick_size=market_tick,
-        neg_risk=bool(payload.get("neg_risk", False)),
-    )
-
+    # Sign with create_order(), then publish with post_order() so the caller's
+    # FOK/FAK/GTD/GTC time-in-force is honored.
     signed = client.create_order(args, options)
     result = client.post_order(signed, order_type)
     _emit({
@@ -335,9 +406,11 @@ def cmd_place_order(payload: dict) -> None:
 
 
 def cmd_cancel_order(payload: dict) -> None:
+    from py_clob_client_v2 import OrderPayload
+
     client = _build_client(payload)
     oid = str(payload["order_id"])
-    result = client.cancel(order_id=oid)
+    result = client.cancel_order(OrderPayload(orderID=oid))
     _emit({
         "ok": bool(result.get("canceled")),
         "order_id": oid,
@@ -346,10 +419,12 @@ def cmd_cancel_order(payload: dict) -> None:
 
 
 def cmd_cancel_market(payload: dict) -> None:
+    from py_clob_client_v2 import OrderMarketCancelParams
+
     client = _build_client(payload)
     market = str(payload["market_id"])
     asset_id = str(payload["asset_id"])
-    result = client.cancel_market_orders(market=market, asset_id=asset_id)
+    result = client.cancel_market_orders(OrderMarketCancelParams(market=market, asset_id=asset_id))
     _emit({"ok": True, "raw": result})
 
 

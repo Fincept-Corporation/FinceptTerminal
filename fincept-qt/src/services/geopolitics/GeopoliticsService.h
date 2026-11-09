@@ -52,9 +52,6 @@ class GeopoliticsService : public QObject, public fincept::datahub::Producer {
     /// Impact of removing trade barriers (FDI / employment / GDP) — script mode `barrier_removal`.
     void analyze_barrier_removal(const QJsonObject& params);
 
-    // ── Geolocation (Python) ────────────────────────────────────────────────
-    void extract_geolocations(const QStringList& headlines);
-
   signals:
     void events_loaded(fincept::services::geo::EventsPage page);
     void countries_loaded(QVector<fincept::services::geo::UniqueCountry> countries);
@@ -62,7 +59,6 @@ class GeopoliticsService : public QObject, public fincept::datahub::Producer {
     void cities_loaded(QStringList cities);
     void hdx_results_loaded(QString context, QVector<fincept::services::geo::HDXDataset> datasets);
     void trade_result_ready(QString context, QJsonObject data);
-    void geolocation_ready(QJsonObject data);
     void error_occurred(QString context, QString message);
 
   private:

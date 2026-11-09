@@ -2,6 +2,7 @@
 
 #include "auth/ConstantTime.h"
 #include "auth/LoopbackGuard.h"
+#include "core/config/AppPaths.h"
 #include "core/logging/Logger.h"
 
 #include <QByteArray>
@@ -51,7 +52,8 @@ QByteArray tx_query_param(const QByteArray& path, const char* key) {
 }
 
 QByteArray load_swap_html() {
-    const QString path = QCoreApplication::applicationDirPath() + QStringLiteral("/resources/wallet/swap.html");
+    // Resolved across every shipped layout (macOS keeps resources in Contents/Resources/).
+    const QString path = fincept::AppPaths::bundled_resource(QStringLiteral("wallet/swap.html"));
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
         LOG_WARN("WalletTxBridge", "swap.html not found at " + path);
@@ -91,14 +93,14 @@ Result<QString> WalletTxBridge::request_signature(const QString& tx_base64, Sign
     pr.timeout_seconds = timeout_seconds > 0 ? timeout_seconds : 60;
 
     const QString req_id = new_request_id();
-    requests_.insert(req_id, std::move(pr));
+    const int timeout_s = pr.timeout_seconds;
+    requests_.emplace(req_id, std::move(pr)); // QHash::insert would copy
 
     const quint16 port = server_->serverPort();
     const QString url = QStringLiteral("http://127.0.0.1:%1/swap?req=%2&token=%3")
                             .arg(port)
                             .arg(req_id, QString::fromLatin1(session_token_));
-    LOG_INFO("WalletTxBridge",
-             QStringLiteral("registered sign request %1 (expires %2s)").arg(req_id).arg(pr.timeout_seconds));
+    LOG_INFO("WalletTxBridge", QStringLiteral("registered sign request %1 (expires %2s)").arg(req_id).arg(timeout_s));
     return Result<QString>::ok(url);
 }
 
@@ -267,8 +269,7 @@ void WalletTxBridge::handle_request(QTcpSocket* socket, const QByteArray& body, 
     // is read-only, embedded in the binary's resource directory, and only
     // reachable from 127.0.0.1 — no privilege boundary is crossed.
     if (method == "GET" && tx_path_starts_with(path, "/vendor/web3.js")) {
-        const QString abs_path =
-            QCoreApplication::applicationDirPath() + QStringLiteral("/resources/wallet/vendor/web3.js");
+        const QString abs_path = fincept::AppPaths::bundled_resource(QStringLiteral("wallet/vendor/web3.js"));
         QFile f(abs_path);
         if (!f.open(QIODevice::ReadOnly)) {
             LOG_WARN("WalletTxBridge", "vendored web3.js missing at " + abs_path);

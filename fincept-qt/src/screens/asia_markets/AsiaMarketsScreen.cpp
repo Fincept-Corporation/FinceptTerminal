@@ -140,7 +140,7 @@ static QList<StockCategory> build_categories() {
         {"fund_flow", "FUND FLOW", "akshare_stocks_funds.py", "#FF3B3B", 56},
         {"boards", "BOARDS", "akshare_stocks_board.py", "#00E5FF", 49},
         {"margin", "MARGIN/HSGT", "akshare_stocks_margin.py", "#FF8800", 46},
-        {"hot_news", "HOT & NEWS", "akshare_stocks_hot.py", "#FF6B6B", 55},
+        {"hot_news", "HOT & NEWS", "akshare_stocks_hot.py", "#FF6B6B", 54},
     };
 }
 

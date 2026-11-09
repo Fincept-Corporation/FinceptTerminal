@@ -53,6 +53,11 @@ class PortfolioService : public QObject {
     bool sell_asset(const QString& portfolio_id, const QString& symbol, double qty, double price,
                     const QString& date = {});
 
+    /// Every symbol held in any portfolio (canonical yfinance form), de-duplicated.
+    /// Reads the repository only — no service state — so it is safe on a worker
+    /// thread (the News screen uses it to flag holdings in the feed).
+    static QStringList held_symbols();
+
     // ── Transactions ─────────────────────────────────────────────────────────
     void load_transactions(const QString& portfolio_id, int limit = 50);
     /// Full ledger, newest first (local SQLite read — for exports/edits).

@@ -154,6 +154,20 @@ void SurfaceAnalyticsScreen::refresh_provider_status() {
                                         svc.has_api_key() ? "key set" : "Settings → Credentials");
 }
 
+void SurfaceAnalyticsScreen::load_dataset_list() {
+    if (!control_panel_)
+        return;
+    auto& svc = DatabentoService::instance();
+    if (!svc.has_api_key())
+        return; // the panel keeps its seed list
+    QPointer<SurfaceAnalyticsScreen> self = this;
+    svc.list_datasets([self](const QStringList& datasets) {
+        if (!self || !self->control_panel_)
+            return;
+        self->control_panel_->set_datasets(datasets);
+    });
+}
+
 void SurfaceAnalyticsScreen::load_dataset_range_for_active_capability() {
     if (!control_panel_)
         return;
@@ -188,11 +202,10 @@ void SurfaceAnalyticsScreen::showEvent(QShowEvent* e) {
             Qt::UniqueConnection);
     connect(&svc, &DatabentoService::fetch_failed, this, &SurfaceAnalyticsScreen::on_db_fetch_failed,
             Qt::UniqueConnection);
-    connect(&svc, &DatabentoService::connection_tested, this, &SurfaceAnalyticsScreen::on_db_connection_tested,
-            Qt::UniqueConnection);
     connect(&svc, &DatabentoService::raw_response, this, &SurfaceAnalyticsScreen::on_db_raw_response,
             Qt::UniqueConnection);
     refresh_provider_status();
+    load_dataset_list();
     load_dataset_range_for_active_capability();
     resubscribe_spot();
 }

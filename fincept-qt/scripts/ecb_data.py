@@ -18,14 +18,22 @@ Usage:
     python ecb_data.py balance_of_payments --country US --frequency monthly
 """
 
+import os
 import sys
 import json
+import math
 import asyncio
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union, Literal
 import aiohttp
 import pandas as pd
+
+try:
+    import fincept_json
+except ImportError:  # scripts dir not on sys.path (unusual launcher)
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import fincept_json
 
 # aiohttp defaults to aiodns when it is installed, and aiodns times out on many
 # Windows setups ("Timeout while contacting DNS servers"). The threaded resolver
@@ -153,11 +161,11 @@ class ECBDataWrapper:
 
     async def get_yield_curve_data(self, rating: str = "aaa", yield_curve_type: str = "spot_rate",
                                   date: str = None) -> Dict:
-        """Get yield curve data for specified parameters"""
+        """Get one euro-area yield curve (all maturities): the latest one, or the one in force
+        on `date` (YYYY-MM-DD) — the last observation on or before it, since the ECB publishes
+        curves on TARGET business days only."""
         try:
             async with aiohttp.ClientSession() as session:
-                results = []
-
                 # Get data for each maturity
                 tasks = []
                 for maturity in self.maturities:
@@ -167,70 +175,83 @@ class ECBDataWrapper:
 
                 responses = await asyncio.gather(*tasks, return_exceptions=True)
 
-                for i, response in enumerate(responses):
-                    if isinstance(response, Exception):
+            # maturity -> {YYYY-MM-DD: rate}. Each series is the full daily history and carries
+            # empty rows for weekends / holidays; those are skipped. They used to be read as 0 %
+            # (about 30 % of all rows), and with no date the whole history since 2004 was returned.
+            series = {}
+            for maturity, response in zip(self.maturities, responses):
+                if not isinstance(response, list):
+                    continue
+                points = {}
+                for item in response:
+                    try:
+                        day = str(item.get("PERIOD") or "")[:10]
+                        value = item.get("OBS_VALUE_AS_IS")
+                        if len(day) != 10 or value in (None, ""):
+                            continue
+                        rate = round(float(value) / 100, 12)  # percent -> decimal
+                    except (AttributeError, TypeError, ValueError):
                         continue
+                    if math.isfinite(rate):
+                        points[day] = rate
+                if points:
+                    series[maturity] = points
 
-                    if isinstance(response, list):
-                        for item in response:
-                            try:
-                                data_point = {
-                                    "date": item.get("PERIOD"),
-                                    "maturity": self.maturities[i],
-                                    "rate": float(item.get("OBS_VALUE_AS_IS", 0)) / 100,  # Convert to decimal
-                                    "rating": rating,
-                                    "curve_type": yield_curve_type
-                                }
+            if not series:
+                return {"success": False, "error": "ECB returned no yield curve observations"}
 
-                                # Filter by date if specified
-                                if date is None or data_point["date"] == date:
-                                    results.append(data_point)
-                            except (ValueError, TypeError):
-                                continue
+            all_days = sorted({day for points in series.values() for day in points})
+            if date:
+                eligible = [day for day in all_days if day <= date]
+                if not eligible:
+                    return {"success": False,
+                            "error": f"No ECB yield curve on or before {date} (the series starts {all_days[0]})"}
+                as_of = eligible[-1]
+            else:
+                as_of = all_days[-1]
 
-                # Sort by date and maturity
-                results.sort(key=lambda x: (x.get("date", ""), x.get("maturity", "")))
+            results = [{"date": as_of, "maturity": m, "rate": series[m][as_of], "rating": rating,
+                        "curve_type": yield_curve_type}
+                       for m in self.maturities if as_of in series.get(m, {})]
+            missing = [m for m in self.maturities if as_of not in series.get(m, {})]
 
-                return {
-                    "success": True,
-                    "data": results,
-                    "parameters": {
-                        "rating": rating,
-                        "curve_type": yield_curve_type,
-                        "date": date
-                    },
-                    "source": "ECB",
-                    "description": f"Yield curve data - {rating} rated bonds - {yield_curve_type}"
-                }
+            out = {
+                "success": True,
+                "data": results,
+                "as_of": as_of,
+                "parameters": {
+                    "rating": rating,
+                    "curve_type": yield_curve_type,
+                    "date": date
+                },
+                "source": "ECB",
+                "description": f"Yield curve data - {rating} rated bonds - {yield_curve_type}"
+            }
+            if missing:
+                out["missing_maturities"] = missing
+            return out
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     async def get_balance_of_payments_data(self, country: str = None, frequency: str = "monthly",
                                          report_type: str = "main") -> Dict:
-        """Get balance of payments data"""
-        try:
-            # This is a simplified version - in a full implementation,
-            # you would need to map all the series IDs like in the OpenBB provider
-            async with aiohttp.ClientSession() as session:
-                # For demonstration, return a placeholder response
-                # In practice, you would need the complete series ID mapping from bps_series.py
+        """Balance of payments — not implemented.
 
-                return {
-                    "success": True,
-                    "data": [],
-                    "parameters": {
-                        "country": country,
-                        "frequency": frequency,
-                        "report_type": report_type
-                    },
-                    "source": "ECB",
-                    "description": "Balance of payments data",
-                    "note": "Full implementation requires series ID mapping from OpenBB utils"
-                }
-
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        It needs the ECB BPS series-key mapping (OpenBB's bps_series.py), which was never
+        ported. The old body answered success with an empty list, so a caller saw "no data"
+        rather than "not available".
+        """
+        return {
+            "success": False,
+            "error": "balance_of_payments is not implemented: the ECB balance-of-payments series "
+                     "mapping has not been ported to this connector",
+            "parameters": {
+                "country": country,
+                "frequency": frequency,
+                "report_type": report_type
+            }
+        }
 
     def get_available_options(self) -> Dict:
         """Get available options for each data category"""
@@ -256,6 +277,8 @@ class ECBDataWrapper:
                     },
                     "balance_of_payments": {
                         "description": "Balance of payments statistics",
+                        "available": False,
+                        "note": "Not implemented yet: the ECB series mapping has not been ported",
                         "countries": self.bps_countries,
                         "frequencies": self.bps_frequencies,
                         "report_types": self.bps_report_types
@@ -270,31 +293,80 @@ class ECBDataWrapper:
             # Get currency rates
             currency_result = await self.get_currency_reference_rates()
 
-            # Get yield curve snapshot
+            # Get yield curve snapshot (the latest AAA spot curve; this used to be the first ten
+            # rows of the full history, i.e. the curve of 6 Sep 2004)
             yield_curve_result = await self.get_yield_curve_data(
                 rating="aaa",
                 yield_curve_type="spot_rate"
             )
 
+            errors = {name: part.get("error") for name, part in
+                      (("currency_rates", currency_result), ("yield_curve", yield_curve_result))
+                      if not part.get("success")}
+            if len(errors) == 2:
+                return {"success": False, "error": "; ".join(f"{k}: {v}" for k, v in errors.items())}
+
             overview = {
                 "success": True,
                 "data": {
                     "currency_rates": currency_result.get("data", {}),
-                    "yield_curve_snapshot": yield_curve_result.get("data", [])[:10],  # First 10 items
+                    "yield_curve_snapshot": yield_curve_result.get("data", []),
+                    "yield_curve_as_of": yield_curve_result.get("as_of"),
                     "available_categories": self.get_available_options()["data"]
                 },
                 "source": "ECB",
                 "description": "European Central Bank data overview",
                 "timestamp": datetime.now().isoformat()
             }
+            if errors:
+                overview["errors"] = errors
 
             return overview
 
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+def _parse_options(tokens):
+    """`--name value` / `--name=value` tokens -> {name: value}. A bare word or a flag without a
+    value is an error rather than being dropped."""
+    options = {}
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if not token.startswith("--") or len(token) < 3:
+            raise ValueError(f"Unexpected argument '{token}': options are written --name value")
+        if "=" in token:
+            name, value = token[2:].split("=", 1)
+        elif i + 1 < len(tokens) and not tokens[i + 1].startswith("--"):
+            name, value = token[2:], tokens[i + 1]
+            i += 1
+        else:
+            raise ValueError(f"Option {token} needs a value")
+        options[name] = value
+        i += 1
+    return options
+
+
+def _reject_unknown(options, known, command):
+    unknown = sorted(set(options) - set(known))
+    if unknown:
+        valid = ", ".join("--" + k for k in known) if known else "none"
+        raise ValueError(f"{command}: unknown option(s) {', '.join('--' + u for u in unknown)} (valid: {valid})")
+
+
+def _option(options, name, default, allowed, command, upper=False):
+    """--name's value (default when absent), which must be one of `allowed`."""
+    value = options.get(name)
+    if value is None:
+        return default
+    value = value.strip().upper() if upper else value.strip().lower()
+    if value not in allowed:
+        raise ValueError(f"{command}: --{name} must be one of {', '.join(allowed)} (got '{value}')")
+    return value
+
+
 def main(args=None):
-    
+
     if args is None:
         args = sys.argv[1:]
     """Main function for CLI interface"""
@@ -316,41 +388,42 @@ def main(args=None):
 
     command = args[0]
 
-    # Parse command line arguments
-    args = {}
-    for i, arg in enumerate(sys.argv[2:], 2):
-        if arg.startswith('--'):
-            if '=' in arg:
-                key, value = arg[2:].split('=', 1)
-                args[key] = value
-            elif i + 1 < len(args) + 1 and not sys.argv[i + 1].startswith('--'):
-                key = arg[2:]
-                value = sys.argv[i + 1]
-                args[key] = value
-                i += 1
-            else:
-                args[arg[2:]] = True
-
     try:
+        # --key value / --key=value. The old loop rebound `args` to {} and then tested
+        # `i + 1 < len(args) + 1`, so `--rating all_ratings` became rating=True with the value
+        # dropped: every documented space-separated call silently fell back to the AAA spot
+        # curve and --date never matched. Unknown options and stray words are errors now.
+        options = _parse_options(args[1:])
+
         if command == "available_categories":
+            _reject_unknown(options, (), command)
             result = wrapper.get_available_options()
 
         elif command == "currency_rates":
+            _reject_unknown(options, (), command)
             result = asyncio.run(wrapper.get_currency_reference_rates())
 
         elif command == "yield_curve":
-            rating = args.get("rating", "aaa")
-            curve_type = args.get("type", "spot_rate")
-            date = args.get("date")
+            _reject_unknown(options, ("rating", "type", "date"), command)
+            rating = _option(options, "rating", "aaa", wrapper.rating_dict, command)
+            curve_type = _option(options, "type", "spot_rate", wrapper.yield_type_dict, command)
+            date = options.get("date")
+            if date is not None:
+                try:
+                    date = datetime.strptime(date.strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
+                except ValueError:
+                    raise ValueError(f"{command}: --date must be YYYY-MM-DD (got '{date}')")
             result = asyncio.run(wrapper.get_yield_curve_data(rating, curve_type, date))
 
         elif command == "balance_of_payments":
-            country = args.get("country")
-            frequency = args.get("frequency", "monthly")
-            report_type = args.get("report_type", "main")
+            _reject_unknown(options, ("country", "frequency", "report_type"), command)
+            country = _option(options, "country", None, wrapper.bps_countries, command, upper=True)
+            frequency = _option(options, "frequency", "monthly", wrapper.bps_frequencies, command)
+            report_type = _option(options, "report_type", "main", wrapper.bps_report_types, command)
             result = asyncio.run(wrapper.get_balance_of_payments_data(country, frequency, report_type))
 
         elif command == "overview":
+            _reject_unknown(options, (), command)
             result = asyncio.run(wrapper.get_ecb_overview())
 
         else:
@@ -359,7 +432,7 @@ def main(args=None):
                 "error": f"Unknown command: {command}"
             }
 
-        print(json.dumps(result, indent=2))
+        print(fincept_json.dumps(result, indent=2, ensure_ascii=True))
 
     except Exception as e:
         print(json.dumps({

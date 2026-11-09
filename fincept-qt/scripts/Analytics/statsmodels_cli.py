@@ -10,6 +10,12 @@ Categories:
 - Power Analysis: Sample size, Effect size calculations
 - Multivariate: PCA, Factor Analysis
 - Nonparametric: KDE, LOWESS
+
+CLI: python statsmodels_cli.py <command> [params_json]   ("list" describes every command)
+  time series: arima, arima_forecast, sarimax, exponential_smoothing, stl_decompose, adf_test, kpss_test,
+  acf, pacf, ljung_box; regression: ols, regression_diagnostics, logit, glm; tests: ttest_ind, ttest_1samp,
+  jarque_bera, ttest_power; descriptive; multivariate: pca; nonparametric: kde, lowess.
+  Series go in "data" (regressions: "y" and "x"), e.g. arima {"data": [...], "order": [1, 0, 0]}.
 """
 
 import sys

@@ -1,4 +1,10 @@
-"""Contribution Analysis for M&A"""
+"""Contribution Analysis for M&A - each party's share of the combined revenue / EBITDA / net income / assets
+versus its share of the combined ownership.
+
+CLI: python contribution_analysis.py analyze <json>   keys acquirer {revenue, ebitda, net_income, ...},
+     target {...}, ownership_split = the TARGET shareholders' share of the combined company (fraction or percent).
+     Native form: contribution <acquirer_json> <target_json> <ownership_split>.
+"""
 import sys
 from pathlib import Path
 from typing import Dict, Any
@@ -30,27 +36,22 @@ class ContributionAnalyzer:
         combined_net_income = self.acquirer.net_income + self.target.net_income
         combined_assets = self.acquirer.total_assets + self.target.total_assets
 
+        def split(acq, tgt, combined):
+            # null, not 0 %, when the metric was not supplied (a 0/0 share is unknown, not zero)
+            return {
+                'acquirer_pct': (acq / combined * 100) if combined else None,
+                'target_pct': (tgt / combined * 100) if combined else None
+            }
+
         return {
             'ownership': {
                 'acquirer_pct': acquirer_ownership,
                 'target_pct': target_ownership
             },
-            'revenue_contribution': {
-                'acquirer_pct': (self.acquirer.revenue / combined_revenue * 100) if combined_revenue else 0,
-                'target_pct': (self.target.revenue / combined_revenue * 100) if combined_revenue else 0
-            },
-            'ebitda_contribution': {
-                'acquirer_pct': (self.acquirer.ebitda / combined_ebitda * 100) if combined_ebitda else 0,
-                'target_pct': (self.target.ebitda / combined_ebitda * 100) if combined_ebitda else 0
-            },
-            'net_income_contribution': {
-                'acquirer_pct': (self.acquirer.net_income / combined_net_income * 100) if combined_net_income else 0,
-                'target_pct': (self.target.net_income / combined_net_income * 100) if combined_net_income else 0
-            },
-            'assets_contribution': {
-                'acquirer_pct': (self.acquirer.total_assets / combined_assets * 100) if combined_assets else 0,
-                'target_pct': (self.target.total_assets / combined_assets * 100) if combined_assets else 0
-            }
+            'revenue_contribution': split(self.acquirer.revenue, self.target.revenue, combined_revenue),
+            'ebitda_contribution': split(self.acquirer.ebitda, self.target.ebitda, combined_ebitda),
+            'net_income_contribution': split(self.acquirer.net_income, self.target.net_income, combined_net_income),
+            'assets_contribution': split(self.acquirer.total_assets, self.target.total_assets, combined_assets)
         }
 
 # ---- service ABI shim (MAAnalyticsService) BEGIN ----

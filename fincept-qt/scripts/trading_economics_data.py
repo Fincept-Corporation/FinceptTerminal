@@ -69,16 +69,29 @@ def get_credit_ratings(country: str = None) -> Dict[str, Any]:
         }
     return data
 
+def _agency_key(name: str) -> str:
+    """'S&P' / 'SP' -> 'sp', "Moody's" -> 'moodys', 'Fitch' -> 'fitch', 'DBRS' -> 'dbrs'."""
+    return "".join(ch for ch in str(name).lower() if ch.isalnum())
+
+
 def get_credit_ratings_by_agency(agency: str) -> Dict[str, Any]:
-    """2. Get credit ratings filtered by rating agency (S&P, Moody's, Fitch)."""
-    # Note: This endpoint might need adjustment based on actual API structure
-    data = _make_request("credit-ratings", {"agency": agency})
+    """2. Get credit ratings of one rating agency (S&P, Moody's, Fitch, DBRS).
+
+    The API has no agency filter: /credit-ratings answers one row per country and agency
+    ({Country, Date, Agency, Rating, Outlook}), so filter on Agency here.
+    """
+    data = _make_request("credit-ratings")
 
     if data and "error" not in data and isinstance(data, list):
+        wanted = _agency_key(agency)
+        rows = [r for r in data if isinstance(r, dict) and _agency_key(r.get("Agency", "")) == wanted]
+        if not rows:
+            agencies = sorted({r.get("Agency") for r in data if isinstance(r, dict) and r.get("Agency")})
+            return {"error": f"No ratings from agency '{agency}'. Agencies: {', '.join(agencies)}"}
         return {
-            "data": data,
+            "data": rows,
             "agency": agency,
-            "count": len(data),
+            "count": len(rows),
             "timestamp": datetime.now().isoformat()
         }
     return data
@@ -87,11 +100,11 @@ def get_historical_credit_ratings(country: str, start_date: str = None, end_date
     """3. Get historical credit ratings for a country."""
     params = {}
     if start_date:
-        params['startDate'] = start_date
+        params['d1'] = start_date
     if end_date:
-        params['endDate'] = end_date
+        params['d2'] = end_date
 
-    endpoint = f"credit-ratings/country/{country}/historical"
+    endpoint = f"credit-ratings/historical/country/{country}"
     data = _make_request(endpoint, params)
 
     if data and "error" not in data:
@@ -104,9 +117,8 @@ def get_historical_credit_ratings(country: str, start_date: str = None, end_date
     return data
 
 def get_rating_changes() -> Dict[str, Any]:
-    """4. Get recent credit rating changes (upgrades/downgrades)."""
-    # Note: This endpoint might need adjustment based on actual API
-    data = _make_request("credit-ratings/changes")
+    """4. Get the latest credit rating updates (upgrades/downgrades/outlook changes)."""
+    data = _make_request("credit-ratings/updates")
 
     if data and "error" not in data:
         return {
@@ -329,7 +341,7 @@ def main():
             "commands": [
                 "test - Test API connection",
                 "ratings [country] - Get credit ratings (optional country)",
-                "ratings_by_agency <agency> - Get ratings by agency (S&P, Moody's, Fitch)",
+                "ratings_by_agency <agency> - Get ratings by agency (S&P, Moody's, Fitch, DBRS)",
                 "ratings_history <country> [start_date] [end_date] - Historical ratings",
                 "rating_changes - Get recent rating changes",
                 "bonds [country] - Get bond yields (optional country)",
@@ -364,8 +376,9 @@ def main():
             country = sys.argv[2] if len(sys.argv) > 2 else None
             result = get_credit_ratings(country)
         elif command == "ratings_by_agency":
-            agency = sys.argv[2]
-            result = get_credit_ratings_by_agency(agency)
+            agency = " ".join(sys.argv[2:]).strip()
+            result = (get_credit_ratings_by_agency(agency) if agency
+                      else {"error": "ratings_by_agency needs an agency: S&P, Moody's, Fitch or DBRS"})
         elif command == "ratings_history":
             country = sys.argv[2]
             start_date = sys.argv[3] if len(sys.argv) > 3 else None

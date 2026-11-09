@@ -9,10 +9,10 @@ Comprehensive wrapper for statsmodels library covering:
 - Statistical tests (t-tests, ANOVA, proportions, diagnostics)
 - Power analysis (t-test, F-test, proportions, ANOVA)
 - Multivariate analysis (PCA, Factor Analysis, MANOVA, Canonical Correlation)
-- Robust regression (RLM, MAD, Huber scale)
-- Survival analysis (Cox PH, Kaplan-Meier, Log-rank test)
 - Nonparametric methods (KDE, Kernel Regression, LOWESS)
-- GAM (Generalized Additive Models)
+
+CLIs: statsmodels_cli.py (imports this package) and statsmodels_service.py (AI Quant Lab
+"Statsmodels" panel, self-contained).
 """
 
 
@@ -50,14 +50,8 @@ __all__ = [
     'anova_power',
     # Multivariate
     'perform_pca', 'perform_factor_analysis', 'perform_manova', 'canonical_correlation',
-    # Robust
-    'fit_rlm', 'mad', 'huber_scale', 'huber_location_scale',
-    # Survival
-    'fit_cox_ph', 'survdiff', 'kaplan_meier',
     # Nonparametric
     'kernel_density_estimation', 'kernel_regression', 'lowess_smoothing', 'multivariate_kde',
-    # GAM
-    'fit_glm_gam', 'fit_gam_formula',
     # Extended stats module (100+ functions - access via stats_extended.function_name)
     'stats_extended'
 ]
@@ -154,19 +148,10 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "perform_factor_analysis": ("multivariate", "perform_factor_analysis"),
     "perform_manova": ("multivariate", "perform_manova"),
     "canonical_correlation": ("multivariate", "canonical_correlation"),
-    "fit_rlm": ("robust", "fit_rlm"),
-    "mad": ("robust", "mad"),
-    "huber_scale": ("robust", "huber_scale"),
-    "huber_location_scale": ("robust", "huber_location_scale"),
-    "fit_cox_ph": ("survival", "fit_cox_ph"),
-    "survdiff": ("survival", "survdiff"),
-    "kaplan_meier": ("survival", "kaplan_meier"),
     "kernel_density_estimation": ("nonparametric", "kernel_density_estimation"),
     "kernel_regression": ("nonparametric", "kernel_regression"),
     "lowess_smoothing": ("nonparametric", "lowess_smoothing"),
     "multivariate_kde": ("nonparametric", "multivariate_kde"),
-    "fit_glm_gam": ("gam", "fit_glm_gam"),
-    "fit_gam_formula": ("gam", "fit_gam_formula"),
 }
 
 

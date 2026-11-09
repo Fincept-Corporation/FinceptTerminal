@@ -41,36 +41,21 @@ class McpService {
     /// news or filings while the UI promised "0 = no cap".
     std::vector<UnifiedTool> get_agent_tools(const ToolFilter& filter);
 
-    /// Phase 6: format with a filter applied. Lets callers scope the
-    /// catalogue per-LLM-request to reduce prompt size and tool-pick noise.
-    /// A default-constructed filter selects the Tier-0 (Tool RAG) set.
+    /// Tool arrays for the three provider dialects. Every one is built by the
+    /// same selection (select_tools_for_llm_locked), so OpenAI, Anthropic and
+    /// Gemini always see the same tools: with a default filter that is the
+    /// whole internal catalogue (the ten core tools) followed by the user's
+    /// external MCP servers' tools, capped per request.
     QJsonArray format_tools_for_openai(const ToolFilter& filter);
 
-    /// Tool RAG activation variant. In Tier-0 (Tool RAG) mode the model only
-    /// sees the always-on Tier-0 tools; `extra_tool_names` force-includes tools
-    /// (by exact bare name) the model has discovered this turn via tool_list /
-    /// tool_describe, so a structured function-calling model can actually call
-    /// them. Has no effect outside Tier-0 mode (the filtered catalogue already
-    /// contains them). See the tool loop / note_tool_activations.
-    QJsonArray format_tools_for_openai(const ToolFilter& filter, const QSet<QString>& extra_tool_names);
+    /// Anthropic `/v1/messages` — `[{name, description, input_schema}]`.
+    QJsonArray format_tools_for_anthropic(const ToolFilter& filter);
 
-    /// Format for Anthropic `/v1/messages` — `[{name, description, input_schema}]`,
-    /// no OpenAI-style `{"type":"function"}` wrapper.
-    ///
-    /// Shares the Tier-0 / filter / activation selection with
-    /// format_tools_for_openai. It has to: the catalogue is ~900 tools, and the
-    /// Anthropic and Gemini builders used to bypass Tool RAG and send ALL of
-    /// them on every turn, which is why tool calling worked on the OpenAI path
-    /// and nowhere else.
-    QJsonArray format_tools_for_anthropic(const ToolFilter& filter, const QSet<QString>& extra_tool_names = {});
-
-    /// Format for Gemini `generateContent` —
-    /// `[{functionDeclarations:[{name, description, parameters}]}]`.
-    ///
+    /// Gemini `generateContent` — `[{functionDeclarations:[{name, description, parameters}]}]`.
     /// Parameters are translated into Gemini's OpenAPI subset (see
     /// mcp/GeminiSchema.h); declarations whose name or schema cannot be made
     /// valid are dropped rather than allowed to fail the whole request.
-    QJsonArray format_tools_for_gemini(const ToolFilter& filter, const QSet<QString>& extra_tool_names = {});
+    QJsonArray format_tools_for_gemini(const ToolFilter& filter);
 
     std::size_t tool_count();
 
@@ -84,9 +69,7 @@ class McpService {
 
     // ── Unified Tool Execution ──────────────────────────────────────────
 
-    /// Where a bare tool name lives — used by the generic `tool_invoke`
-    /// dispatcher and by the agent bridge (which must apply its dispatch policy
-    /// to the tool tool_invoke is about to call, not just to tool_invoke).
+    /// Where a bare tool name lives (internal, or which external server).
     struct ToolTarget {
         QString server_id;           // INTERNAL_SERVER_ID or an external server id
         QString category;            // empty for external tools
@@ -94,28 +77,17 @@ class McpService {
         QString error;               // non-empty ⇒ unresolved; human/LLM-readable reason
     };
 
-    /// Resolve `name` (bare, as tool_list returns it). An empty `server_id`
+    /// Resolve `name` (a bare tool name). An empty `server_id`
     /// means "built-in tool if one exists, otherwise the external tool with
     /// that name" — ambiguous external names are refused with the candidate
     /// server ids, never guessed.
     ToolTarget resolve_tool_target(const QString& name, const QString& server_id = {});
 
     /// Route to internal or external server.
-    ///
-    /// `allow_defer` opts the call into the long-running-job protocol: an
-    /// internal tool that declares `supports_async` and overruns its grace
-    /// window returns a `{job_id, status:"running"}` receipt instead of
-    /// blocking. Only the interactive LLM tool loop passes true — it is the
-    /// only caller that knows about the `job_*` tools. Workflow nodes, the
-    /// Python agent bridge, and internal C++ callers leave it false and keep
-    /// blocking semantics. External servers never defer: the MCP wire carries
-    /// no async metadata.
-    ToolResult execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args,
-                            bool allow_defer = false);
+    ToolResult execute_tool(const QString& server_id, const QString& tool_name, const QJsonObject& args);
 
     /// Execute from OpenAI function-call format ("serverId__toolName")
-    ToolResult execute_openai_function(const QString& function_name, const QJsonObject& args,
-                                       bool allow_defer = false);
+    ToolResult execute_openai_function(const QString& function_name, const QJsonObject& args);
 
     /// Phase 4: async equivalent of execute_openai_function. Returns a
     /// QFuture<ToolResult> so callers (LlmService dispatch loops in
@@ -168,9 +140,8 @@ class McpService {
     QHash<QByteArray, QJsonArray> openai_format_cache_;
     QHash<QByteArray, QJsonArray> anthropic_format_cache_;
     QHash<QByteArray, QJsonArray> gemini_format_cache_;
-    // In Tool RAG mode the format-cache key encodes the activated-tool set, so
-    // it varies per round and the map would otherwise grow unbounded across a
-    // session. Cleared wholesale on overflow — it is a memo, not a store.
+    // Keyed by filter signature — a handful of entries in practice. Cleared
+    // wholesale on overflow: it is a memo, not a store.
     static constexpr int kMaxFormatCacheEntries = 64;
 
     void refresh_cache();        // requires mutex_ held
@@ -185,13 +156,9 @@ class McpService {
     // format_tools_for_openai(filter) reuse the cache without re-locking.
     const std::vector<UnifiedTool>& cached_tools_locked();
 
-    /// Tool selection shared by every provider formatter: applies Tier-0 (Tool
-    /// RAG) mode plus the activated-tool set when the caller passed a default
-    /// filter, and the explicit ToolFilter otherwise. Caller must hold mutex_.
-    /// `out_key` receives the cache key the caller should memo under.
-    std::vector<UnifiedTool> select_tools_for_llm_locked(const ToolFilter& filter,
-                                                         const QSet<QString>& extra_tool_names, QByteArray* out_key,
-                                                         bool* out_used_rag);
+    /// Tool selection shared by every provider formatter. Caller must hold
+    /// mutex_. `out_key` receives the cache key the caller should memo under.
+    std::vector<UnifiedTool> select_tools_for_llm_locked(const ToolFilter& filter, QByteArray* out_key);
 
     // Stable byte signature of a ToolFilter — usable as a QHash key.
     static QByteArray filter_signature(const ToolFilter& filter);

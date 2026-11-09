@@ -4,6 +4,7 @@
 #include "auth/AuthTypes.h"
 #include "ui/theme/Theme.h"
 #include "ui/widgets/LanguageSwitcher.h"
+#include "ui/widgets/VersionLabel.h"
 
 #include <QEvent>
 #include <QFrame>
@@ -100,6 +101,7 @@ RegisterScreen::RegisterScreen(QWidget* parent) : QWidget(parent) {
     // Top-right language picker — visible without account.
     auto* top_row = new QHBoxLayout;
     top_row->setContentsMargins(20, 20, 20, 0);
+    top_row->addWidget(ui::make_version_label(this));
     top_row->addStretch();
     top_row->addWidget(new ui::LanguageSwitcher(this));
     root->addLayout(top_row);

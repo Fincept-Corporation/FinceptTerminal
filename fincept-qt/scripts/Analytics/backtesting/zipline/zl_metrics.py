@@ -57,8 +57,8 @@ def extract_performance(
         sortino = (mean_ret * 252) / downside_std if downside_std > 1e-8 else 0.0
 
         # Max drawdown — emit as positive magnitude to match the convention
-        # used by every other backtesting provider (vectorbt/backtestingpy/bt/
-        # fasttrade). Frontend treats it as a percent in [0, 1].
+        # used by every other backtesting provider (vectorbt/backtestingpy/bt).
+        # Frontend treats it as a percent in [0, 1].
         # The curve starts at 1.0 (initial capital): a loss on the very first bar is a drawdown
         # from that start, which a peak seeded with the first POST-return value never saw.
         cumulative = np.concatenate(([1.0], np.cumprod(1 + daily_returns)))

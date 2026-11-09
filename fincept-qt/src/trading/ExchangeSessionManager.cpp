@@ -92,6 +92,7 @@ ExchangeSession* ExchangeSessionManager::session(const QString& exchange_id) {
     // First touch for this exchange — construct a session with a publisher
     // that routes its fan-out to DataHub via the manager's policies.
     auto* s = new ExchangeSession(exchange_id, build_publisher(), this);
+    connect(s, &ExchangeSession::ws_state_changed, this, &ExchangeSessionManager::ws_state_changed);
     sessions_.insert(exchange_id, s);
     LOG_INFO(kMgrTag, "Created ExchangeSession for " + exchange_id);
     return s;

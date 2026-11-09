@@ -3,21 +3,22 @@
 """
 AKShare Miscellaneous Functions Wrapper
 Covers 129 remaining functions from akshare library (version 1.18.20)
-Categories: get, spot, amac, stock, article, fx, air, car, sw, fund, movie, qdii, fred, migration, nlp, qhkc, repo, rv, sunrise, video, and others
+Categories: get, spot, amac, stock, article, fx, air, car, sw, fund, movie, qdii, fred, migration, nlp, repo, rv, sunrise, video, and others
 """
 
 import akshare as ak
+import inspect
 import json
 import sys
-from typing import Dict, Any, Optional
-from datetime import datetime, date
+from typing import Dict, Any, List, Optional
+from datetime import datetime, date, time as dt_time
 import pandas as pd
 
 
 class DateTimeEncoder(json.JSONEncoder):
     """Custom JSON encoder for datetime objects"""
     def default(self, obj):
-        if isinstance(obj, (datetime, date)):
+        if isinstance(obj, (datetime, date, dt_time)):  # spot_quotations_sge has time-of-day cells
             return obj.isoformat()
         if isinstance(obj, pd.Timestamp):
             return obj.isoformat()
@@ -27,6 +28,24 @@ class DateTimeEncoder(json.JSONEncoder):
 class AKShareError(Exception):
     """Custom exception for AKShare errors"""
     pass
+
+
+def _vars_list(symbol: str) -> Dict[str, Any]:
+    """futures ranking functions take vars_list; an empty symbol keeps akshare's all-varieties default."""
+    return {"vars_list": [symbol.strip().upper()]} if symbol and symbol.strip() else {}
+
+
+def call_with_screen_args(func, name: str, args: List[str]) -> Dict[str, Any]:
+    """The AkShare screen sends up to three positional values (symbol, start, end). Pass as many as
+    the endpoint takes; one that needs more answers with a JSON error naming its parameters instead
+    of dying with a TypeError traceback."""
+    params = [prm for prm in inspect.signature(func).parameters.values()
+              if prm.kind in (prm.POSITIONAL_ONLY, prm.POSITIONAL_OR_KEYWORD)]
+    required = [prm.name for prm in params if prm.default is prm.empty]
+    if len(args) < len(required):
+        return {"success": False, "data": None,
+                "error": f"{name} needs {len(required)} value(s): {', '.join(required)} (got {len(args)})"}
+    return func(*args[:len(params)])
 
 
 class MiscWrapper:
@@ -40,6 +59,11 @@ class MiscWrapper:
         for attempt in range(max_retries):
             try:
                 df = func(*args, **kwargs)
+                if isinstance(df, dict) and df and all(isinstance(v, pd.DataFrame) for v in df.values()):
+                    # futures position rankings: {contract: DataFrame} -> one table with a contract column
+                    df = pd.concat([v.assign(contract=k) for k, v in df.items()], ignore_index=True)
+                if isinstance(df, pd.Series):  # e.g. article_rlab_rv
+                    df = df.to_frame().reset_index()
                 if df is None or (isinstance(df, pd.DataFrame) and df.empty):
                     return {"success": False, "error": "No data returned", "data": None}
 
@@ -63,99 +87,81 @@ class MiscWrapper:
 
         return {"success": False, "error": "Max retries exceeded", "data": None}
 
-    # ==================== GET FUNCTIONS (23) ====================
+    # ==================== FUTURES EXCHANGE DATA (akshare futures_* functions) ====================
+    # Dates are trading days as YYYYMMDD; symbol is a futures variety code (IF, RB, M, ...).
 
     def get_cffex_daily(self, date: str) -> Dict[str, Any]:
         """Get CFFEX daily data"""
-        return self._safe_call_with_retry(ak.get_cffex_daily, date=date)
+        return self._safe_call_with_retry(ak.futures_daily_cffex, date=date)
 
-    def get_cffex_rank_table(self, date: str, symbol: str) -> Dict[str, Any]:
-        """Get CFFEX rank table"""
-        return self._safe_call_with_retry(ak.get_cffex_rank_table, date=date, symbol=symbol)
+    def get_cffex_rank_table(self, date: str, symbol: str = "") -> Dict[str, Any]:
+        """CFFEX member position ranking (symbol: variety, empty = all)"""
+        return self._safe_call_with_retry(ak.futures_rank_table_cffex, date=date, **_vars_list(symbol))
 
     def get_czce_daily(self, date: str) -> Dict[str, Any]:
         """Get CZCE daily data"""
-        return self._safe_call_with_retry(ak.get_czce_daily, date=date)
+        return self._safe_call_with_retry(ak.futures_daily_czce, date=date)
 
     def get_dce_daily(self, date: str) -> Dict[str, Any]:
         """Get DCE daily data"""
-        return self._safe_call_with_retry(ak.get_dce_daily, date=date)
+        return self._safe_call_with_retry(ak.futures_daily_dce, date=date)
 
-    def get_dce_rank_table(self, date: str, symbol: str) -> Dict[str, Any]:
-        """Get DCE rank table"""
-        return self._safe_call_with_retry(ak.get_dce_rank_table, date=date, symbol=symbol)
+    def get_dce_rank_table(self, date: str, symbol: str = "") -> Dict[str, Any]:
+        """DCE member position ranking (symbol: variety, empty = all)"""
+        return self._safe_call_with_retry(ak.futures_rank_table_dce, date=date, **_vars_list(symbol))
 
-    def get_futures_daily(self, start_date: str, end_date: str, market: str, symbol: str) -> Dict[str, Any]:
-        """Get futures daily data"""
-        return self._safe_call_with_retry(ak.get_futures_daily, start_date=start_date, end_date=end_date, market=market, symbol=symbol)
+    def get_futures_daily(self, start_date: str, end_date: str, market: str = "CFFEX") -> Dict[str, Any]:
+        """Daily quotes of every contract on one exchange (CFFEX, SHFE, DCE, CZCE, INE, GFEX)"""
+        return self._safe_call_with_retry(ak.futures_daily, start_date=start_date, end_date=end_date, market=market)
 
     def get_gfex_daily(self, date: str) -> Dict[str, Any]:
         """Get GFEX daily data"""
-        return self._safe_call_with_retry(ak.get_gfex_daily, date=date)
+        return self._safe_call_with_retry(ak.futures_daily_gfex, date=date)
 
     def get_ine_daily(self, date: str) -> Dict[str, Any]:
         """Get INE daily data"""
-        return self._safe_call_with_retry(ak.get_ine_daily, date=date)
+        return self._safe_call_with_retry(ak.futures_daily_ine, date=date)
 
-    def get_qhkc_fund_bs(self) -> Dict[str, Any]:
-        """Get QHKC fund balance sheet"""
-        return self._safe_call_with_retry(ak.get_qhkc_fund_bs)
 
-    def get_qhkc_fund_money_change(self) -> Dict[str, Any]:
-        """Get QHKC fund money change"""
-        return self._safe_call_with_retry(ak.get_qhkc_fund_money_change)
 
-    def get_qhkc_fund_position(self) -> Dict[str, Any]:
-        """Get QHKC fund position"""
-        return self._safe_call_with_retry(ak.get_qhkc_fund_position)
 
-    def get_qhkc_index(self) -> Dict[str, Any]:
-        """Get QHKC index"""
-        return self._safe_call_with_retry(ak.get_qhkc_index)
 
-    def get_qhkc_index_profit_loss(self) -> Dict[str, Any]:
-        """Get QHKC index profit loss"""
-        return self._safe_call_with_retry(ak.get_qhkc_index_profit_loss)
 
-    def get_qhkc_index_trend(self) -> Dict[str, Any]:
-        """Get QHKC index trend"""
-        return self._safe_call_with_retry(ak.get_qhkc_index_trend)
 
-    def get_rank_sum(self, start_date: str, end_date: str, symbol: str) -> Dict[str, Any]:
-        """Get rank sum"""
-        return self._safe_call_with_retry(ak.get_rank_sum, start_date=start_date, end_date=end_date, symbol=symbol)
+    def get_rank_sum(self, date: str, symbol: str = "") -> Dict[str, Any]:
+        """Top-20 member position totals for one trading day (symbol: variety, empty = all)"""
+        return self._safe_call_with_retry(ak.futures_rank_sum, date=date, **_vars_list(symbol))
 
-    def get_rank_sum_daily(self, date: str, symbol: str) -> Dict[str, Any]:
-        """Get daily rank sum"""
-        return self._safe_call_with_retry(ak.get_rank_sum_daily, date=date, symbol=symbol)
+    def get_rank_sum_daily(self, start_date: str, end_date: str, symbol: str = "") -> Dict[str, Any]:
+        """Top-20 member position totals per day over a date range (symbol: variety, empty = all)"""
+        return self._safe_call_with_retry(ak.futures_rank_sum_daily, start_day=start_date, end_day=end_date,
+                                          **_vars_list(symbol))
 
-    def get_rank_table_czce(self, date: str, symbol: str) -> Dict[str, Any]:
-        """Get CZCE rank table"""
-        return self._safe_call_with_retry(ak.get_rank_table_czce, date=date, symbol=symbol)
+    def get_rank_table_czce(self, date: str) -> Dict[str, Any]:
+        """CZCE member position ranking, all contracts"""
+        return self._safe_call_with_retry(ak.futures_rank_table_czce, date=date)
 
-    def get_receipt(self, start_date: str, end_date: str, symbol: str) -> Dict[str, Any]:
-        """Get receipt data"""
-        return self._safe_call_with_retry(ak.get_receipt, start_date=start_date, end_date=end_date, symbol=symbol)
+    def get_receipt(self, start_date: str, end_date: str, symbol: str = "") -> Dict[str, Any]:
+        """Warehouse receipts over a date range (symbol: variety, empty = all)"""
+        return self._safe_call_with_retry(ak.futures_receipt, start_date=start_date, end_date=end_date,
+                                          **_vars_list(symbol))
 
-    def get_roll_yield(self, symbol: str, start_date: str, end_date: str, plot: bool = False) -> Dict[str, Any]:
-        """Get roll yield"""
-        return self._safe_call_with_retry(ak.get_roll_yield, symbol=symbol, start_date=start_date, end_date=end_date, plot=plot)
+    def get_roll_yield(self, symbol: str, date: str) -> Dict[str, Any]:
+        """Roll yield of a variety's main / next contracts on one trading day"""
+        return self._safe_call_with_retry(ak.futures_roll_yield, date=date, var=symbol.upper())
 
-    def get_roll_yield_bar(self, date: str, plot: bool = False, symbol: str = "all") -> Dict[str, Any]:
-        """Get roll yield bar"""
-        return self._safe_call_with_retry(ak.get_roll_yield_bar, date=date, plot=plot, symbol=symbol)
+    def get_roll_yield_bar(self, symbol: str, date: str) -> Dict[str, Any]:
+        """Roll yield across a variety's contracts on one trading day"""
+        return self._safe_call_with_retry(ak.futures_roll_yield_bar, type_method="var", var=symbol.upper(), date=date)
 
     def get_shfe_daily(self, date: str) -> Dict[str, Any]:
         """Get SHFE daily data"""
-        return self._safe_call_with_retry(ak.get_shfe_daily, date=date)
+        return self._safe_call_with_retry(ak.futures_daily_shfe, date=date)
 
-    def get_shfe_rank_table(self, date: str, symbol: str) -> Dict[str, Any]:
-        """Get SHFE rank table"""
-        return self._safe_call_with_retry(ak.get_shfe_rank_table, date=date, symbol=symbol)
+    def get_shfe_rank_table(self, date: str, symbol: str = "") -> Dict[str, Any]:
+        """SHFE member position ranking (symbol: variety, empty = all)"""
+        return self._safe_call_with_retry(ak.futures_rank_table_shfe, date=date, **_vars_list(symbol))
 
-    def get_token(self) -> Dict[str, Any]:
-        """Get token"""
-        return self._safe_call_with_retry(ak.get_token)
 
     # ==================== SPOT FUNCTIONS (16) ====================
 
@@ -163,17 +169,17 @@ class MiscWrapper:
         """Spot corn price from soozhu"""
         return self._safe_call_with_retry(ak.spot_corn_price_soozhu)
 
-    def spot_golden_benchmark_sge(self, symbol: str) -> Dict[str, Any]:
+    def spot_golden_benchmark_sge(self) -> Dict[str, Any]:
         """SGE spot golden benchmark"""
-        return self._safe_call_with_retry(ak.spot_golden_benchmark_sge, symbol=symbol)
+        return self._safe_call_with_retry(ak.spot_golden_benchmark_sge)
 
     def spot_goods(self) -> Dict[str, Any]:
         """Spot goods data"""
         return self._safe_call_with_retry(ak.spot_goods)
 
-    def spot_hist_sge(self, symbol: str, start_date: str) -> Dict[str, Any]:
-        """SGE spot historical data"""
-        return self._safe_call_with_retry(ak.spot_hist_sge, symbol=symbol, start_date=start_date)
+    def spot_hist_sge(self, symbol: str = "Au99.99") -> Dict[str, Any]:
+        """SGE spot historical data (symbol e.g. Au99.99, Ag99.99)"""
+        return self._safe_call_with_retry(ak.spot_hist_sge, symbol=symbol)
 
     def spot_hog_crossbred_soozhu(self) -> Dict[str, Any]:
         """Spot crossbred hog price from soozhu"""
@@ -199,9 +205,9 @@ class MiscWrapper:
         """Spot mixed feed price from soozhu"""
         return self._safe_call_with_retry(ak.spot_mixed_feed_soozhu)
 
-    def spot_price_qh(self, symbol: str, start_date: str, end_date: str) -> Dict[str, Any]:
-        """Spot price from qihuo"""
-        return self._safe_call_with_retry(ak.spot_price_qh, symbol=symbol, start_date=start_date, end_date=end_date)
+    def spot_price_qh(self, symbol: str = "螺纹钢") -> Dict[str, Any]:
+        """Spot price history from qihuo (symbol: commodity name, e.g. 螺纹钢)"""
+        return self._safe_call_with_retry(ak.spot_price_qh, symbol=symbol)
 
     def spot_price_table_qh(self) -> Dict[str, Any]:
         """Spot price table from qihuo"""
@@ -211,9 +217,9 @@ class MiscWrapper:
         """SGE spot quotations"""
         return self._safe_call_with_retry(ak.spot_quotations_sge)
 
-    def spot_silver_benchmark_sge(self, symbol: str) -> Dict[str, Any]:
+    def spot_silver_benchmark_sge(self) -> Dict[str, Any]:
         """SGE spot silver benchmark"""
-        return self._safe_call_with_retry(ak.spot_silver_benchmark_sge, symbol=symbol)
+        return self._safe_call_with_retry(ak.spot_silver_benchmark_sge)
 
     def spot_soybean_price_soozhu(self) -> Dict[str, Any]:
         """Spot soybean price from soozhu"""
@@ -283,9 +289,9 @@ class MiscWrapper:
         """Stock account statistics from EastMoney"""
         return self._safe_call_with_retry(ak.stock_account_statistics_em)
 
-    def stock_add_stock(self, date: str) -> Dict[str, Any]:
-        """Stock additional issuance"""
-        return self._safe_call_with_retry(ak.stock_add_stock, date=date)
+    def stock_add_stock(self, symbol: str) -> Dict[str, Any]:
+        """Stock additional issuance (symbol: 6-digit code)"""
+        return self._safe_call_with_retry(ak.stock_add_stock, symbol=symbol)
 
     def stock_financial_abstract_new_ths(self, symbol: str, indicator: str = "按报告期") -> Dict[str, Any]:
         """THS stock financial abstract (new)"""
@@ -325,13 +331,7 @@ class MiscWrapper:
         """Fama-French CRR factors"""
         return self._safe_call_with_retry(ak.article_ff_crr)
 
-    def article_oman_rv(self) -> Dict[str, Any]:
-        """Oman realized volatility"""
-        return self._safe_call_with_retry(ak.article_oman_rv)
 
-    def article_oman_rv_short(self) -> Dict[str, Any]:
-        """Oman realized volatility (short)"""
-        return self._safe_call_with_retry(ak.article_oman_rv_short)
 
     def article_rlab_rv(self) -> Dict[str, Any]:
         """RLAB realized volatility"""
@@ -343,21 +343,21 @@ class MiscWrapper:
         """FX commodity swap from ChinaMoney"""
         return self._safe_call_with_retry(ak.fx_c_swap_cm)
 
-    def fx_pair_quote(self, symbol: str) -> Dict[str, Any]:
+    def fx_pair_quote(self) -> Dict[str, Any]:
         """FX pair quote"""
-        return self._safe_call_with_retry(ak.fx_pair_quote, symbol=symbol)
+        return self._safe_call_with_retry(ak.fx_pair_quote)
 
-    def fx_quote_baidu(self, symbol: str, date: str) -> Dict[str, Any]:
-        """FX quote from Baidu"""
-        return self._safe_call_with_retry(ak.fx_quote_baidu, symbol=symbol, date=date)
+    def fx_quote_baidu(self, symbol: str = "人民币") -> Dict[str, Any]:
+        """FX quotes against one currency from Baidu (symbol: currency name, e.g. 人民币, 美元)"""
+        return self._safe_call_with_retry(ak.fx_quote_baidu, symbol=symbol)
 
-    def fx_spot_quote(self, symbol: str) -> Dict[str, Any]:
+    def fx_spot_quote(self) -> Dict[str, Any]:
         """FX spot quote"""
-        return self._safe_call_with_retry(ak.fx_spot_quote, symbol=symbol)
+        return self._safe_call_with_retry(ak.fx_spot_quote)
 
-    def fx_swap_quote(self, symbol: str) -> Dict[str, Any]:
+    def fx_swap_quote(self) -> Dict[str, Any]:
         """FX swap quote"""
-        return self._safe_call_with_retry(ak.fx_swap_quote, symbol=symbol)
+        return self._safe_call_with_retry(ak.fx_swap_quote)
 
     # ==================== AIR QUALITY (4) ====================
 
@@ -397,21 +397,21 @@ class MiscWrapper:
 
     # ==================== SW INDEX (4) ====================
 
-    def sw_index_first_info(self, symbol: str = "801001") -> Dict[str, Any]:
+    def sw_index_first_info(self) -> Dict[str, Any]:
         """SW first level index info"""
-        return self._safe_call_with_retry(ak.sw_index_first_info, symbol=symbol)
+        return self._safe_call_with_retry(ak.sw_index_first_info)
 
-    def sw_index_second_info(self, symbol: str = "801011") -> Dict[str, Any]:
+    def sw_index_second_info(self) -> Dict[str, Any]:
         """SW second level index info"""
-        return self._safe_call_with_retry(ak.sw_index_second_info, symbol=symbol)
+        return self._safe_call_with_retry(ak.sw_index_second_info)
 
     def sw_index_third_cons(self, symbol: str = "850111") -> Dict[str, Any]:
         """SW third level index constituents"""
         return self._safe_call_with_retry(ak.sw_index_third_cons, symbol=symbol)
 
-    def sw_index_third_info(self, symbol: str = "850111") -> Dict[str, Any]:
+    def sw_index_third_info(self) -> Dict[str, Any]:
         """SW third level index info"""
-        return self._safe_call_with_retry(ak.sw_index_third_info, symbol=symbol)
+        return self._safe_call_with_retry(ak.sw_index_third_info)
 
     # ==================== FUND ANNOUNCEMENTS (3) ====================
 
@@ -433,9 +433,6 @@ class MiscWrapper:
         """Daily cinema box office"""
         return self._safe_call_with_retry(ak.movie_boxoffice_cinema_daily, date=date)
 
-    def movie_boxoffice_cinema_weekly(self) -> Dict[str, Any]:
-        """Weekly cinema box office"""
-        return self._safe_call_with_retry(ak.movie_boxoffice_cinema_weekly)
 
     def movie_boxoffice_yearly_first_week(self) -> Dict[str, Any]:
         """Yearly first week box office"""
@@ -471,9 +468,9 @@ class MiscWrapper:
         """Baidu migration area data"""
         return self._safe_call_with_retry(ak.migration_area_baidu, area=area, indicator=indicator, date=date)
 
-    def migration_scale_baidu(self, area: str, indicator: str, start_date: str, end_date: str) -> Dict[str, Any]:
-        """Baidu migration scale data"""
-        return self._safe_call_with_retry(ak.migration_scale_baidu, area=area, indicator=indicator, start_date=start_date, end_date=end_date)
+    def migration_scale_baidu(self, area: str = "广州市", indicator: str = "move_in") -> Dict[str, Any]:
+        """Baidu migration scale index for a city (indicator: move_in / move_out)"""
+        return self._safe_call_with_retry(ak.migration_scale_baidu, area=area, indicator=indicator)
 
     # ==================== NLP (2) ====================
 
@@ -481,25 +478,16 @@ class MiscWrapper:
         """NLP question answering"""
         return self._safe_call_with_retry(ak.nlp_answer, question=question)
 
-    def nlp_ownthink(self, question: str) -> Dict[str, Any]:
-        """NLP OwnThink question answering"""
-        return self._safe_call_with_retry(ak.nlp_ownthink, question=question)
 
     # ==================== QHKC TOOLS (2) ====================
 
-    def qhkc_tool_foreign(self) -> Dict[str, Any]:
-        """QHKC foreign exchange tool"""
-        return self._safe_call_with_retry(ak.qhkc_tool_foreign)
 
-    def qhkc_tool_gdp(self) -> Dict[str, Any]:
-        """QHKC GDP tool"""
-        return self._safe_call_with_retry(ak.qhkc_tool_gdp)
 
     # ==================== REPO (2) ====================
 
-    def repo_rate_hist(self, symbol: str) -> Dict[str, Any]:
-        """Repo rate historical data"""
-        return self._safe_call_with_retry(ak.repo_rate_hist, symbol=symbol)
+    def repo_rate_hist(self, start_date: str, end_date: str) -> Dict[str, Any]:
+        """Repo fixing rates over a date range (YYYYMMDD)"""
+        return self._safe_call_with_retry(ak.repo_rate_hist, start_date=start_date, end_date=end_date)
 
     def repo_rate_query(self) -> Dict[str, Any]:
         """Repo rate query"""
@@ -561,9 +549,9 @@ class MiscWrapper:
         """S&P 500 hedge fund data"""
         return self._safe_call_with_retry(ak.hf_sp_500)
 
-    def hurun_rank(self, symbol: str = "胡润百富榜") -> Dict[str, Any]:
-        """Hurun ranking"""
-        return self._safe_call_with_retry(ak.hurun_rank, symbol=symbol)
+    def hurun_rank(self, indicator: str = "胡润百富榜", year: str = "") -> Dict[str, Any]:
+        """Hurun ranking (year empty = akshare's default edition)"""
+        return self._safe_call_with_retry(ak.hurun_rank, indicator=indicator, **({"year": year} if year else {}))
 
     def match_main_contract(self, symbol: str) -> Dict[str, Any]:
         """Match main contract"""
@@ -573,25 +561,16 @@ class MiscWrapper:
         """Artist online value"""
         return self._safe_call_with_retry(ak.online_value_artist)
 
-    def pro_api(self, name: str = "", **kwargs) -> Dict[str, Any]:
-        """Pro API access"""
-        return self._safe_call_with_retry(ak.pro_api, name=name, **kwargs)
 
     def rate_interbank(self, indicator: str = "Shibor人民币", symbol: str = "1天") -> Dict[str, Any]:
         """Interbank rate"""
         return self._safe_call_with_retry(ak.rate_interbank, indicator=indicator, symbol=symbol)
 
-    def set_token(self, token: str) -> Dict[str, Any]:
-        """Set API token"""
-        return self._safe_call_with_retry(ak.set_token, token=token)
 
     def tool_trade_date_hist_sina(self) -> Dict[str, Any]:
         """Trading date history from Sina"""
         return self._safe_call_with_retry(ak.tool_trade_date_hist_sina)
 
-    def volatility_yz_rv(self, symbol: str, start_date: str, end_date: str) -> Dict[str, Any]:
-        """Yang-Zhang realized volatility"""
-        return self._safe_call_with_retry(ak.volatility_yz_rv, symbol=symbol, start_date=start_date, end_date=end_date)
 
     def xincaifu_rank(self) -> Dict[str, Any]:
         """Xincaifu ranking"""
@@ -639,7 +618,6 @@ def main():
                 "fred": 2,
                 "migration": 2,
                 "nlp": 2,
-                "qhkc_tools": 2,
                 "repo": 2,
                 "realized_volatility": 2,
                 "sunrise": 2,
@@ -647,7 +625,7 @@ def main():
                 "single_functions": 15
             },
             "total_functions": 122,
-            "example": "python akshare_misc.py get_token"
+            "example": "python akshare_misc.py get_cffex_daily 20261106"
         }, cls=DateTimeEncoder, ensure_ascii=False, indent=2))
         sys.exit(1)
 
@@ -662,10 +640,7 @@ def main():
         func = getattr(wrapper, function_name)
         # Parse additional arguments if needed
         args = sys.argv[2:] if len(sys.argv) > 2 else []
-        try:
-            result = func(*args)
-        except TypeError:
-            result = func()
+        result = call_with_screen_args(func, function_name, args)
         print(json.dumps(result, cls=DateTimeEncoder, ensure_ascii=True))
     else:
         print(json.dumps({

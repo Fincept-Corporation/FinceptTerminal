@@ -56,9 +56,6 @@ def safe_call(func, *args, **kwargs):
 
 # ==================== CARBON TRADING ====================
 
-def get_energy_carbon_domestic():
-    """Get domestic carbon trading data"""
-    return safe_call(ak.energy_carbon_domestic)
 
 def get_energy_carbon_eu():
     """Get EU carbon trading data"""
@@ -96,7 +93,6 @@ def get_energy_oil_detail():
 
 ENDPOINTS = {
     # Carbon Trading
-    "energy_carbon_domestic": {"func": get_energy_carbon_domestic, "desc": "Domestic carbon trading", "category": "Carbon Trading"},
     "energy_carbon_eu": {"func": get_energy_carbon_eu, "desc": "EU carbon trading", "category": "Carbon Trading"},
     "energy_carbon_beijing": {"func": get_energy_carbon_bj, "desc": "Beijing carbon market", "category": "Carbon Trading"},
     "energy_carbon_guangzhou": {"func": get_energy_carbon_gz, "desc": "Guangzhou carbon market", "category": "Carbon Trading"},

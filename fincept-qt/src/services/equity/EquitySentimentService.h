@@ -11,8 +11,8 @@ class QTimer;
 namespace fincept::services::equity {
 
 // Computes the default, keyless Sentiment-tab content by blending free signals:
-//   • News headline sentiment (GNews/yfinance → news_nlp.py, VADER or lexicon)
-//   • Price/technical momentum (compute_technicals aggregate signal)
+//   • News headline sentiment (GNews/yfinance → NewsNlpService, finance-tuned VADER)
+//   • Price/technical momentum (the Technicals tab's aggregate indicator rating)
 //   • Adanos Market Sentiment — only when an API key is configured
 //
 // Reuses EquityResearchService's cached fetchers rather than duplicating them;

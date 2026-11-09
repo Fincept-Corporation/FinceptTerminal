@@ -243,97 +243,31 @@ void LlmService::ensure_config() const {
         max_tool_rounds_ = std::clamp(gs.value().max_tool_rounds, 1, 200);
     }
 
-    // Default system prompt — primes the model to actually use tools instead of declining tool-feasible requests.
+    // Default system prompt — primes the model to use the terminal's tools instead of
+    // declining tool-feasible requests. Kept short: it is re-sent on every tool round.
     if (system_prompt_.trimmed().isEmpty()) {
         system_prompt_ =
-            "You are Fincept AI, the intelligent assistant embedded inside the Fincept Terminal — "
-            "a professional desktop financial intelligence application. You have access to tools that "
-            "let you interact with the terminal directly: navigate screens, fetch live market data, "
-            "manage watchlists, query portfolios, paper-trade, run Python analytics, search SEC Edgar "
-            "filings, fetch news, and BUILD REPORTS LIVE in the Report Builder.\n"
+            "You are Fincept AI, the assistant inside Fincept Terminal, a professional financial terminal. "
+            "You work the terminal the way the user does, through tools: ui_overview (what is open — call it "
+            "first), ui_open (open any screen, optionally on a symbol), ui_snapshot (a panel's controls, each "
+            "with a ref), ui_act (click, type, select by ref or by the words on a control; several steps per "
+            "call), ui_read (a table, text or chart in full), ui_wait (until something loads), ui_screenshot, "
+            "ui_workspace (arrange panels and layouts), ui_invoke (the terminal's own commands) and python "
+            "(find and run the bundled analytics scripts).\n"
             "\n"
-            "Behaviour rules:\n"
-            "• ALWAYS use a tool when one can fulfil the request — never decline an action that a tool "
-            "  exists for. Never tell the user you cannot navigate or open screens.\n"
-            "• Building a report (e.g. 'create an equity research report on TSLA'): your job is to "
-            "  WRITE THE REPORT INTO THE REPORT BUILDER USING TOOLS. Do not narrate the report into "
-            "  the chat. STEP 0 (mandatory): call report_session_context to see whether this chat "
-            "  is already authoring a report (linked_report set) or is starting fresh (linked_report "
-            "  null with stale components on the canvas). If linked, CONTINUE editing it. If unlinked "
-            "  and the canvas has components, call report_clear first UNLESS the user explicitly "
-            "  said 'edit this report' / 'add to this report' / 'continue the report' — in which "
-            "  case keep the canvas. The flow is: (1) DESIGN A UNIQUE STRUCTURE for the subject — every ticker, "
-            "  sector, or topic deserves its own outline. A Tesla EV-and-FSD memo, a JPM credit note, "
-            "  and a TLT duration play should NOT share the same skeleton. Decide which sections "
-            "  actually matter for THIS subject (could be Catalysts, Bear Case, Capital Structure, "
-            "  Unit Economics, Regulatory Overhang, Insider Activity, Optionality, etc.) — do NOT "
-            "  default to the generic Company Overview / Financials / Valuation / Thesis / Risks / "
-            "  Target template. Do NOT call report_apply_template unless the user explicitly asks "
-            "  for a template OR the request is for a generic non-research scaffold (Meeting Notes, "
-            "  Trade Journal, Pre-Market Checklist). (2) call report_set_metadata with a "
-            "  subject-specific title (e.g. 'Tesla: Margin Compression vs FSD Optionality' — not "
-            "  'Stock Research'), author, company, date. (3) build the structure by calling "
-            "  report_add_component for each section you designed in step 1. (4) gather data with "
-            "  tools like get_equity_info, get_equity_quote, edgar_get_financials, "
-            "  edgar_10k_sections, edgar_calc_multiples, get_equity_news, search_news. "
-            "  (5) populate each section by calling report_update_component with the gathered data. "
-            "  Use stable component ids returned by report_add_component — never indices. "
-            "  COVERAGE: before declaring the report done, verify every section you added has "
-            "  real content (no placeholders like 'Describe the company…').\n"
-            "• Report formatting (CRITICAL for a polished result):\n"
-            "  - text/list/quote/callout content SUPPORTS MARKDOWN. Use **bold** to highlight key "
-            "    figures (e.g. 'Revenue grew **22% YoY** to **$96.8B**'). Use *italic* sparingly. "
-            "    Do not paste raw asterisks expecting them to render — they do, but only inside the "
-            "    content of those component types.\n"
-            "  - For tables, ALWAYS pass real data via config={'csv':'Header1,Header2|Cell1,Cell2|...'}. "
-            "    Pipe `|` separates rows, comma `,` separates cells. First row is auto-bolded. Never "
-            "    leave a table empty — it renders as 'Header 1, Header 2, ...' placeholder text.\n"
-            "  - For charts, pass config={'chart_type':'bar'|'line'|'pie','title':...,'data':'1,2,3',"
-            "    'labels':'Q1,Q2,Q3'}.\n"
-            "  - Set proper metadata FIRST via report_set_metadata: title (e.g. 'Tesla Equity Research "
-            "    Report'), author (e.g. 'Fincept Research'), company, and date. Don't leave 'Analyst' "
-            "    or 'Untitled Report' defaults.\n"
-            "  - Avoid one-line ramblings. Each text component should be a tight paragraph.\n"
-            "• Python scripts: ONLY pass script names returned by list_python_scripts. Never invent or "
-            "  guess script names. If list_python_scripts returns nothing useful, fall back to other "
-            "  tools (get_quote, edgar_*, get_candles, etc.) — those are the canonical data sources.\n"
-            "• When you have completed the user's request, reply with a concise summary in chat. "
-            "  Do not paste the full report content into chat — the report lives in the Report "
-            "  Builder canvas and the user is watching it fill in.\n"
-            "Be concise, accurate, and finance-focused.";
-    }
-
-    // Tool RAG discovery hint: lists categories dynamically so the model can form good tool_list() queries.
-    // The `[Tool discovery]` sentinel makes append idempotent across reloads. Cached static for prompt-cache stability.
-    if (tools_enabled_ && !system_prompt_.contains("[Tool discovery]")) {
-        // Tool registry is immutable after McpInit; runtime additions won't appear until restart (acceptable here).
-        static const QString kHint = []() -> QString {
-            const auto all = mcp::McpProvider::instance().list_all_tools();
-            QSet<QString> cats;
-            for (const auto& t : all) {
-                if (!t.category.isEmpty())
-                    cats.insert(t.category);
-            }
-            QStringList sorted_cats = cats.values();
-            std::sort(sorted_cats.begin(), sorted_cats.end());
-
-            QString hint = "\n\n[Tool discovery] You see only a small subset of tools each turn. "
-                           "To find a tool for any action you don't already have, call "
-                           "tool_list(query=\"<natural-language description>\"). "
-                           "It returns the top 5 most relevant tools (BM25-ranked). "
-                           "Then call tool_describe(name) for the full input schema, then invoke it. "
-                           "For requests with multiple intents (\"get news AND add to watchlist\"), "
-                           "call tool_list MULTIPLE TIMES — once per intent. "
-                           "Never decline an action you can fulfil via a discoverable tool. "
-                           "Discovery is not free: only reach for a tool when the request needs live data "
-                           "or an action inside the terminal. Greetings, small talk, and questions you can "
-                           "answer from your own knowledge get a direct plain-text reply and NO tool call.";
-            if (!sorted_cats.isEmpty()) {
-                hint += "\nAvailable tool categories: " + sorted_cats.join(", ") + ".";
-            }
-            return hint;
-        }();
-        system_prompt_ += kHint;
+            "Rules:\n"
+            "- Use the tools whenever a request needs live data or an action in the terminal; never say you "
+            "cannot open screens or read data. Greetings and questions you can answer from knowledge need no "
+            "tool call.\n"
+            "- Look before you act: ui_overview, then ui_snapshot the panel you need, then act by ref. After "
+            "starting a load, ui_wait(until=\"idle\") before reading results.\n"
+            "- Every figure you report must come from what the terminal shows or a script returns. Never "
+            "invent numbers.\n"
+            "- For analytics: python(action=\"search\") to find a script, action=\"info\" for its commands, "
+            "then run it.\n"
+            "- Orders, money moves, spends and deletions ask the user in the terminal first; if they decline, "
+            "stop and say so. Never try to read or type secrets (API keys, passwords, PINs).\n"
+            "- Finish with a concise answer in chat: the findings, the numbers and where they came from.";
     }
 
     config_loaded_ = true;
@@ -611,13 +545,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             loop_msgs.append(QJsonObject{{"role", "user"}, {"content", user_message}});
             loop_msgs.append(QJsonObject{{"role", "assistant"}, {"content", content}});
 
-            // Tools the model discovers this turn via tool_list / tool_describe.
-            // Tool RAG only ships the Tier-0 prefix, so without feeding these
-            // back into the next round's `tools` array the model stalls right
-            // after tool_describe with "I don't have that tool loaded" — the
-            // OpenAI path has always done this; Anthropic never did.
-            detail::ActivationTracker activated;
-
             QJsonArray tool_results;
             for (const auto& block_val : content) {
                 QJsonObject block = block_val.toObject();
@@ -637,9 +564,8 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 detail::emit_tool_progress(bare, input);
                 QElapsedTimer tool_timer;
                 tool_timer.start();
-                auto tr = mcp::McpService::instance().execute_openai_function(tool_name, input, /*allow_defer=*/true);
+                auto tr = mcp::McpService::instance().execute_openai_function(tool_name, input);
                 emit_tool_done(bare, input, tr, tool_timer.elapsed());
-                detail::note_tool_activations(bare, input, tr, activated);
                 tool_results.append(
                     QJsonObject{{"type", "tool_result"},
                                 {"tool_use_id", tool_id},
@@ -653,10 +579,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
             // the model could execute exactly one tool and never chain a second
             // (multi-step flows like "create a portfolio then add assets" broke).
             // We now loop, re-advertising the tool set each round, until the
-            // model returns a final text answer or we hit the round cap. The
-            // set is rebuilt per round rather than hoisted: under Tool RAG it
-            // grows as the model discovers tools, so a hoisted array would
-            // freeze the catalogue at whatever round 1 could see.
+            // model returns a final text answer or we hit the round cap.
             const int kMaxRounds = active_max_tool_rounds();
             // Rounds cap the token spend; the deadline caps the wait. See ToolLoopBudget.
             detail::ToolLoopBudget ant_budget(kMaxRounds);
@@ -667,7 +590,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     return resp;
                 }
                 ant_budget.note_round();
-                const QJsonArray ant_tools = build_anthropic_tools(activated.names());
+                const QJsonArray ant_tools = build_anthropic_tools();
                 QJsonObject fu;
                 fu["model"] = model_;
                 fu["messages"] = loop_msgs;
@@ -727,7 +650,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     // tool_result blocks are appended in the model's order: an
                     // Anthropic content array is positional, so completion order
                     // must not leak into the transcript.
-                    detail::note_tool_activations(calls[k].display, calls[k].args, results[k], activated);
                     more_results.append(
                         QJsonObject{{"type", "tool_result"},
                                     {"tool_use_id", calls[k].call_id},
@@ -768,10 +690,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 // set each round, until a text answer or the round cap.
                 const int kMaxRounds = active_max_tool_rounds();
                 detail::ToolLoopBudget gem_budget(kMaxRounds);
-                // Rebuilt per round, not hoisted: under Tool RAG the declared
-                // set grows as tool_list / tool_describe surface tools, and a
-                // hoisted array would pin the model to what round 1 could see.
-                detail::ActivationTracker activated;
 
                 // Constant conversation prefix: prior history + the user turn.
                 QJsonArray fu_contents;
@@ -833,7 +751,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     for (std::size_t k = 0; k < calls.size(); ++k) {
                         const auto& c = calls[k];
                         const auto& tr = results[k];
-                        detail::note_tool_activations(c.display, c.args, tr, activated);
                         // Gemini requires response to be an object — wrap strings under "result".
                         QJsonObject response_obj;
                         if (!tr.data.isNull() && !tr.data.isUndefined() && tr.data.isObject())
@@ -861,7 +778,7 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     if (!system_prompt_.isEmpty())
                         fu_body["systemInstruction"] =
                             QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system_prompt_}}}}};
-                    const QJsonArray gem_tools = build_gemini_tools(activated.names());
+                    const QJsonArray gem_tools = build_gemini_tools();
                     if (!gem_tools.isEmpty())
                         fu_body["tools"] = gem_tools;
 
@@ -958,11 +875,6 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                 loop_msgs.append(QJsonObject{{"role", "user"}, {"content", user_message}});
                 loop_msgs.append(msg); // assistant turn with tool_calls
 
-                // Tools the model has discovered this turn — seeded from this
-                // first round so the loop can re-declare them on the next turn
-                // (Tool RAG only ships Tier-0 otherwise; see note_tool_activations).
-                detail::ActivationTracker activated;
-
                 for (const auto& tc_val : tcs) {
                     if (detail::cancel_requested()) {
                         resp.cancelled = true;
@@ -988,19 +900,17 @@ LlmResponse LlmService::do_request(const QString& user_message, const std::vecto
                     detail::emit_tool_progress(bare, fn_args);
                     QElapsedTimer tool_timer;
                     tool_timer.start();
-                    auto tr =
-                        mcp::McpService::instance().execute_openai_function(fn_name, fn_args, /*allow_defer=*/true);
+                    auto tr = mcp::McpService::instance().execute_openai_function(fn_name, fn_args);
                     emit_tool_done(bare, fn_args, tr, tool_timer.elapsed());
                     LOG_INFO(kLlmSvcTag,
                              QString("Tool %1 -> %2 (msg=%3 err=%4)")
                                  .arg(fn_name, tr.success ? "OK" : "FAIL", tr.message.left(120), tr.error.left(120)));
-                    detail::note_tool_activations(bare, fn_args, tr, activated);
                     loop_msgs.append(QJsonObject{{"role", "tool"},
                                                  {"tool_call_id", call_id},
                                                  {"content", detail::encode_tool_result_for_llm(bare, tr)}});
                 }
 
-                resp = do_tool_loop(loop_msgs, url, hdr, activated.names());
+                resp = do_tool_loop(loop_msgs, url, hdr);
                 // do_tool_loop sums the follow-up rounds; add round 1 instead of
                 // overwriting the total with it.
                 {

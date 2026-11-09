@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 #include "mcp/McpService.h"
+#include "mcp/server/CallApproval.h"
 #include "network/http/HttpClient.h"
 #include "python/PythonRunner.h"
 #include "services/notifications/NotificationService.h"
@@ -17,6 +18,8 @@
 #include "trading/ActionCenter.h"
 #include "trading/BrokerRegistry.h"
 #include "trading/ExchangeService.h"
+#include "trading/ExchangeSession.h"
+#include "trading/ExchangeSessionManager.h"
 #include "trading/OrderThreadPool.h"
 #include "trading/PaperTrading.h"
 #include "trading/TradingTypes.h"
@@ -45,6 +48,8 @@
 #include <QTimer>
 #include <QXmlStreamReader>
 #include <QtConcurrent/QtConcurrent>
+
+#include <optional>
 
 using fincept::python::extract_json;
 using fincept::python::PythonResult;
@@ -128,14 +133,24 @@ void wire_market_data_bridges(NodeRegistry& registry) {
                                        std::function<void(bool, QJsonValue, QString)> cb) {
             QString base = params.value("symbol").toString("BTC").toUpper();
             QString quote = params.value("quote").toString("USD").toUpper();
-            QString symbol = base + "/" + quote; // Kraken format: BTC/USD
+            QString symbol = base + "/" + quote; // CCXT unified symbol, e.g. BTC/USD
+            // The node's own exchange. This used to read the Crypto Trading screen's active
+            // exchange instead (and label the result "kraken" whatever it was).
+            const QString exchange = params.value("exchange").toString(QStringLiteral("kraken")).trimmed().toLower();
 
-            (void)QtConcurrent::run([symbol, cb]() {
-                auto& svc = trading::ExchangeService::instance();
-                trading::TickerData t = svc.fetch_ticker(symbol);
+            (void)QtConcurrent::run([symbol, exchange, cb]() {
+                trading::ExchangeSession* session = trading::ExchangeSessionManager::instance().session(exchange);
+                if (!session) {
+                    cb(false, {}, QString("Unknown exchange: %1").arg(exchange));
+                    return;
+                }
+                trading::TickerData t = session->fetch_ticker(symbol);
 
                 if (t.last <= 0.0) {
-                    cb(false, {}, QString("No price data for %1").arg(symbol));
+                    cb(false, {},
+                       QString("No price for %1 on %2 — check that the pair is listed there (e.g. USDT, not USD, "
+                               "on Binance)")
+                           .arg(symbol, exchange));
                     return;
                 }
 
@@ -149,7 +164,7 @@ void wire_market_data_bridges(NodeRegistry& registry) {
                 out["change"] = t.change;
                 out["change_pct"] = t.percentage;
                 out["volume"] = t.base_volume;
-                out["exchange"] = "kraken";
+                out["exchange"] = exchange;
                 out["timestamp"] = static_cast<qint64>(t.timestamp);
                 cb(true, out, {});
                 LOG_DEBUG("MarketBridge", QString("Crypto price fetched: %1 = %2").arg(symbol).arg(t.last));
@@ -2746,9 +2761,18 @@ static void wire_mcp_bridges(NodeRegistry& registry) {
         else if (!input_obj.contains("tool"))
             args = input_obj; // plain data input, not a Tool Picker output
 
-        (void)QtConcurrent::run([tool, args, cb]() {
+        // Set by WorkflowExecutor::enforce_trading_mode when the run is in PAPER mode.
+        const bool paper_run = params.value("_paper_run").toBool();
+
+        (void)QtConcurrent::run([tool, args, cb, paper_run]() {
             auto& svc = mcp::McpService::instance();
             mcp::ToolResult result;
+
+            // PAPER: the core tools refuse anything that would place, change or
+            // cancel a real order or move money (no approval prompt is offered).
+            std::optional<mcp::ScopedPaperRun> paper_guard;
+            if (paper_run)
+                paper_guard.emplace();
 
             // Support both "serverId__toolName" and bare tool name
             if (tool.contains("__")) {
