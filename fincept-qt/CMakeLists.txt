@@ -725,7 +725,9 @@ FetchContent_Declare(
     QGeoView
     GIT_REPOSITORY https://github.com/AmonRaNet/QGeoView.git
     GIT_TAG        4b2c52c80940e1073c259ded1a57df83036ba1c9  # master @ 2026-04-11
-    GIT_SHALLOW    TRUE
+    # No GIT_SHALLOW: a --depth 1 clone only holds branch/tag tips, so a SHA
+    # pinned to an untagged commit breaks ("unable to read tree") as soon as
+    # upstream pushes past it. Repo is tiny; a full clone costs nothing.
     PATCH_COMMAND  ${CMAKE_COMMAND}
         -DFILE=<SOURCE_DIR>/lib/CMakeLists.txt
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/qgeoview_remove_agl.cmake"
@@ -809,7 +811,7 @@ FetchContent_Declare(
     ed25519
     GIT_REPOSITORY https://github.com/orlp/ed25519.git
     GIT_TAG        b1f19fab4aebe607805620d25a5e42566ce46a0e  # master @ 2026-04-27
-    GIT_SHALLOW    TRUE
+    # No GIT_SHALLOW: untagged SHA pin — see the QGeoView note above.
     UPDATE_DISCONNECTED TRUE
 )
 FetchContent_MakeAvailable(ed25519)
