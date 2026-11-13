@@ -20463,8 +20463,8 @@ Expected format:
         <translation>服务交付</translation>
     </message>
     <message>
-        <source>Provide and maintain terminal features, process transactions, and deliver data feeds</source>
-        <translation>提供和维护终端功能、处理交易并传送数据源</translation>
+        <source>Provide and maintain terminal features and process transactions</source>
+        <translation>提供和维护终端功能并处理交易</translation>
     </message>
     <message>
         <source>SECURITY</source>
@@ -31514,8 +31514,8 @@ Create a real ticket and our team will respond within 24 hours.</source>
         <translation>服务说明</translation>
     </message>
     <message>
-        <source>Fincept Terminal is a desktop financial intelligence terminal providing market data, analytics, trading tools, and AI-powered research capabilities.</source>
-        <translation>Fincept Terminal 是一款桌面金融情报终端，提供市场数据、分析、交易工具以及 AI 驱动的研究功能。</translation>
+        <source>Fincept Terminal is open-source desktop software for financial research, with analytics, trading tools and AI-powered research. Market data is fetched on your device from the sources you choose; Fincept does not supply exchange price data.</source>
+        <translation>Fincept Terminal 是一款用于金融研究的开源桌面软件，提供分析、交易工具和 AI 驱动的研究功能。市场数据由您的设备从您选择的来源获取；Fincept 不提供交易所价格数据。</translation>
     </message>
     <message>
         <source>USER ACCOUNTS AND REGISTRATION</source>
@@ -32189,16 +32189,16 @@ Create a real ticket and our team will respond within 24 hours.</source>
         <translation>数据提供方致谢</translation>
     </message>
     <message>
-        <source>Market data provided by various exchanges and data vendors</source>
-        <translation>市场数据由多家交易所和数据供应商提供</translation>
+        <source>Market data fetched on your device from the exchanges, brokers and data vendors you choose</source>
+        <translation>市场数据由您的设备从您选择的交易所、经纪商和数据供应商获取</translation>
     </message>
     <message>
         <source>Economic data from DBnomics, FRED, and government sources</source>
         <translation>经济数据来自 DBnomics、FRED 及政府来源</translation>
     </message>
     <message>
-        <source>News data from licensed news aggregation services</source>
-        <translation>新闻数据来自获授权的新闻聚合服务</translation>
+        <source>News from publishers' public RSS feeds</source>
+        <translation>新闻来自出版方的公开 RSS 源</translation>
     </message>
     <message>
         <source>Geopolitical data from HDX and public sources</source>

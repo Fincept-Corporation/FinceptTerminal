@@ -20470,8 +20470,8 @@ Formato esperado:
         <translation>PRESTACIÓN DEL SERVICIO</translation>
     </message>
     <message>
-        <source>Provide and maintain terminal features, process transactions, and deliver data feeds</source>
-        <translation>Proporcionar y mantener las funciones del terminal, procesar transacciones y entregar feeds de datos</translation>
+        <source>Provide and maintain terminal features and process transactions</source>
+        <translation>Proporcionar y mantener las funciones del terminal y procesar transacciones</translation>
     </message>
     <message>
         <source>SECURITY</source>
@@ -31522,8 +31522,8 @@ Crea un ticket real y nuestro equipo responderá en un plazo de 24 horas.</trans
         <translation>DESCRIPCIÓN DEL SERVICIO</translation>
     </message>
     <message>
-        <source>Fincept Terminal is a desktop financial intelligence terminal providing market data, analytics, trading tools, and AI-powered research capabilities.</source>
-        <translation>Fincept Terminal es un terminal de inteligencia financiera de escritorio que ofrece datos de mercado, análisis, herramientas de trading y capacidades de investigación impulsadas por IA.</translation>
+        <source>Fincept Terminal is open-source desktop software for financial research, with analytics, trading tools and AI-powered research. Market data is fetched on your device from the sources you choose; Fincept does not supply exchange price data.</source>
+        <translation>Fincept Terminal es un software de escritorio de código abierto para la investigación financiera, con análisis, herramientas de trading e investigación con IA. Los datos de mercado se obtienen en tu dispositivo desde las fuentes que elijas; Fincept no suministra datos de precios bursátiles.</translation>
     </message>
     <message>
         <source>USER ACCOUNTS AND REGISTRATION</source>
@@ -32197,16 +32197,16 @@ Crea un ticket real y nuestro equipo responderá en un plazo de 24 horas.</trans
         <translation>AGRADECIMIENTOS A LOS PROVEEDORES DE DATOS</translation>
     </message>
     <message>
-        <source>Market data provided by various exchanges and data vendors</source>
-        <translation>Datos de mercado proporcionados por varias bolsas y proveedores de datos</translation>
+        <source>Market data fetched on your device from the exchanges, brokers and data vendors you choose</source>
+        <translation>Datos de mercado obtenidos en tu dispositivo desde las bolsas, brókeres y proveedores de datos que elijas</translation>
     </message>
     <message>
         <source>Economic data from DBnomics, FRED, and government sources</source>
         <translation>Datos económicos de DBnomics, FRED y fuentes gubernamentales</translation>
     </message>
     <message>
-        <source>News data from licensed news aggregation services</source>
-        <translation>Datos de noticias de servicios autorizados de agregación de noticias</translation>
+        <source>News from publishers' public RSS feeds</source>
+        <translation>Noticias de los feeds RSS públicos de los medios</translation>
     </message>
     <message>
         <source>Geopolitical data from HDX and public sources</source>

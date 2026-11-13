@@ -62,22 +62,23 @@ QWidget* DocsScreen::page_welcome() {
                               "retail and institutional tooling."),
                            ui::colors::AMBER));
 
-    vl->addWidget(make_section_panel("■", tr("KEY CAPABILITIES"),
-                                     tr("■  Real-time market data across equities, crypto, forex, commodities\n"
-                                        "■  Multi-exchange crypto trading (Kraken, HyperLiquid, Binance, etc.)\n"
-                                        "■  Paper trading engine with simulated order matching\n"
-                                        "■  1300+ Python analytics scripts (equity, portfolio, derivatives)\n"
-                                        "■  18-module QuantLib quantitative analysis suite (590+ endpoints)\n"
-                                        "■  AI Quant Lab with ML models, factor discovery, HFT, RL trading\n"
-                                        "■  Multiple AI agent frameworks (Geopolitics, Economic, Hedge Fund)\n"
-                                        "■  Agent Workbench — Claude Code / Codex agents running on the terminal's tools\n"
-                                        "■  Visual node editor for workflow automation\n"
-                                        "■  DBnomics access to 100+ data providers, 500K+ datasets\n"
-                                        "■  Surface analytics for derivatives, fixed income, credit, risk\n"
-                                        "■  Report builder with drag-and-drop components\n"
-                                        "■  Backtesting with 6 providers and 50+ strategies\n"
-                                        "■  Algorithmic trading with strategy builder and scanner"),
-                                     ui::colors::POSITIVE));
+    vl->addWidget(
+        make_section_panel("■", tr("KEY CAPABILITIES"),
+                           tr("■  Live and historical market data from your own brokers and data sources\n"
+                              "■  Multi-exchange crypto trading (Kraken, HyperLiquid, Binance, etc.)\n"
+                              "■  Paper trading engine with simulated order matching\n"
+                              "■  1300+ Python analytics scripts (equity, portfolio, derivatives)\n"
+                              "■  18-module QuantLib quantitative analysis suite (590+ endpoints)\n"
+                              "■  AI Quant Lab with ML models, factor discovery, HFT, RL trading\n"
+                              "■  Multiple AI agent frameworks (Geopolitics, Economic, Hedge Fund)\n"
+                              "■  Agent Workbench — Claude Code / Codex agents running on the terminal's tools\n"
+                              "■  Visual node editor for workflow automation\n"
+                              "■  DBnomics access to 100+ data providers, 500K+ datasets\n"
+                              "■  Surface analytics for derivatives, fixed income, credit, risk\n"
+                              "■  Report builder with drag-and-drop components\n"
+                              "■  Backtesting with 6 providers and 50+ strategies\n"
+                              "■  Algorithmic trading with strategy builder and scanner"),
+                           ui::colors::POSITIVE));
 
     vl->addWidget(make_section_panel("■", tr("WHO IS THIS FOR?"),
                                      tr("■  Retail traders seeking institutional-quality tools\n"

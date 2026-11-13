@@ -20463,8 +20463,8 @@ Expected format:
         <translation>CUNG CẤP DỊCH VỤ</translation>
     </message>
     <message>
-        <source>Provide and maintain terminal features, process transactions, and deliver data feeds</source>
-        <translation>Cung cấp và duy trì các tính năng của terminal, xử lý giao dịch và cung cấp nguồn dữ liệu</translation>
+        <source>Provide and maintain terminal features and process transactions</source>
+        <translation>Cung cấp và duy trì các tính năng của terminal và xử lý giao dịch</translation>
     </message>
     <message>
         <source>SECURITY</source>
@@ -31514,8 +31514,8 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
         <translation>MÔ TẢ DỊCH VỤ</translation>
     </message>
     <message>
-        <source>Fincept Terminal is a desktop financial intelligence terminal providing market data, analytics, trading tools, and AI-powered research capabilities.</source>
-        <translation>Fincept Terminal là một terminal trí tuệ tài chính trên máy tính để bàn, cung cấp dữ liệu thị trường, phân tích, công cụ giao dịch và khả năng nghiên cứu được hỗ trợ bởi AI.</translation>
+        <source>Fincept Terminal is open-source desktop software for financial research, with analytics, trading tools and AI-powered research. Market data is fetched on your device from the sources you choose; Fincept does not supply exchange price data.</source>
+        <translation>Fincept Terminal là phần mềm máy tính mã nguồn mở dành cho nghiên cứu tài chính, với công cụ phân tích, giao dịch và nghiên cứu bằng AI. Dữ liệu thị trường được lấy trên thiết bị của bạn từ các nguồn bạn chọn; Fincept không cung cấp dữ liệu giá của sàn giao dịch.</translation>
     </message>
     <message>
         <source>USER ACCOUNTS AND REGISTRATION</source>
@@ -32189,16 +32189,16 @@ Tạo một phiếu thực và đội ngũ của chúng tôi sẽ phản hồi t
         <translation>GHI NHẬN NHÀ CUNG CẤP DỮ LIỆU</translation>
     </message>
     <message>
-        <source>Market data provided by various exchanges and data vendors</source>
-        <translation>Dữ liệu thị trường do nhiều sàn giao dịch và nhà cung cấp dữ liệu cung cấp</translation>
+        <source>Market data fetched on your device from the exchanges, brokers and data vendors you choose</source>
+        <translation>Dữ liệu thị trường được lấy trên thiết bị của bạn từ các sàn giao dịch, nhà môi giới và nhà cung cấp dữ liệu bạn chọn</translation>
     </message>
     <message>
         <source>Economic data from DBnomics, FRED, and government sources</source>
         <translation>Dữ liệu kinh tế từ DBnomics, FRED và các nguồn chính phủ</translation>
     </message>
     <message>
-        <source>News data from licensed news aggregation services</source>
-        <translation>Dữ liệu tin tức từ các dịch vụ tổng hợp tin tức được cấp phép</translation>
+        <source>News from publishers' public RSS feeds</source>
+        <translation>Tin tức từ nguồn cấp RSS công khai của các nhà xuất bản</translation>
     </message>
     <message>
         <source>Geopolitical data from HDX and public sources</source>

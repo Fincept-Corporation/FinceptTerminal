@@ -20463,8 +20463,8 @@ Expected format:
         <translation>PENYEDIAAN LAYANAN</translation>
     </message>
     <message>
-        <source>Provide and maintain terminal features, process transactions, and deliver data feeds</source>
-        <translation>Menyediakan dan memelihara fitur terminal, memproses transaksi, dan menyalurkan umpan data</translation>
+        <source>Provide and maintain terminal features and process transactions</source>
+        <translation>Menyediakan dan memelihara fitur terminal serta memproses transaksi</translation>
     </message>
     <message>
         <source>SECURITY</source>
@@ -31514,8 +31514,8 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
         <translation>DESKRIPSI LAYANAN</translation>
     </message>
     <message>
-        <source>Fincept Terminal is a desktop financial intelligence terminal providing market data, analytics, trading tools, and AI-powered research capabilities.</source>
-        <translation>Fincept Terminal adalah terminal kecerdasan finansial desktop yang menyediakan data pasar, analitik, alat trading, dan kemampuan riset bertenaga AI.</translation>
+        <source>Fincept Terminal is open-source desktop software for financial research, with analytics, trading tools and AI-powered research. Market data is fetched on your device from the sources you choose; Fincept does not supply exchange price data.</source>
+        <translation>Fincept Terminal adalah perangkat lunak desktop sumber terbuka untuk riset keuangan, dengan analitik, alat trading, dan riset berbasis AI. Data pasar diambil di perangkat Anda dari sumber yang Anda pilih; Fincept tidak menyediakan data harga bursa.</translation>
     </message>
     <message>
         <source>USER ACCOUNTS AND REGISTRATION</source>
@@ -32189,16 +32189,16 @@ Buat tiket asli dan tim kami akan merespons dalam 24 jam.</translation>
         <translation>PENGHARGAAN PENYEDIA DATA</translation>
     </message>
     <message>
-        <source>Market data provided by various exchanges and data vendors</source>
-        <translation>Data pasar disediakan oleh berbagai bursa dan vendor data</translation>
+        <source>Market data fetched on your device from the exchanges, brokers and data vendors you choose</source>
+        <translation>Data pasar diambil di perangkat Anda dari bursa, broker, dan vendor data yang Anda pilih</translation>
     </message>
     <message>
         <source>Economic data from DBnomics, FRED, and government sources</source>
         <translation>Data ekonomi dari DBnomics, FRED, dan sumber pemerintah</translation>
     </message>
     <message>
-        <source>News data from licensed news aggregation services</source>
-        <translation>Data berita dari layanan agregasi berita berlisensi</translation>
+        <source>News from publishers' public RSS feeds</source>
+        <translation>Berita dari umpan RSS publik milik penerbit</translation>
     </message>
     <message>
         <source>Geopolitical data from HDX and public sources</source>

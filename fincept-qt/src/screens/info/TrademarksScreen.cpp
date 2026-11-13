@@ -150,9 +150,10 @@ QWidget* TrademarksScreen::build_page() {
                            "covered by this licence.")));
 
     pvl->addWidget(heading("5", tr("DATA PROVIDER ACKNOWLEDGMENTS")));
-    pvl->addWidget(bullet(tr("Market data provided by various exchanges and data vendors")));
+    pvl->addWidget(
+        bullet(tr("Market data fetched on your device from the exchanges, brokers and data vendors you choose")));
     pvl->addWidget(bullet(tr("Economic data from DBnomics, FRED, and government sources")));
-    pvl->addWidget(bullet(tr("News data from licensed news aggregation services")));
+    pvl->addWidget(bullet(tr("News from publishers' public RSS feeds")));
     pvl->addWidget(bullet(tr("Geopolitical data from HDX and public sources")));
     pvl->addWidget(bullet(tr("Crypto data from exchange APIs (Kraken, HyperLiquid, etc.)")));
     // OpenStreetMap tiles carry a mandatory ODbL attribution requirement and the

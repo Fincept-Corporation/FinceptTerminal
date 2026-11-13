@@ -36,7 +36,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Finanzanalysen auf institutione
 
 ## Über
 
-**Fincept Terminal** ist ein natives C++20-Desktop-Terminal für Finanzresearch — Qt6-Oberfläche, eingebettete Python-3.11-Analytik, eine einzige Binärdatei, kein Electron.
+**Fincept Terminal** ist ein natives C++20-Desktop-Terminal für Finanzresearch — Qt6-Oberfläche, eingebettete Python-3.11-Analytik, eine einzige Binärdatei, kein Electron. Es ist ein Open-Source-Forschungsprojekt und eine kostenlose Alternative zu geschlossenen, kostenpflichtigen Finanzterminals.
 
 Zwei Editionen laufen auf einem gemeinsamen Datenkern. **[Enterprise](https://fincept.in/enterprise)** ist der private, quelloffen nicht verfügbare Build, an dem das Team täglich arbeitet — für Fonds, Family Offices und Research-Desks. **Dieses Repo** ist die kostenlose AGPL-3.0-Edition für Lernzwecke, private Nutzung und akademische Forschung, mit einem Release pro Monat.
 
@@ -46,7 +46,7 @@ Nutzen Sie den offenen Build, wenn Sie Studierende, Hobbyist oder akademisch tä
 |---|---|---|
 | **Lizenz** | AGPL-3.0 — starkes Copyleft | Proprietär — keine Copyleft-Pflichten |
 | **Kosten** | Kostenlos, plus eigene Daten- und LLM-Rechnungen | **15 $ / 30 $ / 45 $** pro Nutzer/Monat |
-| **Daten** | Kostenlose öffentliche Feeds, eigene API-Schlüssel | Private Datensätze, längere Historie, Point-in-Time |
+| **Daten** | Auf Ihrem Rechner abgerufen, aus eigenen Quellen und API-Schlüsseln | Private Datensätze, längere Historie, Point-in-Time |
 | **KI** | Eigener LLM-Schlüssel | 400–5.000 Credits inklusive · Multi-Agenten-Research · privater Datenraum |
 | **Handel** | Papier- + Live-Handel über Ihren Broker | Verwaltetes Live-Routing, Ausführungsanalysen, priorisiertes SLA |
 | **Kontrollen** | — | SSO/SAML, Audit-Logs, RBAC, SLA-gestützter Support |
@@ -94,6 +94,16 @@ Fertige Installationsprogramme für **Windows x64**, **Linux x64** (`.run` / `.d
 - **Globale Aufklärung** — maritimes Tracking, geopolitische Analyse, Beziehungskartierung
 
 Natives C++20 · Qt6 · eingebettetes Python 3.11 · eine Binärdatei · kein Node.js, keine Browser-Runtime.
+
+---
+
+## Woher die Daten stammen
+
+**Fincept besitzt den Code in diesem Repository — nicht die Marktdaten, die Sie damit ansehen.** Das Terminal ist Software, die auf Ihrem Computer läuft. Fincept liefert, verkauft oder vertreibt darüber keine Börsenkursdaten.
+
+- **Kurse stammen aus Ihren eigenen Quellen.** Kurse, Charts, Orderbücher und Optionsketten — für NSE, BSE oder jede andere Börse — ruft das Terminal auf Ihrem Rechner direkt bei der Quelle Ihrer Wahl ab: Ihrem Brokerkonto, dem öffentlichen Feed einer Börse oder einem Anbieter wie Yahoo Finance, mit Ihrem eigenen Login oder API-Schlüssel.
+- **Für die Daten jeder Quelle gelten deren Regeln.** Börsen und Broker erlauben ihre Daten meist nur für den eigenen Gebrauch. Wer sie öffentlich zeigt oder an andere weitergibt, braucht in der Regel eine Lizenz der Börse (bei der NSE von NSE Data & Analytics). Broker-APIs wie Kite Connect sind für die persönliche Nutzung gedacht.
+- **Funktionen des Fincept-Kontos** — Anmeldung, KI mit Fincept-Credits und, falls aktiviert, die Synchronisierung Ihrer eigenen Watchlists und Portfolios — nutzen die Server von Fincept.
 
 ---
 

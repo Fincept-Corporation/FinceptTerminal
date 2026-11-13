@@ -172,9 +172,8 @@ QWidget* PrivacyScreen::build_page() {
         auto* grid = new QGridLayout;
         grid->setSpacing(8);
         grid->addWidget(
-            info_card(tr("SERVICE DELIVERY"),
-                      tr("Provide and maintain terminal features, process transactions, and deliver data feeds")),
-            0, 0);
+            info_card(tr("SERVICE DELIVERY"), tr("Provide and maintain terminal features and process transactions")), 0,
+            0);
         grid->addWidget(
             info_card(tr("SECURITY"),
                       tr("Protect accounts, detect fraud, enforce terms of service, and ensure platform integrity")),

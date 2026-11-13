@@ -129,8 +129,9 @@ QWidget* TermsScreen::build_page() {
 
     // Section 2
     pvl->addWidget(section_heading("2", tr("DESCRIPTION OF SERVICE")));
-    pvl->addWidget(body_text(tr("Fincept Terminal is a desktop financial intelligence terminal providing market data, "
-                                "analytics, trading tools, and AI-powered research capabilities.")));
+    pvl->addWidget(body_text(tr("Fincept Terminal is open-source desktop software for financial research, with "
+                                "analytics, trading tools and AI-powered research. Market data is fetched on your "
+                                "device from the sources you choose; Fincept does not supply exchange price data.")));
 
     // Section 3
     pvl->addWidget(section_heading("3", tr("USER ACCOUNTS AND REGISTRATION")));

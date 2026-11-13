@@ -192,6 +192,7 @@ See `fincept-qt/scripts/README.md` and [PYTHON_CONTRIBUTOR_GUIDE.md](./PYTHON_CO
 - **Style:** match surrounding code. Do **not** run Black / autopep8 / isort on existing files.
 - **Logging:** use the `logging` module (`logger = logging.getLogger(__name__)`, `logger.info(...)`), never `print()`. Scripts run inside an embedded Qt runtime; `print()` output never reaches the user.
 - **Entry points:** C++ invokes scripts through `PythonRunner::instance().run(...)` — your script receives a JSON payload on stdin and must return JSON on stdout. See existing scripts in `scripts/` for the pattern.
+- **Data connectors:** fetch on the user's machine, with the user's own login or API key. Never route exchange price data through Fincept servers, and never scrape a site whose terms forbid automated collection (nseindia.com does). See [Where the data comes from](../README.md#where-the-data-comes-from).
 
 ### UI / design
 

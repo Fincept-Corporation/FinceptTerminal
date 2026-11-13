@@ -74,7 +74,7 @@ State-of-the-art financial intelligence platform with institutional-grade financ
 
 ## About
 
-**Fincept Terminal** is a native C++20 desktop terminal for financial research — Qt6 UI, embedded Python 3.11 analytics, one binary, no Electron.
+**Fincept Terminal** is a native C++20 desktop terminal for financial research — Qt6 UI, embedded Python 3.11 analytics, one binary, no Electron. It is an open-source research project and a free alternative to closed, paid finance terminals.
 
 Two editions run on one data core. **[Enterprise](https://fincept.in/enterprise)** is the private, closed-source build the team develops daily, for funds, family offices and research desks. **This repo** is the free AGPL-3.0 edition — learning, personal use, academic research — shipping one release a month.
 
@@ -86,7 +86,7 @@ Fincept account (this terminal): Free, or Pro at $10/month for monthly cloud cre
 |---|---|---|
 | **Licence** | AGPL-3.0 — strong copyleft | Proprietary — no copyleft to manage |
 | **Cost** | Free, plus your own data and LLM bills | **$15 / $30 / $45** per user/month |
-| **Data** | Free public feeds, your own API keys | Private datasets, deeper history, point-in-time |
+| **Data** | Fetched on your machine from your own sources and API keys | Private datasets, deeper history, point-in-time |
 | **AI** | Bring your own LLM key | 400–5,000 credits included · multi-agent research · private dataroom |
 | **Trading** | Paper + live trading via your broker | Managed live routing, execution analytics, priority SLA |
 | **Controls** | — | SSO/SAML, audit logs, RBAC, SLA-backed support |
@@ -144,6 +144,16 @@ Latest release: **v4.5.1** — [View all releases](https://github.com/Fincept-Co
 - **Global intelligence** — maritime tracking, geopolitical analysis, relationship mapping
 
 Native C++20 · Qt6 · embedded Python 3.11 · single binary · no Node.js, no browser runtime.
+
+---
+
+## Where the data comes from
+
+**Fincept owns the code in this repository — not the market data you view with it.** The terminal is software that runs on your computer. Fincept does not supply, sell or resell exchange price data through it.
+
+- **Prices come from your own sources.** Quotes, charts, order books and option chains — for NSE, BSE or any other exchange — are fetched by the terminal on your machine, directly from the source you pick: your broker account, an exchange's public feed, or a provider such as Yahoo Finance, using your own login or API key.
+- **Each source's rules apply to its data.** Exchanges and brokers usually allow their data for your own use only. Showing it publicly or passing it on to others normally needs a licence from the exchange (for NSE, from NSE Data & Analytics). Broker APIs such as Kite Connect are for personal use.
+- **Fincept account features** — sign-in, AI on Fincept credits and, if you switch it on, sync of your own watchlists and portfolios — use Fincept's servers.
 
 ---
 

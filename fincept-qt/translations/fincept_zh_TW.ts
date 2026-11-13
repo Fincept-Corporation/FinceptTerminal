@@ -20462,8 +20462,8 @@ Expected format:
         <translation>服務提供</translation>
     </message>
     <message>
-        <source>Provide and maintain terminal features, process transactions, and deliver data feeds</source>
-        <translation>提供與維護終端機功能、處理交易並傳送資料來源</translation>
+        <source>Provide and maintain terminal features and process transactions</source>
+        <translation>提供與維護終端機功能並處理交易</translation>
     </message>
     <message>
         <source>SECURITY</source>
@@ -31513,8 +31513,8 @@ Create a real ticket and our team will respond within 24 hours.</source>
         <translation>服務說明</translation>
     </message>
     <message>
-        <source>Fincept Terminal is a desktop financial intelligence terminal providing market data, analytics, trading tools, and AI-powered research capabilities.</source>
-        <translation>Fincept Terminal 是一款桌面金融情報終端，提供市場資料、分析、交易工具以及 AI 驅動的研究功能。</translation>
+        <source>Fincept Terminal is open-source desktop software for financial research, with analytics, trading tools and AI-powered research. Market data is fetched on your device from the sources you choose; Fincept does not supply exchange price data.</source>
+        <translation>Fincept Terminal 是一款用於金融研究的開源桌面軟體，提供分析、交易工具及 AI 驅動的研究功能。市場資料由您的裝置從您選擇的來源取得；Fincept 不提供交易所價格資料。</translation>
     </message>
     <message>
         <source>USER ACCOUNTS AND REGISTRATION</source>
@@ -32188,16 +32188,16 @@ Create a real ticket and our team will respond within 24 hours.</source>
         <translation>資料提供方致謝</translation>
     </message>
     <message>
-        <source>Market data provided by various exchanges and data vendors</source>
-        <translation>市場資料由多家交易所及資料供應商提供</translation>
+        <source>Market data fetched on your device from the exchanges, brokers and data vendors you choose</source>
+        <translation>市場資料由您的裝置從您選擇的交易所、券商及資料供應商取得</translation>
     </message>
     <message>
         <source>Economic data from DBnomics, FRED, and government sources</source>
         <translation>經濟資料來自 DBnomics、FRED 及政府來源</translation>
     </message>
     <message>
-        <source>News data from licensed news aggregation services</source>
-        <translation>新聞資料來自獲授權的新聞彙整服務</translation>
+        <source>News from publishers' public RSS feeds</source>
+        <translation>新聞來自出版方的公開 RSS 來源</translation>
     </message>
     <message>
         <source>Geopolitical data from HDX and public sources</source>

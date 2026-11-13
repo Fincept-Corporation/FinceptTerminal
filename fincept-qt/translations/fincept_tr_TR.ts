@@ -20463,8 +20463,8 @@ Beklenen biçim:
         <translation>HİZMET SUNUMU</translation>
     </message>
     <message>
-        <source>Provide and maintain terminal features, process transactions, and deliver data feeds</source>
-        <translation>Terminal özelliklerini sağlamak ve sürdürmek, işlemleri gerçekleştirmek ve veri akışlarını sunmak</translation>
+        <source>Provide and maintain terminal features and process transactions</source>
+        <translation>Terminal özelliklerini sağlamak, sürdürmek ve işlemleri gerçekleştirmek</translation>
     </message>
     <message>
         <source>SECURITY</source>
@@ -31514,8 +31514,8 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
         <translation>HİZMET AÇIKLAMASI</translation>
     </message>
     <message>
-        <source>Fincept Terminal is a desktop financial intelligence terminal providing market data, analytics, trading tools, and AI-powered research capabilities.</source>
-        <translation>Fincept Terminal, piyasa verileri, analitik, işlem araçları ve AI destekli araştırma yetenekleri sunan bir masaüstü finansal istihbarat terminalidir.</translation>
+        <source>Fincept Terminal is open-source desktop software for financial research, with analytics, trading tools and AI-powered research. Market data is fetched on your device from the sources you choose; Fincept does not supply exchange price data.</source>
+        <translation>Fincept Terminal; analiz, alım satım araçları ve yapay zekâ destekli araştırma sunan, finansal araştırma için açık kaynaklı bir masaüstü yazılımıdır. Piyasa verileri, seçtiğiniz kaynaklardan cihazınızda alınır; Fincept borsa fiyat verisi sağlamaz.</translation>
     </message>
     <message>
         <source>USER ACCOUNTS AND REGISTRATION</source>
@@ -32189,16 +32189,16 @@ Gerçek bir talep oluşturun, ekibimiz 24 saat içinde yanıt verecektir.</trans
         <translation>VERİ SAĞLAYICI TEŞEKKÜRLERİ</translation>
     </message>
     <message>
-        <source>Market data provided by various exchanges and data vendors</source>
-        <translation>Piyasa verileri çeşitli borsalar ve veri sağlayıcıları tarafından sağlanır</translation>
+        <source>Market data fetched on your device from the exchanges, brokers and data vendors you choose</source>
+        <translation>Piyasa verileri, seçtiğiniz borsalardan, aracı kurumlardan ve veri sağlayıcılarından cihazınızda alınır</translation>
     </message>
     <message>
         <source>Economic data from DBnomics, FRED, and government sources</source>
         <translation>DBnomics, FRED ve resmi kaynaklardan ekonomik veriler</translation>
     </message>
     <message>
-        <source>News data from licensed news aggregation services</source>
-        <translation>Lisanslı haber toplama hizmetlerinden haber verileri</translation>
+        <source>News from publishers' public RSS feeds</source>
+        <translation>Yayıncıların herkese açık RSS akışlarından haberler</translation>
     </message>
     <message>
         <source>Geopolitical data from HDX and public sources</source>

@@ -20470,8 +20470,8 @@ Format attendu :
         <translation>FOURNITURE DU SERVICE</translation>
     </message>
     <message>
-        <source>Provide and maintain terminal features, process transactions, and deliver data feeds</source>
-        <translation>Fournir et maintenir les fonctionnalités du terminal, traiter les transactions et fournir les flux de données</translation>
+        <source>Provide and maintain terminal features and process transactions</source>
+        <translation>Fournir et maintenir les fonctionnalités du terminal et traiter les transactions</translation>
     </message>
     <message>
         <source>SECURITY</source>
@@ -31522,8 +31522,8 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
         <translation>DESCRIPTION DU SERVICE</translation>
     </message>
     <message>
-        <source>Fincept Terminal is a desktop financial intelligence terminal providing market data, analytics, trading tools, and AI-powered research capabilities.</source>
-        <translation>Fincept Terminal est un terminal de bureau d'intelligence financière offrant des données de marché, des analyses, des outils de trading et des capacités de recherche alimentées par l'IA.</translation>
+        <source>Fincept Terminal is open-source desktop software for financial research, with analytics, trading tools and AI-powered research. Market data is fetched on your device from the sources you choose; Fincept does not supply exchange price data.</source>
+        <translation>Fincept Terminal est un logiciel de bureau open source dédié à la recherche financière, avec des outils d'analyse, de trading et de recherche assistée par IA. Les données de marché sont récupérées sur votre appareil depuis les sources que vous choisissez ; Fincept ne fournit pas de données de cours boursiers.</translation>
     </message>
     <message>
         <source>USER ACCOUNTS AND REGISTRATION</source>
@@ -32197,16 +32197,16 @@ Créez un vrai ticket et notre équipe répondra sous 24 heures.</translation>
         <translation>REMERCIEMENTS AUX FOURNISSEURS DE DONNÉES</translation>
     </message>
     <message>
-        <source>Market data provided by various exchanges and data vendors</source>
-        <translation>Données de marché fournies par diverses bourses et fournisseurs de données</translation>
+        <source>Market data fetched on your device from the exchanges, brokers and data vendors you choose</source>
+        <translation>Données de marché récupérées sur votre appareil auprès des bourses, courtiers et fournisseurs de données de votre choix</translation>
     </message>
     <message>
         <source>Economic data from DBnomics, FRED, and government sources</source>
         <translation>Données économiques de DBnomics, FRED et de sources gouvernementales</translation>
     </message>
     <message>
-        <source>News data from licensed news aggregation services</source>
-        <translation>Données d'actualités provenant de services agrégateurs d'actualités sous licence</translation>
+        <source>News from publishers' public RSS feeds</source>
+        <translation>Actualités issues des flux RSS publics des éditeurs</translation>
     </message>
     <message>
         <source>Geopolitical data from HDX and public sources</source>
