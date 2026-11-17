@@ -3372,6 +3372,11 @@ set_source_files_properties(
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
+# Logger.cpp keeps its helper types in an anonymous namespace and uses them as fields of
+# Logger::State. GCC accepts that only in a file compiled on its own: pulled into a unity
+# batch it is an included file and -Wsubobject-linkage fires (an error in CI).
+set_source_files_properties(src/core/logging/Logger.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
+
 # Resource files are compiled by an explicit rcc rule, one source each, outside the unity
 # batches. Every compiled .qrc defines the same file-local names (qt_resource_data,
 # qt_resource_name, qt_resource_struct). AUTORCC kept them apart on single-config generators

@@ -30,12 +30,12 @@ class GovTableModel : public QAbstractTableModel {
 
     /// One column. Members in declaration order (designated initialisers).
     struct Column {
-        TextFn text;                                         ///< display text (required)
-        TextFn tooltip;                                      ///< empty = no tooltip
+        TextFn text{};                                         ///< display text (required)
+        TextFn tooltip{};                                      ///< empty = no tooltip
         Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter;
         Ink ink = Ink::Default;
-        TestFn ink_if;                                       ///< empty = always (when ink != Default)
-        TextFn export_text;                                  ///< empty = the display text
+        TestFn ink_if{};                                       ///< empty = always (when ink != Default)
+        TextFn export_text{};                                  ///< empty = the display text
     };
 
     explicit GovTableModel(QObject* parent = nullptr);

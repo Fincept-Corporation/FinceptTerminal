@@ -871,7 +871,7 @@ jobs:
 
       - name: Build
         working-directory: fincept-qt
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc)
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc) -- -k 0
 
       - name: Verify binary
         working-directory: fincept-qt
@@ -1689,7 +1689,7 @@ jobs:
 
       - name: Build
         working-directory: fincept-qt
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} -j $(sysctl -n hw.logicalcpu)
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} -j $(sysctl -n hw.logicalcpu) -- -k 0
 
       # ── Verify ───────────────────────────────────────────────────────────
       - name: Verify binary

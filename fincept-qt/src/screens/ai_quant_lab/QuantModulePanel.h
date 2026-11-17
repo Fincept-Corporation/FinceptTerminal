@@ -70,25 +70,25 @@ class QuantModulePanel : public QWidget {
 
     /// How a view is declared (the only per-tab code the mechanism needs).
     struct ViewSpec {
-        QString key;                 ///< unique in the module; InputMemory view and pane view
+        QString key{};                 ///< unique in the module; InputMemory view and pane view
         ViewCost cost = ViewCost::Fetch;
-        QString loading;             ///< skeleton caption until the action says more
+        QString loading{};             ///< skeleton caption until the action says more
         ui::LoadingSkeleton::Shape shape = ui::LoadingSkeleton::Shape::Result;
         int max_age_s = -2;          ///< remembered-result refresh (s); -2 = by cost (Free: never, Fetch: 6 h)
-        QString pane_view;           ///< tabs sharing one result (HFT): the common pane view key
+        QString pane_view{};           ///< tabs sharing one result (HFT): the common pane view key
         bool qlib_dataset = false;   ///< reads the module's local qlib dataset (waits for / gates on the bar)
         bool llm = false;            ///< needs an LLM profile
         bool pane = true;            ///< false: the view shows its own widgets; the pane hides for it
         /// Heavy views that may run by themselves once a prerequisite exists (a saved model path…).
-        std::function<bool()> auto_when;
+        std::function<bool()> auto_when{};
         /// Called after a reply of this view was delivered (ok) or failed: refresh a list another
         /// view shows, keep a produced id for the next view, reset bespoke progress widgets.
-        std::function<void(bool ok, const QString& command, const QJsonObject& data)> after;
+        std::function<void(bool ok, const QString& command, const QJsonObject& data)> after{};
         // Preview of a view that does not run by itself (the designed empty state).
-        QString title;               ///< what the view is
-        QString returns;             ///< what a run returns, one sentence
-        QString run_text;            ///< the one primary action ("TRAIN MODEL")
-        QString cost_note;           ///< chip: "Trains a model · about 2 min of CPU"
+        QString title{};               ///< what the view is
+        QString returns{};             ///< what a run returns, one sentence
+        QString run_text{};            ///< the one primary action ("TRAIN MODEL")
+        QString cost_note{};           ///< chip: "Trains a model · about 2 min of CPU"
     };
 
     /// What a series input reads when its view's source is a ticker (D1).

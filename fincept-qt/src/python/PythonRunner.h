@@ -63,13 +63,13 @@ class PythonRunner : public QObject {
 
         /// Written to the child's stdin after spawn; the write channel is then
         /// closed so the script sees EOF. See the note on run() below.
-        QByteArray stdin_data;
+        QByteArray stdin_data{};
 
         /// Optional cancellation token. Raising it (from any thread) fails a
         /// request that is still queued without spawning it, and kills a running
         /// process within ~250 ms; the callback then receives
         /// `success=false, error="Cancelled"`. Null = not cancellable (default).
-        std::shared_ptr<std::atomic<bool>> cancel_token;
+        std::shared_ptr<std::atomic<bool>> cancel_token{};
 
         /// When set, ONLY these stored credentials are injected into the child's
         /// environment (the env vars the script itself reads); every other key
@@ -77,7 +77,7 @@ class PythonRunner : public QObject {
         /// terminal's own screens expect. Agent-started runs (the MCP `python`
         /// tool) always set it, so a script an agent runs cannot read keys it has
         /// no business with (exchange secrets in a data connector's environment).
-        std::optional<QStringList> credential_allowlist;
+        std::optional<QStringList> credential_allowlist{};
 
         /// Stop a run whose stdout grows past this many bytes: the process is
         /// killed and the result fails with "output too large". 0 = no cap.
@@ -201,7 +201,7 @@ class PythonRunner : public QObject {
         StreamCallback on_line;
         /// Written to the child's stdin after spawn; the write channel is closed
         /// afterwards. Empty = leave stdin untouched (legacy behaviour).
-        QByteArray stdin_data;
+        QByteArray stdin_data{};
         /// True only for scripts that implement the `@<path>` argument-spill
         /// convention (see script_supports_arg_spill() in PythonRunner.cpp).
         /// Spilling a >8 KB argument for a script that does NOT implement it
@@ -213,9 +213,9 @@ class PythonRunner : public QObject {
         /// Resolved watchdog budget in ms; 0 = no watchdog.
         int timeout_ms = 0;
         /// See RunOptions::cancel_token. Null = not cancellable.
-        std::shared_ptr<std::atomic<bool>> cancel_token;
+        std::shared_ptr<std::atomic<bool>> cancel_token{};
         /// See RunOptions::credential_allowlist.
-        std::optional<QStringList> credential_allowlist;
+        std::optional<QStringList> credential_allowlist{};
         /// See RunOptions::max_output_bytes.
         qint64 max_output_bytes = 0;
         /// See RunOptions::stream_stdout.

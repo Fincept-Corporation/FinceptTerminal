@@ -156,7 +156,7 @@ void reap_group(qint64 group, bool leader_reaped) {
 /// Dynamic property holding the PROCESS_INFORMATION* Qt hands to CreateProcess.
 /// Read only from the QProcess::started slot — emitted synchronously inside
 /// start(), while Qt's structure is alive — and cleared right after.
-constexpr const char kProcInfoProperty[] = "_fincept_tree_procinfo";
+[[maybe_unused]] constexpr const char kProcInfoProperty[] = "_fincept_tree_procinfo"; // Windows branch only
 /// own_tree() already connected its started handler to this QProcess.
 constexpr const char kHookedProperty[] = "_fincept_tree_hooked";
 constexpr const char kHandleName[] = "_fincept_process_tree";

@@ -249,6 +249,7 @@ void repoint_link(const QString& path, const PrefixRewriter& rw, RelocationRepor
 /// uv's Windows launcher (console scripts, and python.exe in some uv versions):
 /// <exe><payload><python path, UTF-8><u32 LE length><"UVSC" | "UVPY">. Only a
 /// trailer that parses completely and names an old root is rebuilt.
+[[maybe_unused]] // called from the Windows branch only
 void patch_launcher(const QString& path, const PrefixRewriter& rw, RelocationReport& rep) {
     const QFileInfo fi(path);
     if (fi.isSymLink() || !fi.isFile() || fi.size() < 16 || fi.size() > kMaxLauncher)

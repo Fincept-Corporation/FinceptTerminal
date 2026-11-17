@@ -315,7 +315,7 @@ void EquityChartPanel::build_status_overlay() {
     status_detail_->setStyleSheet(QString("background:transparent;border:none;color:%1;font-size:%2px;"
                                           "font-family:%3;")
                                       .arg(c::TEXT_SECONDARY())
-                                      .arg(f::TINY)
+                                      .arg(f::TINY.get())
                                       .arg(f::DATA_FAMILY()));
     l->addWidget(status_detail_);
     l->addStretch(1);
@@ -469,13 +469,13 @@ void EquityChartPanel::build_position_card() {
     pos_title_lbl_ = new QLabel(pos_card_);
     pos_title_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
                                           "font-size:%1px;font-family:%2;")
-                                      .arg(f::TINY)
+                                      .arg(f::TINY.get())
                                       .arg(f::DATA_FAMILY()));
 
     pos_pnl_lbl_ = new QLabel(pos_card_);
     pos_pnl_lbl_->setStyleSheet(QString("background:transparent;border:none;font-weight:700;"
                                         "font-size:%1px;font-family:%2;")
-                                    .arg(f::DATA)
+                                    .arg(f::DATA.get())
                                     .arg(f::DATA_FAMILY()));
 
     pos_exit_btn_ = new QPushButton(tr("EXIT"), pos_card_);
@@ -486,7 +486,7 @@ void EquityChartPanel::build_position_card() {
                 "padding:3px 14px;font-weight:700;font-size:%2px;font-family:%3;}"
                 "QPushButton:hover{background:%4;}")
             .arg(c::NEGATIVE())
-            .arg(f::TINY)
+            .arg(f::TINY.get())
             .arg(f::DATA_FAMILY(), c::alpha(c::NEGATIVE, 0.16)));
     connect(pos_exit_btn_, &QPushButton::clicked, this,
             [this]() { emit exit_position_requested(pos_symbol_, pos_exchange_, pos_product_, pos_side_, pos_qty_); });

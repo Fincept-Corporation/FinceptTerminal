@@ -441,7 +441,7 @@ jobs:
             -DFINCEPT_BUILD_TESTS=ON
 
       - name: Build the test suites only (fincept_unit_tests)
-        run: cmake --build build-tests --target fincept_unit_tests --parallel "$(nproc)"
+        run: cmake --build build-tests --target fincept_unit_tests --parallel "$(nproc)" -- -k 0
 
       - name: Run tests (ctest)
         env:
